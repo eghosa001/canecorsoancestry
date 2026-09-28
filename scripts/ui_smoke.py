@@ -60,6 +60,8 @@ def main():
         if pedigree_cards.count():
             pedigree_cards.first.click()
             desktop.wait_for_load_state("networkidle")
+            desktop.get_by_text("Ancestor contribution", exact=False).first.wait_for()
+            desktop.get_by_text("Linebreeding paths", exact=False).first.wait_for()
             screenshot(desktop, "pedigree-detail-desktop", overflow=False)
 
         login(desktop)
@@ -87,6 +89,14 @@ def main():
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
         capture(mobile, "/", "home-mobile")
         capture(mobile, "/dogs/?q=", "dogs-mobile")
+        capture(mobile, "/pedigrees/", "pedigrees-mobile")
+        mobile_pedigrees = mobile.locator(".pedigree-index-card")
+        if mobile_pedigrees.count():
+            mobile_pedigrees.first.click()
+            mobile.wait_for_load_state("networkidle")
+            mobile.locator(".analysis-mobile-summary").wait_for(state="visible")
+            screenshot(mobile, "pedigree-detail-mobile", overflow=False)
+
         mobile_dogs = mobile.locator(".search-result-card")
         if mobile_dogs.count():
             mobile_dogs.first.click()
