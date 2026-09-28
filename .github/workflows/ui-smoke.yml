@@ -1,0 +1,50 @@
+name: UI smoke screenshots
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "templates/**"
+      - "core/templates/**"
+      - "core/static/**"
+      - "registry/templates/**"
+      - "pedigrees/templates/**"
+      - "accounts/templates/**"
+      - "scripts/ui_smoke.py"
+      - ".github/workflows/ui-smoke.yml"
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt playwright
+      - run: python -m playwright install --with-deps chromium
+      - run: python manage.py migrate --noinput
+      - run: python manage.py import_bellissimo
+      - name: Create UI review member
+        run: |
+          python manage.py shell -c "from django.contrib.auth import get_user_model; from registry.models import Kennel,KennelMembership; U=get_user_model(); u,_=U.objects.get_or_create(username='ui-reviewer', defaults={'is_staff':True}); u.is_staff=True; u.set_password('ui-reviewer-password'); u.save(); k=Kennel.objects.first() or Kennel.objects.create(name='UI Kennel',slug='ui-kennel'); KennelMembership.objects.get_or_create(user=u,kennel=k,defaults={'role':KennelMembership.Role.OWNER})"
+      - name: Start Django
+        run: |
+          python manage.py runserver 127.0.0.1:8000 > /tmp/cca-django.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8000/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/cca-django.log
+          exit 1
+      - run: python scripts/ui_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-smoke-screenshots
+          path: artifacts/ui
+          if-no-files-found: error

@@ -13,7 +13,9 @@
       <a href="#my-kennel">My kennel</a>
       <a href="#health">Health & DNA</a>
       <a href="{% url 'accounts:documents' %}">My documents</a>
-      <a href="{% url 'accounts:submissions' %}">Submissions</a>\n      <a href="{% url 'accounts:notifications' %}">Notifications</a>\n      <a href="{% url 'password_change' %}">Account settings</a>
+      <a href="{% url 'accounts:submissions' %}">Submissions</a>
+      <a href="{% url 'accounts:notifications' %}">Notifications</a>
+      <a href="{% url 'password_change' %}">Account settings</a>
       <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="sidebar-logout" type="submit">Sign out</button></form>
     </nav>
   </aside>
@@ -49,7 +51,7 @@
                 </div>
                 <div class="dog-card-body">
                   <h3>{{ dog.name }}</h3>
-                  <p>{{ dog.colour|default:"Colour not recorded" }}</p><div class="card-actions"><span href="#">Pedigree record</span><span>Manage through submissions</span></div>
+                  <p>{{ dog.colour|default:"Colour not recorded" }}</p><div class="card-actions"><span>Pedigree record</span><span>Manage through submissions</span></div>
                 </div>
               </a>
             {% endfor %}
