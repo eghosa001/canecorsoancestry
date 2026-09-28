@@ -2,72 +2,10 @@
 {% block title %}{{ dog.name }} · My Pedigrees{% endblock %}
 {% block content %}
 <section class="pedigree-page">
-  <header class="pedigree-toolbar page-shell">
-    <div>
-      <p class="eyebrow">Member pedigree</p>
-      <h1>{{ dog.name }}</h1>
-      <p>{{ dog.kennel.name }} · includes your private kennel ancestry where available</p>
-    </div>
-    <div class="generation-switch">
-      {% for option in generation_options %}
-        <a class="{% if generations == option %}active{% endif %}" href="?generations={{ option }}">{{ option }} generations</a>
-      {% endfor %}
-    </div>
-  </header>
-
-  {% if cycle_error %}<div class="notice error page-shell">{{ cycle_error }}</div>{% endif %}
-
-  <div class="pedigree-scroll">
-    <div class="pedigree-board">
-      {% for layer in layers %}
-        <section class="pedigree-column">
-          <h2>{{ layer.label }}</h2>
-          <div class="pedigree-nodes">
-            {% for node in layer.nodes %}
-              {% if node.dog %}
-                {% if node.dog.is_public %}
-                  <a class="pedigree-node {% if node.repeated %}repeated{% endif %}" href="{% url 'registry:dog-detail' node.dog.slug %}">
-                    <strong>{{ node.dog.name }}</strong>
-                    <span>{{ node.dog.get_sex_display }}{% if node.dog.colour %} · {{ node.dog.colour }}{% endif %}</span>
-                    {% if node.repeated %}<small>Repeated ancestor</small>{% endif %}
-                  </a>
-                {% else %}
-                  <div class="pedigree-node private-node {% if node.repeated %}repeated{% endif %}">
-                    <strong>{{ node.dog.name }}</strong>
-                    <span>Private record{% if node.dog.colour %} · {{ node.dog.colour }}{% endif %}</span>
-                    {% if node.repeated %}<small>Repeated ancestor</small>{% endif %}
-                  </div>
-                {% endif %}
-              {% else %}
-                <div class="pedigree-node missing"><strong>Unknown</strong><span>No canonical record</span></div>
-              {% endif %}
-            {% endfor %}
-          </div>
-        </section>
-      {% endfor %}
-    </div>
-  </div>
-
-  <section class="page-shell analysis-grid">
-    <article class="analysis-card">
-      <p class="eyebrow">Pedigree analysis</p>
-      <strong class="analysis-number">{% if coi_percent != None %}{{ coi_percent|floatformat:2 }}%{% else %}—{% endif %}</strong>
-      <span>Coefficient of inbreeding</span>
-    </article>
-    <article class="analysis-card">
-      <p class="eyebrow">Repeated ancestors</p>
-      <strong class="analysis-number">{{ repeated|length }}</strong>
-      <span>Detected at this pedigree depth</span>
-    </article>
-    <article class="analysis-card action-analysis">
-      <p class="eyebrow">Record management</p>
-      <h2>Keep the pedigree accurate</h2>
-      <a class="btn btn-gold" href="{% url 'accounts:submit-correction' dog.pk %}">Suggest correction</a>
-    </article>
-  </section>
-
-  <section class="page-shell">
-    <a class="text-link" href="{% url 'accounts:my-pedigrees' %}">← Back to My Pedigrees</a>
-  </section>
+<header class="pedigree-toolbar page-shell"><div><p class="eyebrow">Member pedigree</p><h1>{{ dog.name }}</h1><p>{{ dog.kennel.name }} · includes your private kennel ancestry where available</p></div><div class="generation-switch no-print">{% for option in generation_options %}<a class="{% if generations == option %}active{% endif %}" href="?generations={{ option }}">{{ option }} generations</a>{% endfor %}</div></header>
+{% if cycle_error %}<div class="notice error page-shell">{{ cycle_error }}</div>{% endif %}
+<div class="pedigree-scroll"><div class="pedigree-board">{% for layer in layers %}<section class="pedigree-column"><h2>{{ layer.label }}</h2><div class="pedigree-nodes">{% for node in layer.nodes %}{% if node.dog %}{% if node.dog.is_public %}<a class="pedigree-node {% if node.repeated %}repeated{% endif %}" href="{% url 'registry:dog-detail' node.dog.slug %}"><strong>{{ node.dog.name }}</strong><span>{{ node.dog.get_sex_display }}{% if node.dog.colour %} · {{ node.dog.colour }}{% endif %}</span>{% if node.repeated %}<small>Repeated ancestor</small>{% endif %}</a>{% else %}<div class="pedigree-node private-node {% if node.repeated %}repeated{% endif %}"><strong>{{ node.dog.name }}</strong><span>Private record{% if node.dog.colour %} · {{ node.dog.colour }}{% endif %}</span>{% if node.repeated %}<small>Repeated ancestor</small>{% endif %}</div>{% endif %}{% else %}<div class="pedigree-node missing"><strong>Unknown</strong><span>No canonical record</span></div>{% endif %}{% endfor %}</div></section>{% endfor %}</div></div>
+{% include "pedigrees/_analysis_report.html" %}
+<section class="page-shell no-print"><a class="text-link" href="{% url 'accounts:my-pedigrees' %}">← Back to My Pedigrees</a></section>
 </section>
 {% endblock %}

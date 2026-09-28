@@ -1,0 +1,55 @@
+<section class="page-shell advanced-analysis" aria-labelledby="advanced-analysis-title">
+  <div class="analysis-heading-row">
+    <div>
+      <p class="eyebrow">Advanced pedigree analysis</p>
+      <h2 id="advanced-analysis-title">Depth-aware ancestry summary</h2>
+      <p class="muted">Calculated from the visible {{ generations }}-generation pedigree. Revision {{ analysis.revision_key }}.</p>
+    </div>
+    <div class="button-row no-print">
+      <button class="btn btn-outline" type="button" onclick="window.print()">Print pedigree</button>
+      {% if member_mode %}
+        <a class="btn btn-gold" href="{% url 'accounts:member-pedigree-export' dog.pk %}?generations={{ generations }}">Export CSV</a>
+      {% else %}
+        <a class="btn btn-gold" href="{% url 'pedigrees:export' dog.slug %}?generations={{ generations }}">Export CSV</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="analysis-grid analysis-grid-four analysis-mobile-summary">
+    <article class="analysis-card"><p class="eyebrow">Coefficient of inbreeding</p><strong class="analysis-number">{% if analysis.coi_percent != None %}{{ analysis.coi_percent|floatformat:2 }}%{% else %}—{% endif %}</strong><span>Wright-style coefficient across known ancestry</span></article>
+    <article class="analysis-card"><p class="eyebrow">Pedigree coverage</p><strong class="analysis-number">{{ analysis.coverage_percent|floatformat:1 }}%</strong><span>{{ analysis.known_slots }} of {{ analysis.total_slots }} ancestry positions known</span></article>
+    <article class="analysis-card"><p class="eyebrow">Unique ancestors</p><strong class="analysis-number">{{ analysis.unique_ancestor_count }}</strong><span>Across the selected depth</span></article>
+    <article class="analysis-card"><p class="eyebrow">Repeated ancestors</p><strong class="analysis-number">{{ analysis.linebreeding|length }}</strong><span>Deepest known generation: {{ analysis.deepest_known_generation }}</span></article>
+  </div>
+  <div class="analysis-detail-grid">
+    <article class="panel contribution-panel">
+      <div class="panel-heading"><div><p class="eyebrow">Ancestor contribution</p><h2>Expected pedigree share</h2></div><span>Each path contributes ½ per generation; repeated paths are combined.</span></div>
+      {% if analysis.contributions %}
+        <div class="contribution-list">
+          {% for item in analysis.contributions|slice:":12" %}
+            <div class="contribution-row">
+              <div class="contribution-copy">{% if item.dog.is_public %}<a href="{% url 'registry:dog-detail' item.dog.slug %}"><strong>{{ item.dog.name }}</strong></a>{% else %}<strong>{{ item.dog.name }}</strong>{% endif %}<span>{{ item.occurrences }} path{{ item.occurrences|pluralize }} · nearest generation {{ item.nearest_generation }}</span></div>
+              <div class="contribution-value"><strong>{{ item.percentage|floatformat:2 }}%</strong><div class="contribution-bar" aria-hidden="true"><span style="width: {{ item.percentage|floatformat:0 }}%"></span></div></div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}<p class="empty-state">No known ancestors are available at this depth yet.</p>{% endif %}
+    </article>
+    <article class="panel linebreeding-panel">
+      <div class="panel-heading"><div><p class="eyebrow">Linebreeding paths</p><h2>Repeated ancestor routes</h2></div><span>Analysis only; no pedigree record is changed.</span></div>
+      {% if analysis.linebreeding %}
+        <div class="linebreeding-list">
+          {% for item in analysis.linebreeding|slice:":10" %}
+            <section class="linebreeding-row">
+              <div class="linebreeding-title">{% if item.dog.is_public %}<a href="{% url 'registry:dog-detail' item.dog.slug %}"><strong>{{ item.dog.name }}</strong></a>{% else %}<strong>{{ item.dog.name }}</strong>{% endif %}<span>{{ item.pattern }} · {{ item.percentage|floatformat:2 }}% contribution</span></div>
+              <div class="linebreeding-paths">{% for path in item.paths %}<div><strong>{{ path.label }}</strong><span>Gen {{ path.generation }} · {{ path.percentage|floatformat:2 }}%</span></div>{% endfor %}</div>
+            </section>
+          {% endfor %}
+        </div>
+      {% else %}<p class="empty-state">No repeated-ancestor paths were detected at this depth.</p>{% endif %}
+    </article>
+  </div>
+  <div class="generation-coverage-strip">{% for row in analysis.generation_coverage %}<div><strong>G{{ row.generation }}</strong><span>{{ row.known }}/{{ row.total }} known</span></div>{% endfor %}</div>
+  <div class="button-row no-print">
+    {% if member_mode %}<a class="btn btn-outline" href="{% url 'accounts:submit-correction' dog.pk %}">Suggest correction</a>{% else %}<a class="btn btn-outline" href="{% url 'pedigrees:virtual-mating' %}">Analyse a pairing</a>{% endif %}
+  </div>
+</section>

@@ -1,5 +1,7 @@
 from collections import Counter, defaultdict
+from hashlib import sha256
 
+from django.core.cache import cache
 from django.db.models import Q
 
 from registry.models import Dog
@@ -7,6 +9,132 @@ from registry.models import Dog
 
 class PedigreeCycleError(ValueError):
     pass
+
+
+ANALYSIS_CACHE_SECONDS = 60 * 60
+
+
+def _bounded_generations(generations):
+    return max(1, min(int(generations), 10))
+
+
+def _slot_path(generation, index):
+    if generation <= 0:
+        return ()
+    return tuple(
+        "dam" if (index >> shift) & 1 else "sire"
+        for shift in range(generation - 1, -1, -1)
+    )
+
+
+def _path_label(path):
+    return " → ".join(part.title() for part in path) if path else "Subject"
+
+
+def _pedigree_snapshot(dog, generations=4, public_only=False):
+    """Load a bounded pedigree with at most one parent query per generation."""
+    generations = _bounded_generations(generations)
+    layers = [[dog]]
+    slots = [dog]
+
+    for _ in range(generations):
+        parent_ids = {
+            parent_id
+            for current in slots
+            if current is not None
+            for parent_id in (current.sire_id, current.dam_id)
+            if parent_id
+        }
+        parents = Dog.objects.select_related("kennel").in_bulk(parent_ids)
+        if public_only:
+            parents = {
+                pk: parent for pk, parent in parents.items() if parent.is_public
+            }
+
+        next_slots = []
+        for current in slots:
+            if current is None:
+                next_slots.extend((None, None))
+                continue
+            next_slots.extend(
+                (parents.get(current.sire_id), parents.get(current.dam_id))
+            )
+        layers.append(next_slots)
+        slots = next_slots
+
+    dogs_by_key = {
+        str(current.pk): current
+        for layer in layers
+        for current in layer
+        if current is not None
+    }
+    revision_material = [f"g={generations}", f"public={int(public_only)}"]
+    for key in sorted(dogs_by_key):
+        current = dogs_by_key[key]
+        revision_material.append(
+            ":".join(
+                (
+                    key,
+                    current.name,
+                    current.sex,
+                    current.colour,
+                    str(current.sire_id or ""),
+                    str(current.dam_id or ""),
+                    str(current.kennel_id or ""),
+                    str(int(current.is_public)),
+                    current.updated_at.isoformat() if current.updated_at else "",
+                )
+            )
+        )
+    revision_key = sha256("|".join(revision_material).encode("utf-8")).hexdigest()[:20]
+
+    return {
+        "dog": dog,
+        "generations": generations,
+        "public_only": public_only,
+        "layers": layers,
+        "dogs_by_key": dogs_by_key,
+        "revision_key": revision_key,
+    }
+
+
+def _layers_from_snapshot(snapshot):
+    counts = Counter(
+        current.pk
+        for layer in snapshot["layers"]
+        for current in layer
+        if current is not None
+    )
+    labels = {
+        0: "Subject",
+        1: "Parents",
+        2: "Grandparents",
+        3: "Great-grandparents",
+    }
+    return [
+        {
+            "number": index,
+            "label": labels.get(index, f"Generation {index}"),
+            "nodes": [
+                {
+                    "dog": current,
+                    "repeated": bool(current and counts[current.pk] > 1),
+                }
+                for current in layer
+            ],
+        }
+        for index, layer in enumerate(snapshot["layers"])
+    ]
+
+
+def _occurrences_from_snapshot(snapshot):
+    occurrences = []
+    for generation, layer in enumerate(snapshot["layers"][1:], start=1):
+        for index, current in enumerate(layer):
+            if current is None:
+                continue
+            occurrences.append((current, generation, _slot_path(generation, index)))
+    return occurrences
 
 
 def build_pedigree(dog, generations=4, _seen=None, public_only=False):
@@ -37,88 +165,14 @@ def build_pedigree(dog, generations=4, _seen=None, public_only=False):
 
 
 def pedigree_generations(dog, generations=4, public_only=False):
-    """Return ordered pedigree slots using at most one parent query per generation."""
-    generations = max(1, min(int(generations), 10))
-    layers = []
-    slots = [dog]
-
-    for generation in range(generations + 1):
-        layers.append(list(slots))
-        if generation == generations:
-            break
-
-        parent_ids = {
-            parent_id
-            for current in slots
-            if current is not None
-            for parent_id in (current.sire_id, current.dam_id)
-            if parent_id
-        }
-        parents = Dog.objects.in_bulk(parent_ids)
-
-        next_slots = []
-        for current in slots:
-            if current is None:
-                next_slots.extend((None, None))
-                continue
-
-            sire = parents.get(current.sire_id)
-            dam = parents.get(current.dam_id)
-            if public_only and sire is not None and not sire.is_public:
-                sire = None
-            if public_only and dam is not None and not dam.is_public:
-                dam = None
-            next_slots.extend((sire, dam))
-        slots = next_slots
-
-    counts = Counter(
-        current.pk
-        for layer in layers
-        for current in layer
-        if current is not None
-    )
-
-    labels = {
-        0: "Subject",
-        1: "Parents",
-        2: "Grandparents",
-        3: "Great-grandparents",
-    }
-    return [
-        {
-            "number": index,
-            "label": labels.get(index, f"Generation {index}"),
-            "nodes": [
-                {
-                    "dog": current,
-                    "repeated": bool(current and counts[current.pk] > 1),
-                }
-                for current in layer
-            ],
-        }
-        for index, layer in enumerate(layers)
-    ]
+    snapshot = _pedigree_snapshot(dog, generations, public_only=public_only)
+    return _layers_from_snapshot(snapshot)
 
 
 def ancestor_occurrences(dog, generations=4, public_only=False):
-    """Return every pedigree position; repeated ancestors intentionally repeat."""
-    occurrences = []
-    frontier = [(dog, 0, ())]
-
-    while frontier:
-        current, generation, path = frontier.pop()
-        if current is None or generation >= generations:
-            continue
-        for relation in ("sire", "dam"):
-            parent = getattr(current, relation)
-            if parent is None or (public_only and not parent.is_public):
-                continue
-            next_path = path + (relation,)
-            next_generation = generation + 1
-            occurrences.append((parent, next_generation, next_path))
-            frontier.append((parent, next_generation, next_path))
-
-    return occurrences
+    """Return every bounded pedigree position without relationship N+1 queries."""
+    snapshot = _pedigree_snapshot(dog, generations, public_only=public_only)
+    return _occurrences_from_snapshot(snapshot)
 
 
 def repeated_ancestors(dog, generations=4, public_only=False):
@@ -221,27 +275,59 @@ def common_ancestors(dog_a, dog_b, generations=10, public_only=False):
 
 
 def _pedigree_order(*dogs, public_only=False):
+    """Load all reachable ancestors in breadth-first batches, then topologically order them."""
+    nodes = {}
+    frontier = []
+    for dog in dogs:
+        if dog is None or (public_only and not dog.is_public):
+            continue
+        nodes[dog.pk] = dog
+        frontier.append(dog)
+
+    while frontier:
+        parent_ids = {
+            parent_id
+            for current in frontier
+            for parent_id in (current.sire_id, current.dam_id)
+            if parent_id and parent_id not in nodes
+        }
+        if not parent_ids:
+            break
+        parents = Dog.objects.in_bulk(parent_ids)
+        if public_only:
+            parents = {
+                pk: parent for pk, parent in parents.items() if parent.is_public
+            }
+        frontier = []
+        for parent in parents.values():
+            if parent.pk not in nodes:
+                nodes[parent.pk] = parent
+                frontier.append(parent)
+
     visited = set()
     visiting = set()
     ordered = []
 
-    def visit(dog):
-        if dog is None or dog.pk in visited:
+    def visit(dog_id):
+        if dog_id in visited:
             return
-        if public_only and not dog.is_public:
-            return
-        if dog.pk in visiting:
+        if dog_id in visiting:
             raise PedigreeCycleError("Pedigree contains a parent cycle.")
+        current = nodes.get(dog_id)
+        if current is None:
+            return
 
-        visiting.add(dog.pk)
-        visit(dog.sire)
-        visit(dog.dam)
-        visiting.remove(dog.pk)
-        visited.add(dog.pk)
-        ordered.append(dog)
+        visiting.add(dog_id)
+        for parent_id in (current.sire_id, current.dam_id):
+            if parent_id in nodes:
+                visit(parent_id)
+        visiting.remove(dog_id)
+        visited.add(dog_id)
+        ordered.append(current)
 
     for dog in dogs:
-        visit(dog)
+        if dog is not None and dog.pk in nodes:
+            visit(dog.pk)
     return ordered
 
 
@@ -290,3 +376,190 @@ def projected_inbreeding(sire, dam, public_only=False):
         sire, dam, public_only=public_only
     )
     return max(0.0, 0.5 * matrix[index[sire.pk]][index[dam.pk]])
+
+
+
+def _analysis_payload(snapshot):
+    occurrences = _occurrences_from_snapshot(snapshot)
+    rows = {}
+    known_by_generation = Counter()
+
+    for ancestor, generation, path in occurrences:
+        known_by_generation[generation] += 1
+        key = str(ancestor.pk)
+        row = rows.setdefault(
+            key,
+            {
+                "dog_key": key,
+                "name": ancestor.name,
+                "occurrences": 0,
+                "nearest_generation": generation,
+                "percentage": 0.0,
+                "paths": [],
+            },
+        )
+        path_percent = 100.0 / (2 ** generation)
+        row["occurrences"] += 1
+        row["nearest_generation"] = min(row["nearest_generation"], generation)
+        row["percentage"] += path_percent
+        row["paths"].append(
+            {
+                "generation": generation,
+                "path": list(path),
+                "label": _path_label(path),
+                "percentage": path_percent,
+                "side": path[0] if path else "subject",
+            }
+        )
+
+    contributions = []
+    linebreeding = []
+    for row in rows.values():
+        row["percentage"] = min(100.0, row["percentage"])
+        row["paths"].sort(key=lambda item: (item["generation"], item["label"]))
+        contributions.append(row)
+        if row["occurrences"] > 1:
+            sides = {item["side"] for item in row["paths"]}
+            if {"sire", "dam"}.issubset(sides):
+                pattern = "Sire + dam lines"
+            elif "sire" in sides:
+                pattern = "Sire-side concentration"
+            else:
+                pattern = "Dam-side concentration"
+            linebreeding.append(
+                {
+                    **row,
+                    "pattern": pattern,
+                    "crosses_both_sides": {"sire", "dam"}.issubset(sides),
+                    "path_pair_count": row["occurrences"] * (row["occurrences"] - 1) // 2,
+                    "paths": row["paths"][:8],
+                }
+            )
+
+    contributions.sort(
+        key=lambda row: (-row["percentage"], row["nearest_generation"], row["name"])
+    )
+    linebreeding.sort(
+        key=lambda row: (
+            not row["crosses_both_sides"],
+            -row["percentage"],
+            row["nearest_generation"],
+            row["name"],
+        )
+    )
+
+    generations = snapshot["generations"]
+    total_slots = sum(2 ** generation for generation in range(1, generations + 1))
+    known_slots = len(occurrences)
+    deepest_known = max(known_by_generation, default=0)
+
+    try:
+        coi_percent = inbreeding_coefficient(
+            snapshot["dog"], public_only=snapshot["public_only"]
+        ) * 100
+        cycle_error = ""
+    except PedigreeCycleError:
+        coi_percent = None
+        cycle_error = "This pedigree contains a parent cycle and cannot be analysed safely."
+
+    return {
+        "coi_percent": coi_percent,
+        "cycle_error": cycle_error,
+        "coverage_percent": (known_slots / total_slots * 100) if total_slots else 0.0,
+        "known_slots": known_slots,
+        "total_slots": total_slots,
+        "unique_ancestor_count": len(rows),
+        "deepest_known_generation": deepest_known,
+        "contributions": contributions,
+        "linebreeding": linebreeding,
+        "generation_coverage": [
+            {
+                "generation": generation,
+                "known": known_by_generation[generation],
+                "total": 2 ** generation,
+            }
+            for generation in range(1, generations + 1)
+        ],
+    }
+
+
+def pedigree_analysis(dog, generations=4, public_only=False):
+    """Return the board and cached advanced metrics under a pedigree revision key."""
+    snapshot = _pedigree_snapshot(dog, generations, public_only=public_only)
+    cache_key = (
+        f"cca:pedigree-analysis:v2:{dog.pk}:{snapshot['generations']}:"
+        f"{int(public_only)}:{snapshot['revision_key']}"
+    )
+    payload = cache.get(cache_key)
+    cache_hit = payload is not None
+    if payload is None:
+        payload = _analysis_payload(snapshot)
+        cache.set(cache_key, payload, ANALYSIS_CACHE_SECONDS)
+
+    dogs_by_key = snapshot["dogs_by_key"]
+    contributions = [
+        {**row, "dog": dogs_by_key[row["dog_key"]]}
+        for row in payload["contributions"]
+        if row["dog_key"] in dogs_by_key
+    ]
+    linebreeding = [
+        {**row, "dog": dogs_by_key[row["dog_key"]]}
+        for row in payload["linebreeding"]
+        if row["dog_key"] in dogs_by_key
+    ]
+    repeated = [
+        {
+            "dog": row["dog"],
+            "occurrences": row["occurrences"],
+            "nearest_generation": row["nearest_generation"],
+        }
+        for row in linebreeding
+    ]
+
+    return {
+        **payload,
+        "layers": _layers_from_snapshot(snapshot),
+        "contributions": contributions,
+        "linebreeding": linebreeding,
+        "repeated": repeated,
+        "revision_key": snapshot["revision_key"],
+        "cache_hit": cache_hit,
+        "generations": snapshot["generations"],
+    }
+
+
+def pedigree_export_rows(dog, generations=4, public_only=False):
+    """Return stable CSV-ready pedigree positions for the selected depth."""
+    snapshot = _pedigree_snapshot(dog, generations, public_only=public_only)
+    counts = Counter(
+        current.pk
+        for layer in snapshot["layers"][1:]
+        for current in layer
+        if current is not None
+    )
+    rows = []
+    for generation, layer in enumerate(snapshot["layers"]):
+        for index, current in enumerate(layer):
+            if current is None:
+                continue
+            path = _slot_path(generation, index)
+            rows.append(
+                {
+                    "generation": generation,
+                    "path": _path_label(path),
+                    "dog_id": str(current.pk),
+                    "name": current.name,
+                    "sex": current.get_sex_display(),
+                    "date_of_birth": current.date_of_birth.isoformat()
+                    if current.date_of_birth
+                    else "",
+                    "colour": current.colour,
+                    "country": current.country,
+                    "kennel": current.kennel.name if current.kennel_id else "",
+                    "repeated": "yes" if generation and counts[current.pk] > 1 else "no",
+                    "path_contribution_percent": 100.0 / (2 ** generation)
+                    if generation
+                    else 100.0,
+                }
+            )
+    return rows

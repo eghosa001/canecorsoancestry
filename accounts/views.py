@@ -1,9 +1,12 @@
+import csv
+
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -34,12 +37,7 @@ from registry.services import (
     submission_diff,
 )
 
-from pedigrees.services import (
-    PedigreeCycleError,
-    inbreeding_coefficient,
-    pedigree_generations,
-    repeated_ancestors,
-)
+from pedigrees.services import pedigree_analysis, pedigree_export_rows
 
 from .forms import (
     BulkModerationForm,
@@ -569,13 +567,7 @@ def member_pedigree_detail(request, pk):
     except ValueError:
         requested = 4
     generations = requested if requested in {4, 6, 8, 10} else 4
-
-    try:
-        coi_percent = inbreeding_coefficient(dog, public_only=False) * 100
-        cycle_error = ""
-    except PedigreeCycleError:
-        coi_percent = None
-        cycle_error = "This pedigree contains a parent cycle and cannot be analysed safely."
+    analysis = pedigree_analysis(dog, generations, public_only=False)
 
     return render(
         request,
@@ -584,12 +576,53 @@ def member_pedigree_detail(request, pk):
             "dog": dog,
             "generations": generations,
             "generation_options": (4, 6, 8, 10),
-            "layers": pedigree_generations(dog, generations, public_only=False),
-            "repeated": repeated_ancestors(dog, generations, public_only=False),
-            "coi_percent": coi_percent,
-            "cycle_error": cycle_error,
+            "analysis": analysis,
+            "layers": analysis["layers"],
+            "repeated": analysis["repeated"],
+            "coi_percent": analysis["coi_percent"],
+            "cycle_error": analysis["cycle_error"],
+            "member_mode": True,
         },
     )
+
+
+@login_required
+def member_pedigree_export(request, pk):
+    kennel_ids = request.user.kennel_memberships.values_list("kennel_id", flat=True)
+    dog = get_object_or_404(
+        Dog.objects.select_related("kennel"),
+        pk=pk,
+        kennel_id__in=kennel_ids,
+    )
+    try:
+        requested = int(request.GET.get("generations", "4"))
+    except ValueError:
+        requested = 4
+    generations = requested if requested in {4, 6, 8, 10} else 4
+
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = (
+        f'attachment; filename="{dog.slug}-pedigree-{generations}g.csv"'
+    )
+    writer = csv.DictWriter(
+        response,
+        fieldnames=(
+            "generation",
+            "path",
+            "dog_id",
+            "name",
+            "sex",
+            "date_of_birth",
+            "colour",
+            "country",
+            "kennel",
+            "repeated",
+            "path_contribution_percent",
+        ),
+    )
+    writer.writeheader()
+    writer.writerows(pedigree_export_rows(dog, generations, public_only=False))
+    return response
 
 
 @login_required

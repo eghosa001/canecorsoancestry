@@ -60,6 +60,8 @@ def main():
         if pedigree_cards.count():
             pedigree_cards.first.click()
             desktop.wait_for_load_state("networkidle")
+            desktop.get_by_text("Ancestor contribution", exact=False).first.wait_for()
+            desktop.get_by_text("Linebreeding paths", exact=False).first.wait_for()
             screenshot(desktop, "pedigree-detail-desktop", overflow=False)
 
         login(desktop)
@@ -93,9 +95,23 @@ def main():
             mobile.wait_for_load_state("networkidle")
             screenshot(mobile, "dog-profile-mobile")
 
+        capture(mobile, "/pedigrees/", "pedigrees-mobile")
+        mobile_pedigrees = mobile.locator(".pedigree-index-card")
+        if mobile_pedigrees.count():
+            mobile_pedigrees.first.click()
+            mobile.wait_for_load_state("networkidle")
+            mobile.locator(".analysis-mobile-summary").wait_for(state="visible")
+            screenshot(mobile, "pedigree-detail-mobile", overflow=False)
+
         login(mobile)
         screenshot(mobile, "dashboard-mobile")
         capture(mobile, "/member/pedigrees/", "my-pedigrees-mobile")
+        member_mobile = mobile.locator(".pedigree-workspace-card .btn-gold")
+        if member_mobile.count():
+            member_mobile.first.click()
+            mobile.wait_for_load_state("networkidle")
+            mobile.locator(".analysis-mobile-summary").wait_for(state="visible")
+            screenshot(mobile, "member-pedigree-detail-mobile", overflow=False)
         capture(mobile, "/member/litters/", "my-litters-mobile")
         capture(mobile, "/member/documents/", "documents-mobile")
         capture(mobile, "/member/disputes/", "my-disputes-mobile")
