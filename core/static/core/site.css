@@ -748,3 +748,14 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
 }
 
 .moderation-suggestions { margin-bottom: 18px; }
+
+@media (max-width: 760px) {
+  .source-list > div {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .source-list > div span,
+  .source-list > div .text-link {
+    text-align: left;
+  }
+}
