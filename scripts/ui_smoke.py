@@ -89,6 +89,12 @@ def main():
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
         capture(mobile, "/", "home-mobile")
         capture(mobile, "/dogs/?q=", "dogs-mobile")
+        mobile_dogs = mobile.locator(".search-result-card")
+        if mobile_dogs.count():
+            mobile_dogs.first.click()
+            mobile.wait_for_load_state("networkidle")
+            screenshot(mobile, "dog-profile-mobile")
+
         capture(mobile, "/pedigrees/", "pedigrees-mobile")
         mobile_pedigrees = mobile.locator(".pedigree-index-card")
         if mobile_pedigrees.count():
@@ -97,15 +103,15 @@ def main():
             mobile.locator(".analysis-mobile-summary").wait_for(state="visible")
             screenshot(mobile, "pedigree-detail-mobile", overflow=False)
 
-        mobile_dogs = mobile.locator(".search-result-card")
-        if mobile_dogs.count():
-            mobile_dogs.first.click()
-            mobile.wait_for_load_state("networkidle")
-            screenshot(mobile, "dog-profile-mobile")
-
         login(mobile)
         screenshot(mobile, "dashboard-mobile")
         capture(mobile, "/member/pedigrees/", "my-pedigrees-mobile")
+        member_mobile = mobile.locator(".pedigree-workspace-card .btn-gold")
+        if member_mobile.count():
+            member_mobile.first.click()
+            mobile.wait_for_load_state("networkidle")
+            mobile.locator(".analysis-mobile-summary").wait_for(state="visible")
+            screenshot(mobile, "member-pedigree-detail-mobile", overflow=False)
         capture(mobile, "/member/litters/", "my-litters-mobile")
         capture(mobile, "/member/documents/", "documents-mobile")
         capture(mobile, "/member/disputes/", "my-disputes-mobile")
