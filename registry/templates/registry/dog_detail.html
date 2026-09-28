@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ dog.name }} · Cane Corso Ancestry{% endblock %}
+{% block meta_description %}Pedigree, ancestry, offspring, siblings, health information and provenance for Cane Corso {{ dog.name }}.{% endblock %}
+{% block og_title %}{{ dog.name }} · Cane Corso Pedigree{% endblock %}
+{% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and verified provenance.{% endblock %}
+{% block extra_head %}
+  {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}">{% endif %}
+  <script type="application/ld+json">{{ structured_data }}</script>
+{% endblock %}
 {% block content %}
 <section class="dog-profile page-shell">
   <div class="dog-profile-hero">
