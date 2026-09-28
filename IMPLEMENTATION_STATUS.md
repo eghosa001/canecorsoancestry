@@ -4,14 +4,14 @@ Updated: 28 September 2026
 
 ## Current state
 
-The repository now has a working Django ancestry platform foundation, owner-style public/member UI, Bellissimo seed import, advanced pedigree analysis, member/kennel workflows, and a full moderation/search-intelligence layer.
+The repository now has a production-deployed Django ancestry platform with owner-style public/member UI, Bellissimo seed data, advanced pedigree analysis, member/kennel workflows, moderation/search intelligence, Railway PostgreSQL and private object storage.
 
 Current validation:
 
 - Django migration/check/test CI: passing;
 - Bellissimo seed dry-run validation: passing;
 - Playwright desktop/mobile smoke screenshots: passing;
-- 38 Django tests across pedigree, import, member, moderation, ownership, duplicate and dispute workflows.
+- 45 Django tests across pedigree, import, member, moderation, ownership, duplicate, dispute and production-surface workflows.
 
 ## Completed
 
@@ -177,6 +177,26 @@ Current validation:
 - All merges remain explicit moderator actions using the safe atomic merge service.
 - Existing duplicate-match API aliases retained for backward compatibility.
 
+### Production deployment — operational
+
+- Dedicated Railway project: `Cane Corso Ancestry`.
+- Production PostgreSQL service is online with a persistent volume.
+- Production web service deploys from `eghosa001/canecorsoancestry` `main`.
+- Railway deployment `fa258ef` is healthy and `/healthz/` returns HTTP 200.
+- Static collection is part of the build/runtime path; 128 static files are present in the production image.
+- Private S3-compatible object storage is wired through Django `default_storage`.
+- Storage was verified through the live Django container with successful PUT / GET / DELETE of a temporary probe object.
+- Bellissimo production seed import verified: 117 canonical records imported, 101 public and 16 draft.
+- Production media/evidence does not depend on ephemeral web-container storage.
+- Production security headers, HTTPS redirect, secure cookies, proxy-aware HTTPS handling and private-page noindex/no-store controls are enabled.
+- Public SEO includes robots.txt, sitemap.xml, canonical/Open Graph metadata and JSON-LD.
+- Request IDs and Railway health/runtime logging are active.
+- Optional Sentry integration is code-ready and activates only when `SENTRY_DSN` is supplied.
+- Resend SMTP configuration is code-ready; email notifications remain disabled until a Resend credential and sender-domain verification are connected.
+- `canecorsoancestry.com` is attached to the Railway web service. Railway requires the apex DNS CNAME to `7i4x0mqk.up.railway.app`.
+- Current Railway plan allows one custom domain per service, so `www` should redirect to the apex at the DNS/CDN layer instead of being attached as a second Railway custom domain.
+- Daily / Weekly / Monthly PostgreSQL backup schedules were submitted to Railway, but Railway's API does not expose schedule state for verification; verify the Backups tab or `railway postgres pitr schedule list` before treating the schedule as audited.
+
 ### Browser/UI acceptance
 
 - Playwright smoke workflow at 1440×1000 desktop and 390×844 mobile.
@@ -205,19 +225,14 @@ Current placeholders are intentional. Do not fill a specific dog's profile with 
 
 Approved photos can enter through the member photo submission/review workflow.
 
-## Next major phase
+## Remaining external activation
 
-### Production
+The application and Railway infrastructure are operational. The remaining items require access to external provider accounts rather than repository code:
 
-- Select/configure deployment host.
-- Configure production PostgreSQL.
-- Configure object storage for dog photos/evidence.
-- Configure `canecorsoancestry.com` DNS.
-- Backups.
-- Production email provider.
-- Security/permission audit.
-- SEO/structured metadata.
-- Monitoring/error reporting.
+- create the apex DNS CNAME `canecorsoancestry.com → 7i4x0mqk.up.railway.app` and use the DNS/CDN provider to redirect `www` to the apex;
+- connect Resend, verify `canecorsoancestry.com`, supply `EMAIL_HOST_PASSWORD`, then enable `ANCESTRY_EMAIL_NOTIFICATIONS=1`;
+- optionally supply a Sentry DSN to activate application error reporting;
+- verify Railway's Daily / Weekly / Monthly backup schedule through the dashboard or Railway CLI because schedule state is not readable through the current API.
 
 ## Release principle
 
