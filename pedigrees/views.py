@@ -1,15 +1,16 @@
+import csv
+
 from django.db.models import Q
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 
 from registry.models import Dog
 
 from .services import (
-    PedigreeCycleError,
     common_ancestors,
-    inbreeding_coefficient,
-    pedigree_generations,
+    pedigree_analysis,
+    pedigree_export_rows,
     projected_inbreeding,
-    repeated_ancestors,
 )
 
 
@@ -18,6 +19,42 @@ ALLOWED_GENERATIONS = {4, 6, 8, 10}
 
 def _public_dogs():
     return Dog.objects.filter(is_public=True).select_related("kennel", "sire", "dam")
+
+
+def _requested_generations(request):
+    try:
+        requested = int(request.GET.get("generations", "4"))
+    except ValueError:
+        requested = 4
+    return requested if requested in ALLOWED_GENERATIONS else 4
+
+
+def _csv_response(dog, generations, public_only=True):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = (
+        f'attachment; filename="{dog.slug}-pedigree-{generations}g.csv"'
+    )
+    writer = csv.DictWriter(
+        response,
+        fieldnames=(
+            "generation",
+            "path",
+            "dog_id",
+            "name",
+            "sex",
+            "date_of_birth",
+            "colour",
+            "country",
+            "kennel",
+            "repeated",
+            "path_contribution_percent",
+        ),
+    )
+    writer.writeheader()
+    writer.writerows(
+        pedigree_export_rows(dog, generations, public_only=public_only)
+    )
+    return response
 
 
 def pedigree_index(request):
@@ -38,29 +75,26 @@ def pedigree_index(request):
 
 def pedigree_detail(request, slug):
     dog = get_object_or_404(_public_dogs(), slug=slug)
-    try:
-        requested = int(request.GET.get("generations", "4"))
-    except ValueError:
-        requested = 4
-    generations = requested if requested in ALLOWED_GENERATIONS else 4
-
-    try:
-        coi_percent = inbreeding_coefficient(dog, public_only=True) * 100
-        cycle_error = ""
-    except PedigreeCycleError:
-        coi_percent = None
-        cycle_error = "This pedigree contains a parent cycle and cannot be analysed safely."
+    generations = _requested_generations(request)
+    analysis = pedigree_analysis(dog, generations, public_only=True)
 
     context = {
         "dog": dog,
         "generations": generations,
         "generation_options": sorted(ALLOWED_GENERATIONS),
-        "layers": pedigree_generations(dog, generations, public_only=True),
-        "repeated": repeated_ancestors(dog, generations, public_only=True),
-        "coi_percent": coi_percent,
-        "cycle_error": cycle_error,
+        "analysis": analysis,
+        "layers": analysis["layers"],
+        "repeated": analysis["repeated"],
+        "coi_percent": analysis["coi_percent"],
+        "cycle_error": analysis["cycle_error"],
+        "member_mode": False,
     }
     return render(request, "pedigrees/pedigree_detail.html", context)
+
+
+def pedigree_export(request, slug):
+    dog = get_object_or_404(_public_dogs(), slug=slug)
+    return _csv_response(dog, _requested_generations(request), public_only=True)
 
 
 def virtual_mating(request):
@@ -88,7 +122,7 @@ def virtual_mating(request):
             common = common_ancestors(
                 sire, dam, generations=10, public_only=True
             )
-        except (PedigreeCycleError, ValueError) as exc:
+        except ValueError as exc:
             error = str(exc)
 
     return render(
