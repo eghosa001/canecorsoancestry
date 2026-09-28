@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}My submissions · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Member area</p>
+    <h1>My submissions</h1>
+    <p>Track new dog records, corrections, photos, documents and kennel changes sent for review.</p>
+  </header>
+  <div class="button-row section-spacer-tight">
+    <a class="btn btn-gold" href="{% url 'accounts:submit-dog' %}">Submit a dog</a>
+    <a class="btn btn-outline" href="{% url 'dashboard' %}">Back to dashboard</a>
+  </div>
+  <div class="submission-list">
+    {% for item in submissions %}
+      <article class="submission-card">
+        <div>
+          <span class="eyebrow">{{ item.get_kind_display }}</span>
+          <h2>{% if item.dog %}{{ item.dog.name }}{% elif item.kennel %}{{ item.kennel.name }}{% else %}New record{% endif %}</h2>
+          <p>{{ item.created_at|date:"d M Y, H:i" }}{% if item.notes %} · {{ item.notes|truncatewords:16 }}{% endif %}</p>
+        </div>
+        <div class="submission-state {{ item.status }}">{{ item.get_status_display }}</div>
+        {% if item.resolution_notes %}<p class="resolution-note">{{ item.resolution_notes }}</p>{% endif %}
+      </article>
+    {% empty %}
+      <div class="empty-state"><strong>No submissions yet.</strong><p>New contributions will appear here while moderators review them.</p></div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

@@ -8,12 +8,12 @@
     <nav>
       <a class="active" href="{% url 'dashboard' %}">Dashboard</a>
       <a href="#my-dogs">My dogs</a>
-      <a href="#my-pedigrees">My pedigrees</a>
+      <a href="{% url 'pedigrees:index' %}">My pedigrees</a>
       <a href="#my-litters">My litters</a>
       <a href="#my-kennel">My kennel</a>
       <a href="#health">Health & DNA</a>
-      <a href="#documents">My documents</a>
-      <a href="{% url 'password_change' %}">Account settings</a>
+      <a href="{% url 'accounts:documents' %}">My documents</a>
+      <a href="{% url 'accounts:submissions' %}">Submissions</a>\n      <a href="{% url 'accounts:notifications' %}">Notifications</a>\n      <a href="{% url 'password_change' %}">Account settings</a>
       <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="sidebar-logout" type="submit">Sign out</button></form>
     </nav>
   </aside>
@@ -38,7 +38,7 @@
 
     <div class="dashboard-grid">
       <section id="my-dogs" class="dashboard-panel dashboard-wide">
-        <div class="panel-heading"><h2>My dogs</h2><span>Canonical records linked to your kennel</span></div>
+        <div class="panel-heading"><h2>My dogs</h2><a class="text-link" href="{% url 'accounts:submit-dog' %}">Submit dog →</a></div>
         {% if dogs %}
           <div class="dog-card-grid compact">
             {% for dog in dogs %}
@@ -49,7 +49,7 @@
                 </div>
                 <div class="dog-card-body">
                   <h3>{{ dog.name }}</h3>
-                  <p>{{ dog.colour|default:"Colour not recorded" }}</p>
+                  <p>{{ dog.colour|default:"Colour not recorded" }}</p><div class="card-actions"><span href="#">Pedigree record</span><span>Manage through submissions</span></div>
                 </div>
               </a>
             {% endfor %}
@@ -64,7 +64,7 @@
         {% if primary_kennel %}
           <h3>{{ primary_kennel.name }}</h3>
           <p class="muted">{{ primary_kennel.city }}{% if primary_kennel.city and primary_kennel.country %}, {% endif %}{{ primary_kennel.country }}</p>
-          <a class="btn btn-outline" href="{% url 'registry:kennel-detail' primary_kennel.slug %}">View public kennel</a>
+          <div class="button-row"><a class="btn btn-outline" href="{% url 'registry:kennel-detail' primary_kennel.slug %}">View public kennel</a><a class="btn btn-outline" href="{% url 'accounts:edit-kennel' primary_kennel.pk %}">Suggest changes</a></div>
         {% else %}
           <div class="empty-state"><p>No kennel membership recorded.</p></div>
         {% endif %}

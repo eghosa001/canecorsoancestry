@@ -1,11 +1,13 @@
 from django.db.models import Count, Prefetch, Q
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 
 from pedigrees.services import offspring_for, sibling_relationships
 
 from .models import (
     Dog,
+    DogDocument,
     DogImage,
+    DogRedirect,
     DogRegistration,
     DogSource,
     DogTitle,
@@ -13,6 +15,7 @@ from .models import (
     Kennel,
     Litter,
 )
+from .permissions import can_contribute_to_dog
 
 
 def _dog_cards(queryset):
@@ -94,8 +97,19 @@ def dog_detail(request, slug):
             queryset=DogTitle.objects.order_by("name"),
             to_attr="display_titles",
         ),
+        Prefetch(
+            "documents",
+            queryset=DogDocument.objects.filter(is_public=True).order_by("-created_at"),
+            to_attr="display_documents",
+        ),
     )
-    dog = get_object_or_404(dogs, slug=slug)
+    dog = dogs.filter(slug=slug).first()
+    if dog is None:
+        old = DogRedirect.objects.select_related("dog").filter(old_slug=slug).first()
+        if old and old.dog.is_public:
+            return redirect("registry:dog-detail", slug=old.dog.slug, permanent=True)
+        return get_object_or_404(dogs, slug=slug)
+
     return render(
         request,
         "registry/dog_detail.html",
@@ -103,6 +117,7 @@ def dog_detail(request, slug):
             "dog": dog,
             "siblings": sibling_relationships(dog),
             "offspring": offspring_for(dog),
+            "can_contribute": can_contribute_to_dog(request.user, dog),
         },
     )
 

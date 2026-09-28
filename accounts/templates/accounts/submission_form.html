@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell member-form-shell">
+  <header class="page-heading">
+    <p class="eyebrow">{{ eyebrow }}</p>
+    <h1>{{ title }}</h1>
+    <p>{{ intro }}</p>
+  </header>
+  <form class="member-form" method="post" {% if multipart %}enctype="multipart/form-data"{% endif %}>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="notice error">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="form-grid">
+      {% for field in form %}
+        <div class="form-field {% if field.field.widget.input_type == 'textarea' %}form-wide{% endif %}">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+          {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+    <div class="button-row">
+      <button class="btn btn-gold" type="submit">{{ button_label }}</button>
+      <a class="btn btn-outline" href="{% url 'accounts:submissions' %}">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

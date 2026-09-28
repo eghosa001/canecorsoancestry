@@ -3,8 +3,10 @@ from django.contrib import admin
 from .models import (
     Dog,
     DogAlias,
+    DogDocument,
     DogExternalKey,
     DogImage,
+    DogRedirect,
     DogRegistration,
     DogSource,
     DogTitle,
@@ -12,7 +14,11 @@ from .models import (
     Kennel,
     KennelMembership,
     Litter,
+    MergeHistory,
+    Notification,
     RegistrationAuthority,
+    Submission,
+    VerificationEvent,
 )
 
 
@@ -70,8 +76,41 @@ class LitterAdmin(admin.ModelAdmin):
     search_fields = ("code",)
 
 
+@admin.register(Submission)
+class SubmissionAdmin(admin.ModelAdmin):
+    list_display = ("kind", "submitted_by", "dog", "kennel", "status", "created_at")
+    list_filter = ("kind", "status", "created_at")
+    search_fields = ("dog__name", "kennel__name", "submitted_by__username")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(VerificationEvent)
+class VerificationEventAdmin(admin.ModelAdmin):
+    list_display = ("dog", "kennel", "field_name", "state", "reviewer", "created_at")
+    list_filter = ("state", "created_at")
+    search_fields = ("dog__name", "kennel__name", "field_name", "note")
+
+
+@admin.register(MergeHistory)
+class MergeHistoryAdmin(admin.ModelAdmin):
+    list_display = ("retired_name", "canonical_dog", "performed_by", "created_at")
+    search_fields = ("retired_name", "retired_slug", "canonical_dog__name")
+    readonly_fields = (
+        "canonical_dog",
+        "retired_dog_id",
+        "retired_slug",
+        "retired_name",
+        "performed_by",
+        "summary",
+        "created_at",
+    )
+
+
 admin.site.register(KennelMembership)
 admin.site.register(RegistrationAuthority)
 admin.site.register(DogImage)
+admin.site.register(DogDocument)
 admin.site.register(HealthRecord)
 admin.site.register(DogSource)
+admin.site.register(DogRedirect)
+admin.site.register(Notification)

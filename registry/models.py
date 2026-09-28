@@ -304,3 +304,198 @@ class DogSource(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+
+
+class Submission(models.Model):
+    class Kind(models.TextChoices):
+        DOG = "dog", "New dog"
+        CORRECTION = "correction", "Dog correction"
+        IMAGE = "image", "Dog image"
+        DOCUMENT = "document", "Dog document"
+        KENNEL = "kennel", "Kennel update"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ancestry_submissions",
+    )
+    dog = models.ForeignKey(
+        Dog,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="submissions",
+    )
+    kennel = models.ForeignKey(
+        Kennel,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="submissions",
+    )
+    payload = models.JSONField(default=dict, blank=True)
+    attachment = models.FileField(upload_to="submissions/%Y/%m/", blank=True)
+    notes = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_ancestry_submissions",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    resolution_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.get_kind_display()} · {self.submitted_by}"
+
+
+class DogDocument(models.Model):
+    class DocumentType(models.TextChoices):
+        PEDIGREE = "pedigree", "Pedigree"
+        HEALTH = "health", "Health"
+        REGISTRATION = "registration", "External registration"
+        DNA = "dna", "DNA"
+        OTHER = "other", "Other"
+
+    dog = models.ForeignKey(Dog, on_delete=models.CASCADE, related_name="documents")
+    title = models.CharField(max_length=220)
+    document_type = models.CharField(
+        max_length=20, choices=DocumentType.choices, default=DocumentType.OTHER
+    )
+    file = models.FileField(upload_to="documents/%Y/%m/")
+    is_public = models.BooleanField(default=False)
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="dog_documents",
+    )
+    source_submission = models.OneToOneField(
+        Submission,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_document",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return self.title
+
+
+class VerificationEvent(models.Model):
+    dog = models.ForeignKey(
+        Dog,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="verification_events",
+    )
+    kennel = models.ForeignKey(
+        Kennel,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="verification_events",
+    )
+    health_record = models.ForeignKey(
+        HealthRecord,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="verification_events",
+    )
+    field_name = models.CharField(max_length=80, blank=True)
+    state = models.CharField(max_length=20, choices=VerificationState.choices)
+    source = models.ForeignKey(
+        DogSource,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="verification_events",
+    )
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ancestry_verification_events",
+    )
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        target = self.dog or self.kennel or self.health_record
+        return f"{target} · {self.get_state_display()}"
+
+
+class DogRedirect(models.Model):
+    old_slug = models.SlugField(max_length=230, unique=True)
+    dog = models.ForeignKey(Dog, on_delete=models.CASCADE, related_name="redirects")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.old_slug} → {self.dog.slug}"
+
+
+class MergeHistory(models.Model):
+    canonical_dog = models.ForeignKey(
+        Dog, on_delete=models.CASCADE, related_name="merge_history"
+    )
+    retired_dog_id = models.UUIDField()
+    retired_slug = models.CharField(max_length=230)
+    retired_name = models.CharField(max_length=220)
+    performed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="dog_merges",
+    )
+    summary = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+
+class Notification(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ancestry_notifications",
+    )
+    title = models.CharField(max_length=180)
+    message = models.TextField()
+    link = models.CharField(max_length=300, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return self.title

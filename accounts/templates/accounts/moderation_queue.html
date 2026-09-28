@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Moderation · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Internal moderation</p>
+    <h1>Review queue</h1>
+    <p>Approve evidence-backed contributions, reject incorrect changes, and merge duplicate canonical dog records safely.</p>
+  </header>
+
+  <section class="panel moderation-merge">
+    <div class="panel-heading"><h2>Merge duplicate dogs</h2><span>The duplicate record is retired only after relationships and attached data are repointed.</span></div>
+    <form class="merge-form" method="post" action="{% url 'accounts:merge-dogs' %}">
+      {% csrf_token %}
+      <div><label for="{{ merge_form.canonical.id_for_label }}">Canonical dog</label>{{ merge_form.canonical }}</div>
+      <div><label for="{{ merge_form.duplicate.id_for_label }}">Duplicate to retire</label>{{ merge_form.duplicate }}</div>
+      <button class="btn btn-gold" type="submit">Merge safely</button>
+    </form>
+  </section>
+
+  <section class="panel moderation-verify">
+    <div class="panel-heading"><h2>Record verification</h2><span>Verification can apply to an individual field/source or to the overall dog record.</span></div>
+    <form class="verification-form" method="post" action="{% url 'accounts:verify-dog' %}">
+      {% csrf_token %}
+      {% for field in verification_form %}
+        <div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</div>
+      {% endfor %}
+      <button class="btn btn-gold" type="submit">Record verification</button>
+    </form>
+  </section>
+
+  <div class="moderation-list">
+    {% for item in pending %}
+      <article class="moderation-card">
+        <div class="moderation-meta">
+          <span class="eyebrow">{{ item.get_kind_display }}</span>
+          <h2>{% if item.dog %}{{ item.dog.name }}{% elif item.kennel %}{{ item.kennel.name }}{% else %}New dog submission{% endif %}</h2>
+          <p>Submitted by {{ item.submitted_by }} · {{ item.created_at|date:"d M Y, H:i" }}</p>
+        </div>
+        <pre class="payload-preview">{{ item.payload }}</pre>
+        {% if item.attachment %}<a class="text-link" href="{{ item.attachment.url }}">Open attachment →</a>{% endif %}
+        {% if item.notes %}<p class="moderator-note">{{ item.notes }}</p>{% endif %}
+        <div class="review-actions">
+          <form method="post" action="{% url 'accounts:review-submission' item.pk 'approve' %}">
+            {% csrf_token %}
+            <textarea name="resolution_notes" rows="2" placeholder="Optional review note"></textarea>
+            <button class="btn btn-gold" type="submit">Approve</button>
+          </form>
+          <form method="post" action="{% url 'accounts:review-submission' item.pk 'reject' %}">
+            {% csrf_token %}
+            <textarea name="resolution_notes" rows="2" placeholder="Reason for rejection"></textarea>
+            <button class="btn btn-outline" type="submit">Reject</button>
+          </form>
+        </div>
+      </article>
+    {% empty %}
+      <div class="empty-state"><strong>Queue clear.</strong><p>No contributions are waiting for review.</p></div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

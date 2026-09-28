@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Notifications · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Member area</p>
+    <h1>Notifications</h1>
+    <p>Review decisions and important changes to records you contribute.</p>
+  </header>
+  <form method="post" class="button-row">{% csrf_token %}<button class="btn btn-outline" type="submit">Mark all as read</button></form>
+  <div class="notification-list">
+    {% for item in notifications %}
+      <article class="notification-card {% if not item.read_at %}unread{% endif %}">
+        <div><strong>{{ item.title }}</strong><p>{{ item.message }}</p><small>{{ item.created_at|date:"d M Y, H:i" }}</small></div>
+        {% if item.link %}<a class="text-link" href="{{ item.link }}">Open →</a>{% endif %}
+      </article>
+    {% empty %}
+      <div class="empty-state"><p>No notifications yet.</p></div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

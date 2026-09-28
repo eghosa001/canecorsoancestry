@@ -30,6 +30,7 @@
           <input id="header-q" name="q" placeholder="Search dog, kennel, registration">
         </form>
         {% if user.is_authenticated %}
+          {% if user.is_staff %}<a class="account-link" href="{% url 'accounts:moderation' %}">Moderation</a>{% endif %}
           <a class="account-link" href="{% url 'dashboard' %}">{{ user.get_username }}</a>
         {% else %}
           <a class="account-link" href="{% url 'login' %}">Member access</a>
@@ -38,7 +39,14 @@
     </div>
   </header>
 
-  <main>{% block content %}{% endblock %}</main>
+  <main>
+  {% if messages %}
+    <div class="flash-stack" aria-live="polite">
+      {% for message in messages %}<div class="flash {{ message.tags }}">{{ message }}</div>{% endfor %}
+    </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
 
   <footer class="site-footer">
     <div>

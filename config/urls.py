@@ -8,7 +8,7 @@ from core.views import dashboard, home
 urlpatterns = [
     path("", home, name="home"),
     path("dashboard/", dashboard, name="dashboard"),
-    path("accounts/", include("django.contrib.auth.urls")),
+    path("accounts/", include("django.contrib.auth.urls")),\n    path("member/", include("accounts.urls")),
     path("admin/", admin.site.urls),
     path("pedigrees/", include("pedigrees.urls")),
     path("", include("registry.urls")),
