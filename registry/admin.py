@@ -41,8 +41,13 @@ class KennelAdmin(admin.ModelAdmin):
     prepopulated_fields = {"slug": ("name",)}
 
 
+@admin.register(Litter)
+class LitterAdmin(admin.ModelAdmin):
+    list_display = ("code", "kennel", "date_of_birth", "is_public")
+    search_fields = ("code",)
+
+
 admin.site.register(KennelMembership)
-admin.site.register(Litter)
 admin.site.register(RegistrationAuthority)
 admin.site.register(DogImage)
 admin.site.register(HealthRecord)
