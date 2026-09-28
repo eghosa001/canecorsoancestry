@@ -1,5 +1,9 @@
+from django.conf import settings
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+
+from core.seo import json_ld
 
 from pedigrees.services import offspring_for, sibling_relationships
 
@@ -111,6 +115,32 @@ def dog_detail(request, slug):
             return redirect("registry:dog-detail", slug=old.dog.slug, permanent=True)
         return get_object_or_404(dogs, slug=slug)
 
+    image_url = dog.display_images[0].image.url if dog.display_images else None
+    structured_data = {
+        "@context": "https://schema.org",
+        "@type": "Thing",
+        "name": dog.name,
+        "url": f"{settings.SITE_URL}{request.path}",
+        "description": dog.bio or f"Cane Corso pedigree and ancestry record for {dog.name}.",
+        "identifier": [registration.number for registration in dog.display_registrations],
+        "additionalProperty": [
+            {"@type": "PropertyValue", "name": "Sex", "value": dog.get_sex_display()},
+            {"@type": "PropertyValue", "name": "Colour", "value": dog.colour or "Not recorded"},
+            {"@type": "PropertyValue", "name": "Country", "value": dog.country or "Not recorded"},
+            {"@type": "PropertyValue", "name": "Verification", "value": dog.get_verification_state_display()},
+        ],
+    }
+    if dog.date_of_birth:
+        structured_data["birthDate"] = dog.date_of_birth.isoformat()
+    if image_url:
+        structured_data["image"] = image_url
+    if dog.kennel:
+        structured_data["isPartOf"] = {
+            "@type": "Organization",
+            "name": dog.kennel.name,
+            "url": f"{settings.SITE_URL}" + reverse("registry:kennel-detail", args=[dog.kennel.slug]),
+        }
+
     return render(
         request,
         "registry/dog_detail.html",
@@ -119,6 +149,7 @@ def dog_detail(request, slug):
             "siblings": sibling_relationships(dog),
             "offspring": offspring_for(dog),
             "can_contribute": can_contribute_to_dog(request.user, dog),
+            "structured_data": json_ld(structured_data),
         },
     )
 

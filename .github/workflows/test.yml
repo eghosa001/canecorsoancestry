@@ -17,6 +17,16 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py check
+      - name: Production deploy checks
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_SECRET_KEY: ci-only-production-check-secret-key
+          DJANGO_ALLOWED_HOSTS: testserver,localhost
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver
+          SITE_URL: https://testserver
+          DATABASE_URL: sqlite:///production-check.sqlite3
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: python manage.py check --deploy
       - run: python manage.py migrate --noinput
       - run: python manage.py import_bellissimo --dry-run
       - run: python manage.py test --verbosity 1
