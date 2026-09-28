@@ -1,0 +1,23 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Cane Corso Ancestry — pedigree, bloodline and kennel research.">
+  <title>{% block title %}Cane Corso Ancestry{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'core/site.css' %}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="{% url 'home' %}">CANE CORSO <span>ANCESTRY</span></a>
+    <nav aria-label="Main navigation">
+      <a href="{% url 'registry:dog-search' %}">Dogs</a>
+      <a href="#">Kennels</a>
+      <a href="#">Pedigrees</a>
+      <a href="/admin/">Member access</a>
+    </nav>
+  </header>
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>

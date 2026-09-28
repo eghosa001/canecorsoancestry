@@ -1,0 +1,61 @@
+name: Bootstrap Django foundation
+
+on:
+  push:
+    paths:
+      - "manage.py"
+      - "accounts/**"
+      - "registry/**"
+      - ".github/workflows/bootstrap-django.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Generate initial migrations and verify
+        run: |
+          python manage.py makemigrations accounts registry
+          python manage.py check
+          python manage.py test --verbosity 1
+      - name: Install permanent test workflow
+        run: |
+          cat > .github/workflows/test.yml <<'EOF'
+          name: Django tests
+
+          on:
+            push:
+              branches: [main]
+            pull_request:
+
+          jobs:
+            test:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/setup-python@v5
+                  with:
+                    python-version: "3.13"
+                    cache: pip
+                - run: pip install -r requirements.txt
+                - run: python manage.py makemigrations --check --dry-run
+                - run: python manage.py check
+                - run: python manage.py test --verbosity 1
+          EOF
+          rm .github/workflows/bootstrap-django.yml
+      - name: Commit generated foundation files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Generate initial Django migrations and CI"
+          git push

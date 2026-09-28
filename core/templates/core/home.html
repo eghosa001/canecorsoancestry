@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div class="hero-copy">
+    <p class="eyebrow">Pedigree · Bloodline · Provenance</p>
+    <h1>Discover the ancestry behind the Cane Corso.</h1>
+    <p>Search canonical dog records, follow generations and inspect the evidence behind each pedigree.</p>
+    <form class="search" action="{% url 'registry:dog-search' %}" method="get">
+      <label class="sr-only" for="dog-search">Search dogs</label>
+      <input id="dog-search" name="q" placeholder="Dog name, kennel or registration number">
+      <button type="submit">Search</button>
+    </form>
+  </div>
+</section>
+<section class="stats" aria-label="Database statistics">
+  <article><strong>{{ dog_count }}</strong><span>Public dogs</span></article>
+  <article><strong>{{ kennel_count }}</strong><span>Kennels</span></article>
+  <article><strong>{{ litter_count }}</strong><span>Litters</span></article>
+</section>
+<section class="feature-grid">
+  <article><h2>Search dogs</h2><p>Find one canonical record across names, aliases and registrations.</p></article>
+  <article><h2>Explore pedigrees</h2><p>Move across generations without losing family context.</p></article>
+  <article><h2>Verify sources</h2><p>Keep pedigree and health claims linked to supporting evidence.</p></article>
+</section>
+{% endblock %}

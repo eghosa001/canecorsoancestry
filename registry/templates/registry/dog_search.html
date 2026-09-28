@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Search dogs · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <p class="eyebrow">Dog database</p>
+  <h1>Search dogs</h1>
+  <form class="search" method="get">
+    <label class="sr-only" for="q">Search dogs</label>
+    <input id="q" name="q" value="{{ query }}" placeholder="Dog name, kennel or registration number">
+    <button type="submit">Search</button>
+  </form>
+  <div class="results">
+    {% for dog in dogs %}
+      <a class="result-card" href="{% url 'registry:dog-detail' dog.slug %}">
+        <strong>{{ dog.name }}</strong>
+        <span>{{ dog.get_sex_display }}{% if dog.kennel %} · {{ dog.kennel.name }}{% endif %}</span>
+      </a>
+    {% empty %}
+      {% if query %}<p class="muted">No public dogs matched “{{ query }}”.</p>{% endif %}
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
