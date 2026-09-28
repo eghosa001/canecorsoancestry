@@ -3,11 +3,12 @@
 Production is hosted on Railway with a Django web service, private PostgreSQL service and private S3-compatible storage bucket.
 
 ## Deployment
+- Source: GitHub `eghosa001/canecorsoancestry`, branch `main`.
 - Build: collect static assets.
 - Pre-deploy: run Django migrations.
 - Runtime: Gunicorn.
 - Health: `/healthz/`.
-- Configuration: `railway.toml`.
+- Project-level desired state: `.railway/railway.ts` (Railway Infrastructure as Code).
 
 ## Required variables
 `DJANGO_SETTINGS_MODULE=config.settings.production`, `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `SITE_URL`, `DATABASE_URL`, `DJANGO_REQUIRE_OBJECT_STORAGE=1`, `BUCKET`, `REGION`, `ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`.
