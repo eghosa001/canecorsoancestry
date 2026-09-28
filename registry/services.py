@@ -651,7 +651,7 @@ def _score_duplicate_pair(reference, candidate, trigram_score=None):
     ratio = SequenceMatcher(None, left_name, right_name).ratio() if left_name and right_name else 0
 
     if left_name and left_name == right_name:
-        score += 48
+        score += 60
         reasons.append("Same normalized name")
     else:
         name_score = max(ratio, trigram_score or 0) * 45
