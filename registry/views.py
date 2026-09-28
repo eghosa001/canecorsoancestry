@@ -12,6 +12,7 @@ def dog_search(request):
     if query:
         dogs = dogs.filter(
             Q(name__icontains=query)
+            | Q(bloodline__icontains=query)
             | Q(aliases__name__icontains=query)
             | Q(registrations__number__icontains=query)
         ).distinct()
@@ -22,13 +23,17 @@ def dog_search(request):
 
 def dog_detail(request, slug):
     dog = get_object_or_404(
-        Dog.objects.select_related("kennel", "sire", "dam"),
+        Dog.objects.select_related("kennel", "sire", "dam").prefetch_related(
+            "registrations__authority",
+            "health_records",
+            "titles",
+        ),
         slug=slug,
         is_public=True,
     )
     context = {
         "dog": dog,
-        "pedigree": build_pedigree(dog, generations=4),
-        "repeated": repeated_ancestors(dog, generations=4),
+        "pedigree": build_pedigree(dog, generations=4, public_only=True),
+        "repeated": repeated_ancestors(dog, generations=4, public_only=True),
     }
     return render(request, "registry/dog_detail.html", context)

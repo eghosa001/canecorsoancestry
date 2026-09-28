@@ -1,9 +1,11 @@
 from collections import Counter, defaultdict
 
 
-def build_pedigree(dog, generations=4, _seen=None):
+def build_pedigree(dog, generations=4, _seen=None, public_only=False):
     """Return a bounded pedigree tree while safely stopping accidental cycles."""
     if dog is None or generations < 0:
+        return None
+    if public_only and not dog.is_public:
         return None
 
     seen = set() if _seen is None else set(_seen)
@@ -17,13 +19,23 @@ def build_pedigree(dog, generations=4, _seen=None):
     return {
         "dog": dog,
         "cycle": False,
-        "sire": build_pedigree(dog.sire, generations - 1, seen),
-        "dam": build_pedigree(dog.dam, generations - 1, seen),
+        "sire": build_pedigree(
+            dog.sire,
+            generations - 1,
+            seen,
+            public_only=public_only,
+        ),
+        "dam": build_pedigree(
+            dog.dam,
+            generations - 1,
+            seen,
+            public_only=public_only,
+        ),
     }
 
 
-def ancestor_occurrences(dog, generations=4):
-    """Return every pedigree position; repeated ancestors intentionally appear repeatedly."""
+def ancestor_occurrences(dog, generations=4, public_only=False):
+    """Return every pedigree position; repeated ancestors intentionally repeat."""
     occurrences = []
     frontier = [(dog, 0, ())]
 
@@ -33,7 +45,7 @@ def ancestor_occurrences(dog, generations=4):
             continue
         for relation in ("sire", "dam"):
             parent = getattr(current, relation)
-            if parent is None:
+            if parent is None or (public_only and not parent.is_public):
                 continue
             next_path = path + (relation,)
             next_generation = generation + 1
@@ -43,8 +55,12 @@ def ancestor_occurrences(dog, generations=4):
     return occurrences
 
 
-def repeated_ancestors(dog, generations=4):
-    occurrences = ancestor_occurrences(dog, generations)
+def repeated_ancestors(dog, generations=4, public_only=False):
+    occurrences = ancestor_occurrences(
+        dog,
+        generations,
+        public_only=public_only,
+    )
     counts = Counter(ancestor.pk for ancestor, _, _ in occurrences)
     generations_by_id = defaultdict(list)
     dogs_by_id = {}

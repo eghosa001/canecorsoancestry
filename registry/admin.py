@@ -3,9 +3,11 @@ from django.contrib import admin
 from .models import (
     Dog,
     DogAlias,
+    DogExternalKey,
     DogImage,
     DogRegistration,
     DogSource,
+    DogTitle,
     HealthRecord,
     Kennel,
     KennelMembership,
@@ -24,14 +26,35 @@ class DogAliasInline(admin.TabularInline):
     extra = 0
 
 
+class DogExternalKeyInline(admin.TabularInline):
+    model = DogExternalKey
+    extra = 0
+
+
+class DogTitleInline(admin.TabularInline):
+    model = DogTitle
+    extra = 0
+
+
 @admin.register(Dog)
 class DogAdmin(admin.ModelAdmin):
     list_display = ("name", "sex", "kennel", "verification_state", "is_public")
     list_filter = ("sex", "verification_state", "is_public", "country")
-    search_fields = ("name", "aliases__name", "registrations__number")
+    search_fields = (
+        "name",
+        "bloodline",
+        "aliases__name",
+        "registrations__number",
+        "external_keys__key",
+    )
     prepopulated_fields = {"slug": ("name",)}
     autocomplete_fields = ("sire", "dam", "kennel", "litter")
-    inlines = (DogAliasInline, DogRegistrationInline)
+    inlines = (
+        DogAliasInline,
+        DogExternalKeyInline,
+        DogRegistrationInline,
+        DogTitleInline,
+    )
 
 
 @admin.register(Kennel)

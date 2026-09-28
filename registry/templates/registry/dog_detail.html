@@ -11,16 +11,59 @@
         <dt>Sex</dt><dd>{{ dog.get_sex_display }}</dd>
         <dt>Date of birth</dt><dd>{{ dog.date_of_birth|default:"Not recorded" }}</dd>
         <dt>Colour</dt><dd>{{ dog.colour|default:"Not recorded" }}</dd>
+        <dt>Bloodline</dt><dd>{{ dog.bloodline|default:"Not recorded" }}</dd>
         <dt>Country</dt><dd>{{ dog.country|default:"Not recorded" }}</dd>
         <dt>Verification</dt><dd>{{ dog.get_verification_state_display }}</dd>
       </dl>
     </article>
     <article class="panel">
       <h2>Parents</h2>
-      <p>Sire: {% if dog.sire %}{{ dog.sire.name }}{% else %}Not recorded{% endif %}</p>
-      <p>Dam: {% if dog.dam %}{{ dog.dam.name }}{% else %}Not recorded{% endif %}</p>
+      <p>Sire:
+        {% if dog.sire and dog.sire.is_public %}
+          <a href="{% url 'registry:dog-detail' dog.sire.slug %}">{{ dog.sire.name }}</a>
+        {% elif dog.sire %}
+          Not published
+        {% else %}
+          Not recorded
+        {% endif %}
+      </p>
+      <p>Dam:
+        {% if dog.dam and dog.dam.is_public %}
+          <a href="{% url 'registry:dog-detail' dog.dam.slug %}">{{ dog.dam.name }}</a>
+        {% elif dog.dam %}
+          Not published
+        {% else %}
+          Not recorded
+        {% endif %}
+      </p>
     </article>
   </div>
+
+  {% if dog.registrations.all %}
+  <article class="panel">
+    <h2>Registrations</h2>
+    {% for registration in dog.registrations.all %}
+      <p>{{ registration.number }}{% if registration.authority %} · {{ registration.authority.name }}{% endif %}</p>
+    {% endfor %}
+  </article>
+  {% endif %}
+
+  {% if dog.health_records.all %}
+  <article class="panel">
+    <h2>Health &amp; DNA</h2>
+    {% for record in dog.health_records.all %}
+      <p><strong>{{ record.test_type }}</strong> · {{ record.result }}</p>
+    {% endfor %}
+  </article>
+  {% endif %}
+
+  {% if dog.titles.all %}
+  <article class="panel">
+    <h2>Titles</h2>
+    {% for title in dog.titles.all %}<p>{{ title.name }}</p>{% endfor %}
+  </article>
+  {% endif %}
+
   {% if repeated %}
   <article class="panel">
     <h2>Repeated ancestors</h2>

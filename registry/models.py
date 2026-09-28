@@ -67,6 +67,7 @@ class Dog(models.Model):
     date_of_birth = models.DateField(null=True, blank=True)
     colour = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=80, blank=True)
+    bloodline = models.CharField(max_length=220, blank=True)
     kennel = models.ForeignKey(
         Kennel,
         null=True,
@@ -170,6 +171,23 @@ class DogAlias(models.Model):
         return self.name
 
 
+class DogExternalKey(models.Model):
+    dog = models.ForeignKey(Dog, on_delete=models.CASCADE, related_name="external_keys")
+    namespace = models.CharField(max_length=80)
+    key = models.CharField(max_length=230)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("namespace", "key"),
+                name="unique_external_dog_key",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.namespace}:{self.key}"
+
+
 class RegistrationAuthority(models.Model):
     code = models.CharField(max_length=32, unique=True)
     name = models.CharField(max_length=180, unique=True)
@@ -187,6 +205,8 @@ class DogRegistration(models.Model):
     dog = models.ForeignKey(Dog, on_delete=models.CASCADE, related_name="registrations")
     authority = models.ForeignKey(
         RegistrationAuthority,
+        null=True,
+        blank=True,
         on_delete=models.PROTECT,
         related_name="registrations",
     )
@@ -198,11 +218,18 @@ class DogRegistration(models.Model):
             models.UniqueConstraint(
                 fields=("authority", "number"),
                 name="unique_registration_number_per_authority",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=("number",),
+                condition=Q(authority__isnull=True),
+                name="unique_registration_number_without_authority",
+            ),
         ]
 
     def __str__(self):
-        return f"{self.authority.code} {self.number}"
+        if self.authority:
+            return f"{self.authority.code} {self.number}"
+        return self.number
 
 
 class DogImage(models.Model):
@@ -222,6 +249,22 @@ class DogImage(models.Model):
                 name="one_primary_image_per_dog",
             )
         ]
+
+
+class DogTitle(models.Model):
+    dog = models.ForeignKey(Dog, on_delete=models.CASCADE, related_name="titles")
+    name = models.CharField(max_length=160)
+    source_text = models.CharField(max_length=220, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("name",)
+        constraints = [
+            models.UniqueConstraint(fields=("dog", "name"), name="unique_dog_title")
+        ]
+
+    def __str__(self):
+        return self.name
 
 
 class HealthRecord(models.Model):
@@ -255,6 +298,7 @@ class DogSource(models.Model):
     source_url = models.URLField(blank=True)
     document = models.FileField(upload_to="evidence/%Y/%m/", blank=True)
     notes = models.TextField(blank=True)
+    raw_payload = models.JSONField(default=dict, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
