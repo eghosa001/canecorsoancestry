@@ -22,9 +22,9 @@ export default defineRailway((ctx) => {
     preDeploy: "python manage.py migrate --noinput",
     healthcheck: "/healthz/",
     healthcheckTimeout: 60,
-    domains: production
-      ? ["canecorsoancestry.com", "www.canecorsoancestry.com"]
-      : [],
+    // Current Railway plan allows one custom domain per service.
+    // Serve the apex directly; redirect www at the DNS/CDN layer.
+    domains: production ? ["canecorsoancestry.com"] : [],
     env: {
       DJANGO_SETTINGS_MODULE: "config.settings.production",
       DJANGO_SECRET_KEY: preserve(),
@@ -37,7 +37,7 @@ export default defineRailway((ctx) => {
       AWS_SECRET_ACCESS_KEY: preserve(),
       SITE_URL: "https://canecorsoancestry.com",
       DJANGO_ALLOWED_HOSTS:
-        "canecorsoancestry.com,www.canecorsoancestry.com,.up.railway.app,.railway.internal,localhost,127.0.0.1",
+        "canecorsoancestry.com,www.canecorsoancestry.com,healthcheck.railway.app,.up.railway.app,.railway.internal,localhost,127.0.0.1",
       DJANGO_CSRF_TRUSTED_ORIGINS:
         "https://canecorsoancestry.com,https://www.canecorsoancestry.com,https://*.up.railway.app",
       DJANGO_HSTS_SECONDS: "3600",
