@@ -8,6 +8,20 @@
     <p>Approve evidence-backed contributions, reject incorrect changes, and merge duplicate canonical dog records safely.</p>
   </header>
 
+  {% if duplicate_candidates %}
+  <section class="panel moderation-suggestions">
+    <div class="panel-heading"><h2>Duplicate suggestions</h2><span>Suggestions only—nothing is merged automatically.</span></div>
+    <div class="relationship-list">
+      {% for item in duplicate_candidates %}
+        <div>
+          <strong>{{ item.left.name }} ↔ {{ item.right.name }}</strong>
+          <span>{{ item.reasons|join:", " }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   <section class="panel moderation-merge">
     <div class="panel-heading"><h2>Merge duplicate dogs</h2><span>The duplicate record is retired only after relationships and attached data are repointed.</span></div>
     <form class="merge-form" method="post" action="{% url 'accounts:merge-dogs' %}">

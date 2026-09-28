@@ -21,6 +21,7 @@ from registry.permissions import (
 )
 from registry.services import (
     approve_submission,
+    duplicate_candidates,
     merge_dogs,
     reject_submission,
 )
@@ -300,6 +301,7 @@ def moderation_queue(request):
             "pending": pending,
             "merge_form": MergeDogsForm(),
             "verification_form": VerificationEventForm(),
+            "duplicate_candidates": duplicate_candidates(),
         },
     )
 

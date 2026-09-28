@@ -12,7 +12,7 @@ from .models import (
     Submission,
     VerificationState,
 )
-from .services import approve_submission, merge_dogs
+from .services import approve_submission, duplicate_candidates, merge_dogs
 
 
 class DogMergeTests(TestCase):
@@ -71,3 +71,16 @@ class SubmissionApprovalTests(TestCase):
         self.assertFalse(dog.is_public)
         self.assertEqual(dog.verification_state, VerificationState.COMMUNITY)
         self.assertTrue(Notification.objects.filter(user=user).exists())
+
+
+
+class DuplicateCandidateTests(TestCase):
+    def test_normalized_name_match_is_suggested_without_merging(self):
+        first = Dog.objects.create(name="Custodi-Nos Karma", slug="candidate-a")
+        second = Dog.objects.create(name="Custodi Nos Karma", slug="candidate-b")
+
+        candidates = duplicate_candidates()
+
+        self.assertEqual(candidates[0]["left"].pk in {first.pk, second.pk}, True)
+        self.assertIn("Same normalized name", candidates[0]["reasons"])
+        self.assertEqual(Dog.objects.count(), 2)

@@ -746,3 +746,5 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
 @media (max-width: 560px) {
   .verification-form { grid-template-columns: 1fr; }
 }
+
+.moderation-suggestions { margin-bottom: 18px; }

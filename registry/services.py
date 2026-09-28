@@ -1,4 +1,6 @@
+from collections import defaultdict
 from datetime import date
+import re
 
 from django.db import transaction
 from django.db.models import Q
@@ -363,3 +365,51 @@ def merge_dogs(canonical, duplicate, performed_by=None):
     )
     duplicate.delete()
     return history
+
+
+
+def duplicate_candidates(limit=30):
+    """Return conservative duplicate suggestions without mutating any records."""
+    dogs = list(
+        Dog.objects.prefetch_related("registrations").order_by("name")
+    )
+    name_buckets = defaultdict(list)
+    registration_buckets = defaultdict(list)
+
+    for dog in dogs:
+        normalized = re.sub(r"[^a-z0-9]+", "", dog.name.lower())
+        if normalized:
+            name_buckets[normalized].append(dog)
+        for registration in dog.registrations.all():
+            number = re.sub(r"\s+", "", registration.number.lower())
+            authority = registration.authority_id or "none"
+            if number:
+                registration_buckets[(authority, number)].append(dog)
+
+    pairs = {}
+
+    def add_pair(left, right, reason):
+        if left.pk == right.pk:
+            return
+        ordered = sorted((left, right), key=lambda item: str(item.pk))
+        key = (ordered[0].pk, ordered[1].pk)
+        entry = pairs.setdefault(
+            key,
+            {"left": ordered[0], "right": ordered[1], "reasons": []},
+        )
+        if reason not in entry["reasons"]:
+            entry["reasons"].append(reason)
+
+    for bucket in name_buckets.values():
+        if len(bucket) > 1:
+            for index, left in enumerate(bucket):
+                for right in bucket[index + 1 :]:
+                    add_pair(left, right, "Same normalized name")
+
+    for bucket in registration_buckets.values():
+        if len(bucket) > 1:
+            for index, left in enumerate(bucket):
+                for right in bucket[index + 1 :]:
+                    add_pair(left, right, "Same external registration")
+
+    return list(pairs.values())[:limit]

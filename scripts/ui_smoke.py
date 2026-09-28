@@ -17,16 +17,28 @@ def assert_no_global_overflow(page, label):
         raise AssertionError(f"{label} has {overflow}px of global horizontal overflow")
 
 
-def capture(page, path, label, overflow=True):
-    errors = []
-    page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
-    page.goto(f"{BASE_URL}{path}", wait_until="networkidle")
+def screenshot(page, label, overflow=True):
     page.locator("main").wait_for(state="visible")
     if overflow:
         assert_no_global_overflow(page, label)
     page.screenshot(path=OUT / f"{label}.png", full_page=True)
+
+
+def capture(page, path, label, overflow=True):
+    errors = []
+    page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
+    page.goto(f"{BASE_URL}{path}", wait_until="networkidle")
+    screenshot(page, label, overflow=overflow)
     if errors:
         raise AssertionError(f"{label} console errors: {errors}")
+
+
+def login(page):
+    page.goto(f"{BASE_URL}/accounts/login/", wait_until="networkidle")
+    page.locator("#id_username").fill("ui-reviewer")
+    page.locator("#id_password").fill("ui-reviewer-password")
+    page.locator("button[type=submit]").click()
+    page.wait_for_url("**/dashboard/")
 
 
 def main():
@@ -36,32 +48,37 @@ def main():
         desktop = browser.new_page(viewport={"width": 1440, "height": 1000})
         capture(desktop, "/", "home-desktop")
         capture(desktop, "/dogs/?q=", "dogs-desktop")
-        capture(desktop, "/pedigrees/", "pedigrees-desktop")
 
-        cards = desktop.locator(".pedigree-index-card")
-        if cards.count():
-            cards.first.click()
+        dog_cards = desktop.locator(".search-result-card")
+        if dog_cards.count():
+            dog_cards.first.click()
             desktop.wait_for_load_state("networkidle")
-            desktop.screenshot(path=OUT / "pedigree-detail-desktop.png", full_page=True)
+            screenshot(desktop, "dog-profile-desktop")
 
-        desktop.goto(f"{BASE_URL}/accounts/login/", wait_until="networkidle")
-        desktop.locator("#id_username").fill("ui-reviewer")
-        desktop.locator("#id_password").fill("ui-reviewer-password")
-        desktop.locator("button[type=submit]").click()
-        desktop.wait_for_url("**/dashboard/")
-        assert_no_global_overflow(desktop, "dashboard-desktop")
-        desktop.screenshot(path=OUT / "dashboard-desktop.png", full_page=True)
+        capture(desktop, "/pedigrees/", "pedigrees-desktop")
+        pedigree_cards = desktop.locator(".pedigree-index-card")
+        if pedigree_cards.count():
+            pedigree_cards.first.click()
+            desktop.wait_for_load_state("networkidle")
+            screenshot(desktop, "pedigree-detail-desktop", overflow=False)
+
+        login(desktop)
+        screenshot(desktop, "dashboard-desktop")
+        capture(desktop, "/member/moderation/", "moderation-desktop")
+        capture(desktop, "/member/submit/dog/", "submit-dog-desktop")
 
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
         capture(mobile, "/", "home-mobile")
         capture(mobile, "/dogs/?q=", "dogs-mobile")
-        mobile.goto(f"{BASE_URL}/accounts/login/", wait_until="networkidle")
-        mobile.locator("#id_username").fill("ui-reviewer")
-        mobile.locator("#id_password").fill("ui-reviewer-password")
-        mobile.locator("button[type=submit]").click()
-        mobile.wait_for_url("**/dashboard/")
-        assert_no_global_overflow(mobile, "dashboard-mobile")
-        mobile.screenshot(path=OUT / "dashboard-mobile.png", full_page=True)
+        mobile_dogs = mobile.locator(".search-result-card")
+        if mobile_dogs.count():
+            mobile_dogs.first.click()
+            mobile.wait_for_load_state("networkidle")
+            screenshot(mobile, "dog-profile-mobile")
+
+        login(mobile)
+        screenshot(mobile, "dashboard-mobile")
+        capture(mobile, "/member/submit/dog/", "submit-dog-mobile")
 
         browser.close()
 
