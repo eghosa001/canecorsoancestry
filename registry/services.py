@@ -21,6 +21,7 @@ from .models import (
     DogTitle,
     HealthRecord,
     Litter,
+    KennelMembership,
     MergeHistory,
     Notification,
     Submission,
