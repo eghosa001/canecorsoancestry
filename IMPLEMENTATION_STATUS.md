@@ -4,14 +4,14 @@ Updated: 28 September 2026
 
 ## Current state
 
-The repository now has a working Django ancestry platform foundation, owner-style public/member UI, Bellissimo seed import, pedigree analysis, member/kennel workflows, and a full moderation/search-intelligence layer.
+The repository now has a working Django ancestry platform foundation, owner-style public/member UI, Bellissimo seed import, advanced pedigree analysis, member/kennel workflows, and a full moderation/search-intelligence layer.
 
 Current validation:
 
 - Django migration/check/test CI: passing;
 - Bellissimo seed dry-run validation: passing;
 - Playwright desktop/mobile smoke screenshots: passing;
-- 34 Django tests across pedigree, import, member, moderation, ownership, duplicate and dispute workflows.
+- 38 Django tests across pedigree, import, member, moderation, ownership, duplicate and dispute workflows.
 
 ## Completed
 
@@ -93,6 +93,25 @@ Current validation:
 - Virtual mating with projected COI.
 - Member pedigree view can include private kennel records without exposing them publicly.
 
+
+### Advanced pedigree analysis phase — complete
+
+- Dedicated ancestor-contribution reporting with expected pedigree-share percentages.
+- Repeated ancestors combine contributions from every visible pedigree path.
+- Rich linebreeding-path reporting shows the exact sire/dam route, generation and path contribution.
+- Repeated paths are classified as sire-side concentration, dam-side concentration, or crossing both sire and dam lines.
+- Shared bounded pedigree snapshots load parents in batches instead of occurrence-by-occurrence ORM traversal.
+- Deep 8–10 generation analysis reuses the same bounded graph for the board, contributions and linebreeding analysis.
+- Focused performance coverage enforces at most one parent query per generation for the 10-generation board path.
+- Pedigree revision keys are derived from the visible ancestry graph and relevant canonical dog facts.
+- Advanced analysis payloads are cached under the dog, depth, public/private scope and revision key, so canonical pedigree edits naturally move analysis to a new cache entry.
+- Pedigree coverage reports known ancestry positions, unique ancestors, deepest known generation and per-generation completeness.
+- Public pedigree CSV export is available for the selected generation depth.
+- Member CSV export can include private kennel ancestry only when the signed-in member belongs to that dog's kennel.
+- Browser-native printable pedigree/report layout is provided with a dedicated landscape print stylesheet.
+- Public and member analysis summaries are responsive on mobile while the deep pedigree board remains intentionally horizontally scrollable.
+- Analysis remains read-only and never changes canonical pedigree relationships.
+
 ### Member / kennel workflows
 
 - Custom member login/dashboard.
@@ -165,9 +184,9 @@ Current validation:
 - Screenshot coverage includes:
   - homepage;
   - dog search/profile;
-  - public pedigree;
+  - public pedigree on desktop and mobile, including advanced analysis;
   - member dashboard;
-  - My Pedigrees/private pedigree;
+  - My Pedigrees/private pedigree on desktop and mobile, including advanced analysis;
   - My Litters;
   - My Documents;
   - My Review Cases;
@@ -188,16 +207,7 @@ Approved photos can enter through the member photo submission/review workflow.
 
 ## Next major phase
 
-### Advanced pedigree analysis
-
-- Dedicated ancestor-contribution reporting.
-- Rich linebreeding path visualization.
-- Printable/exportable pedigree.
-- Pedigree revision keys and analysis caching.
-- Performance testing on dense 8–10 generation pedigrees.
-- Better mobile analysis summaries for very deep pedigrees.
-
-### Production phase after analysis
+### Production
 
 - Select/configure deployment host.
 - Configure production PostgreSQL.
