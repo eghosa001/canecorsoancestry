@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Virtual mating · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Pedigree analysis</p>
+    <h1>Virtual mating</h1>
+    <p>Compare a public sire and dam using the ancestry already connected in the database. This does not create a litter or registration.</p>
+  </header>
+
+  <form class="mating-form" method="get">
+    <div class="mating-select">
+      <label for="sire">Select sire</label>
+      <select id="sire" name="sire" required>
+        <option value="">Choose a sire</option>
+        {% for dog in sires %}<option value="{{ dog.pk }}" {% if sire and sire.pk == dog.pk %}selected{% endif %}>{{ dog.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <span class="mating-plus">+</span>
+    <div class="mating-select">
+      <label for="dam">Select dam</label>
+      <select id="dam" name="dam" required>
+        <option value="">Choose a dam</option>
+        {% for dog in dams %}<option value="{{ dog.pk }}" {% if dam and dam.pk == dog.pk %}selected{% endif %}>{{ dog.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <button class="btn btn-gold" type="submit">Analyse pairing</button>
+  </form>
+
+  {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+
+  {% if sire and dam and not error %}
+    <section class="mating-results">
+      <div class="pairing-summary">
+        <article><span>Sire</span><strong>{{ sire.name }}</strong></article>
+        <span class="mating-plus">×</span>
+        <article><span>Dam</span><strong>{{ dam.name }}</strong></article>
+      </div>
+      <div class="analysis-grid">
+        <article class="analysis-card"><p class="eyebrow">Projected COI</p><strong class="analysis-number">{{ projected_percent|floatformat:2 }}%</strong><span>Based on connected ancestry</span></article>
+        <article class="analysis-card"><p class="eyebrow">Common ancestors</p><strong class="analysis-number">{{ common|length }}</strong><span>Distinct shared ancestors</span></article>
+      </div>
+      <div class="panel">
+        <div class="panel-heading"><h2>Common ancestors</h2></div>
+        <div class="repeated-list">
+          {% for item in common %}
+            <a href="{% url 'registry:dog-detail' item.dog.slug %}">
+              <strong>{{ item.dog.name }}</strong>
+              <span>Sire side gen {{ item.left_generation }} · dam side gen {{ item.right_generation }}</span>
+            </a>
+          {% empty %}
+            <p class="muted">No common ancestors were found in the connected pedigree depth.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+  {% endif %}
+</section>
+{% endblock %}

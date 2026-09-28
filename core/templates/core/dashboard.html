@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<div class="dashboard-shell">
+  <aside class="dashboard-sidebar">
+    <p class="eyebrow">Member area</p>
+    <strong class="sidebar-name">{{ user.get_username }}</strong>
+    <nav>
+      <a class="active" href="{% url 'dashboard' %}">Dashboard</a>
+      <a href="#my-dogs">My dogs</a>
+      <a href="#my-pedigrees">My pedigrees</a>
+      <a href="#my-litters">My litters</a>
+      <a href="#my-kennel">My kennel</a>
+      <a href="#health">Health & DNA</a>
+      <a href="#documents">My documents</a>
+      <a href="{% url 'password_change' %}">Account settings</a>
+      <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="sidebar-logout" type="submit">Sign out</button></form>
+    </nav>
+  </aside>
+
+  <section class="dashboard-main">
+    <header class="dashboard-hero">
+      <div>
+        <p class="eyebrow">Member dashboard</p>
+        <h1>{{ user.get_full_name|default:user.get_username }}</h1>
+        {% if primary_kennel %}
+          <p>{{ primary_kennel.name }}{% if primary_kennel.country %} · {{ primary_kennel.country }}{% endif %}</p>
+        {% else %}
+          <p>No kennel is linked to this account yet.</p>
+        {% endif %}
+      </div>
+      <div class="dashboard-stats">
+        <article><strong>{{ dog_total }}</strong><span>Dogs</span></article>
+        <article><strong>{{ litter_total }}</strong><span>Litters</span></article>
+        <article><strong>{{ public_dog_total }}</strong><span>Public records</span></article>
+      </div>
+    </header>
+
+    <div class="dashboard-grid">
+      <section id="my-dogs" class="dashboard-panel dashboard-wide">
+        <div class="panel-heading"><h2>My dogs</h2><span>Canonical records linked to your kennel</span></div>
+        {% if dogs %}
+          <div class="dog-card-grid compact">
+            {% for dog in dogs %}
+              <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
+                <div class="dog-card-media">
+                  {% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}">{% else %}<div class="media-placeholder">CCA</div>{% endif %}
+                  <span class="verification-pill">{{ dog.get_verification_state_display }}</span>
+                </div>
+                <div class="dog-card-body">
+                  <h3>{{ dog.name }}</h3>
+                  <p>{{ dog.colour|default:"Colour not recorded" }}</p>
+                </div>
+              </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state"><strong>No kennel dogs yet.</strong><p>Dog submissions will appear here after your kennel is linked.</p></div>
+        {% endif %}
+      </section>
+
+      <section id="my-kennel" class="dashboard-panel">
+        <div class="panel-heading"><h2>My kennel</h2></div>
+        {% if primary_kennel %}
+          <h3>{{ primary_kennel.name }}</h3>
+          <p class="muted">{{ primary_kennel.city }}{% if primary_kennel.city and primary_kennel.country %}, {% endif %}{{ primary_kennel.country }}</p>
+          <a class="btn btn-outline" href="{% url 'registry:kennel-detail' primary_kennel.slug %}">View public kennel</a>
+        {% else %}
+          <div class="empty-state"><p>No kennel membership recorded.</p></div>
+        {% endif %}
+      </section>
+
+      <section id="my-litters" class="dashboard-panel">
+        <div class="panel-heading"><h2>My litters</h2></div>
+        {% for litter in litters %}
+          <a class="activity-row" href="{% url 'registry:litter-detail' litter.pk %}">
+            <strong>{{ litter.code }}</strong>
+            <span>{{ litter.date_of_birth|default:"Date not recorded" }}</span>
+          </a>
+        {% empty %}
+          <p class="muted">No litters recorded.</p>
+        {% endfor %}
+      </section>
+
+      <section id="health" class="dashboard-panel dashboard-wide">
+        <div class="panel-heading"><h2>Health & DNA records</h2></div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>Dog</th><th>Test</th><th>Result</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody>
+            {% for record in health_records %}
+              <tr><td>{{ record.dog.name }}</td><td>{{ record.test_type }}</td><td>{{ record.result }}</td><td>{{ record.get_verification_state_display }}</td><td>{{ record.tested_on|default:"—" }}</td></tr>
+            {% empty %}
+              <tr><td colspan="5">No health records recorded.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </section>
+</div>
+{% endblock %}

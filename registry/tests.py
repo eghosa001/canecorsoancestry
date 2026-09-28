@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Dog
+from .models import Dog, DogRegistration, RegistrationAuthority
 
 
 class DogModelTests(TestCase):
@@ -16,3 +16,12 @@ class DogModelTests(TestCase):
         Dog.objects.create(name="Karma Custodi Nos", slug="karma-custodi-nos", is_public=True)
         response = self.client.get(reverse("registry:dog-search"), {"q": "Karma"})
         self.assertContains(response, "Karma Custodi Nos")
+
+    def test_public_search_finds_external_registration_number(self):
+        dog = Dog.objects.create(name="Branco", slug="branco", is_public=True)
+        authority = RegistrationAuthority.objects.create(code="KSS", name="Kennel authority")
+        DogRegistration.objects.create(dog=dog, authority=authority, number="JR 710606 Cc")
+
+        response = self.client.get(reverse("registry:dog-search"), {"q": "710606"})
+
+        self.assertContains(response, "Branco")

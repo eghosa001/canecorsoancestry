@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Kennels · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Kennel directory</p>
+    <h1>Explore kennels</h1>
+    <p>Browse kennels represented in the ancestry database and follow their public dogs and litters.</p>
+  </header>
+  <div class="kennel-grid">
+    {% for kennel in kennels %}
+      <a class="kennel-card" href="{% url 'registry:kennel-detail' kennel.slug %}">
+        <div class="kennel-card-top">
+          <span class="eyebrow">{{ kennel.country|default:"Country not recorded" }}</span>
+          {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% endif %}
+        </div>
+        <h2>{{ kennel.name }}</h2>
+        <p>{{ kennel.description|truncatewords:24|default:"Kennel profile." }}</p>
+        <div class="mini-stats"><span><strong>{{ kennel.public_dog_count }}</strong> dogs</span><span><strong>{{ kennel.public_litter_count }}</strong> litters</span></div>
+      </a>
+    {% empty %}
+      <div class="empty-state"><p>No kennels have been published yet.</p></div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ kennel.name }} · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="kennel-hero">
+    <div>
+      <p class="eyebrow">Kennel profile</p>
+      <h1>{{ kennel.name }}</h1>
+      <p>{{ kennel.city }}{% if kennel.city and kennel.country %}, {% endif %}{{ kennel.country }}</p>
+      {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% endif %}
+    </div>
+    {% if kennel.website %}<a class="btn btn-outline" href="{{ kennel.website }}" rel="noreferrer">Kennel website</a>{% endif %}
+  </header>
+  {% if kennel.description %}<p class="kennel-description">{{ kennel.description }}</p>{% endif %}
+
+  <div class="section-heading"><h2>Dogs</h2><span>{{ dogs|length }} public record{{ dogs|length|pluralize }}</span></div>
+  <div class="dog-card-grid">
+    {% for dog in dogs %}
+      <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
+        <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}">{% else %}<div class="media-placeholder">CCA</div>{% endif %}</div>
+        <div class="dog-card-body"><h3>{{ dog.name }}</h3><p>{{ dog.colour|default:"Colour not recorded" }} · {{ dog.get_sex_display }}</p></div>
+      </a>
+    {% empty %}<div class="empty-state"><p>No public dogs are linked yet.</p></div>{% endfor %}
+  </div>
+
+  <div class="section-heading section-spacer"><h2>Litters</h2></div>
+  <div class="litter-list">
+    {% for litter in litters %}
+      <a class="litter-row" href="{% url 'registry:litter-detail' litter.pk %}">
+        <strong>{{ litter.code }}</strong>
+        <span>{{ litter.date_of_birth|default:"Date not recorded" }}</span>
+        <span>{% if litter.sire %}{{ litter.sire.name }}{% else %}Unknown sire{% endif %} × {% if litter.dam %}{{ litter.dam.name }}{% else %}Unknown dam{% endif %}</span>
+      </a>
+    {% empty %}<p class="muted">No public litters are linked yet.</p>{% endfor %}
+  </div>
+</section>
+{% endblock %}

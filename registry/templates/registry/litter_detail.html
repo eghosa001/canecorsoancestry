@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ litter.code }} · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Litter</p>
+    <h1>{{ litter.code }}</h1>
+    <p>{{ litter.date_of_birth|default:"Date of birth not recorded" }}{% if litter.kennel %} · <a class="text-link" href="{% url 'registry:kennel-detail' litter.kennel.slug %}">{{ litter.kennel.name }}</a>{% endif %}</p>
+  </header>
+
+  <div class="profile-section-grid">
+    <article class="panel">
+      <div class="panel-heading"><h2>Parents</h2></div>
+      <div class="parent-grid">
+        <div><span>Sire</span>{% if litter.sire %}<strong>{{ litter.sire.name }}</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
+        <div><span>Dam</span>{% if litter.dam %}<strong>{{ litter.dam.name }}</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
+      </div>
+    </article>
+    <article class="panel">
+      <div class="panel-heading"><h2>Summary</h2></div>
+      <dl class="compact-facts"><dt>Public offspring</dt><dd>{{ offspring|length }}</dd><dt>Status</dt><dd>Published pedigree record</dd></dl>
+    </article>
+  </div>
+
+  {% if litter.notes %}<article class="panel profile-bio"><p>{{ litter.notes }}</p></article>{% endif %}
+
+  <div class="section-heading section-spacer"><h2>Offspring</h2></div>
+  <div class="dog-card-grid">
+    {% for dog in offspring %}
+      <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
+        <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}">{% else %}<div class="media-placeholder">CCA</div>{% endif %}</div>
+        <div class="dog-card-body"><h3>{{ dog.name }}</h3><p>{{ dog.get_sex_display }} · {{ dog.colour|default:"Colour not recorded" }}</p></div>
+      </a>
+    {% empty %}<div class="empty-state"><p>No public offspring records are attached yet.</p></div>{% endfor %}
+  </div>
+</section>
+{% endblock %}

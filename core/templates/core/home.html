@@ -3,23 +3,78 @@
 <section class="hero">
   <div class="hero-copy">
     <p class="eyebrow">Pedigree · Bloodline · Provenance</p>
-    <h1>Discover the ancestry behind the Cane Corso.</h1>
-    <p>Search canonical dog records, follow generations and inspect the evidence behind each pedigree.</p>
-    <form class="search" action="{% url 'registry:dog-search' %}" method="get">
+    <h1>CANE CORSO<br>ITALIANO</h1>
+    <p>Discover the ancestry behind the breed. Search canonical dog records, follow generations, compare bloodlines and inspect the evidence behind each pedigree.</p>
+    <form class="hero-search" action="{% url 'registry:dog-search' %}" method="get">
       <label class="sr-only" for="dog-search">Search dogs</label>
-      <input id="dog-search" name="q" placeholder="Dog name, kennel or registration number">
+      <input id="dog-search" name="q" placeholder="Search by dog name, kennel, registration number…">
       <button type="submit">Search</button>
     </form>
+
+    <div class="hero-stats" aria-label="Database statistics">
+      <article><strong>{{ dog_count }}</strong><span>Public dogs</span></article>
+      <article><strong>{{ kennel_count }}</strong><span>Kennels</span></article>
+      <article><strong>{{ litter_count }}</strong><span>Litters</span></article>
+      <article><strong>{{ country_count }}</strong><span>Countries</span></article>
+    </div>
+  </div>
+  <div class="hero-mark" aria-hidden="true">
+    <span>CCA</span>
+    <small>CANECORSOANCESTRY.COM</small>
   </div>
 </section>
-<section class="stats" aria-label="Database statistics">
-  <article><strong>{{ dog_count }}</strong><span>Public dogs</span></article>
-  <article><strong>{{ kennel_count }}</strong><span>Kennels</span></article>
-  <article><strong>{{ litter_count }}</strong><span>Litters</span></article>
+
+<section class="page-shell home-actions">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Explore</p>
+      <h2>Trace the bloodline.</h2>
+    </div>
+  </div>
+  <div class="action-grid">
+    <a class="action-card" href="{% url 'registry:dog-search' %}">
+      <span class="action-icon">⌕</span><strong>Search dogs</strong><small>Find pedigrees</small>
+    </a>
+    <a class="action-card" href="{% url 'registry:kennel-list' %}">
+      <span class="action-icon">⌂</span><strong>Explore kennels</strong><small>View kennel profiles</small>
+    </a>
+    <a class="action-card" href="{% url 'pedigrees:index' %}">
+      <span class="action-icon">◇</span><strong>Explore pedigrees</strong><small>Follow generations</small>
+    </a>
+    <a class="action-card" href="{% url 'pedigrees:virtual-mating' %}">
+      <span class="action-icon">⌘</span><strong>Virtual mating</strong><small>Analyse pairings</small>
+    </a>
+  </div>
 </section>
-<section class="feature-grid">
-  <article><h2>Search dogs</h2><p>Find one canonical record across names, aliases and registrations.</p></article>
-  <article><h2>Explore pedigrees</h2><p>Move across generations without losing family context.</p></article>
-  <article><h2>Verify sources</h2><p>Keep pedigree and health claims linked to supporting evidence.</p></article>
+
+{% if featured_dogs %}
+<section class="page-shell">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Recently updated</p>
+      <h2>Dog records</h2>
+    </div>
+    <a class="text-link" href="{% url 'registry:dog-search' %}">View all dogs →</a>
+  </div>
+  <div class="dog-card-grid">
+    {% for dog in featured_dogs %}
+      <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
+        <div class="dog-card-media">
+          {% if dog.display_images %}
+            <img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}">
+          {% else %}
+            <div class="media-placeholder">CCA</div>
+          {% endif %}
+          <span class="verification-pill">{{ dog.get_verification_state_display }}</span>
+        </div>
+        <div class="dog-card-body">
+          <h3>{{ dog.name }}</h3>
+          {% if dog.display_registrations %}<p>{{ dog.display_registrations.0.authority.code }} · {{ dog.display_registrations.0.number }}</p>{% endif %}
+          <p>{{ dog.colour|default:"Colour not recorded" }}{% if dog.country %} · {{ dog.country }}{% endif %}</p>
+        </div>
+      </a>
+    {% endfor %}
+  </div>
 </section>
+{% endif %}
 {% endblock %}

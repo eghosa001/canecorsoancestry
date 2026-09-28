@@ -1,22 +1,71 @@
 {% extends "base.html" %}
 {% block title %}Search dogs · Cane Corso Ancestry{% endblock %}
 {% block content %}
-<section class="page-shell">
-  <p class="eyebrow">Dog database</p>
-  <h1>Search dogs</h1>
-  <form class="search" method="get">
-    <label class="sr-only" for="q">Search dogs</label>
-    <input id="q" name="q" value="{{ query }}" placeholder="Dog name, kennel or registration number">
-    <button type="submit">Search</button>
+<section class="search-layout page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Dog database</p>
+    <h1>Search dogs</h1>
+    <p>Search canonical Cane Corso records by name, kennel, alias or external registration number.</p>
+  </header>
+
+  <form class="filter-panel" method="get">
+    <div class="filter-search">
+      <label for="q">Search</label>
+      <input id="q" name="q" value="{{ query }}" placeholder="Dog name, kennel or registration number">
+    </div>
+    <div>
+      <label for="sex">Sex</label>
+      <select id="sex" name="sex">
+        <option value="">All</option>
+        <option value="male" {% if sex == "male" %}selected{% endif %}>Male</option>
+        <option value="female" {% if sex == "female" %}selected{% endif %}>Female</option>
+        <option value="unknown" {% if sex == "unknown" %}selected{% endif %}>Unknown</option>
+      </select>
+    </div>
+    <div>
+      <label for="country">Country</label>
+      <select id="country" name="country">
+        <option value="">All</option>
+        {% for item in countries %}<option value="{{ item }}" {% if country == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="kennel">Kennel</label>
+      <select id="kennel" name="kennel">
+        <option value="">All</option>
+        {% for kennel in kennels %}<option value="{{ kennel.slug }}" {% if kennel_slug == kennel.slug %}selected{% endif %}>{{ kennel.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <button class="btn btn-gold" type="submit">Search</button>
   </form>
-  <div class="results">
+
+  <div class="result-summary">
+    <strong>{{ dogs|length }} result{{ dogs|length|pluralize }}</strong>
+    {% if query %}<span>for “{{ query }}”</span>{% endif %}
+  </div>
+
+  <div class="search-results">
     {% for dog in dogs %}
-      <a class="result-card" href="{% url 'registry:dog-detail' dog.slug %}">
-        <strong>{{ dog.name }}</strong>
-        <span>{{ dog.get_sex_display }}{% if dog.kennel %} · {{ dog.kennel.name }}{% endif %}</span>
+      <a class="search-result-card" href="{% url 'registry:dog-detail' dog.slug %}">
+        <div class="search-result-media">
+          {% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}">{% else %}<div class="media-placeholder">CCA</div>{% endif %}
+        </div>
+        <div class="search-result-main">
+          <div class="result-title-row">
+            <h2>{{ dog.name }}</h2>
+            <span class="sex-mark">{{ dog.get_sex_display }}</span>
+          </div>
+          {% if dog.display_registrations %}<p class="registration-line">{{ dog.display_registrations.0.authority.code }} · {{ dog.display_registrations.0.number }}</p>{% endif %}
+          <p>{{ dog.colour|default:"Colour not recorded" }}{% if dog.date_of_birth %} · Born {{ dog.date_of_birth }}{% endif %}</p>
+          {% if dog.kennel %}<p class="muted">{{ dog.kennel.name }}</p>{% endif %}
+        </div>
+        <span class="verification-pill">{{ dog.get_verification_state_display }}</span>
       </a>
     {% empty %}
-      {% if query %}<p class="muted">No public dogs matched “{{ query }}”.</p>{% endif %}
+      <div class="empty-state">
+        <strong>No matching public dogs.</strong>
+        <p>Try a broader name, kennel or registration search.</p>
+      </div>
     {% endfor %}
   </div>
 </section>

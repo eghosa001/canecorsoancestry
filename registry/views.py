@@ -1,39 +1,151 @@
-from django.db.models import Q
+from django.db.models import Count, Prefetch, Q
 from django.shortcuts import get_object_or_404, render
 
-from pedigrees.services import build_pedigree, repeated_ancestors
+from pedigrees.services import offspring_for, sibling_relationships
 
-from .models import Dog
+from .models import (
+    Dog,
+    DogImage,
+    DogRegistration,
+    DogSource,
+    DogTitle,
+    HealthRecord,
+    Kennel,
+    Litter,
+)
+
+
+def _dog_cards(queryset):
+    return queryset.select_related("kennel", "sire", "dam").prefetch_related(
+        Prefetch(
+            "images",
+            queryset=DogImage.objects.order_by("-is_primary", "sort_order", "created_at"),
+            to_attr="display_images",
+        ),
+        Prefetch(
+            "registrations",
+            queryset=DogRegistration.objects.select_related("authority"),
+            to_attr="display_registrations",
+        ),
+    )
 
 
 def dog_search(request):
     query = request.GET.get("q", "").strip()
-    dogs = Dog.objects.filter(is_public=True).select_related("kennel", "sire", "dam")
+    sex = request.GET.get("sex", "").strip()
+    country = request.GET.get("country", "").strip()
+    kennel_slug = request.GET.get("kennel", "").strip()
+
+    dogs = _dog_cards(Dog.objects.filter(is_public=True))
     if query:
         dogs = dogs.filter(
             Q(name__icontains=query)
             | Q(bloodline__icontains=query)
             | Q(aliases__name__icontains=query)
             | Q(registrations__number__icontains=query)
+            | Q(kennel__name__icontains=query)
         ).distinct()
-    else:
-        dogs = dogs.none()
-    return render(request, "registry/dog_search.html", {"dogs": dogs, "query": query})
+    if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE, Dog.Sex.UNKNOWN}:
+        dogs = dogs.filter(sex=sex)
+    if country:
+        dogs = dogs.filter(country__iexact=country)
+    if kennel_slug:
+        dogs = dogs.filter(kennel__slug=kennel_slug)
+
+    dogs = dogs.order_by("name")
+    countries = (
+        Dog.objects.filter(is_public=True)
+        .exclude(country="")
+        .values_list("country", flat=True)
+        .distinct()
+        .order_by("country")
+    )
+    kennels = Kennel.objects.order_by("name")
+
+    return render(
+        request,
+        "registry/dog_search.html",
+        {
+            "dogs": dogs,
+            "query": query,
+            "sex": sex,
+            "country": country,
+            "kennel_slug": kennel_slug,
+            "countries": countries,
+            "kennels": kennels,
+        },
+    )
 
 
 def dog_detail(request, slug):
-    dog = get_object_or_404(
-        Dog.objects.select_related("kennel", "sire", "dam").prefetch_related(
-            "registrations__authority",
+    dogs = _dog_cards(Dog.objects.filter(is_public=True)).prefetch_related(
+        Prefetch(
             "health_records",
-            "titles",
+            queryset=HealthRecord.objects.order_by("test_type", "-tested_on"),
+            to_attr="display_health_records",
         ),
-        slug=slug,
+        Prefetch(
+            "sources",
+            queryset=DogSource.objects.order_by("-verified_at", "-created_at"),
+            to_attr="display_sources",
+        ),
+        Prefetch(
+            "titles",
+            queryset=DogTitle.objects.order_by("name"),
+            to_attr="display_titles",
+        ),
+    )
+    dog = get_object_or_404(dogs, slug=slug)
+    return render(
+        request,
+        "registry/dog_detail.html",
+        {
+            "dog": dog,
+            "siblings": sibling_relationships(dog),
+            "offspring": offspring_for(dog),
+        },
+    )
+
+
+def kennel_list(request):
+    kennels = (
+        Kennel.objects.annotate(
+            public_dog_count=Count("dogs", filter=Q(dogs__is_public=True), distinct=True),
+            public_litter_count=Count(
+                "litters", filter=Q(litters__is_public=True), distinct=True
+            ),
+        )
+        .order_by("name")
+    )
+    return render(request, "registry/kennel_list.html", {"kennels": kennels})
+
+
+def kennel_detail(request, slug):
+    kennel = get_object_or_404(Kennel, slug=slug)
+    dogs = _dog_cards(Dog.objects.filter(kennel=kennel, is_public=True)).order_by("name")
+    litters = (
+        Litter.objects.filter(kennel=kennel, is_public=True)
+        .select_related("sire", "dam")
+        .order_by("-date_of_birth", "code")
+    )
+    return render(
+        request,
+        "registry/kennel_detail.html",
+        {"kennel": kennel, "dogs": dogs, "litters": litters},
+    )
+
+
+def litter_detail(request, pk):
+    litter = get_object_or_404(
+        Litter.objects.select_related("kennel", "sire", "dam"),
+        pk=pk,
         is_public=True,
     )
-    context = {
-        "dog": dog,
-        "pedigree": build_pedigree(dog, generations=4, public_only=True),
-        "repeated": repeated_ancestors(dog, generations=4, public_only=True),
-    }
-    return render(request, "registry/dog_detail.html", context)
+    offspring = _dog_cards(
+        Dog.objects.filter(litter=litter, is_public=True)
+    ).order_by("name")
+    return render(
+        request,
+        "registry/litter_detail.html",
+        {"litter": litter, "offspring": offspring},
+    )

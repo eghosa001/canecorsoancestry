@@ -7,4 +7,7 @@ app_name = "registry"
 urlpatterns = [
     path("dogs/", views.dog_search, name="dog-search"),
     path("dogs/<slug:slug>/", views.dog_detail, name="dog-detail"),
+    path("kennels/", views.kennel_list, name="kennel-list"),
+    path("kennels/<slug:slug>/", views.kennel_detail, name="kennel-detail"),
+    path("litters/<uuid:pk>/", views.litter_detail, name="litter-detail"),
 ]

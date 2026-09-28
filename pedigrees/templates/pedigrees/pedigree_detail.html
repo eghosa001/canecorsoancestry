@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ dog.name }} pedigree · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="pedigree-page">
+  <header class="pedigree-toolbar page-shell">
+    <div>
+      <p class="eyebrow">Pedigree</p>
+      <h1>{{ dog.name }}</h1>
+      <p>{{ generations }} generation view</p>
+    </div>
+    <div class="generation-switch" aria-label="Pedigree depth">
+      {% for option in generation_options %}
+        <a class="{% if generations == option %}active{% endif %}" href="?generations={{ option }}">{{ option }} generations</a>
+      {% endfor %}
+    </div>
+  </header>
+
+  {% if cycle_error %}<div class="notice error page-shell">{{ cycle_error }}</div>{% endif %}
+
+  <div class="pedigree-scroll" aria-label="{{ generations }} generation pedigree for {{ dog.name }}">
+    <div class="pedigree-board">
+      {% for layer in layers %}
+        <section class="pedigree-column">
+          <h2>{{ layer.label }}</h2>
+          <div class="pedigree-nodes">
+            {% for node in layer.nodes %}
+              {% if node.dog %}
+                <a class="pedigree-node {% if node.repeated %}repeated{% endif %}" href="{% url 'registry:dog-detail' node.dog.slug %}">
+                  <strong>{{ node.dog.name }}</strong>
+                  <span>{{ node.dog.get_sex_display }}{% if node.dog.colour %} · {{ node.dog.colour }}{% endif %}</span>
+                  {% if node.repeated %}<small>Repeated ancestor</small>{% endif %}
+                </a>
+              {% else %}
+                <div class="pedigree-node missing"><strong>Unknown</strong><span>No canonical record</span></div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </section>
+      {% endfor %}
+    </div>
+  </div>
+
+  <section class="page-shell analysis-grid">
+    <article class="analysis-card">
+      <p class="eyebrow">Pedigree analysis</p>
+      <strong class="analysis-number">{% if coi_percent != None %}{{ coi_percent|floatformat:2 }}%{% else %}—{% endif %}</strong>
+      <span>Coefficient of inbreeding</span>
+    </article>
+    <article class="analysis-card">
+      <p class="eyebrow">Repeated ancestors</p>
+      <strong class="analysis-number">{{ repeated|length }}</strong>
+      <span>Detected in this pedigree depth</span>
+    </article>
+    <article class="analysis-card action-analysis">
+      <p class="eyebrow">Compare a pairing</p>
+      <h2>Virtual mating</h2>
+      <a class="btn btn-gold" href="{% url 'pedigrees:virtual-mating' %}">Analyse pairing</a>
+    </article>
+  </section>
+
+  {% if repeated %}
+  <section class="page-shell">
+    <div class="panel">
+      <div class="panel-heading"><h2>Repeated ancestors</h2><span>One canonical dog may appear in several pedigree positions.</span></div>
+      <div class="repeated-list">
+        {% for item in repeated %}
+          <a href="{% url 'registry:dog-detail' item.dog.slug %}">
+            <strong>{{ item.dog.name }}</strong>
+            <span>{{ item.occurrences }} appearances · nearest generation {{ item.nearest_generation }}</span>
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Pedigrees · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Pedigree explorer</p>
+    <h1>Explore pedigrees</h1>
+    <p>Select a public dog to trace generations, repeated ancestors and inbreeding analysis.</p>
+  </header>
+  <form class="hero-search compact-search" method="get">
+    <label class="sr-only" for="pedigree-q">Search pedigrees</label>
+    <input id="pedigree-q" name="q" value="{{ query }}" placeholder="Dog name, kennel or registration">
+    <button type="submit">Search</button>
+  </form>
+  <div class="pedigree-index-grid">
+    {% for dog in dogs %}
+      <a class="pedigree-index-card" href="{% url 'pedigrees:detail' dog.slug %}">
+        <span class="eyebrow">{{ dog.get_sex_display }}</span>
+        <h2>{{ dog.name }}</h2>
+        <p>{% if dog.kennel %}{{ dog.kennel.name }}{% else %}Kennel not recorded{% endif %}</p>
+        <span class="text-link">Open pedigree →</span>
+      </a>
+    {% empty %}
+      <div class="empty-state"><p>No matching public pedigree records.</p></div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
