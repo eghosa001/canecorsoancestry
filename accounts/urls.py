@@ -19,5 +19,6 @@ urlpatterns = [
         views.review_submission,
         name="review-submission",
     ),
-    path("moderation/merge-dogs/", views.merge_dogs_view, name="merge-dogs"),\n    path("moderation/verify-dog/", views.verify_dog, name="verify-dog"),
+    path("moderation/merge-dogs/", views.merge_dogs_view, name="merge-dogs"),
+    path("moderation/verify-dog/", views.verify_dog, name="verify-dog"),
 ]
