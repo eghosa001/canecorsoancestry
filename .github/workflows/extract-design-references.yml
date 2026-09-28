@@ -1,0 +1,71 @@
+name: Extract owner design references
+
+on:
+  push:
+    paths:
+      - ".github/workflows/extract-design-references.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract original reference images
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import posixpath
+          import xml.etree.ElementTree as ET
+
+          package = Path(".github/assets/design-reference-transfer.pptx")
+          out = Path("docs/design-reference")
+          out.mkdir(parents=True, exist_ok=True)
+
+          targets = [
+              (1, out / "public-pedigree-reference.jpg"),
+              (2, out / "member-dashboard-reference.jpg"),
+          ]
+
+          with ZipFile(package) as z:
+              for slide_num, destination in targets:
+                  rel_path = f"ppt/slides/_rels/slide{slide_num}.xml.rels"
+                  root = ET.fromstring(z.read(rel_path))
+                  image_target = None
+                  for rel in root:
+                      if rel.attrib.get("Type", "").endswith("/image"):
+                          image_target = rel.attrib["Target"]
+                          break
+                  if not image_target:
+                      raise RuntimeError(f"No image relationship found for slide {slide_num}")
+                  media_path = posixpath.normpath(
+                      posixpath.join("ppt/slides", image_target)
+                  )
+                  payload = z.read(media_path)
+                  destination.write_bytes(payload)
+                  print(f"{destination}: {len(payload)} bytes from {media_path}")
+          PY
+
+          file docs/design-reference/public-pedigree-reference.jpg
+          file docs/design-reference/member-dashboard-reference.jpg
+          test "$(stat -c%s docs/design-reference/public-pedigree-reference.jpg)" -gt 100000
+          test "$(stat -c%s docs/design-reference/member-dashboard-reference.jpg)" -gt 100000
+
+      - name: Remove one-time transfer files
+        run: |
+          rm -f .github/assets/design-reference-transfer.pptx
+          rm -f .github/workflows/extract-design-references.yml
+
+      - name: Commit preserved originals
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Preserve full-resolution owner design references"
+          git push
