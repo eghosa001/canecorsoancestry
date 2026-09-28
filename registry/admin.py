@@ -78,9 +78,24 @@ class LitterAdmin(admin.ModelAdmin):
 
 @admin.register(Submission)
 class SubmissionAdmin(admin.ModelAdmin):
-    list_display = ("kind", "submitted_by", "dog", "kennel", "status", "created_at")
+    list_display = (
+        "kind",
+        "submitted_by",
+        "dog",
+        "litter",
+        "document",
+        "kennel",
+        "status",
+        "created_at",
+    )
     list_filter = ("kind", "status", "created_at")
-    search_fields = ("dog__name", "kennel__name", "submitted_by__username")
+    search_fields = (
+        "dog__name",
+        "litter__code",
+        "document__title",
+        "kennel__name",
+        "submitted_by__username",
+    )
     readonly_fields = ("created_at", "updated_at")
 
 

@@ -33,9 +33,51 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - run: python manage.py migrate --noinput
       - run: python manage.py import_bellissimo
-      - name: Create UI review member
+      - name: Create UI review member and workspace data
         run: |
-          python manage.py shell -c "from django.contrib.auth import get_user_model; from registry.models import Kennel,KennelMembership; U=get_user_model(); u,_=U.objects.get_or_create(username='ui-reviewer', defaults={'is_staff':True}); u.is_staff=True; u.set_password('ui-reviewer-password'); u.save(); k=Kennel.objects.first() or Kennel.objects.create(name='UI Kennel',slug='ui-kennel'); KennelMembership.objects.get_or_create(user=u,kennel=k,defaults={'role':KennelMembership.Role.OWNER})"
+          python manage.py shell <<'PY'
+          from django.contrib.auth import get_user_model
+          from registry.models import Dog, DogDocument, Kennel, KennelMembership, Litter
+
+          U = get_user_model()
+          u, _ = U.objects.get_or_create(username="ui-reviewer", defaults={"is_staff": True})
+          u.is_staff = True
+          u.set_password("ui-reviewer-password")
+          u.save()
+
+          k = Kennel.objects.filter(dogs__isnull=False).distinct().first()
+          if not k:
+              k = Kennel.objects.create(name="UI Kennel", slug="ui-kennel")
+          KennelMembership.objects.update_or_create(
+              user=u,
+              kennel=k,
+              defaults={"role": KennelMembership.Role.OWNER},
+          )
+
+          Kennel.objects.get_or_create(
+              slug="claimable-kennel",
+              defaults={"name": "Claimable Kennel", "country": "Nigeria"},
+          )
+
+          sire = Dog.objects.filter(kennel=k, sex=Dog.Sex.MALE).first()
+          dam = Dog.objects.filter(kennel=k, sex=Dog.Sex.FEMALE).first()
+          Litter.objects.get_or_create(
+              code="UI-LITTER-2026",
+              defaults={"kennel": k, "sire": sire, "dam": dam, "is_public": False},
+          )
+
+          dog = Dog.objects.filter(kennel=k).first()
+          if dog:
+              DogDocument.objects.get_or_create(
+                  dog=dog,
+                  title="UI pedigree evidence",
+                  defaults={
+                      "document_type": DogDocument.DocumentType.PEDIGREE,
+                      "file": "documents/ui-pedigree.pdf",
+                      "submitted_by": u,
+                  },
+              )
+          PY
       - name: Start Django
         run: |
           python manage.py runserver 127.0.0.1:8000 > /tmp/cca-django.log 2>&1 &

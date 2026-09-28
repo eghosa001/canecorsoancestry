@@ -9,7 +9,11 @@
       <p>{{ kennel.city }}{% if kennel.city and kennel.country %}, {% endif %}{{ kennel.country }}</p>
       {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% endif %}
     </div>
-    {% if kennel.website %}<a class="btn btn-outline" href="{{ kennel.website }}" rel="noreferrer">Kennel website</a>{% endif %}
+    <div class="button-row">
+      {% if kennel.website %}<a class="btn btn-outline" href="{{ kennel.website }}" rel="noreferrer">Kennel website</a>{% endif %}
+      {% if can_claim %}<a class="btn btn-gold" href="{% url 'accounts:claim-kennel' kennel.pk %}">Claim this kennel</a>{% endif %}
+      {% if claim_pending %}<span class="submission-state pending">Ownership claim pending</span>{% endif %}
+    </div>
   </header>
   {% if kennel.description %}<p class="kennel-description">{{ kennel.description }}</p>{% endif %}
 

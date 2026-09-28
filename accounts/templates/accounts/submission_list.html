@@ -16,7 +16,7 @@
       <article class="submission-card">
         <div>
           <span class="eyebrow">{{ item.get_kind_display }}</span>
-          <h2>{% if item.dog %}{{ item.dog.name }}{% elif item.kennel %}{{ item.kennel.name }}{% else %}New record{% endif %}</h2>
+          <h2>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.code }}{% elif item.document %}{{ item.document.title }}{% elif item.kennel %}{{ item.kennel.name }}{% else %}New record{% endif %}</h2>
           <p>{{ item.created_at|date:"d M Y, H:i" }}{% if item.notes %} · {{ item.notes|truncatewords:16 }}{% endif %}</p>
         </div>
         <div class="submission-state {{ item.status }}">{{ item.get_status_display }}</div>

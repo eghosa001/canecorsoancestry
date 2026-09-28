@@ -14,6 +14,7 @@ from .models import (
     HealthRecord,
     Kennel,
     Litter,
+    Submission,
 )
 from .permissions import can_contribute_to_dog
 
@@ -143,10 +144,35 @@ def kennel_detail(request, slug):
         .select_related("sire", "dam")
         .order_by("-date_of_birth", "code")
     )
+    kennel_linked = kennel.memberships.exists()
+    is_member = bool(
+        request.user.is_authenticated
+        and request.user.kennel_memberships.filter(kennel=kennel).exists()
+    )
+    claim_pending = bool(
+        request.user.is_authenticated
+        and Submission.objects.filter(
+            kind=Submission.Kind.KENNEL_CLAIM,
+            status=Submission.Status.PENDING,
+            submitted_by=request.user,
+            kennel=kennel,
+        ).exists()
+    )
     return render(
         request,
         "registry/kennel_detail.html",
-        {"kennel": kennel, "dogs": dogs, "litters": litters},
+        {
+            "kennel": kennel,
+            "dogs": dogs,
+            "litters": litters,
+            "can_claim": (
+                request.user.is_authenticated
+                and not kennel_linked
+                and not is_member
+                and not claim_pending
+            ),
+            "claim_pending": claim_pending,
+        },
     )
 
 

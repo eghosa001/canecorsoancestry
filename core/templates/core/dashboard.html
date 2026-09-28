@@ -8,8 +8,8 @@
     <nav>
       <a class="active" href="{% url 'dashboard' %}">Dashboard</a>
       <a href="#my-dogs">My dogs</a>
-      <a href="{% url 'pedigrees:index' %}">My pedigrees</a>
-      <a href="#my-litters">My litters</a>
+      <a href="{% url 'accounts:my-pedigrees' %}">My pedigrees</a>
+      <a href="{% url 'accounts:my-litters' %}">My litters</a>
       <a href="#my-kennel">My kennel</a>
       <a href="#health">Health & DNA</a>
       <a href="{% url 'accounts:documents' %}">My documents</a>
@@ -73,7 +73,7 @@
       </section>
 
       <section id="my-litters" class="dashboard-panel">
-        <div class="panel-heading"><h2>My litters</h2></div>
+        <div class="panel-heading"><h2>My litters</h2><a class="text-link" href="{% url 'accounts:my-litters' %}">Manage litters →</a></div>
         {% for litter in litters %}
           <a class="activity-row" href="{% url 'registry:litter-detail' litter.pk %}">
             <strong>{{ litter.code }}</strong>

@@ -64,8 +64,23 @@ def main():
 
         login(desktop)
         screenshot(desktop, "dashboard-desktop")
+        capture(desktop, "/member/pedigrees/", "my-pedigrees-desktop")
+        member_pedigrees = desktop.locator(".pedigree-workspace-card .btn-gold")
+        if member_pedigrees.count():
+            member_pedigrees.first.click()
+            desktop.wait_for_load_state("networkidle")
+            screenshot(desktop, "member-pedigree-detail-desktop", overflow=False)
+
+        capture(desktop, "/member/litters/", "my-litters-desktop")
+        capture(desktop, "/member/documents/", "documents-desktop")
         capture(desktop, "/member/moderation/", "moderation-desktop")
         capture(desktop, "/member/submit/dog/", "submit-dog-desktop")
+        capture(desktop, "/kennels/claimable-kennel/", "claimable-kennel-desktop")
+        claim_button = desktop.get_by_role("link", name="Claim this kennel")
+        if claim_button.count():
+            claim_button.click()
+            desktop.wait_for_load_state("networkidle")
+            screenshot(desktop, "kennel-claim-desktop")
 
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
         capture(mobile, "/", "home-mobile")
@@ -78,6 +93,9 @@ def main():
 
         login(mobile)
         screenshot(mobile, "dashboard-mobile")
+        capture(mobile, "/member/pedigrees/", "my-pedigrees-mobile")
+        capture(mobile, "/member/litters/", "my-litters-mobile")
+        capture(mobile, "/member/documents/", "documents-mobile")
         capture(mobile, "/member/submit/dog/", "submit-dog-mobile")
 
         browser.close()

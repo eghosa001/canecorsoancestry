@@ -117,6 +117,16 @@ class Dog(models.Model):
             raise ValidationError({"sire": "A dog cannot be its own sire."})
         if self.pk and self.dam_id == self.pk:
             raise ValidationError({"dam": "A dog cannot be its own dam."})
+        if (
+            self.litter_id
+            and self.kennel_id
+            and self.litter
+            and self.litter.kennel_id
+            and self.litter.kennel_id != self.kennel_id
+        ):
+            raise ValidationError(
+                {"litter": "A dog can only be assigned to a litter from the same kennel."}
+            )
 
     def __str__(self):
         return self.name
@@ -153,6 +163,15 @@ class Litter(models.Model):
 
     class Meta:
         ordering = ("-date_of_birth", "code")
+
+    def clean(self):
+        super().clean()
+        if self.sire_id and self.dam_id and self.sire_id == self.dam_id:
+            raise ValidationError({"dam": "Sire and dam must be different dogs."})
+        if self.sire and self.sire.sex == Dog.Sex.FEMALE:
+            raise ValidationError({"sire": "The selected sire is recorded as female."})
+        if self.dam and self.dam.sex == Dog.Sex.MALE:
+            raise ValidationError({"dam": "The selected dam is recorded as male."})
 
     def __str__(self):
         return self.code
@@ -313,6 +332,10 @@ class Submission(models.Model):
         IMAGE = "image", "Dog image"
         DOCUMENT = "document", "Dog document"
         KENNEL = "kennel", "Kennel update"
+        KENNEL_CLAIM = "kennel_claim", "Kennel ownership claim"
+        LITTER_CREATE = "litter_create", "New litter"
+        LITTER_EDIT = "litter_edit", "Litter correction"
+        DOCUMENT_VISIBILITY = "document_visibility", "Document visibility"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending review"
@@ -342,6 +365,20 @@ class Submission(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="submissions",
+    )
+    litter = models.ForeignKey(
+        Litter,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="submissions",
+    )
+    document = models.ForeignKey(
+        "DogDocument",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="visibility_submissions",
     )
     payload = models.JSONField(default=dict, blank=True)
     attachment = models.FileField(upload_to="submissions/%Y/%m/", blank=True)

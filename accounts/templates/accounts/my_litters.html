@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}My Litters · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Member workspace</p>
+    <h1>My litters</h1>
+    <p>Manage litter pedigree data through moderated submissions. New litters start private until publication is approved separately.</p>
+  </header>
+
+  <div class="workspace-toolbar">
+    {% if can_create_litter %}<a class="btn btn-gold" href="{% url 'accounts:submit-litter' %}">Submit a litter</a>{% endif %}
+    <a class="btn btn-outline" href="{% url 'dashboard' %}">Dashboard</a>
+  </div>
+
+  <div class="member-litter-list">
+    {% for litter in litters %}
+      <article class="member-litter-card">
+        <div>
+          <span class="eyebrow">{{ litter.kennel.name }}</span>
+          <h2>{{ litter.code }}</h2>
+          <p>{{ litter.date_of_birth|default:"Date not recorded" }}</p>
+        </div>
+        <div class="litter-parent-pair">
+          <span><small>Sire</small><strong>{% if litter.sire %}{{ litter.sire.name }}{% else %}Not recorded{% endif %}</strong></span>
+          <span><small>Dam</small><strong>{% if litter.dam %}{{ litter.dam.name }}{% else %}Not recorded{% endif %}</strong></span>
+        </div>
+        <div class="button-row">
+          {% if litter.is_public %}<a class="btn btn-outline" href="{% url 'registry:litter-detail' litter.pk %}">Public litter</a>{% else %}<span class="record-visibility private">Private</span>{% endif %}
+          {% if litter.kennel_id in editable_kennel_ids %}<a class="btn btn-gold" href="{% url 'accounts:edit-litter' litter.pk %}">Suggest changes</a>{% endif %}
+        </div>
+      </article>
+    {% empty %}
+      <div class="empty-state"><strong>No litters recorded.</strong><p>Owners and editors can submit the first litter from this workspace.</p></div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

@@ -2,6 +2,8 @@ from collections import defaultdict
 from datetime import date
 import re
 
+from django.conf import settings
+from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -47,6 +49,12 @@ def _resolve_dog(value):
     return Dog.objects.filter(pk=value).first()
 
 
+def _resolve_litter(value):
+    if not value:
+        return None
+    return Litter.objects.filter(pk=value).first()
+
+
 def _date_from_payload(value):
     if not value:
         return None
@@ -56,21 +64,34 @@ def _date_from_payload(value):
 
 
 def _notify_submission(submission):
+    title = f"Submission {submission.get_status_display().lower()}"
+    message = (
+        f"Your {submission.get_kind_display().lower()} submission "
+        f"has been {submission.get_status_display().lower()}."
+    )
     Notification.objects.create(
         user=submission.submitted_by,
-        title=f"Submission {submission.get_status_display().lower()}",
-        message=(
-            f"Your {submission.get_kind_display().lower()} submission "
-            f"has been {submission.get_status_display().lower()}."
-        ),
+        title=title,
+        message=message,
         link="/member/submissions/",
     )
+    if (
+        getattr(settings, "ANCESTRY_EMAIL_NOTIFICATIONS", False)
+        and submission.submitted_by.email
+    ):
+        send_mail(
+            subject=f"Cane Corso Ancestry · {title}",
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[submission.submitted_by.email],
+            fail_silently=True,
+        )
 
 
 @transaction.atomic
 def approve_submission(submission, reviewer, resolution_notes=""):
     submission = Submission.objects.select_for_update().select_related(
-        "dog", "kennel", "submitted_by"
+        "dog", "kennel", "litter", "document", "submitted_by"
     ).get(pk=submission.pk)
     if submission.status != Submission.Status.PENDING:
         raise ValueError("Only pending submissions can be reviewed.")
@@ -79,7 +100,7 @@ def approve_submission(submission, reviewer, resolution_notes=""):
 
     if submission.kind == Submission.Kind.DOG:
         kennel = submission.kennel
-        dog = Dog.objects.create(
+        dog = Dog(
             name=payload["name"].strip(),
             slug=unique_dog_slug(payload["name"]),
             sex=payload.get("sex") or Dog.Sex.UNKNOWN,
@@ -90,10 +111,13 @@ def approve_submission(submission, reviewer, resolution_notes=""):
             kennel=kennel,
             sire=_resolve_dog(payload.get("sire_id")),
             dam=_resolve_dog(payload.get("dam_id")),
+            litter=_resolve_litter(payload.get("litter_id")),
             bio=payload.get("bio", "").strip(),
             verification_state=VerificationState.COMMUNITY,
             is_public=False,
         )
+        dog.full_clean()
+        dog.save()
         submission.dog = dog
         VerificationEvent.objects.create(
             dog=dog,
@@ -135,6 +159,8 @@ def approve_submission(submission, reviewer, resolution_notes=""):
             dog.sire = _resolve_dog(payload.get("sire_id"))
         if "dam_id" in payload:
             dog.dam = _resolve_dog(payload.get("dam_id"))
+        if "litter_id" in payload:
+            dog.litter = _resolve_litter(payload.get("litter_id"))
         dog.full_clean()
         dog.save()
 
@@ -182,6 +208,66 @@ def approve_submission(submission, reviewer, resolution_notes=""):
                 setattr(kennel, field, payload[field])
         kennel.save()
 
+    elif submission.kind == Submission.Kind.KENNEL_CLAIM:
+        kennel = submission.kennel
+        if kennel is None:
+            raise ValueError("Kennel claim has no target kennel.")
+        if KennelMembership.objects.filter(kennel=kennel).exclude(
+            user=submission.submitted_by
+        ).exists():
+            raise ValueError(
+                "This kennel is already linked to another account; resolve ownership manually."
+            )
+        KennelMembership.objects.update_or_create(
+            kennel=kennel,
+            user=submission.submitted_by,
+            defaults={"role": KennelMembership.Role.OWNER},
+        )
+
+    elif submission.kind == Submission.Kind.LITTER_CREATE:
+        kennel = submission.kennel
+        if kennel is None:
+            raise ValueError("Litter submission has no target kennel.")
+        code = str(payload.get("code") or "").strip()
+        if not code:
+            raise ValueError("Litter code is required.")
+        if Litter.objects.filter(code=code).exists():
+            raise ValueError("A litter with that code already exists.")
+        litter = Litter(
+            code=code,
+            kennel=kennel,
+            sire=_resolve_dog(payload.get("sire_id")),
+            dam=_resolve_dog(payload.get("dam_id")),
+            date_of_birth=_date_from_payload(payload.get("date_of_birth")),
+            notes=str(payload.get("notes") or "").strip(),
+            is_public=False,
+        )
+        litter.full_clean()
+        litter.save()
+        submission.litter = litter
+
+    elif submission.kind == Submission.Kind.LITTER_EDIT:
+        litter = submission.litter
+        if litter is None:
+            raise ValueError("Litter correction has no target litter.")
+        code = str(payload.get("code") or litter.code).strip()
+        if Litter.objects.exclude(pk=litter.pk).filter(code=code).exists():
+            raise ValueError("A litter with that code already exists.")
+        litter.code = code
+        litter.sire = _resolve_dog(payload.get("sire_id"))
+        litter.dam = _resolve_dog(payload.get("dam_id"))
+        litter.date_of_birth = _date_from_payload(payload.get("date_of_birth"))
+        litter.notes = str(payload.get("notes") or "").strip()
+        litter.full_clean()
+        litter.save()
+
+    elif submission.kind == Submission.Kind.DOCUMENT_VISIBILITY:
+        document = submission.document
+        if document is None:
+            raise ValueError("Document visibility request has no target document.")
+        document.is_public = bool(payload.get("is_public"))
+        document.save(update_fields=("is_public",))
+
     else:
         raise ValueError("Unsupported submission type.")
 
@@ -192,6 +278,7 @@ def approve_submission(submission, reviewer, resolution_notes=""):
     submission.save(
         update_fields=(
             "dog",
+            "litter",
             "status",
             "reviewed_by",
             "reviewed_at",

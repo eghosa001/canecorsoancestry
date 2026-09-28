@@ -1,22 +1,56 @@
 {% extends "base.html" %}
-{% block title %}My documents · Cane Corso Ancestry{% endblock %}
+{% block title %}My Documents · Cane Corso Ancestry{% endblock %}
 {% block content %}
 <section class="page-shell">
   <header class="page-heading">
     <p class="eyebrow">Member area</p>
     <h1>My documents</h1>
-    <p>Approved pedigree, health, DNA and external-registration evidence linked to your kennel dogs.</p>
+    <p>Review approved pedigree, health, DNA and external-registration evidence linked to your kennel dogs.</p>
   </header>
+
+  <form class="document-filters" method="get">
+    <div>
+      <label for="type">Type</label>
+      <select id="type" name="type">
+        <option value="">All document types</option>
+        {% for value,label in document_types %}
+          <option value="{{ value }}" {% if selected_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="visibility">Visibility</label>
+      <select id="visibility" name="visibility">
+        <option value="">All visibility</option>
+        <option value="public" {% if selected_visibility == "public" %}selected{% endif %}>Public</option>
+        <option value="private" {% if selected_visibility == "private" %}selected{% endif %}>Private</option>
+      </select>
+    </div>
+    <button class="btn btn-outline" type="submit">Filter</button>
+  </form>
+
   <div class="document-grid">
     {% for item in documents %}
       <article class="document-card">
-        <span class="eyebrow">{{ item.get_document_type_display }}</span>
+        <div class="workspace-card-top">
+          <span class="eyebrow">{{ item.get_document_type_display }}</span>
+          <span class="record-visibility {% if item.is_public %}public{% else %}private{% endif %}">{% if item.is_public %}Public{% else %}Private{% endif %}</span>
+        </div>
         <h2>{{ item.title }}</h2>
         <p>{{ item.dog.name }} · {{ item.created_at|date:"d M Y" }}</p>
-        <a class="text-link" href="{{ item.file.url }}">Open document →</a>
+        <div class="button-row">
+          <a class="btn btn-outline" href="{{ item.file.url }}">Open</a>
+          {% if item.dog.kennel_id in editable_kennel_ids %}
+            {% if item.pk in pending_visibility_ids %}
+              <span class="submission-state pending">Visibility review pending</span>
+            {% else %}
+              <a class="btn btn-gold" href="{% url 'accounts:document-visibility' item.pk %}">Change visibility</a>
+            {% endif %}
+          {% endif %}
+        </div>
       </article>
     {% empty %}
-      <div class="empty-state"><p>No approved documents are linked yet.</p></div>
+      <div class="empty-state"><p>No approved documents match these filters.</p></div>
     {% endfor %}
   </div>
 </section>
