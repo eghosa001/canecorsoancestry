@@ -1,0 +1,43 @@
+name: Import owner design references
+
+on:
+  push:
+    paths:
+      - ".github/workflows/import-design-references.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-references:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download owner-approved reference images
+        env:
+          PUBLIC_REF_URL: "https://media.canva.com/v2/image-resize/format:JPG/height:720/quality:95/uri:ifs%3A%2F%2FM%2F6e8acb90-8bc4-4ae3-b3bb-050fbc3fb6a0/watermark:F/width:1080?csig=AAAAAAAAAAAAAAAAAAAAAALrmPP99fLI_BD4n4UtGvgasP3ERcHuC6x62DWO-4vr&exp=1790605383&osig=AAAAAAAAAAAAAAAAAAAAAOboOJM3b9cz6uAMwNzFGRuJZKcpEMkEHyiHKbQJOopW&signer=media-rpc&x-canva-quality=thumbnail"
+          DASHBOARD_REF_URL: "https://media.canva.com/v2/image-resize/format:JPG/height:720/quality:95/uri:ifs%3A%2F%2FM%2Fe70278fa-a1dc-4e7e-b09c-f2b3d8af550a/watermark:F/width:1080?csig=AAAAAAAAAAAAAAAAAAAAAA43y0mHSH5Y5pYquJYZ9rrWHtxTRCwljPFtbJ3jY5gb&exp=1790607832&osig=AAAAAAAAAAAAAAAAAAAAAJs3Z8aHOpHYetI010-EPF4bXiRwuKuuYEVDn3G7J_uv&signer=media-rpc&x-canva-quality=thumbnail"
+          PUBLIC_FALLBACK_URL: "https://media.canva.com/v2/image-resize/format:JPG/height:133/quality:75/uri:ifs%3A%2F%2FM%2F6e8acb90-8bc4-4ae3-b3bb-050fbc3fb6a0/watermark:F/width:200?csig=AAAAAAAAAAAAAAAAAAAAAALrmPP99fLI_BD4n4UtGvgasP3ERcHuC6x62DWO-4vr&exp=1790605383&osig=AAAAAAAAAAAAAAAAAAAAAOboOJM3b9cz6uAMwNzFGRuJZKcpEMkEHyiHKbQJOopW&signer=media-rpc&x-canva-quality=thumbnail"
+          DASHBOARD_FALLBACK_URL: "https://media.canva.com/v2/image-resize/format:JPG/height:133/quality:75/uri:ifs%3A%2F%2FM%2Fe70278fa-a1dc-4e7e-b09c-f2b3d8af550a/watermark:F/width:200?csig=AAAAAAAAAAAAAAAAAAAAAA43y0mHSH5Y5pYquJYZ9rrWHtxTRCwljPFtbJ3jY5gb&exp=1790607832&osig=AAAAAAAAAAAAAAAAAAAAAJs3Z8aHOpHYetI010-EPF4bXiRwuKuuYEVDn3G7J_uv&signer=media-rpc&x-canva-quality=thumbnail"
+        run: |
+          set -euo pipefail
+          mkdir -p docs/design-reference
+          curl --fail --location --retry 2 "$PUBLIC_REF_URL" -o docs/design-reference/public-pedigree-reference.jpg ||             curl --fail --location --retry 2 "$PUBLIC_FALLBACK_URL" -o docs/design-reference/public-pedigree-reference.jpg
+          curl --fail --location --retry 2 "$DASHBOARD_REF_URL" -o docs/design-reference/member-dashboard-reference.jpg ||             curl --fail --location --retry 2 "$DASHBOARD_FALLBACK_URL" -o docs/design-reference/member-dashboard-reference.jpg
+          file docs/design-reference/*.jpg
+          test -s docs/design-reference/public-pedigree-reference.jpg
+          test -s docs/design-reference/member-dashboard-reference.jpg
+
+      - name: Commit references
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/design-reference/public-pedigree-reference.jpg docs/design-reference/member-dashboard-reference.jpg
+          if git diff --cached --quiet; then
+            echo "Reference images already present."
+            exit 0
+          fi
+          git commit -m "Add owner-approved design reference images"
+          git push
