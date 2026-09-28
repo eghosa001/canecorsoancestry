@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    DisputeCase,
     Dog,
     DogAlias,
     DogDocument,
@@ -15,6 +16,7 @@ from .models import (
     KennelMembership,
     Litter,
     MergeHistory,
+    ModerationAudit,
     Notification,
     RegistrationAuthority,
     Submission,
@@ -86,9 +88,11 @@ class SubmissionAdmin(admin.ModelAdmin):
         "document",
         "kennel",
         "status",
+        "priority",
+        "assigned_to",
         "created_at",
     )
-    list_filter = ("kind", "status", "created_at")
+    list_filter = ("kind", "status", "priority", "created_at")
     search_fields = (
         "dog__name",
         "litter__code",
@@ -129,3 +133,30 @@ admin.site.register(HealthRecord)
 admin.site.register(DogSource)
 admin.site.register(DogRedirect)
 admin.site.register(Notification)
+
+
+
+@admin.register(DisputeCase)
+class DisputeCaseAdmin(admin.ModelAdmin):
+    list_display = ("dog", "reason", "status", "opened_by", "assigned_to", "created_at")
+    list_filter = ("reason", "status", "created_at")
+    search_fields = ("dog__name", "opened_by__username", "details", "resolution_notes")
+
+
+@admin.register(ModerationAudit)
+class ModerationAuditAdmin(admin.ModelAdmin):
+    list_display = ("action", "actor", "dog", "kennel", "litter", "created_at")
+    list_filter = ("action", "created_at")
+    search_fields = ("dog__name", "kennel__name", "litter__code", "actor__username", "note")
+    readonly_fields = (
+        "actor",
+        "action",
+        "dog",
+        "kennel",
+        "litter",
+        "submission",
+        "dispute",
+        "summary",
+        "note",
+        "created_at",
+    )

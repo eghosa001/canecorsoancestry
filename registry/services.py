@@ -1,10 +1,12 @@
 from collections import defaultdict
 from datetime import date
+from difflib import SequenceMatcher
 import re
 
 from django.conf import settings
+from django.contrib.postgres.search import TrigramSimilarity
 from django.core.mail import send_mail
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
@@ -19,10 +21,12 @@ from .models import (
     DogRegistration,
     DogSource,
     DogTitle,
+    DisputeCase,
     HealthRecord,
     Litter,
     KennelMembership,
     MergeHistory,
+    ModerationAudit,
     Notification,
     Submission,
     VerificationEvent,
@@ -64,6 +68,31 @@ def _date_from_payload(value):
     return date.fromisoformat(value)
 
 
+def record_audit(
+    *,
+    action,
+    actor=None,
+    dog=None,
+    kennel=None,
+    litter=None,
+    submission=None,
+    dispute=None,
+    summary=None,
+    note="",
+):
+    return ModerationAudit.objects.create(
+        action=action,
+        actor=actor,
+        dog=dog,
+        kennel=kennel,
+        litter=litter,
+        submission=submission,
+        dispute=dispute,
+        summary=summary or {},
+        note=note,
+    )
+
+
 def _notify_submission(submission):
     title = f"Submission {submission.get_status_display().lower()}"
     message = (
@@ -98,6 +127,7 @@ def approve_submission(submission, reviewer, resolution_notes=""):
         raise ValueError("Only pending submissions can be reviewed.")
 
     payload = submission.payload or {}
+    review_diff = submission_diff(submission)
 
     if submission.kind == Submission.Kind.DOG:
         kennel = submission.kennel
@@ -288,6 +318,19 @@ def approve_submission(submission, reviewer, resolution_notes=""):
         )
     )
     _notify_submission(submission)
+    record_audit(
+        action=ModerationAudit.Action.SUBMISSION_APPROVED,
+        actor=reviewer,
+        dog=submission.dog,
+        kennel=submission.kennel,
+        litter=submission.litter,
+        submission=submission,
+        summary={
+            "kind": submission.kind,
+            "changes": review_diff,
+        },
+        note=resolution_notes,
+    )
     return submission
 
 
@@ -299,6 +342,7 @@ def reject_submission(submission, reviewer, resolution_notes=""):
     if submission.status != Submission.Status.PENDING:
         raise ValueError("Only pending submissions can be reviewed.")
 
+    review_diff = submission_diff(submission)
     submission.status = Submission.Status.REJECTED
     submission.reviewed_by = reviewer
     submission.reviewed_at = timezone.now()
@@ -313,6 +357,19 @@ def reject_submission(submission, reviewer, resolution_notes=""):
         )
     )
     _notify_submission(submission)
+    record_audit(
+        action=ModerationAudit.Action.SUBMISSION_REJECTED,
+        actor=reviewer,
+        dog=submission.dog,
+        kennel=submission.kennel,
+        litter=submission.litter,
+        submission=submission,
+        summary={
+            "kind": submission.kind,
+            "changes": review_diff,
+        },
+        note=resolution_notes,
+    )
     return submission
 
 
@@ -451,53 +508,333 @@ def merge_dogs(canonical, duplicate, performed_by=None):
         performed_by=performed_by,
         summary=summary,
     )
+    record_audit(
+        action=ModerationAudit.Action.DOG_MERGED,
+        actor=performed_by,
+        dog=canonical,
+        kennel=canonical.kennel,
+        summary={
+            "retired_dog_id": str(retired_id),
+            "retired_slug": retired_slug,
+            "retired_name": retired_name,
+            "moved": summary,
+        },
+    )
     duplicate.delete()
     return history
 
 
 
+
+def _display_value(value):
+    if value is None or value == "":
+        return "Not recorded"
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
+def _dog_name(value):
+    dog = _resolve_dog(value)
+    return dog.name if dog else "Not recorded"
+
+
+def _litter_name(value):
+    litter = _resolve_litter(value)
+    return litter.code if litter else "Not recorded"
+
+
+def submission_diff(submission):
+    """Return moderator-friendly before/after changes without mutating the target."""
+    payload = submission.payload or {}
+    changes = []
+
+    def add(label, before, after):
+        before_text = _display_value(before)
+        after_text = _display_value(after)
+        if before_text != after_text:
+            changes.append(
+                {"field": label, "before": before_text, "after": after_text}
+            )
+
+    if submission.kind == Submission.Kind.CORRECTION and submission.dog:
+        dog = submission.dog
+        field_map = (
+            ("Name", "name"),
+            ("Sex", "sex"),
+            ("Date of birth", "date_of_birth"),
+            ("Colour", "colour"),
+            ("Country", "country"),
+            ("Bloodline", "bloodline"),
+            ("Biography", "bio"),
+        )
+        for label, field in field_map:
+            if field in payload:
+                add(label, getattr(dog, field), payload.get(field))
+        if "sire_id" in payload:
+            add("Sire", dog.sire.name if dog.sire else None, _dog_name(payload.get("sire_id")))
+        if "dam_id" in payload:
+            add("Dam", dog.dam.name if dog.dam else None, _dog_name(payload.get("dam_id")))
+        if "litter_id" in payload:
+            add(
+                "Litter",
+                dog.litter.code if dog.litter else None,
+                _litter_name(payload.get("litter_id")),
+            )
+
+    elif submission.kind == Submission.Kind.KENNEL and submission.kennel:
+        for label, field in (
+            ("Name", "name"),
+            ("Country", "country"),
+            ("City", "city"),
+            ("Description", "description"),
+            ("Website", "website"),
+        ):
+            if field in payload:
+                add(label, getattr(submission.kennel, field), payload.get(field))
+
+    elif submission.kind == Submission.Kind.LITTER_EDIT and submission.litter:
+        litter = submission.litter
+        add("Code", litter.code, payload.get("code"))
+        add("Sire", litter.sire.name if litter.sire else None, _dog_name(payload.get("sire_id")))
+        add("Dam", litter.dam.name if litter.dam else None, _dog_name(payload.get("dam_id")))
+        add("Date of birth", litter.date_of_birth, payload.get("date_of_birth"))
+        add("Notes", litter.notes, payload.get("notes"))
+
+    elif submission.kind == Submission.Kind.DOCUMENT_VISIBILITY and submission.document:
+        add(
+            "Document visibility",
+            "Public" if submission.document.is_public else "Private",
+            "Public" if bool(payload.get("is_public")) else "Private",
+        )
+
+    elif submission.kind in {
+        Submission.Kind.DOG,
+        Submission.Kind.LITTER_CREATE,
+        Submission.Kind.KENNEL_CLAIM,
+        Submission.Kind.DOCUMENT,
+        Submission.Kind.IMAGE,
+    }:
+        for key, value in payload.items():
+            label = key.replace("_id", "").replace("_", " ").title()
+            if key in {"sire_id", "dam_id"}:
+                value = _dog_name(value)
+            elif key == "litter_id":
+                value = _litter_name(value)
+            changes.append(
+                {"field": label, "before": "New record", "after": _display_value(value)}
+            )
+
+    return changes
+
+
+def _normalized_name(value):
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
+def _registration_keys(dog):
+    return {
+        (registration.authority_id or "none", re.sub(r"\s+", "", registration.number.lower()))
+        for registration in dog.registrations.all()
+        if registration.number
+    }
+
+
+def _score_duplicate_pair(reference, candidate, trigram_score=None):
+    reasons = []
+    score = 0.0
+
+    left_name = _normalized_name(reference.name)
+    right_name = _normalized_name(candidate.name)
+    ratio = SequenceMatcher(None, left_name, right_name).ratio() if left_name and right_name else 0
+
+    if left_name and left_name == right_name:
+        score += 48
+        reasons.append("Same normalized name")
+    else:
+        name_score = max(ratio, trigram_score or 0) * 45
+        score += name_score
+        if name_score >= 28:
+            reasons.append(f"Similar name ({max(ratio, trigram_score or 0):.0%})")
+
+    shared_registrations = _registration_keys(reference) & _registration_keys(candidate)
+    if shared_registrations:
+        score += 55
+        reasons.append("Same external registration")
+
+    if reference.sire_id and reference.sire_id == candidate.sire_id:
+        score += 14
+        reasons.append("Same sire")
+    if reference.dam_id and reference.dam_id == candidate.dam_id:
+        score += 14
+        reasons.append("Same dam")
+    if reference.date_of_birth and reference.date_of_birth == candidate.date_of_birth:
+        score += 10
+        reasons.append("Same date of birth")
+    if reference.kennel_id and reference.kennel_id == candidate.kennel_id:
+        score += 6
+        reasons.append("Same kennel")
+    if reference.sex != Dog.Sex.UNKNOWN and reference.sex == candidate.sex:
+        score += 3
+    elif (
+        reference.sex != Dog.Sex.UNKNOWN
+        and candidate.sex != Dog.Sex.UNKNOWN
+        and reference.sex != candidate.sex
+    ):
+        score -= 18
+        reasons.append("Conflicting sex")
+
+    score = max(0, min(100, round(score)))
+    if score >= 80:
+        confidence = "High"
+    elif score >= 60:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
+
+    return {
+        "reference": reference,
+        "candidate": candidate,
+        "score": score,
+        "confidence": confidence,
+        "reasons": reasons,
+    }
+
+
+def duplicate_matches(reference, limit=20):
+    """Find likely duplicate records, using pg_trgm on PostgreSQL when available."""
+    queryset = (
+        Dog.objects.exclude(pk=reference.pk)
+        .select_related("sire", "dam", "kennel")
+        .prefetch_related("registrations")
+    )
+
+    trigram_lookup = {}
+    if connection.vendor == "postgresql":
+        reference_numbers = [
+            registration.number
+            for registration in reference.registrations.all()
+            if registration.number
+        ]
+        queryset = queryset.annotate(
+            name_similarity=TrigramSimilarity("name", reference.name)
+        ).filter(
+            Q(name_similarity__gte=0.18)
+            | Q(registrations__number__in=reference_numbers)
+        ).distinct().order_by("-name_similarity")[:120]
+        candidates = list(queryset)
+        trigram_lookup = {
+            dog.pk: float(getattr(dog, "name_similarity", 0) or 0)
+            for dog in candidates
+        }
+    else:
+        candidates = list(queryset[:1000])
+
+    results = []
+    for candidate in candidates:
+        row = _score_duplicate_pair(
+            reference,
+            candidate,
+            trigram_score=trigram_lookup.get(candidate.pk),
+        )
+        if row["score"] >= 35 or "Same external registration" in row["reasons"]:
+            results.append(row)
+
+    results.sort(key=lambda item: (-item["score"], item["candidate"].name.lower()))
+    return results[:limit]
+
+
 def duplicate_candidates(limit=30):
-    """Return conservative duplicate suggestions without mutating any records."""
+    """Return conservative high-signal duplicate pairs without mutating any records."""
     dogs = list(
-        Dog.objects.prefetch_related("registrations").order_by("name")
+        Dog.objects.select_related("sire", "dam", "kennel")
+        .prefetch_related("registrations")
+        .order_by("name")
     )
     name_buckets = defaultdict(list)
     registration_buckets = defaultdict(list)
 
     for dog in dogs:
-        normalized = re.sub(r"[^a-z0-9]+", "", dog.name.lower())
+        normalized = _normalized_name(dog.name)
         if normalized:
             name_buckets[normalized].append(dog)
-        for registration in dog.registrations.all():
-            number = re.sub(r"\s+", "", registration.number.lower())
-            authority = registration.authority_id or "none"
-            if number:
-                registration_buckets[(authority, number)].append(dog)
+        for key in _registration_keys(dog):
+            registration_buckets[key].append(dog)
 
     pairs = {}
 
-    def add_pair(left, right, reason):
+    def add_pair(left, right):
         if left.pk == right.pk:
             return
         ordered = sorted((left, right), key=lambda item: str(item.pk))
         key = (ordered[0].pk, ordered[1].pk)
-        entry = pairs.setdefault(
-            key,
-            {"left": ordered[0], "right": ordered[1], "reasons": []},
-        )
-        if reason not in entry["reasons"]:
-            entry["reasons"].append(reason)
+        if key not in pairs:
+            pairs[key] = _score_duplicate_pair(ordered[0], ordered[1])
 
     for bucket in name_buckets.values():
         if len(bucket) > 1:
             for index, left in enumerate(bucket):
                 for right in bucket[index + 1 :]:
-                    add_pair(left, right, "Same normalized name")
+                    add_pair(left, right)
 
     for bucket in registration_buckets.values():
         if len(bucket) > 1:
             for index, left in enumerate(bucket):
                 for right in bucket[index + 1 :]:
-                    add_pair(left, right, "Same external registration")
+                    add_pair(left, right)
 
-    return list(pairs.values())[:limit]
+    rows = [row for row in pairs.values() if row["score"] >= 60]
+    rows.sort(key=lambda item: (-item["score"], item["reference"].name.lower()))
+    return rows[:limit]
+
+
+
+def moderation_dog_search(query, limit=12):
+    """Search dog records for moderator duplicate review without loading the full database."""
+    query = (query or "").strip()
+    if not query:
+        return []
+
+    base = (
+        Dog.objects.select_related("kennel", "sire", "dam")
+        .prefetch_related("registrations", "aliases")
+    )
+
+    if connection.vendor == "postgresql":
+        rows = list(
+            base.annotate(name_similarity=TrigramSimilarity("name", query))
+            .filter(
+                Q(name_similarity__gte=0.16)
+                | Q(name__icontains=query)
+                | Q(aliases__name__icontains=query)
+                | Q(registrations__number__icontains=query)
+            )
+            .distinct()
+            .order_by("-name_similarity", "name")[:limit]
+        )
+        return rows
+
+    direct = list(
+        base.filter(
+            Q(name__icontains=query)
+            | Q(aliases__name__icontains=query)
+            | Q(registrations__number__icontains=query)
+        )
+        .distinct()
+        .order_by("name")[:limit]
+    )
+    if direct:
+        return direct
+
+    normalized_query = _normalized_name(query)
+    scored = []
+    for dog in base.order_by("name")[:1000]:
+        ratio = SequenceMatcher(
+            None, normalized_query, _normalized_name(dog.name)
+        ).ratio()
+        if ratio >= 0.45:
+            scored.append((ratio, dog))
+    scored.sort(key=lambda item: (-item[0], item[1].name.lower()))
+    return [dog for _, dog in scored[:limit]]

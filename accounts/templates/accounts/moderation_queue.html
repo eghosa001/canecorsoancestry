@@ -1,29 +1,127 @@
 {% extends "base.html" %}
 {% block title %}Moderation · Cane Corso Ancestry{% endblock %}
 {% block content %}
-<section class="page-shell">
-  <header class="page-heading">
-    <p class="eyebrow">Internal moderation</p>
-    <h1>Review queue</h1>
-    <p>Approve evidence-backed contributions, reject incorrect changes, and merge duplicate canonical dog records safely.</p>
+<section class="page-shell moderation-page">
+  <header class="page-heading moderation-heading">
+    <div>
+      <p class="eyebrow">Internal moderation</p>
+      <h1>Review queue</h1>
+      <p>Prioritise evidence-backed work, compare proposed changes against canonical data, investigate disputes, and merge duplicates deliberately.</p>
+    </div>
+    <a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a>
   </header>
 
-  {% if duplicate_candidates %}
-  <section class="panel moderation-suggestions">
-    <div class="panel-heading"><h2>Duplicate suggestions</h2><span>Suggestions only—nothing is merged automatically.</span></div>
-    <div class="relationship-list">
-      {% for item in duplicate_candidates %}
-        <div>
-          <strong>{{ item.left.name }} ↔ {{ item.right.name }}</strong>
-          <span>{{ item.reasons|join:", " }}</span>
-        </div>
-      {% endfor %}
+  <form class="moderation-filters" method="get">
+    <div class="filter-search">
+      <label for="moderation-q">Search queue</label>
+      <input id="moderation-q" name="q" value="{{ filters.q }}" placeholder="Dog, kennel, litter, member or note">
     </div>
+    <div>
+      <label for="moderation-kind">Type</label>
+      <select id="moderation-kind" name="kind">
+        <option value="">All types</option>
+        {% for value,label in submission_kinds %}<option value="{{ value }}" {% if filters.kind == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="moderation-priority">Priority</label>
+      <select id="moderation-priority" name="priority">
+        <option value="">All priorities</option>
+        {% for value,label in priority_choices %}<option value="{{ value }}" {% if filters.priority == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="moderation-assignment">Assignment</label>
+      <select id="moderation-assignment" name="assignment">
+        <option value="">Everyone</option>
+        <option value="mine" {% if filters.assignment == "mine" %}selected{% endif %}>Assigned to me</option>
+        <option value="unassigned" {% if filters.assignment == "unassigned" %}selected{% endif %}>Unassigned</option>
+      </select>
+    </div>
+    <button class="btn btn-gold" type="submit">Filter queue</button>
+  </form>
+
+  <div class="moderation-summary">
+    <article><strong>{{ pending_total }}</strong><span>Pending submissions</span></article>
+    <article><strong>{{ disputes|length }}</strong><span>Open disputes</span></article>
+    <article><strong>{{ duplicate_candidates|length }}</strong><span>High-signal duplicate pairs</span></article>
+  </div>
+
+  <section class="panel duplicate-search-panel">
+    <div class="panel-heading">
+      <div><h2>Duplicate intelligence</h2><span>PostgreSQL uses trigram preselection; exact registrations and pedigree facts strengthen confidence.</span></div>
+    </div>
+    <form class="duplicate-search-form" method="get">
+      <input type="hidden" name="q" value="{{ filters.q }}">
+      <input type="hidden" name="kind" value="{{ filters.kind }}">
+      <input type="hidden" name="priority" value="{{ filters.priority }}">
+      <input type="hidden" name="assignment" value="{{ filters.assignment }}">
+      <div><label for="{{ duplicate_form.duplicate_q.id_for_label }}">{{ duplicate_form.duplicate_q.label }}</label>{{ duplicate_form.duplicate_q }}</div>
+      <button class="btn btn-gold" type="submit">Search dogs</button>
+    </form>
+
+    {% if duplicate_lookup_results %}
+      <div class="duplicate-results-heading">
+        <strong>Select the dog to inspect</strong>
+        <span>Then the system will rank likely duplicate records against it.</span>
+      </div>
+      <div class="duplicate-result-list">
+        {% for dog in duplicate_lookup_results %}
+          <a class="duplicate-result-card selectable" href="?reference={{ dog.pk }}&q={{ filters.q|urlencode }}&kind={{ filters.kind|urlencode }}&priority={{ filters.priority|urlencode }}&assignment={{ filters.assignment|urlencode }}">
+            <div>
+              <h3>{{ dog.name }}</h3>
+              <p>{% if dog.kennel %}{{ dog.kennel.name }}{% else %}Kennel unknown{% endif %}{% if dog.date_of_birth %} · {{ dog.date_of_birth }}{% endif %}</p>
+            </div>
+            <span class="text-link">Inspect matches →</span>
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if duplicate_reference %}
+      <div class="duplicate-results-heading">
+        <strong>Possible matches for {{ duplicate_reference.name }}</strong>
+        <span>Suggestions only. A moderator must still choose the canonical record and merge manually.</span>
+      </div>
+      <div class="duplicate-result-list">
+        {% for item in duplicate_results %}
+          <article class="duplicate-result-card">
+            <div>
+              <span class="confidence-pill confidence-{{ item.confidence|lower }}">{{ item.confidence }} · {{ item.score }}%</span>
+              <h3>{{ item.candidate.name }}</h3>
+              <p>{{ item.reasons|join:" · " }}</p>
+            </div>
+            <div class="duplicate-record-meta">
+              <span>{% if item.candidate.kennel %}{{ item.candidate.kennel.name }}{% else %}Kennel unknown{% endif %}</span>
+              <span>{% if item.candidate.date_of_birth %}{{ item.candidate.date_of_birth }}{% else %}DOB unknown{% endif %}</span>
+            </div>
+          </article>
+        {% empty %}
+          <p class="muted">No meaningful duplicate matches were found for this record.</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if duplicate_candidates %}
+      <details class="moderation-details">
+        <summary>High-signal database-wide duplicate suggestions</summary>
+        <div class="duplicate-result-list">
+          {% for item in duplicate_candidates %}
+            <article class="duplicate-result-card compact">
+              <div>
+                <span class="confidence-pill confidence-{{ item.confidence|lower }}">{{ item.confidence }} · {{ item.score }}%</span>
+                <strong>{{ item.reference.name }} ↔ {{ item.candidate.name }}</strong>
+                <p>{{ item.reasons|join:" · " }}</p>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      </details>
+    {% endif %}
   </section>
-  {% endif %}
 
   <section class="panel moderation-merge">
-    <div class="panel-heading"><h2>Merge duplicate dogs</h2><span>The duplicate record is retired only after relationships and attached data are repointed.</span></div>
+    <div class="panel-heading"><h2>Merge duplicate dogs</h2><span>The duplicate is retired only after relationships and attached data are repointed.</span></div>
     <form class="merge-form" method="post" action="{% url 'accounts:merge-dogs' %}">
       {% csrf_token %}
       <div><label for="{{ merge_form.canonical.id_for_label }}">Canonical dog</label>{{ merge_form.canonical }}</div>
@@ -43,32 +141,114 @@
     </form>
   </section>
 
+  <section class="panel dispute-queue">
+    <div class="panel-heading"><h2>Open dispute cases</h2><span>Cases flag contested facts but never alter canonical pedigree data automatically.</span></div>
+    <div class="dispute-list">
+      {% for dispute in disputes %}
+        <article class="dispute-card">
+          <div class="dispute-card-main">
+            <span class="eyebrow">{{ dispute.get_reason_display }}</span>
+            <h3>{{ dispute.dog.name }}</h3>
+            <p>{{ dispute.details }}</p>
+            <small>Opened by {{ dispute.opened_by }} · {{ dispute.created_at|date:"d M Y, H:i" }}{% if dispute.assigned_to %} · Assigned to {{ dispute.assigned_to }}{% endif %}</small>
+            {% if dispute.attachment %}<a class="text-link" href="{{ dispute.attachment.url }}">Open evidence →</a>{% endif %}
+          </div>
+          <div class="dispute-actions">
+            <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'assign' %}">{% csrf_token %}<button class="btn btn-outline" type="submit">Assign to me</button></form>
+            <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'resolve' %}">
+              {% csrf_token %}
+              <textarea name="resolution_notes" rows="2" placeholder="Resolution note"></textarea>
+              <button class="btn btn-gold" type="submit">Resolve</button>
+            </form>
+            <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'dismiss' %}">
+              {% csrf_token %}
+              <textarea name="resolution_notes" rows="2" placeholder="Reason for dismissal"></textarea>
+              <button class="btn btn-outline" type="submit">Dismiss</button>
+            </form>
+          </div>
+        </article>
+      {% empty %}
+        <p class="muted">No open dispute cases.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="section-heading section-spacer">
+    <div>
+      <p class="eyebrow">Contributions</p>
+      <h2>Pending review</h2>
+    </div>
+    <span>{{ pending_total }} matching item{{ pending_total|pluralize }}</span>
+  </div>
+
+  <form id="bulk-form" class="bulk-bar" method="post" action="{% url 'accounts:bulk-moderation' %}">
+    {% csrf_token %}
+    <div>
+      <label for="{{ bulk_form.action.id_for_label }}">Safe bulk action</label>
+      {{ bulk_form.action }}
+    </div>
+    <div class="bulk-note">
+      <label for="{{ bulk_form.resolution_notes.id_for_label }}">Review note</label>
+      {{ bulk_form.resolution_notes }}
+    </div>
+    <button class="btn btn-outline" type="submit">Apply to selected</button>
+    <small>Bulk approval is intentionally unavailable.</small>
+  </form>
+
   <div class="moderation-list">
     {% for item in pending %}
-      <article class="moderation-card">
-        <div class="moderation-meta">
-          <span class="eyebrow">{{ item.get_kind_display }}</span>
-          <h2>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.code }}{% elif item.document %}{{ item.document.title }}{% elif item.kennel %}{{ item.kennel.name }}{% else %}New record{% endif %}</h2>
-          <p>Submitted by {{ item.submitted_by }} · {{ item.created_at|date:"d M Y, H:i" }}</p>
+      <article class="moderation-card {% if item.is_aging %}aging{% endif %}">
+        <div class="moderation-select">
+          <input form="bulk-form" type="checkbox" name="submission_ids" value="{{ item.pk }}" aria-label="Select {{ item.get_kind_display }}">
         </div>
-        <pre class="payload-preview">{{ item.payload }}</pre>
-        {% if item.attachment %}<a class="text-link" href="{{ item.attachment.url }}">Open attachment →</a>{% endif %}
-        {% if item.notes %}<p class="moderator-note">{{ item.notes }}</p>{% endif %}
-        <div class="review-actions">
-          <form method="post" action="{% url 'accounts:review-submission' item.pk 'approve' %}">
-            {% csrf_token %}
-            <textarea name="resolution_notes" rows="2" placeholder="Optional review note"></textarea>
-            <button class="btn btn-gold" type="submit">Approve</button>
-          </form>
-          <form method="post" action="{% url 'accounts:review-submission' item.pk 'reject' %}">
-            {% csrf_token %}
-            <textarea name="resolution_notes" rows="2" placeholder="Reason for rejection"></textarea>
-            <button class="btn btn-outline" type="submit">Reject</button>
-          </form>
+        <div class="moderation-card-content">
+          <div class="moderation-meta">
+            <div>
+              <span class="eyebrow">{{ item.get_kind_display }}</span>
+              <h2>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.code }}{% elif item.document %}{{ item.document.title }}{% elif item.kennel %}{{ item.kennel.name }}{% else %}New record{% endif %}</h2>
+              <p>Submitted by {{ item.submitted_by }} · {{ item.created_at|date:"d M Y, H:i" }}{% if item.age_days %} · {{ item.age_days }} day{{ item.age_days|pluralize }} waiting{% endif %}</p>
+            </div>
+            <div class="queue-badges">
+              <span class="priority-pill priority-{{ item.priority }}">{{ item.get_priority_display }}</span>
+              {% if item.assigned_to %}<span class="assignment-pill">{{ item.assigned_to }}</span>{% else %}<span class="assignment-pill unassigned">Unassigned</span>{% endif %}
+            </div>
+          </div>
+
+          {% if item.review_diff %}
+            <div class="review-diff">
+              <div class="review-diff-heading"><strong>Proposed changes</strong><span>Canonical value → submitted value</span></div>
+              {% for change in item.review_diff %}
+                <div class="review-diff-row">
+                  <strong>{{ change.field }}</strong>
+                  <span class="diff-before">{{ change.before }}</span>
+                  <span class="diff-arrow">→</span>
+                  <span class="diff-after">{{ change.after }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <pre class="payload-preview">{{ item.payload }}</pre>
+          {% endif %}
+
+          {% if item.attachment %}<a class="text-link" href="{{ item.attachment.url }}">Open attachment →</a>{% endif %}
+          {% if item.notes %}<p class="moderator-note">{{ item.notes }}</p>{% endif %}
+
+          <div class="review-actions">
+            <form method="post" action="{% url 'accounts:review-submission' item.pk 'approve' %}">
+              {% csrf_token %}
+              <textarea name="resolution_notes" rows="2" placeholder="Optional approval note"></textarea>
+              <button class="btn btn-gold" type="submit">Approve</button>
+            </form>
+            <form method="post" action="{% url 'accounts:review-submission' item.pk 'reject' %}">
+              {% csrf_token %}
+              <textarea name="resolution_notes" rows="2" placeholder="Reason for rejection"></textarea>
+              <button class="btn btn-outline" type="submit">Reject</button>
+            </form>
+          </div>
         </div>
       </article>
     {% empty %}
-      <div class="empty-state"><strong>Queue clear.</strong><p>No contributions are waiting for review.</p></div>
+      <div class="empty-state"><strong>Queue clear.</strong><p>No contributions match the current filters.</p></div>
     {% endfor %}
   </div>
 </section>

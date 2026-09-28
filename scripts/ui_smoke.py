@@ -74,6 +74,8 @@ def main():
         capture(desktop, "/member/litters/", "my-litters-desktop")
         capture(desktop, "/member/documents/", "documents-desktop")
         capture(desktop, "/member/moderation/", "moderation-desktop")
+        capture(desktop, "/member/moderation/audit/", "moderation-audit-desktop")
+        capture(desktop, "/member/disputes/", "my-disputes-desktop")
         capture(desktop, "/member/submit/dog/", "submit-dog-desktop")
         capture(desktop, "/kennels/claimable-kennel/", "claimable-kennel-desktop")
         claim_button = desktop.get_by_role("link", name="Claim this kennel")
@@ -96,6 +98,7 @@ def main():
         capture(mobile, "/member/pedigrees/", "my-pedigrees-mobile")
         capture(mobile, "/member/litters/", "my-litters-mobile")
         capture(mobile, "/member/documents/", "documents-mobile")
+        capture(mobile, "/member/disputes/", "my-disputes-mobile")
         capture(mobile, "/member/submit/dog/", "submit-dog-mobile")
 
         browser.close()

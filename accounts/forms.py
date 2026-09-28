@@ -2,7 +2,7 @@ from django import forms
 from django.core.validators import FileExtensionValidator
 from django.db.models import Q
 
-from registry.models import Dog, DogDocument, DogSource, Kennel, Litter, Submission, VerificationState
+from registry.models import DisputeCase, Dog, DogDocument, DogSource, Kennel, Litter, Submission, VerificationState
 
 
 class DogSubmissionForm(forms.Form):
@@ -261,4 +261,54 @@ class DocumentVisibilityForm(forms.Form):
         required=False,
         widget=forms.Textarea(attrs={"rows": 3}),
         help_text="Optional note explaining the visibility change.",
+    )
+
+
+
+class DisputeForm(forms.Form):
+    reason = forms.ChoiceField(choices=DisputeCase.Reason.choices)
+    details = forms.CharField(
+        widget=forms.Textarea(attrs={"rows": 6}),
+        help_text="Describe the exact fact or relationship you believe should be reviewed.",
+    )
+    attachment = forms.FileField(
+        required=False,
+        validators=[FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"])],
+        help_text="Optional pedigree, certificate, screenshot or other supporting evidence.",
+    )
+
+
+class BulkModerationForm(forms.Form):
+    ACTIONS = (
+        ("assign_me", "Assign selected to me"),
+        ("unassign", "Remove assignee"),
+        ("priority_low", "Set priority: Low"),
+        ("priority_normal", "Set priority: Normal"),
+        ("priority_high", "Set priority: High"),
+        ("priority_urgent", "Set priority: Urgent"),
+        ("reject", "Reject selected"),
+    )
+
+    action = forms.ChoiceField(choices=ACTIONS)
+    resolution_notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+        help_text="Required when rejecting multiple submissions.",
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("action") == "reject" and not cleaned.get("resolution_notes", "").strip():
+            self.add_error(
+                "resolution_notes",
+                "A rejection reason is required for a bulk rejection.",
+            )
+        return cleaned
+
+
+class DuplicateMatchForm(forms.Form):
+    duplicate_q = forms.CharField(
+        max_length=220,
+        label="Find a dog",
+        help_text="Search by dog name, alias or external registration number.",
     )

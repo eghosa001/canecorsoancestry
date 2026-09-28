@@ -2,15 +2,18 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from registry.models import (
+    DisputeCase,
     Dog,
     DogDocument,
     Kennel,
     Litter,
+    ModerationAudit,
     Notification,
     Submission,
     VerificationEvent,
@@ -23,8 +26,12 @@ from registry.permissions import (
 from registry.services import (
     approve_submission,
     duplicate_candidates,
+    duplicate_matches,
     merge_dogs,
+    moderation_dog_search,
+    record_audit,
     reject_submission,
+    submission_diff,
 )
 
 from pedigrees.services import (
@@ -35,11 +42,14 @@ from pedigrees.services import (
 )
 
 from .forms import (
+    BulkModerationForm,
+    DisputeForm,
     DocumentVisibilityForm,
     DogCorrectionForm,
     DogDocumentSubmissionForm,
     DogImageSubmissionForm,
     DogSubmissionForm,
+    DuplicateMatchForm,
     KennelClaimForm,
     KennelEditForm,
     LitterSubmissionForm,
@@ -341,17 +351,96 @@ def notifications(request):
 
 @staff_member_required
 def moderation_queue(request):
-    pending = Submission.objects.filter(status=Submission.Status.PENDING).select_related(
-        "submitted_by", "dog", "kennel", "litter", "document"
+    pending = Submission.objects.filter(
+        status=Submission.Status.PENDING
+    ).select_related(
+        "submitted_by",
+        "dog",
+        "kennel",
+        "litter",
+        "document",
+        "assigned_to",
     )
+
+    query = request.GET.get("q", "").strip()
+    kind = request.GET.get("kind", "").strip()
+    priority = request.GET.get("priority", "").strip()
+    assignment = request.GET.get("assignment", "").strip()
+
+    if query:
+        pending = pending.filter(
+            Q(submitted_by__username__icontains=query)
+            | Q(dog__name__icontains=query)
+            | Q(kennel__name__icontains=query)
+            | Q(litter__code__icontains=query)
+            | Q(document__title__icontains=query)
+            | Q(notes__icontains=query)
+        ).distinct()
+    if kind in dict(Submission.Kind.choices):
+        pending = pending.filter(kind=kind)
+    if priority.isdigit() and int(priority) in dict(Submission.Priority.choices):
+        pending = pending.filter(priority=int(priority))
+    if assignment == "mine":
+        pending = pending.filter(assigned_to=request.user)
+    elif assignment == "unassigned":
+        pending = pending.filter(assigned_to__isnull=True)
+
+    pending_items = list(pending.order_by("-priority", "created_at")[:100])
+    for item in pending_items:
+        item.review_diff = submission_diff(item)
+        age_days = max(0, (timezone.now() - item.created_at).days)
+        item.age_days = age_days
+        item.is_aging = age_days >= 7
+
+    duplicate_form = DuplicateMatchForm(request.GET or None)
+    duplicate_lookup_results = []
+    duplicate_results = []
+    duplicate_reference = None
+    reference_id = request.GET.get("reference", "").strip()
+    duplicate_query = request.GET.get("duplicate_q", "").strip()
+
+    if reference_id:
+        duplicate_reference = Dog.objects.select_related(
+            "kennel", "sire", "dam"
+        ).prefetch_related("registrations").filter(pk=reference_id).first()
+        if duplicate_reference:
+            duplicate_results = duplicate_matches(duplicate_reference)
+    elif duplicate_query and duplicate_form.is_valid():
+        duplicate_lookup_results = moderation_dog_search(
+            duplicate_form.cleaned_data["duplicate_q"]
+        )
+
+    disputes = (
+        DisputeCase.objects.filter(
+            status__in=[DisputeCase.Status.OPEN, DisputeCase.Status.REVIEWING]
+        )
+        .select_related("dog", "opened_by", "assigned_to")
+        .order_by("status", "created_at")[:50]
+    )
+
     return render(
         request,
         "accounts/moderation_queue.html",
         {
-            "pending": pending,
+            "pending": pending_items,
+            "pending_total": pending.count(),
             "merge_form": MergeDogsForm(),
             "verification_form": VerificationEventForm(),
             "duplicate_candidates": duplicate_candidates(),
+            "duplicate_form": duplicate_form,
+            "duplicate_reference": duplicate_reference,
+            "duplicate_lookup_results": duplicate_lookup_results,
+            "duplicate_results": duplicate_results,
+            "bulk_form": BulkModerationForm(),
+            "disputes": disputes,
+            "filters": {
+                "q": query,
+                "kind": kind,
+                "priority": priority,
+                "assignment": assignment,
+            },
+            "submission_kinds": Submission.Kind.choices,
+            "priority_choices": Submission.Priority.choices,
         },
     )
 
@@ -417,7 +506,7 @@ def verify_dog(request):
     dog = form.cleaned_data["dog"]
     state = form.cleaned_data["state"]
     field_name = form.cleaned_data["field_name"].strip()
-    VerificationEvent.objects.create(
+    event = VerificationEvent.objects.create(
         dog=dog,
         field_name=field_name,
         state=state,
@@ -428,6 +517,18 @@ def verify_dog(request):
     if not field_name:
         dog.verification_state = state
         dog.save(update_fields=("verification_state", "updated_at"))
+    record_audit(
+        action=ModerationAudit.Action.VERIFICATION,
+        actor=request.user,
+        dog=dog,
+        kennel=dog.kennel,
+        summary={
+            "verification_event_id": event.pk,
+            "field_name": field_name,
+            "state": state,
+        },
+        note=form.cleaned_data["note"],
+    )
     messages.success(request, "Verification event recorded.")
     return redirect("accounts:moderation")
 
@@ -696,5 +797,218 @@ def request_document_visibility(request, pk):
             "title": f"Visibility · {document.title}",
             "intro": "Public/private visibility changes are moderated so evidence is not exposed accidentally.",
             "button_label": "Submit visibility request",
+        },
+    )
+
+
+
+@login_required
+def open_dispute(request, pk):
+    kennel_ids = request.user.kennel_memberships.values_list("kennel_id", flat=True)
+    dog = get_object_or_404(
+        Dog.objects.filter(Q(is_public=True) | Q(kennel_id__in=kennel_ids)).distinct(),
+        pk=pk,
+    )
+    form = DisputeForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        dispute = DisputeCase.objects.create(
+            dog=dog,
+            opened_by=request.user,
+            reason=form.cleaned_data["reason"],
+            details=form.cleaned_data["details"],
+            attachment=form.cleaned_data["attachment"] or "",
+        )
+        record_audit(
+            action=ModerationAudit.Action.DISPUTE_OPENED,
+            actor=request.user,
+            dog=dog,
+            kennel=dog.kennel,
+            dispute=dispute,
+            summary={"reason": dispute.reason},
+        )
+        messages.success(request, "Review case opened. A moderator can now investigate it.")
+        return redirect("accounts:my-disputes")
+
+    return render(
+        request,
+        "accounts/submission_form.html",
+        {
+            "form": form,
+            "eyebrow": "Dispute / review case",
+            "title": f"Request review · {dog.name}",
+            "intro": "Report a specific pedigree, identity, health, ownership or duplicate concern. Opening a case does not alter the canonical record.",
+            "button_label": "Open review case",
+            "multipart": True,
+        },
+    )
+
+
+@login_required
+def my_disputes(request):
+    disputes = request.user.opened_ancestry_disputes.select_related(
+        "dog", "assigned_to", "closed_by"
+    )
+    return render(
+        request,
+        "accounts/my_disputes.html",
+        {"disputes": disputes},
+    )
+
+
+@staff_member_required
+def bulk_moderation(request):
+    if request.method != "POST":
+        return redirect("accounts:moderation")
+
+    form = BulkModerationForm(request.POST)
+    submission_ids = request.POST.getlist("submission_ids")
+    if not form.is_valid() or not submission_ids:
+        messages.error(request, "Select at least one pending submission and a valid bulk action.")
+        return redirect("accounts:moderation")
+
+    action = form.cleaned_data["action"]
+    note = form.cleaned_data["resolution_notes"].strip()
+    now = timezone.now()
+
+    with transaction.atomic():
+        queryset = Submission.objects.select_for_update().filter(
+            pk__in=submission_ids,
+            status=Submission.Status.PENDING,
+        )
+        items = list(queryset)
+        if not items:
+            messages.info(request, "None of the selected submissions are still pending.")
+            return redirect("accounts:moderation")
+
+        if action == "reject":
+            for item in items:
+                reject_submission(item, request.user, note)
+        elif action == "assign_me":
+            queryset.update(
+                assigned_to=request.user,
+                review_started_at=now,
+                updated_at=now,
+            )
+        elif action == "unassign":
+            queryset.update(
+                assigned_to=None,
+                review_started_at=None,
+                updated_at=now,
+            )
+        else:
+            priority_map = {
+                "priority_low": Submission.Priority.LOW,
+                "priority_normal": Submission.Priority.NORMAL,
+                "priority_high": Submission.Priority.HIGH,
+                "priority_urgent": Submission.Priority.URGENT,
+            }
+            new_priority = priority_map.get(action)
+            if new_priority is None:
+                messages.error(request, "Unsupported bulk moderation action.")
+                return redirect("accounts:moderation")
+            queryset.update(priority=new_priority, updated_at=now)
+
+        if action != "reject":
+            record_audit(
+                action=ModerationAudit.Action.SUBMISSION_BULK,
+                actor=request.user,
+                summary={
+                    "action": action,
+                    "count": len(items),
+                    "submission_ids": [str(item.pk) for item in items],
+                },
+                note=note,
+            )
+
+    messages.success(request, f"Bulk moderation updated {len(items)} submission(s).")
+    return redirect("accounts:moderation")
+
+
+@staff_member_required
+def review_dispute(request, pk, decision):
+    if request.method != "POST":
+        return redirect("accounts:moderation")
+
+    note = request.POST.get("resolution_notes", "").strip()
+    with transaction.atomic():
+        dispute = get_object_or_404(
+            DisputeCase.objects.select_for_update().select_related("dog", "opened_by"),
+            pk=pk,
+        )
+
+        if decision == "assign":
+            dispute.assigned_to = request.user
+            dispute.status = DisputeCase.Status.REVIEWING
+        elif decision == "resolve":
+            if not note:
+                messages.error(request, "A resolution note is required.")
+                return redirect("accounts:moderation")
+            dispute.status = DisputeCase.Status.RESOLVED
+            dispute.resolution_notes = note
+            dispute.closed_by = request.user
+            dispute.closed_at = timezone.now()
+        elif decision == "dismiss":
+            if not note:
+                messages.error(request, "A dismissal reason is required.")
+                return redirect("accounts:moderation")
+            dispute.status = DisputeCase.Status.DISMISSED
+            dispute.resolution_notes = note
+            dispute.closed_by = request.user
+            dispute.closed_at = timezone.now()
+        else:
+            messages.error(request, "Unknown dispute action.")
+            return redirect("accounts:moderation")
+
+        dispute.save()
+        record_audit(
+            action=ModerationAudit.Action.DISPUTE_UPDATED,
+            actor=request.user,
+            dog=dispute.dog,
+            kennel=dispute.dog.kennel,
+            dispute=dispute,
+            summary={"decision": decision, "status": dispute.status},
+            note=note,
+        )
+        Notification.objects.create(
+            user=dispute.opened_by,
+            title=f"Review case {dispute.get_status_display().lower()}",
+            message=f"Your review case for {dispute.dog.name} is now {dispute.get_status_display().lower()}.",
+            link="/member/disputes/",
+        )
+
+    messages.success(request, "Dispute case updated.")
+    return redirect("accounts:moderation")
+
+
+@staff_member_required
+def moderation_audit(request):
+    events = ModerationAudit.objects.select_related(
+        "actor", "dog", "kennel", "litter", "submission", "dispute"
+    )
+
+    query = request.GET.get("q", "").strip()
+    action = request.GET.get("action", "").strip()
+    actor = request.GET.get("actor", "").strip()
+
+    if query:
+        events = events.filter(
+            Q(dog__name__icontains=query)
+            | Q(kennel__name__icontains=query)
+            | Q(litter__code__icontains=query)
+            | Q(actor__username__icontains=query)
+            | Q(note__icontains=query)
+        ).distinct()
+    if action in dict(ModerationAudit.Action.choices):
+        events = events.filter(action=action)
+    if actor:
+        events = events.filter(actor__username__icontains=actor)
+
+    return render(
+        request,
+        "accounts/moderation_audit.html",
+        {
+            "events": events[:200],
+            "actions": ModerationAudit.Action.choices,
+            "filters": {"q": query, "action": action, "actor": actor},
         },
     )

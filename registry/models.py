@@ -326,6 +326,12 @@ class DogSource(models.Model):
 
 
 class Submission(models.Model):
+    class Priority(models.IntegerChoices):
+        LOW = 10, "Low"
+        NORMAL = 20, "Normal"
+        HIGH = 30, "High"
+        URGENT = 40, "Urgent"
+
     class Kind(models.TextChoices):
         DOG = "dog", "New dog"
         CORRECTION = "correction", "Dog correction"
@@ -347,6 +353,19 @@ class Submission(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
     )
+    priority = models.PositiveSmallIntegerField(
+        choices=Priority.choices,
+        default=Priority.NORMAL,
+        db_index=True,
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_ancestry_submissions",
+    )
+    review_started_at = models.DateTimeField(null=True, blank=True)
     submitted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -438,6 +457,124 @@ class DogDocument(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class DisputeCase(models.Model):
+    class Reason(models.TextChoices):
+        PEDIGREE = "pedigree", "Pedigree relationship"
+        IDENTITY = "identity", "Dog identity"
+        HEALTH = "health", "Health/DNA information"
+        OWNERSHIP = "ownership", "Kennel/ownership information"
+        DUPLICATE = "duplicate", "Possible duplicate dog"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        REVIEWING = "reviewing", "Under review"
+        RESOLVED = "resolved", "Resolved"
+        DISMISSED = "dismissed", "Dismissed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    dog = models.ForeignKey(Dog, on_delete=models.CASCADE, related_name="disputes")
+    opened_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="opened_ancestry_disputes",
+    )
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.OPEN, db_index=True
+    )
+    details = models.TextField()
+    attachment = models.FileField(upload_to="disputes/%Y/%m/", blank=True)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_ancestry_disputes",
+    )
+    resolution_notes = models.TextField(blank=True)
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="closed_ancestry_disputes",
+    )
+    closed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("status", "-created_at")
+
+    def __str__(self):
+        return f"{self.dog} · {self.get_reason_display()}"
+
+
+class ModerationAudit(models.Model):
+    class Action(models.TextChoices):
+        SUBMISSION_APPROVED = "submission_approved", "Submission approved"
+        SUBMISSION_REJECTED = "submission_rejected", "Submission rejected"
+        SUBMISSION_BULK = "submission_bulk", "Bulk moderation update"
+        DOG_MERGED = "dog_merged", "Dog records merged"
+        VERIFICATION = "verification", "Verification recorded"
+        DISPUTE_OPENED = "dispute_opened", "Dispute opened"
+        DISPUTE_UPDATED = "dispute_updated", "Dispute updated"
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ancestry_moderation_audit",
+    )
+    action = models.CharField(max_length=40, choices=Action.choices, db_index=True)
+    dog = models.ForeignKey(
+        Dog,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="moderation_audit",
+    )
+    kennel = models.ForeignKey(
+        Kennel,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="moderation_audit",
+    )
+    litter = models.ForeignKey(
+        Litter,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="moderation_audit",
+    )
+    submission = models.ForeignKey(
+        Submission,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="audit_events",
+    )
+    dispute = models.ForeignKey(
+        DisputeCase,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="audit_events",
+    )
+    summary = models.JSONField(default=dict, blank=True)
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.get_action_display()} · {self.created_at:%Y-%m-%d %H:%M}"
 
 
 class VerificationEvent(models.Model):

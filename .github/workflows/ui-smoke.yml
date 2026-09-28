@@ -37,7 +37,16 @@ jobs:
         run: |
           python manage.py shell <<'PY'
           from django.contrib.auth import get_user_model
-          from registry.models import Dog, DogDocument, Kennel, KennelMembership, Litter
+          from registry.models import (
+              DisputeCase,
+              Dog,
+              DogDocument,
+              Kennel,
+              KennelMembership,
+              Litter,
+              ModerationAudit,
+              Submission,
+          )
 
           U = get_user_model()
           u, _ = U.objects.get_or_create(username="ui-reviewer", defaults={"is_staff": True})
@@ -75,6 +84,41 @@ jobs:
                       "document_type": DogDocument.DocumentType.PEDIGREE,
                       "file": "documents/ui-pedigree.pdf",
                       "submitted_by": u,
+                  },
+              )
+              if not Submission.objects.filter(
+                  submitted_by=u,
+                  dog=dog,
+                  kind=Submission.Kind.CORRECTION,
+                  status=Submission.Status.PENDING,
+              ).exists():
+                  Submission.objects.create(
+                      kind=Submission.Kind.CORRECTION,
+                      submitted_by=u,
+                      dog=dog,
+                      kennel=dog.kennel,
+                      priority=Submission.Priority.HIGH,
+                      payload={
+                          "name": dog.name,
+                          "colour": "Brindle" if dog.colour != "Brindle" else "Black",
+                      },
+                      notes="UI review example with a visible before/after diff.",
+                  )
+              dispute, _ = DisputeCase.objects.get_or_create(
+                  dog=dog,
+                  opened_by=u,
+                  reason=DisputeCase.Reason.PEDIGREE,
+                  status=DisputeCase.Status.OPEN,
+                  defaults={"details": "UI example: verify the listed sire against pedigree evidence."},
+              )
+              ModerationAudit.objects.get_or_create(
+                  action=ModerationAudit.Action.DISPUTE_OPENED,
+                  dispute=dispute,
+                  defaults={
+                      "actor": u,
+                      "dog": dog,
+                      "kennel": dog.kennel,
+                      "summary": {"reason": dispute.reason, "ui_seed": True},
                   },
               )
           PY
