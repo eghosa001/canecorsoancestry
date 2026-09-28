@@ -11,6 +11,10 @@ on:
       - "registry/templates/**"
       - "pedigrees/templates/**"
       - "accounts/templates/**"
+      - "accounts/views.py"
+      - "accounts/urls.py"
+      - "registry/views.py"
+      - "config/urls.py"
       - "scripts/ui_smoke.py"
       - ".github/workflows/ui-smoke.yml"
 
