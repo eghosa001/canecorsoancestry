@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from registry.models import Dog, Kennel
@@ -11,6 +11,11 @@ class ProductionSurfaceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
         self.assertEqual(response["Cache-Control"], "no-store")
+
+    @override_settings(SECURE_SSL_REDIRECT=True, SECURE_REDIRECT_EXEMPT=[r"^healthz/$"])
+    def test_health_check_is_not_redirected_by_https_enforcement(self):
+        response = self.client.get(reverse("healthz"))
+        self.assertEqual(response.status_code, 200)
 
     def test_security_and_request_trace_headers_are_present(self):
         response = self.client.get(reverse("home"))
