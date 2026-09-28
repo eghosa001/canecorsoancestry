@@ -697,6 +697,8 @@ def _score_duplicate_pair(reference, candidate, trigram_score=None):
     return {
         "reference": reference,
         "candidate": candidate,
+        "left": reference,
+        "right": candidate,
         "score": score,
         "confidence": confidence,
         "reasons": reasons,
