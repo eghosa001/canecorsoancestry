@@ -1,7 +1,9 @@
 import os
+import re
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
@@ -66,6 +68,26 @@ DATABASES = {"default": dj_database_url.config(
     conn_max_age=60,
 )}
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+
+database = DATABASES["default"]
+if database.get("ENGINE", "").endswith("postgresql"):
+    db_schema = os.getenv("DJANGO_DB_SCHEMA", "").strip()
+    db_sslmode = os.getenv("DJANGO_DB_SSLMODE", "").strip()
+    db_options = database.setdefault("OPTIONS", {})
+
+    if db_schema:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", db_schema):
+            raise ImproperlyConfigured(
+                "DJANGO_DB_SCHEMA must be a valid PostgreSQL identifier."
+            )
+        existing_options = db_options.get("options", "").strip()
+        search_path_option = f"-c search_path={db_schema},extensions,public"
+        db_options["options"] = (
+            f"{existing_options} {search_path_option}".strip()
+        )
+
+    if db_sslmode:
+        db_options["sslmode"] = db_sslmode
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
