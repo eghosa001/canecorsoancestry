@@ -13,7 +13,7 @@ from django.db import connections
 
 
 TARGET_ALIAS = "supabase"
-COPY_LABELS = ("auth.Group", "auth.User", "accounts", "registry")
+COPY_LABELS = ("auth.group", "auth.user", "accounts", "registry")
 SKIP_MODELS = {
     ("auth", "permission"),
 }
@@ -127,7 +127,7 @@ class Command(BaseCommand):
             *COPY_LABELS,
             database="default",
             format="json",
-            natural_foreign=True,
+            use_natural_foreign_keys=True,
             use_base_manager=True,
             stdout=buffer,
             verbosity=0,
