@@ -33,15 +33,48 @@ SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 
-bucket_name = os.getenv("AWS_STORAGE_BUCKET_NAME") or os.getenv("BUCKET")
-bucket_region = os.getenv("AWS_S3_REGION_NAME") or os.getenv("REGION")
-bucket_endpoint = os.getenv("AWS_S3_ENDPOINT_URL") or os.getenv("ENDPOINT")
-bucket_access_key = os.getenv("AWS_ACCESS_KEY_ID", "")
-bucket_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+supabase_project_ref = os.getenv("SUPABASE_PROJECT_REF", "").strip()
+bucket_name = (
+    os.getenv("SUPABASE_STORAGE_BUCKET")
+    or os.getenv("AWS_STORAGE_BUCKET_NAME")
+    or os.getenv("BUCKET")
+)
+bucket_region = (
+    os.getenv("SUPABASE_REGION")
+    or os.getenv("AWS_S3_REGION_NAME")
+    or os.getenv("REGION")
+)
+bucket_endpoint = (
+    os.getenv("SUPABASE_S3_ENDPOINT_URL")
+    or os.getenv("AWS_S3_ENDPOINT_URL")
+    or os.getenv("ENDPOINT")
+)
+if supabase_project_ref and not bucket_endpoint:
+    bucket_endpoint = (
+        f"https://{supabase_project_ref}.storage.supabase.co/storage/v1/s3"
+    )
+bucket_access_key = (
+    os.getenv("SUPABASE_S3_ACCESS_KEY_ID")
+    or os.getenv("AWS_ACCESS_KEY_ID", "")
+)
+bucket_secret_key = (
+    os.getenv("SUPABASE_S3_SECRET_ACCESS_KEY")
+    or os.getenv("AWS_SECRET_ACCESS_KEY", "")
+)
 require_object_storage = os.getenv("DJANGO_REQUIRE_OBJECT_STORAGE", "0") == "1"
-bucket_ready = all((bucket_name, bucket_region, bucket_endpoint, bucket_access_key, bucket_secret_key))
+bucket_ready = all(
+    (
+        bucket_name,
+        bucket_region,
+        bucket_endpoint,
+        bucket_access_key,
+        bucket_secret_key,
+    )
+)
 if require_object_storage and not bucket_ready:
-    raise ImproperlyConfigured("Production object storage is required but S3-compatible bucket credentials are incomplete.")
+    raise ImproperlyConfigured(
+        "Production object storage is required but S3-compatible bucket credentials are incomplete."
+    )
 
 if bucket_ready:
     STORAGES = {
@@ -62,30 +95,38 @@ if bucket_ready:
                 "signature_version": "s3v4",
             },
         },
-        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        },
     }
 else:
     STORAGES = {
         "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        },
     }
 
 if ANCESTRY_EMAIL_NOTIFICATIONS:  # noqa: F405
     missing_email = [
-        name for name, value in {
+        name
+        for name, value in {
             "EMAIL_HOST": EMAIL_HOST,  # noqa: F405
             "EMAIL_HOST_USER": EMAIL_HOST_USER,  # noqa: F405
             "EMAIL_HOST_PASSWORD": EMAIL_HOST_PASSWORD,  # noqa: F405
-        }.items() if not value
+        }.items()
+        if not value
     ]
     if missing_email:
         raise ImproperlyConfigured(
-            "Email notifications are enabled but these settings are missing: " + ", ".join(missing_email)
+            "Email notifications are enabled but these settings are missing: "
+            + ", ".join(missing_email)
         )
 
 SENTRY_DSN = os.getenv("SENTRY_DSN", "")
 if SENTRY_DSN:
     import sentry_sdk
+
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
