@@ -1,0 +1,55 @@
+name: Cloudflare zone diagnostic
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/cloudflare-zone-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 19a03bec57c0277e01e1e70e241576af
+
+    steps:
+      - name: Validate token presence
+        shell: bash
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is unavailable."
+            exit 1
+          fi
+
+      - name: Check domain zone visibility
+        shell: bash
+        run: |
+          response="$(curl --silent --show-error             --url "https://api.cloudflare.com/client/v4/zones?name=canecorsoancestry.com&account.id=$CLOUDFLARE_ACCOUNT_ID"             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             --header "Accept: application/json")"
+
+          success="$(printf '%s' "$response" | jq -r '.success // false')"
+          count="$(printf '%s' "$response" | jq -r '.result | if type=="array" then length else 0 end')"
+          echo "Zone API success: $success"
+          echo "Matching zones: $count"
+
+          if [ "$success" = "true" ] && [ "$count" -gt 0 ]; then
+            printf '%s' "$response" | jq -r '.result[] | "Zone: \(.name) | status=\(.status) | account=\(.account.id)"'
+          else
+            printf '%s' "$response" | jq -r '.errors[]? | "Zone API error \(.code): \(.message)"'
+          fi
+
+      - name: Check Workers Domains API
+        shell: bash
+        run: |
+          tmp="$(mktemp)"
+          status="$(curl --silent --show-error             --output "$tmp"             --write-out '%{http_code}'             --url "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains?hostname=canecorsoancestry.com"             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             --header "Accept: application/json")"
+
+          echo "Workers Domains HTTP status: $status"
+          if jq -e . "$tmp" >/dev/null 2>&1; then
+            jq -r '"Workers Domains success: " + ((.success // false)|tostring)' "$tmp"
+            jq -r '.errors[]? | "Workers Domains error \(.code): \(.message)"' "$tmp"
+            jq -r '.result[]? | "Existing Worker domain: \(.hostname) -> \(.service) | zone=\(.zone_name)"' "$tmp"
+          fi
