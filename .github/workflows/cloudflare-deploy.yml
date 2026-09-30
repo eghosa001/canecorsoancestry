@@ -1,6 +1,8 @@
 name: Cloudflare Worker deploy
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       target:
@@ -58,7 +60,7 @@ jobs:
 
       - name: Render Wrangler config
         run: |
-          if [ "${{ inputs.target }}" = "production" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.target }}" = "production" ]; then
             template="wrangler.production.toml"
           else
             template="wrangler.preview.toml"
