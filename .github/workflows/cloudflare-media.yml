@@ -31,7 +31,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-      RENDER_ORIGIN: ${{ vars.RENDER_ORIGIN }}
+      RENDER_ORIGIN: ${{ vars.RENDER_ORIGIN || 'https://canecorsoancestry.onrender.com' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.target }}" = "production" ]; then
             if [ -z "$RENDER_ORIGIN" ]; then
-              echo "::error::GitHub Actions variable RENDER_ORIGIN is required for production."
+              echo "::error::A Render origin is required for production."
               exit 1
             fi
             case "$RENDER_ORIGIN" in
