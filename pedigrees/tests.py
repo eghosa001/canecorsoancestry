@@ -2,7 +2,7 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
-from registry.models import Dog
+from registry.models import Dog, HealthRecord
 
 from .services import (
     descendant_generations,
@@ -63,6 +63,26 @@ class PedigreeServiceTests(TestCase):
         dam = Dog.objects.create(name="Female Half Sibling", slug="female-half", sire=common)
 
         self.assertAlmostEqual(projected_inbreeding(sire, dam), 0.125)
+
+    def test_relative_health_is_derived_from_connected_family(self):
+        sire = Dog.objects.create(
+            name="Health Sire", slug="health-sire", is_public=True
+        )
+        child = Dog.objects.create(
+            name="Health Child",
+            slug="health-child",
+            sire=sire,
+            is_public=True,
+        )
+        HealthRecord.objects.create(
+            dog=sire, test_type="Hips", result="Good"
+        )
+
+        rows = direct_relative_health(child)
+
+        self.assertEqual(rows[0]["dog"], sire)
+        self.assertEqual(rows[0]["relations"], ["Sire"])
+        self.assertEqual(rows[0]["records"][0].result, "Good")
 
     def test_mates_are_derived_from_shared_offspring(self):
         sire = Dog.objects.create(
