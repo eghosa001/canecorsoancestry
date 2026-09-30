@@ -6,7 +6,8 @@ requires-python = ">=3.13"
 dependencies = [
     "Django>=5.2,<5.3",
     "dj-database-url>=2.3,<3",
-    "psycopg[binary]>=3.3.5,<4",
+    "django-pg8000==0.0.5",
+    "pg8000>=1.31.2,<2",
     "whitenoise>=6.9,<7",
 ]
 
