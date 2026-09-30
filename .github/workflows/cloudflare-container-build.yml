@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "Dockerfile"
+      - ".dockerignore"
       - "src/container-worker.js"
       - "wrangler.container.*.jsonc"
       - "package.json"
