@@ -113,6 +113,34 @@
       "size": 247822
     },
     {
+      "dog_external_key": "himera-custodi-nos",
+      "source_path": "assets/dogs/himera-custodi-nos-main.avif",
+      "r2_key": "dogs/bellissimo/himera-custodi-nos-main.avif",
+      "is_primary": true,
+      "sort_order": 0,
+      "size": 29114,
+      "reconstructed_from": [
+        ".github/assets/rocco-bellissimo-geni-avif.b64.part00",
+        ".github/assets/rocco-bellissimo-geni-avif.b64.part01",
+        ".github/assets/rocco-bellissimo-geni-avif.b64.part02",
+        ".github/assets/rocco-bellissimo-geni-avif.b64.part03",
+        ".github/assets/rocco-bellissimo-geni-avif.b64.part04"
+      ]
+    },
+    {
+      "dog_external_key": "himera-custodi-nos",
+      "source_path": "assets/dogs/himera-custodi-nos-02.avif",
+      "r2_key": "dogs/bellissimo/himera-custodi-nos-02.avif",
+      "is_primary": false,
+      "sort_order": 1,
+      "size": 19520,
+      "reconstructed_from": [
+        ".github/assets/diesel-bellissimo-geni-avif.b64.part00",
+        ".github/assets/diesel-bellissimo-geni-avif.b64.part01",
+        ".github/assets/diesel-bellissimo-geni-avif.b64.part02"
+      ]
+    },
+    {
       "dog_external_key": "roman-custodi-nos",
       "source_path": "assets/dogs/roman-custodi-nos.webp",
       "r2_key": "dogs/bellissimo/roman-custodi-nos.webp",

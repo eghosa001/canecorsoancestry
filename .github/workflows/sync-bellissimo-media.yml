@@ -29,6 +29,14 @@ jobs:
           ref: 3addd1b186a62bf2040c02980ab0eaa0aad801a7
           path: source-bellissimo
 
+      - name: Reconstruct verified Himera photographs
+        shell: bash
+        run: |
+          cat source-bellissimo/.github/assets/rocco-bellissimo-geni-avif.b64.part* | tr -d '\n\r' | base64 --decode > source-bellissimo/assets/dogs/himera-custodi-nos-main.avif
+          cat source-bellissimo/.github/assets/diesel-bellissimo-geni-avif.b64.part* | tr -d '\n\r' | base64 --decode > source-bellissimo/assets/dogs/himera-custodi-nos-02.avif
+          test "$(wc -c < source-bellissimo/assets/dogs/himera-custodi-nos-main.avif)" -eq 29114
+          test "$(wc -c < source-bellissimo/assets/dogs/himera-custodi-nos-02.avif)" -eq 19520
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -115,8 +123,8 @@ jobs:
             count=$((count + 1))
           done < /tmp/bellissimo-media.tsv
 
-          if [ "$count" -ne 20 ]; then
-            echo "::error::Expected 20 verified media objects, uploaded $count."
+          if [ "$count" -ne 22 ]; then
+            echo "::error::Expected 22 verified media objects, uploaded $count."
             exit 1
           fi
           echo "Verified $count R2 media objects byte-for-byte."
@@ -162,7 +170,7 @@ jobs:
           from registry.models import DogImage
           qs = DogImage.objects.filter(image__startswith='dogs/bellissimo/')
           primary = qs.filter(is_primary=True)
-          assert qs.count() == 20, f'Expected 20 Bellissimo DogImage rows, got {qs.count()}'
-          assert primary.count() == 13, f'Expected 13 Bellissimo primary images, got {primary.count()}'
+          assert qs.count() == 22, f'Expected 22 Bellissimo DogImage rows, got {qs.count()}'
+          assert primary.count() == 14, f'Expected 14 Bellissimo primary images, got {primary.count()}'
           print(f'Verified: {qs.count()} Bellissimo images; {primary.count()} primary')
           "
