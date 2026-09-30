@@ -2,13 +2,16 @@ import os
 
 import dj_database_url
 from django.conf import settings
-from django.core.asgi import get_asgi_application
+from django.core.wsgi import get_wsgi_application
 from django.db import connections
-from workers import WorkerEntrypoint, asgi
+from workers import WorkerEntrypoint, wsgi
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.cloudflare")
 
-_application = get_asgi_application()
+# Build Django during Cloudflare startup while settings use the dummy database
+# backend. WSGI avoids Django/asgiref thread creation, which Python Workers do
+# not support for this synchronous application.
+_application = get_wsgi_application()
 _database_ready = False
 
 
@@ -43,4 +46,4 @@ class Default(WorkerEntrypoint):
             _install_hyperdrive_database(self.env)
             _database_ready = True
 
-        return await asgi.fetch(_application, request, self.env)
+        return await wsgi.fetch(_application, request, self.env)
