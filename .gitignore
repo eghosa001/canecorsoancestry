@@ -8,6 +8,7 @@ venv/
 media/
 staticfiles/
 worker_assets/
+wrangler.toml
 wrangler.generated.toml
 .wrangler/
 .pytest_cache/
