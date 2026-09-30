@@ -2,193 +2,121 @@
 
 ## Final production architecture
 
-Cane Corso Ancestry is moving to **Cloudflare + Supabase**.
+Cane Corso Ancestry uses **Cloudflare + Supabase**.
 
-- Application runtime: Cloudflare Python Workers
-- WSGI adapter: Cloudflare Workers Python WSGI support
-- Database: Supabase PostgreSQL project `wsntfvpcqloqzwgmsfaz` (`eu-north-1`)
-- Database connection pooling: Cloudflare Hyperdrive
+- Application runtime: Cloudflare Containers running Django/Gunicorn
+- Edge router and static assets: Cloudflare Workers + Workers Static Assets
+- Database: Supabase PostgreSQL project `wsntfvpcqloqzwgmsfaz` in `eu-north-1`
+- Database connectivity: Supabase Session Pooler from the container
 - Media/evidence: private Cloudflare R2 bucket `canecorsoancestry-media`
-- Static assets: Cloudflare Workers Static Assets
 - DNS/TLS/application origin: Cloudflare Custom Domain on `canecorsoancestry.com`
 
-Railway remains only as a temporary rollback/source environment until the cutover is verified.
+Railway is not part of the final architecture. It may remain temporarily only as a rollback/source environment until data and media cutover are verified.
 
-## Supabase database
+## Why Containers instead of Python Workers
+
+The Django application was tested on Cloudflare Python Workers. The package, bindings, Supabase migrations and R2 deployment all worked, but the application used far more CPU than the Workers Free request budget and required a normal synchronous Python/PostgreSQL runtime.
+
+Cloudflare Containers provide a standard Linux/Python environment for Django while retaining Cloudflare routing, R2, static assets and deployment.
+
+## Supabase
 
 Django authentication remains canonical; Supabase Auth is not used.
 
-Django tables live in the non-exposed `django_app` schema.
-
-The target search path is:
+Django tables live in the private `django_app` schema with search path:
 
 `django_app,extensions,public`
 
-`pg_trgm` remains available from the `extensions` schema for duplicate matching.
+`pg_trgm` remains available for duplicate matching.
 
-The Supabase security advisor should remain clean after schema changes.
+The deployment workflow:
+1. validates the Direct Supabase URL;
+2. derives the IPv4 Session Pooler URL automatically;
+3. runs Django migrations against Supabase;
+4. passes the Session Pooler URL to the container as an encrypted Worker secret.
 
-## Cloudflare runtime
+## Cloudflare Container runtime
 
-Cloudflare runs `worker.py`, which loads:
+The container uses:
+- `Dockerfile`
+- `config.settings.container`
+- Gunicorn on port 8080
+- one `lite` container instance initially
+- scale-to-zero after inactivity
 
-`DJANGO_SETTINGS_MODULE=config.settings.cloudflare`
+The edge router is `src/container-worker.js`.
 
-The Worker requires these bindings:
-
-- `HYPERDRIVE` — points to Supabase PostgreSQL
-- `MEDIA_BUCKET` — R2 bucket `canecorsoancestry-media`
-- `ASSETS` — Workers Static Assets bundle
-
-The only mandatory Worker secret used by Django itself is:
-
-- `DJANGO_SECRET_KEY`
-
-Do not commit it.
-
-## Static assets
-
-Before deployment:
-
-1. Run Django `collectstatic`.
-2. Run `python scripts/build_cloudflare_assets.py`.
-3. Deploy the generated `worker_assets/` directory with the Worker.
-
-`/static/*` is served directly by Cloudflare's asset layer, while application routes invoke Django.
+Preview Worker:
+`canecorsoancestry-container-preview`
 
 ## Media
 
-Production uploads use `core.storage.CloudflareR2Storage`.
+R2 remains private.
 
-The storage backend uses the native R2 Worker binding, not S3 credentials. That avoids carrying Railway bucket credentials or synchronous boto3 networking into Python Workers.
+The container does not receive R2 access keys. `core.container_storage.CloudflareR2BridgeStorage` sends internal HTTP requests to the Worker, which accesses the native `MEDIA_BUCKET` R2 binding.
 
-Media URLs resolve through Django's `/media/<path>` route. Django authorizes each request before reading the R2 object.
+Public/private authorization remains in Django before media objects are served.
 
-Public access is intentionally narrow:
-- public-dog images;
-- explicitly public documents attached to public dogs.
+## Static assets
 
-Private submissions, dispute evidence, source documents and private member documents require an authorized user or staff account.
+Django `collectstatic` builds static files. `scripts/build_cloudflare_assets.py` prepares `worker_assets/`, and Cloudflare serves `/static/*` directly at the edge before starting the container.
 
-## Deployment configs
+## Required GitHub secrets
 
-`wrangler.preview.toml` deploys to workers.dev for verification.
-
-`wrangler.production.toml` adds:
-
-`canecorsoancestry.com`
-
-as a Cloudflare Custom Domain.
-
-Both files keep the Hyperdrive ID as a placeholder. The deployment pipeline creates or updates the cache-disabled `canecorsoancestry-supabase` Hyperdrive from the Direct Supabase database URL, discovers its ID through the Cloudflare API, and renders the temporary `wrangler.toml` without committing credentials or resource IDs.
-
-## GitHub deployment secrets
-
-The Cloudflare deploy workflow requires only these GitHub Actions secrets:
+Only these three are required:
 
 - `CLOUDFLARE_API_TOKEN`
-- `SUPABASE_DATABASE_URL` — the **Direct** Supabase PostgreSQL connection string
+- `SUPABASE_DATABASE_URL`
 - `DJANGO_SECRET_KEY`
 
-The workflow discovers the Cloudflare account ID from the token automatically. If the token can access more than one Cloudflare account, set the optional repository variable `CLOUDFLARE_ACCOUNT_ID` to select the correct one.
+No R2 access keys, Hyperdrive ID or separate pooler secret is required.
 
-Those values belong in GitHub Actions secrets, never in the repository. The workflow automatically creates or updates a cache-disabled Hyperdrive configuration named `canecorsoancestry-supabase`, so no Hyperdrive ID needs to be entered manually.
+## Cloudflare prerequisites
 
-### Cloudflare API token scope
+The Cloudflare account must have **Workers Paid** enabled because Containers are not available on Workers Free.
 
-For the first cutover deployment, create a narrowly scoped Cloudflare API token with:
+The deployment API token must include:
+- Account Settings: Read
+- Workers: Admin for initial Worker creation
+- Workers R2 Storage: Write
+- **Containers: Write**
+- Zone > Workers Routes: Write for `canecorsoancestry.com`
 
-- Account Settings: Read — required for automatic account discovery.
-- Workers: Admin at the Workers product scope — required because the workflow may create the Worker on its first deployment.
-- Workers R2 Storage: Write — required to create/inspect the `canecorsoancestry-media` bucket.
-- Hyperdrive: Write — required to create/update the Supabase Hyperdrive configuration.
-- Zone > Workers Routes: Write for the `canecorsoancestry.com` zone — required when the production deployment attaches the Custom Domain.
+The workflow performs a Containers API preflight before migrations, Docker builds or deployment work.
 
-After the Worker and Custom Domain exist, the token can be tightened: Workers Admin can be reduced to Editor, and Workers Routes Write is only needed again if the route/custom-domain connection changes.
+## Deployment
 
-## Database migration
+Preview:
+`wrangler.container.preview.jsonc`
 
-The existing `copy_to_supabase` management command is the controlled database migration path.
+Production:
+`wrangler.container.production.jsonc`
 
-Run it from the existing Railway application while Railway's PostgreSQL database is still the default source and `SUPABASE_DATABASE_URL` points to the Supabase target.
+Container deployments use:
+`.github/workflows/cloudflare-container-deploy.yml`
 
-The command:
-
-1. applies Django migrations to the Supabase target;
-2. copies Django users/groups, active database sessions, Django admin log entries, accounts and registry data;
-3. verifies source/target model counts, including sessions and admin audit history;
-4. refuses to overwrite an already populated target unless `--replace` is explicitly supplied.
-
-Use the same `DJANGO_SECRET_KEY` on Cloudflare as Railway so copied database sessions remain valid after cutover.
-
-Do not change production traffic to Supabase until that verification succeeds.
+Production remains an explicit manual target. The legacy Python Worker workflow is retained only as a manual diagnostic/rollback tool and must not auto-deploy from `main`.
 
 ## Cutover order
 
-1. Keep Railway fully intact.
-2. Configure the Supabase database connection for migration.
-3. Run and verify `copy_to_supabase`.
-4. Run the Cloudflare preview deploy workflow; it creates or updates the cache-disabled Hyperdrive against the validated Supabase Direct connection automatically.
-5. The same workflow creates/verifies the `canecorsoancestry-media` R2 bucket.
-6. Verify the deployed **preview** Worker.
-7. Verify `/healthz/`, login, admin, member dashboard, search, dog profiles, pedigrees, duplicate matching, moderation, submissions, uploads and private/public media access.
-8. Copy existing production media from the Railway bucket to R2 using:
-   `python manage.py copy_media_to_cloudflare --target-url=https://<preview>.workers.dev`.
-   The preview-only importer accepts only database-referenced paths and HMAC-signed bytes, verifies SHA-256, and is disabled in the production Worker config.
-9. Re-run the command until every referenced media object reports stored or already identical. Any missing source object is a blocking error.
-10. Remove the old apex CNAME that points to Railway.
-11. Deploy using the **production** target so Cloudflare creates the Custom Domain for `canecorsoancestry.com`. The production Worker has `MEDIA_MIGRATION_ENABLED=0`.
-12. Repeat production smoke tests.
-13. Keep Railway available during the rollback window.
-14. Remove Railway only after the new stack is confirmed stable.
-
-## Domain
-
-Cloudflare Custom Domains are the final origin configuration.
-
-The old Railway CNAME for `canecorsoancestry.com` must be removed before Cloudflare can attach the same hostname as a Custom Domain.
-
-`www.canecorsoancestry.com` should redirect to the apex unless a second Custom Domain is intentionally configured.
-
-## Email
-
-In-app notifications continue to work.
-
-SMTP mail is disabled in the Cloudflare Worker settings for the initial cutover because the old Railway SMTP path is not required for correctness and should not block the migration. Transactional email can be reintroduced using a Worker-compatible HTTP email provider after the runtime cutover.
-
-## Backups and rollback
-
-Do not remove the Railway PostgreSQL volume or its backups during migration.
-
-After Supabase becomes canonical, enable/verify the Supabase backup policy appropriate to the project plan and perform a restore test before deleting the Railway rollback copy.
-
-R2 media should also have an export/backup procedure before the Railway bucket is deleted.
+1. Keep the existing rollback source untouched.
+2. Enable Workers Paid and ensure the API token has Containers Write.
+3. Deploy the Cloudflare Container preview.
+4. Verify `/healthz/`, login, admin, member dashboard, dog search, pedigrees, moderation and submissions.
+5. Copy existing production media to R2 and verify object counts/hashes.
+6. Verify Supabase production records/counts.
+7. Deploy the production Container target.
+8. Attach `canecorsoancestry.com` as the Cloudflare Custom Domain.
+9. Repeat production smoke tests.
+10. Remove the old environment only after the rollback window has passed.
 
 ## Security
 
 - HTTPS-only production
 - secure session and CSRF cookies
-- HSTS staged initially at one hour
-- no framing
-- MIME-sniff protection
-- same-origin referrer/COOP policy
-- private R2 media by default
+- private R2 media
 - server-side media authorization
 - Django tables outside Supabase `public`
-- no Supabase service-role key in the Worker
-- no R2 access keys in the Worker; the native binding supplies capability access
-
-After all production hostnames are stable on HTTPS, HSTS may be raised to one year and preload considered.
-
-## Production seed
-
-The current source production database previously imported 117 canonical Bellissimo-source dogs, including 101 public records and 16 drafts. The data copy must preserve those canonical IDs and all later member/moderation records rather than re-seeding production from scratch.
-
-
-## Media migration authentication
-
-The preview media importer signs each request with Django's existing `DJANGO_SECRET_KEY`. For the cutover, configure the Cloudflare Worker with the **same Django secret currently used by Railway**. This preserves existing Django signing behavior and lets the Railway source authenticate the one-time R2 copy without introducing another migration secret.
-
-Do not paste the secret into logs, repository files, command arguments, or chat. Store the same value in the GitHub Actions `DJANGO_SECRET_KEY` secret.
-
-The importer is enabled only in `wrangler.preview.toml`; `wrangler.production.toml` disables it.
+- no Supabase service-role key in the application
+- no R2 access keys in the container
+- encrypted Worker secrets for database URL and Django secret

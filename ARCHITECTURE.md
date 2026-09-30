@@ -6,177 +6,108 @@ Cane Corso Ancestry is a server-rendered Django application.
 
 Primary production stack:
 
-- Python 3.13 on Cloudflare Python Workers
-- Django 5.2 via the Cloudflare WSGI adapter
+- Django 5.2 / Python 3.13 in Cloudflare Containers
+- Gunicorn inside the container
+- Cloudflare Worker as the edge router
+- Cloudflare Workers Static Assets for CSS/static files
 - Supabase PostgreSQL as the canonical database
-- Cloudflare Hyperdrive between Workers and Supabase PostgreSQL
+- Supabase Session Pooler for container database connectivity
 - Cloudflare R2 for uploaded dog images, evidence and documents
-- Cloudflare Workers Static Assets for CSS and other static files
-- Django templates for server-rendered pages
-- GitHub Actions for CI and controlled Cloudflare deployments
+- GitHub Actions for CI and Cloudflare deployment
 
-The public experience remains usable without a heavy JavaScript application shell.
+The final runtime does not depend on Railway.
 
-## Current Django apps
+## Django applications
 
 ### `core`
-
-Site shell, homepage, shared navigation, media authorization and the custom member dashboard.
+Site shell, homepage, shared navigation, media authorization and member dashboard.
 
 ### `accounts`
-
 Member profile and account-specific features.
 
 ### `registry`
-
-Internal code package for canonical dog, kennel, litter, image, health, source and external-registration records.
-
-The package name is internal only. **The public product must not be presented as a registry.**
+Canonical dog, kennel, litter, image, health, source and external-registration records.
 
 ### `pedigrees`
-
 Pedigree traversal, repeated-ancestor analysis, common-ancestor analysis, COI calculations and virtual mating.
-
-## Core record graph
-
-`Dog` is the canonical node.
-
-Each dog can reference:
-- one sire;
-- one dam;
-- one kennel;
-- one litter;
-- aliases;
-- external registrations;
-- images;
-- health records;
-- evidence/sources.
-
-Repeated appearances of one ancestor in a rendered pedigree do not create extra Dog rows.
 
 ## Database
 
-Supabase PostgreSQL is the canonical production database.
+Supabase PostgreSQL is canonical.
 
-Django tables live in the private `django_app` schema rather than Supabase's exposed `public` schema. The connection search path is:
+Django tables live in the private `django_app` schema. The search path is:
 
 `django_app,extensions,public`
 
-This preserves access to PostgreSQL extensions such as `pg_trgm` without exposing Django's tables through the Supabase Data API.
+`pg_trgm` supports duplicate matching.
 
-Cloudflare Workers connect through the `HYPERDRIVE` binding. Hyperdrive owns connection pooling, so Django uses short-lived application connections (`CONN_MAX_AGE=0`).
+Django authentication remains canonical; Supabase Auth is intentionally not introduced.
 
-Use constraints for facts that must be unique or singular, including:
-- one kennel membership per user/kennel pair;
-- one external registration number per authority;
-- one primary image per dog;
-- unique canonical slugs.
+## Container runtime
 
-Pedigree code must be cycle-safe. A malformed ancestry cycle must not recurse forever.
+`Dockerfile` creates the Django image.
+
+`src/container-worker.js` defines the Cloudflare Container class and routes incoming requests to the named application container.
+
+The initial instance type is `lite`, with one instance and scale-to-zero after inactivity.
+
+Secrets are passed from encrypted Worker bindings into the container environment.
 
 ## Media
 
-Uploaded media is stored in the private Cloudflare R2 bucket bound as `MEDIA_BUCKET`.
+R2 is bound to the Worker as `MEDIA_BUCKET`.
 
-Django keeps the object key in its existing FileField columns. `core.storage.CloudflareR2Storage` bridges Django's synchronous Storage API to the asynchronous R2 binding using Pyodide's `run_sync` bridge.
+The container accesses R2 through an internal outbound bridge and never receives R2 credentials.
 
-All media access goes through `/media/<path>`, where Django authorizes the request before the object is opened:
+Django stores only object keys in existing FileField columns. `core.container_storage.CloudflareR2BridgeStorage` implements save/open/head/delete against the private bridge.
 
-- dog images for public dogs may be served publicly;
-- documents are public only when both the document and dog are public;
-- member submissions, dispute evidence and private documents require membership/ownership or staff authorization.
-
-Evidence is never exposed merely because somebody knows the R2 key.
-
-Original uploaded media remains the source of truth. Do not repeatedly recompress dog photography, and preserve natural framing.
+All public/private access remains authorized by Django before objects are served.
 
 ## Static assets
 
-Django `collectstatic` builds the project static files. The deploy pipeline copies them into `worker_assets/static/`, and Cloudflare Workers Static Assets serves `/static/*` directly without invoking Django.
+Django `collectstatic` produces static files. The deployment pipeline copies them into `worker_assets/static/`, and Cloudflare Workers Static Assets serves `/static/*` without starting the container.
 
 ## Authentication and authorization
 
-Django authentication remains canonical. Supabase Auth is intentionally not introduced because that would create a second identity system and break existing Django sessions, staff permissions and moderation workflows.
+Django sessions, users, permissions and admin remain authoritative.
 
-Normal breeders/members receive the custom member dashboard. Django Admin is for internal moderation/operations.
-
-Expected roles:
-
-- member;
-- kennel contributor;
-- kennel editor;
-- kennel owner;
-- moderator/admin.
-
-Permissions are enforced server-side.
-
-## Verification
-
-Verification is evidence-scoped.
-
-Progression:
-
-1. Community submitted
-2. Source attached
-3. Identity reviewed
-4. Pedigree reviewed
-5. Health/DNA verified
-
-A kennel has a separate verification state.
+Expected application roles include member, kennel contributor/editor/owner and moderator/admin.
 
 ## Pedigree analysis
 
-The analysis layer provides deterministic services independent from templates:
-
-- bounded pedigree traversal;
+The analysis layer remains deterministic and database-backed:
+- bounded traversal;
 - repeated ancestor detection;
-- full/half sibling discovery;
+- sibling discovery;
 - offspring queries;
-- common ancestor detection;
-- inbreeding coefficient calculations;
-- projected virtual-mating coefficient.
+- common ancestors;
+- COI;
+- virtual mating.
 
-Calculation code uses short unit tests with small known pedigrees.
+## Deployment
 
-## Cloudflare deployment
+Preview:
+`wrangler.container.preview.jsonc`
 
-`worker.py` is the Cloudflare WSGI entrypoint.
+Production:
+`wrangler.container.production.jsonc`
 
-`config.settings.cloudflare` is isolated from the existing Railway settings so rollback remains possible during migration.
+CI validates:
+- Django checks/tests;
+- Docker image build;
+- Wrangler Container configuration.
 
-The repository contains:
+The deployment workflow validates Containers access, applies Supabase migrations, prepares static assets, sets encrypted Worker secrets and deploys the Cloudflare Container.
 
-- `wrangler.preview.toml` for workers.dev verification;
-- `wrangler.production.toml` for the final `canecorsoancestry.com` Custom Domain;
-- `scripts/render_wrangler.py` to inject the automatically discovered Hyperdrive binding ID without committing it;
-- `scripts/build_cloudflare_assets.py` to prepare Workers Static Assets;
-- `.github/workflows/cloudflare-build.yml` for bundle dry-run validation;
-- `.github/workflows/cloudflare-deploy.yml` for controlled preview/production deployment.
+The legacy Python Worker deployment is manual-only and is not the production runtime.
 
-## Migration and rollback
+## Rollback
 
-Railway is no longer the target architecture. It remains temporarily as the source and rollback copy until Cloudflare + Supabase passes production verification.
+The previous environment remains only until:
+1. Supabase data is verified;
+2. R2 media is verified;
+3. Container preview passes application smoke tests;
+4. the custom domain serves the Container deployment;
+5. the rollback window has passed.
 
-Do not remove the Railway web service, PostgreSQL volume or bucket until:
-
-1. the production database has been copied and verified in Supabase;
-2. required existing media has been copied to R2;
-3. the Worker preview passes health, login, search, pedigree, moderation and upload/download tests;
-4. `canecorsoancestry.com` is serving the verified Worker deployment;
-5. a rollback window has passed.
-
-Existing Railway media is copied to R2 with the `copy_media_to_cloudflare` management command. The preview Worker exposes a temporary HMAC-authenticated import endpoint that accepts only database-referenced FileField keys and verifies object hashes. The endpoint is disabled in the production Worker configuration.
-
-After those conditions are satisfied, Railway can be retired.
-
-## CI philosophy
-
-Keep CI focused and fast:
-
-- migration drift check;
-- `manage.py check`;
-- short Django unit tests;
-- Cloudflare Worker bundle dry run for runtime/config changes;
-- small responsive browser smoke coverage.
-
-Do not run expensive unrelated suites for narrow changes.
+After that, the previous environment is removed.
