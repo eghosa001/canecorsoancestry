@@ -33,34 +33,11 @@ SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 
-supabase_project_ref = os.getenv("SUPABASE_PROJECT_REF", "").strip()
-bucket_name = (
-    os.getenv("SUPABASE_STORAGE_BUCKET")
-    or os.getenv("AWS_STORAGE_BUCKET_NAME")
-    or os.getenv("BUCKET")
-)
-bucket_region = (
-    os.getenv("SUPABASE_REGION")
-    or os.getenv("AWS_S3_REGION_NAME")
-    or os.getenv("REGION")
-)
-bucket_endpoint = (
-    os.getenv("SUPABASE_S3_ENDPOINT_URL")
-    or os.getenv("AWS_S3_ENDPOINT_URL")
-    or os.getenv("ENDPOINT")
-)
-if supabase_project_ref and not bucket_endpoint:
-    bucket_endpoint = (
-        f"https://{supabase_project_ref}.storage.supabase.co/storage/v1/s3"
-    )
-bucket_access_key = (
-    os.getenv("SUPABASE_S3_ACCESS_KEY_ID")
-    or os.getenv("AWS_ACCESS_KEY_ID", "")
-)
-bucket_secret_key = (
-    os.getenv("SUPABASE_S3_SECRET_ACCESS_KEY")
-    or os.getenv("AWS_SECRET_ACCESS_KEY", "")
-)
+bucket_name = os.getenv("AWS_STORAGE_BUCKET_NAME") or os.getenv("BUCKET")
+bucket_region = os.getenv("AWS_S3_REGION_NAME") or os.getenv("REGION")
+bucket_endpoint = os.getenv("AWS_S3_ENDPOINT_URL") or os.getenv("ENDPOINT")
+bucket_access_key = os.getenv("AWS_ACCESS_KEY_ID", "")
+bucket_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 require_object_storage = os.getenv("DJANGO_REQUIRE_OBJECT_STORAGE", "0") == "1"
 bucket_ready = all(
     (
@@ -130,7 +107,7 @@ if SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
-        release=os.getenv("K_REVISION") or os.getenv("RAILWAY_GIT_COMMIT_SHA") or None,
+        release=os.getenv("RENDER_GIT_COMMIT") or os.getenv("K_REVISION") or None,
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.05")),
         send_default_pii=False,
     )
