@@ -1,4 +1,5 @@
 import csv
+import logging
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
@@ -44,6 +45,9 @@ from registry.services import (
 )
 
 from pedigrees.services import pedigree_analysis, pedigree_export_rows
+
+logger = logging.getLogger(__name__)
+
 
 from .forms import (
     BulkModerationForm,
@@ -121,6 +125,10 @@ def signup(request):
             try:
                 sent = _send_verification_email(request, user)
             except Exception:
+                logger.exception(
+                    "member_verification_email_failed user_id=%s",
+                    user.pk,
+                )
                 user.delete()
                 form.add_error(
                     "email",
