@@ -1,10 +1,10 @@
 # Cane Corso Ancestry — Implementation Status
 
-Updated: 28 September 2026
+Updated: 30 September 2026
 
 ## Current state
 
-The repository now has a production-deployed Django ancestry platform with owner-style public/member UI, Bellissimo seed data, advanced pedigree analysis, member/kennel workflows, moderation/search intelligence, Railway PostgreSQL and private object storage.
+The repository has a production-ready Django ancestry platform with owner-style public/member UI, Bellissimo seed data, advanced pedigree analysis, member/kennel workflows and moderation/search intelligence. The active hosting target is Render for Django, Aiven PostgreSQL for relational data, and Cloudflare Worker/R2 for the public edge and media. Supabase remains only as the pre-cutover database source until the verified Aiven migration is run.
 
 Current validation:
 
@@ -177,25 +177,20 @@ Current validation:
 - All merges remain explicit moderator actions using the safe atomic merge service.
 - Existing duplicate-match API aliases retained for backward compatibility.
 
-### Production deployment — operational
+### Production deployment — migration-ready
 
-- Dedicated Railway project: `Cane Corso Ancestry`.
-- Production PostgreSQL service is online with a persistent volume.
-- Production web service deploys from `eghosa001/canecorsoancestry` `main`.
-- Railway deployment `fa258ef` is healthy and `/healthz/` returns HTTP 200.
-- Static collection is part of the build/runtime path; 128 static files are present in the production image.
-- Private S3-compatible object storage is wired through Django `default_storage`.
-- Storage was verified through the live Django container with successful PUT / GET / DELETE of a temporary probe object.
-- Bellissimo production seed import verified: 117 canonical records imported, 101 public and 16 draft.
-- Production media/evidence does not depend on ephemeral web-container storage.
-- Production security headers, HTTPS redirect, secure cookies, proxy-aware HTTPS handling and private-page noindex/no-store controls are enabled.
-- Public SEO includes robots.txt, sitemap.xml, canonical/Open Graph metadata and JSON-LD.
-- Request IDs and Railway health/runtime logging are active.
-- Optional Sentry integration is code-ready and activates only when `SENTRY_DSN` is supplied.
-- Resend SMTP configuration is code-ready; email notifications remain disabled until a Resend credential and sender-domain verification are connected.
-- `canecorsoancestry.com` is attached to the Railway web service. Railway requires the apex DNS CNAME to `7i4x0mqk.up.railway.app`.
-- Current Railway plan allows one custom domain per service, so `www` should redirect to the apex at the DNS/CDN layer instead of being attached as a second Railway custom domain.
-- Daily / Weekly / Monthly PostgreSQL backup schedules were submitted to Railway, but Railway's API does not expose schedule state for verification; verify the Backups tab or `railway postgres pitr schedule list` before treating the schedule as audited.
+- Render free web-service configuration is committed in `render.yaml`.
+- Render production settings use one Gunicorn worker and two threads to stay within the small free-instance memory footprint and Aiven free-tier connection limits.
+- Normal Render origin traffic can be HMAC-gated behind Cloudflare while `/healthz/` remains directly available to Render health checks.
+- Cloudflare Worker and R2 gateway deployment is independent of the application host.
+- Preview and production Cloudflare Workers now use separate Worker names so preview pushes cannot overwrite production routes.
+- Production Cloudflare routing is prepared for `canecorsoancestry.com` and `www.canecorsoancestry.com`.
+- Cloudflare R2 bucket `canecorsoancestry-media` is the durable media/evidence store.
+- A safe one-time Supabase → Aiven migration workflow is committed. It refuses a non-empty Aiven target, enables `pg_trgm`, copies only `django_app`, compares every table row count and runs Django deployment checks against the target.
+- Production Bellissimo seed and R2 media metadata workflows now target `AIVEN_DATABASE_URL` and are manual-only during cutover.
+- Google Cloud Run deployment workflows/setup and Railway deployment metadata have been removed from the active repository.
+- The legacy Supabase session-pooler discovery helper remains temporarily because the one-time migration still needs to read the existing source database.
+- Full external activation steps are documented in `docs/PRODUCTION_DEPLOYMENT.md`.
 
 ### Browser/UI acceptance
 
@@ -217,22 +212,24 @@ Current validation:
 - Moderation screenshots contain real seeded pending corrections/disputes rather than empty-only states.
 - Final moderation review confirmed the bulk action bar does not cover merge or verification controls.
 
-## Known visual/media gap
+## Media status
 
-The imported ancestry seed contains pedigree/identity data but does not provide approved production dog image files in this Django media store.
-
-Current placeholders are intentional. Do not fill a specific dog's profile with unrelated photography.
-
-Approved photos can enter through the member photo submission/review workflow.
+The verified Bellissimo media sync contains 22 byte-verified R2 objects and corresponding `DogImage` metadata. Dogs without an approved image continue to use intentional placeholders; unrelated photography must never be assigned to a dog merely to fill a visual gap.
 
 ## Remaining external activation
 
-The application and Railway infrastructure are operational. The remaining items require access to external provider accounts rather than repository code:
+Repository work is ready for the free production stack. The remaining provider-account actions are:
 
-- create the apex DNS CNAME `canecorsoancestry.com → 7i4x0mqk.up.railway.app` and use the DNS/CDN provider to redirect `www` to the apex;
-- connect Resend, verify `canecorsoancestry.com`, supply `EMAIL_HOST_PASSWORD`, then enable `ANCESTRY_EMAIL_NOTIFICATIONS=1`;
-- optionally supply a Sentry DSN to activate application error reporting;
-- verify Railway's Daily / Weekly / Monthly backup schedule through the dashboard or Railway CLI because schedule state is not readable through the current API.
+- create the Aiven Free PostgreSQL service and add its Service URI as GitHub secret `AIVEN_DATABASE_URL`;
+- run the manual **Migrate Supabase database to Aiven** workflow and require it to pass before cutover;
+- create/update the Render service from `render.yaml`, setting `DATABASE_URL` to Aiven and using the same `DJANGO_SECRET_KEY` as GitHub Actions;
+- add GitHub Actions variable `RENDER_ORIGIN` using Render's exact HTTPS `onrender.com` URL;
+- manually deploy the Cloudflare edge with target `production`;
+- verify public pages, authenticated areas, media, moderation and a harmless database write/read;
+- remove Supabase credentials and retire Supabase only after the Aiven-backed deployment is confirmed stable;
+- optionally connect Resend and Sentry later.
+
+See `docs/PRODUCTION_DEPLOYMENT.md` for the exact sequence.
 
 ## Release principle
 
