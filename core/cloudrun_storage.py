@@ -1,43 +1,61 @@
 import mimetypes
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import Storage
 from django.utils.deconstruct import deconstructible
 
+from core.cloudflare_media import gateway_signature, sha256_hex
+
 
 @deconstructible
-class CloudflareR2BridgeStorage(Storage):
-    """Django storage backed by R2 through an internal Container outbound bridge."""
+class CloudflareR2GatewayStorage(Storage):
+    """Use a signed Cloudflare Worker gateway for private R2 operations."""
 
-    def __init__(self, base_url=None):
-        from django.conf import settings
-
+    def __init__(self, base_url=None, timeout=30):
         self.base_url = (
             base_url
-            or getattr(settings, "R2_BRIDGE_URL", "")
+            or getattr(settings, "R2_GATEWAY_URL", "")
         ).rstrip("/")
+        self.timeout = timeout
         if not self.base_url:
-            raise RuntimeError("R2_BRIDGE_URL is required for container storage.")
+            raise RuntimeError("R2_GATEWAY_URL is required for Cloud Run storage.")
 
     def _url(self, name):
         encoded = urllib.parse.quote(name, safe="/")
-        return f"{self.base_url}/media/{encoded}"
+        return f"{self.base_url}/_r2/{encoded}"
 
     def _request(self, name, *, method, data=None, content_type=None):
-        headers = {}
+        body = data or b""
+        digest = sha256_hex(body)
+        timestamp = str(int(time.time()))
+        signature = gateway_signature(
+            settings.SECRET_KEY,
+            method,
+            name,
+            timestamp,
+            digest,
+        )
+        headers = {
+            "X-R2-Timestamp": timestamp,
+            "X-R2-Content-SHA256": digest,
+            "X-R2-Signature": signature,
+        }
         if content_type:
             headers["Content-Type"] = content_type
+
         request = urllib.request.Request(
             self._url(name),
-            data=data,
+            data=body if method == "PUT" else None,
             method=method,
             headers=headers,
         )
         try:
-            return urllib.request.urlopen(request, timeout=30)
+            return urllib.request.urlopen(request, timeout=self.timeout)
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 raise FileNotFoundError(name) from exc
@@ -67,32 +85,24 @@ class CloudflareR2BridgeStorage(Storage):
             return ContentFile(response.read(), name=name)
 
     def exists(self, name):
-        request = urllib.request.Request(self._url(name), method="HEAD")
         try:
-            with urllib.request.urlopen(request, timeout=15):
+            with self._request(name, method="HEAD"):
                 return True
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                return False
-            raise
+        except FileNotFoundError:
+            return False
 
     def delete(self, name):
-        request = urllib.request.Request(self._url(name), method="DELETE")
         try:
-            with urllib.request.urlopen(request, timeout=15):
+            with self._request(name, method="DELETE"):
                 pass
-        except urllib.error.HTTPError as exc:
-            if exc.code != 404:
-                raise
+        except FileNotFoundError:
+            pass
 
     def size(self, name):
-        request = urllib.request.Request(self._url(name), method="HEAD")
         try:
-            with urllib.request.urlopen(request, timeout=15) as response:
+            with self._request(name, method="HEAD") as response:
                 return int(response.headers["Content-Length"])
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                raise FileNotFoundError(name) from exc
+        except FileNotFoundError:
             raise
 
     def url(self, name):

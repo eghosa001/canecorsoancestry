@@ -4,10 +4,11 @@ import time
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.http import FileResponse, Http404, HttpResponseForbidden, JsonResponse
+from django.http import FileResponse, Http404, HttpResponseForbidden, HttpResponseRedirect, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from core.cloudflare_media import signed_media_url
 from core.media_migration import body_sha256, valid_migration_signature
 from registry.models import DisputeCase, DogDocument, DogImage, DogSource, Submission
 
@@ -85,6 +86,21 @@ def media_file(request, path):
     allowed, public = _can_read_media(request.user, path)
     if not allowed:
         raise Http404
+
+    edge_base = getattr(settings, "MEDIA_EDGE_BASE_URL", "").strip()
+    if edge_base:
+        response = HttpResponseRedirect(
+            signed_media_url(
+                edge_base,
+                path,
+                settings.SECRET_KEY,
+                ttl=getattr(settings, "MEDIA_EDGE_URL_TTL", 300),
+            )
+        )
+        response["Cache-Control"] = (
+            "public, max-age=60" if public else "private, no-store"
+        )
+        return response
 
     try:
         handle = default_storage.open(path, "rb")

@@ -6,16 +6,16 @@ Cane Corso Ancestry is a server-rendered Django application.
 
 Primary production stack:
 
-- Django 5.2 / Python 3.13 in Cloudflare Containers
-- Gunicorn inside the container
-- Cloudflare Worker as the edge router
+- Django 5.2 / Python 3.13 on Google Cloud Run
+- Gunicorn inside the Cloud Run container
+- Cloudflare Worker as the public edge/router
 - Cloudflare Workers Static Assets for CSS/static files
+- Cloudflare R2 for uploaded media and evidence
 - Supabase PostgreSQL as the canonical database
-- Supabase Session Pooler for container database connectivity
-- Cloudflare R2 for uploaded dog images, evidence and documents
-- GitHub Actions for CI and Cloudflare deployment
+- Supabase Session Pooler for Cloud Run database connectivity
+- GitHub Actions for CI and deployment
 
-The final runtime does not depend on Railway.
+The final runtime does not depend on Railway or Cloudflare Containers.
 
 ## Django applications
 
@@ -41,31 +41,47 @@ Django tables live in the private `django_app` schema. The search path is:
 
 `pg_trgm` supports duplicate matching.
 
-Django authentication remains canonical; Supabase Auth is intentionally not introduced.
+Django authentication remains authoritative; Supabase Auth is intentionally not introduced.
 
-## Container runtime
+## Cloud Run runtime
 
-`Dockerfile` creates the Django image.
+`Dockerfile` builds a normal CPython/Gunicorn image.
 
-`src/container-worker.js` defines the Cloudflare Container class and routes incoming requests to the named application container.
+`config.settings.cloudrun` extends the hardened production settings and replaces media storage with the signed Cloudflare R2 gateway backend.
 
-The initial instance type is `lite`, with one instance and scale-to-zero after inactivity.
+Cloud Run starts at zero instances and scales up within an explicit maximum-instance cap.
 
-Secrets are passed from encrypted Worker bindings into the container environment.
+## Cloudflare edge
+
+`src/cloudrun-edge.js` is intentionally lightweight.
+
+It:
+
+- serves static assets at the edge;
+- proxies dynamic requests to Cloud Run;
+- owns the native R2 binding;
+- validates HMAC-signed backend storage requests;
+- validates short-lived signed media-delivery URLs.
+
+The edge Worker does not run Django.
 
 ## Media
 
-R2 is bound to the Worker as `MEDIA_BUCKET`.
+Django stores R2 object keys in existing FileField columns.
 
-The container accesses R2 through an internal outbound bridge and never receives R2 credentials.
+For uploads and storage metadata operations, Cloud Run uses:
 
-Django stores only object keys in existing FileField columns. `core.container_storage.CloudflareR2BridgeStorage` implements save/open/head/delete against the private bridge.
+`core.cloudrun_storage.CloudflareR2GatewayStorage`
 
-All public/private access remains authorized by Django before objects are served.
+The backend signs requests to the Cloudflare `/_r2/*` gateway using `DJANGO_SECRET_KEY`.
+
+For downloads, Django authorizes the user and redirects to a short-lived `/_media/*` signature. Cloudflare then streams the R2 object directly.
+
+This keeps private-access decisions server-side without routing image bytes through Cloud Run.
 
 ## Static assets
 
-Django `collectstatic` produces static files. The deployment pipeline copies them into `worker_assets/static/`, and Cloudflare Workers Static Assets serves `/static/*` without starting the container.
+Django `collectstatic` produces static files. The deployment pipeline copies them into `worker_assets/static/`, and Workers Static Assets serves `/static/*` without invoking Cloud Run.
 
 ## Authentication and authorization
 
@@ -75,8 +91,9 @@ Expected application roles include member, kennel contributor/editor/owner and m
 
 ## Pedigree analysis
 
-The analysis layer remains deterministic and database-backed:
-- bounded traversal;
+The database-backed analysis layer remains deterministic:
+
+- bounded pedigree traversal;
 - repeated ancestor detection;
 - sibling discovery;
 - offspring queries;
@@ -86,28 +103,39 @@ The analysis layer remains deterministic and database-backed:
 
 ## Deployment
 
-Preview:
-`wrangler.container.preview.jsonc`
-
-Production:
-`wrangler.container.production.jsonc`
-
 CI validates:
-- Django checks/tests;
-- Docker image build;
-- Wrangler Container configuration.
 
-The deployment workflow validates Containers access, applies Supabase migrations, prepares static assets, sets encrypted Worker secrets and deploys the Cloudflare Container.
+- Django tests and deploy checks;
+- the Cloud Run Docker image;
+- Cloud Run settings;
+- Cloudflare Worker JavaScript;
+- Cloudflare edge dry-run bundle.
 
-The legacy Python Worker deployment is manual-only and is not the production runtime.
+Production deployment uses:
+
+`.github/workflows/cloudrun-deploy.yml`
+
+GitHub authenticates to Google using Workload Identity Federation. Sensitive application values are stored in Google Secret Manager and pinned to Cloud Run revisions.
+
+## Scalability
+
+The app tier is stateless. Cloud Run can add instances without migrating application state.
+
+Supabase owns relational state and indexes. R2 owns large binary media.
+
+For a future catalog approaching 100,000 dogs, performance work should focus on:
+
+- database indexes and query plans;
+- bounded pedigree traversal;
+- pagination/search selectivity;
+- connection-pool sizing;
+- cacheable public pages/media;
+- database capacity before application-compute capacity.
 
 ## Rollback
 
-The previous environment remains only until:
-1. Supabase data is verified;
-2. R2 media is verified;
-3. Container preview passes application smoke tests;
-4. the custom domain serves the Container deployment;
-5. the rollback window has passed.
+Cloud Run revisions and container images provide application rollback.
 
-After that, the previous environment is removed.
+Supabase migrations and backups cover database rollback.
+
+Cloudflare edge deployments can be rolled back independently of the Django image.

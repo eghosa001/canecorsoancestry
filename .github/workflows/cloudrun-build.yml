@@ -1,0 +1,71 @@
+name: Cloud Run build check
+
+on:
+  pull_request:
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "config/settings/cloudrun.py"
+      - "core/cloudrun_storage.py"
+      - "core/cloudflare_media.py"
+      - "core/media_views.py"
+      - "src/cloudrun-edge.js"
+      - "wrangler.edge.*.toml"
+      - "package.json"
+      - "scripts/setup_gcp_cloudrun.sh"
+      - ".github/workflows/cloudrun-*.yml"
+      - "requirements.txt"
+      - "core/static/**"
+      - "templates/**"
+      - "accounts/templates/**"
+      - "registry/templates/**"
+      - "pedigrees/templates/**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: pip install -r requirements.txt
+      - run: npm install
+
+      - name: Check Cloud Run Django settings
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.cloudrun
+          DJANGO_SECRET_KEY: ci-cloud-run-secret
+          DATABASE_URL: sqlite:///cloudrun-check.sqlite3
+          DJANGO_ALLOWED_HOSTS: testserver,localhost,.run.app,.workers.dev
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+          R2_GATEWAY_URL: https://edge.example.workers.dev
+          MEDIA_EDGE_BASE_URL: https://edge.example.workers.dev
+        run: python manage.py check --deploy
+
+      - name: Build Cloud Run image
+        run: docker build -t canecorsoancestry-cloudrun:test .
+
+      - name: Build Cloudflare edge assets
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+        run: |
+          python manage.py collectstatic --noinput
+          python scripts/build_cloudflare_assets.py
+
+      - name: Validate edge Worker JavaScript
+        run: node --check src/cloudrun-edge.js
+
+      - name: Validate Cloudflare edge bundle
+        run: npx wrangler deploy --dry-run --config wrangler.edge.preview.toml --var CLOUD_RUN_ORIGIN:https://example.run.app
