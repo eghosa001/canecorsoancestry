@@ -129,6 +129,41 @@ jobs:
             --var "APP_ORIGIN:$APP_ORIGIN" \
             --secrets-file /tmp/edge-secrets.json
 
+      - name: Attach production Worker domains
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'production' || contains(github.event.head_commit.message, '[production-cutover]') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          attach_domain() {
+            hostname="$1"
+            body="$(jq -n \
+              --arg hostname "$hostname" \
+              --arg service "canecorsoancestry-edge" \
+              --arg zone_name "canecorsoancestry.com" \
+              '{hostname:$hostname,service:$service,zone_name:$zone_name}')"
+
+            response="$(curl --silent --show-error --fail-with-body \
+              --request PUT \
+              --url "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$body")"
+
+            success="$(printf '%s' "$response" | jq -r '.success // false')"
+            if [ "$success" != "true" ]; then
+              printf '%s
+' "$response"
+              echo "::error::Failed to attach Worker domain: $hostname"
+              exit 1
+            fi
+
+            printf '%s' "$response" | jq -r '.result | "Attached \(.hostname) to \(.service) in zone \(.zone_name)"'
+          }
+
+          attach_domain canecorsoancestry.com
+          attach_domain www.canecorsoancestry.com
+
       - name: Verify edge
         shell: bash
         run: |
