@@ -1,0 +1,16 @@
+name = "canecorsoancestry-edge"
+main = "src/cloudrun-edge.js"
+compatibility_date = "2026-09-30"
+workers_dev = true
+
+[observability]
+enabled = true
+
+[assets]
+directory = "./worker_assets"
+binding = "ASSETS"
+run_worker_first = ["/*", "!/static/*"]
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "canecorsoancestry-media"
