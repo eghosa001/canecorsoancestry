@@ -130,7 +130,7 @@ if SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
-        release=os.getenv("RAILWAY_GIT_COMMIT_SHA") or None,
+        release=os.getenv("K_REVISION") or os.getenv("RAILWAY_GIT_COMMIT_SHA") or None,
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.05")),
         send_default_pii=False,
     )
