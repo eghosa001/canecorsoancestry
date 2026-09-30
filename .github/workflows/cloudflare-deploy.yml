@@ -75,7 +75,8 @@ print(matches[0] if matches else "")
           )"
 
           if [ -z "$hyperdrive_id" ]; then
-            npx wrangler hyperdrive create "$name"               --connection-string="$SUPABASE_DATABASE_URL"               --caching-disabled
+            npx wrangler hyperdrive create "$name"               --connection-string="$SUPABASE_DATABASE_URL"               --caching-disabled \
+              --sslmode require
 
             response="$(curl -fsS "$endpoint"               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
 
@@ -88,7 +89,8 @@ print(matches[0] if matches else "")
 '
             )"
           else
-            npx wrangler hyperdrive update "$hyperdrive_id"               --connection-string="$SUPABASE_DATABASE_URL"               --caching-disabled
+            npx wrangler hyperdrive update "$hyperdrive_id"               --connection-string="$SUPABASE_DATABASE_URL"               --caching-disabled \
+              --sslmode require
           fi
 
           if [ -z "$hyperdrive_id" ]; then
