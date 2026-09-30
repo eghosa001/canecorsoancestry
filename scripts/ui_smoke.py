@@ -38,7 +38,12 @@ def assert_basic_accessibility(page, label):
             if (!el.id) return true;
             return !document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
           });
-          if (unlabeled.length) issues.push(unlabeled.length + " unlabeled form control(s)");
+          if (unlabeled.length) {
+            issues.push(
+              "unlabeled form controls: " +
+              unlabeled.slice(0, 8).map((el) => el.outerHTML).join(" || ")
+            );
+          }
           return issues;
         }"""
     )
