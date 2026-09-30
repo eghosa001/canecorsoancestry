@@ -1,6 +1,18 @@
 name: Cloudflare Container deploy
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "src/container-worker.js"
+      - "wrangler.container.*.jsonc"
+      - "package.json"
+      - "core/container_storage.py"
+      - "config/settings/container.py"
+      - ".github/workflows/cloudflare-container-deploy.yml"
+      - "requirements.txt"
   workflow_dispatch:
     inputs:
       target:
@@ -94,7 +106,7 @@ jobs:
       - name: Select Wrangler config
         shell: bash
         run: |
-          if [ "${{ inputs.target }}" = "production" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.target }}" = "production" ]; then
             echo "WRANGLER_CONFIG=wrangler.container.production.jsonc" >> "$GITHUB_ENV"
             echo "HEALTH_URL=https://canecorsoancestry.com/healthz/" >> "$GITHUB_ENV"
           else
