@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Verify your email · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="auth-shell">
+  <div class="auth-card">
+    <p class="eyebrow">Member verification</p>
+    <h1>Check your email</h1>
+    <p class="muted">{% if privacy_safe %}If an inactive account exists for that address, a new verification link has been sent.{% else %}We sent a verification link to {{ email }}. Open it to activate your member account.{% endif %}</p>
+    <a class="btn btn-outline" href="{% url 'login' %}">Return to sign in</a>
+  </div>
+</section>
+{% endblock %}
