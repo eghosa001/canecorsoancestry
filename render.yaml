@@ -34,7 +34,7 @@ services:
       - key: DJANGO_ALLOWED_HOSTS
         value: .onrender.com
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
-        value: https://canecorsoancestry.onrender.com
+        value: https://canecorsoancestry.onrender.com,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
       - key: SITE_URL
         value: https://canecorsoancestry.onrender.com
       - key: R2_GATEWAY_URL
