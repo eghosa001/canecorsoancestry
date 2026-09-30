@@ -1,110 +1,167 @@
 # Production Operations
 
-Production compute is hosted on Railway. The current Railway PostgreSQL service and private bucket remain in place as rollback sources while the Supabase cutover is prepared.
+## Final production architecture
 
-## Supabase target
+Cane Corso Ancestry is moving to **Cloudflare + Supabase**.
 
-Supabase project ref: `wsntfvpcqloqzwgmsfaz` in `eu-north-1`.
+- Application runtime: Cloudflare Python Workers
+- WSGI adapter: Cloudflare Workers Python WSGI support
+- Database: Supabase PostgreSQL project `wsntfvpcqloqzwgmsfaz` (`eu-north-1`)
+- Database connection pooling: Cloudflare Hyperdrive
+- Media/evidence: private Cloudflare R2 bucket `canecorsoancestry-media`
+- Static assets: Cloudflare Workers Static Assets
+- DNS/TLS/application origin: Cloudflare Custom Domain on `canecorsoancestry.com`
 
-The target is deliberately split as follows:
+Railway remains only as a temporary rollback/source environment until the cutover is verified.
 
-- Django authentication remains the application's canonical authentication system.
-- Django tables live in the non-exposed `django_app` PostgreSQL schema.
-- `extensions` remains on the database search path so `pg_trgm` works for duplicate matching.
-- Supabase Storage uses the private `ancestry-private` bucket through its server-side S3-compatible endpoint.
-- Supabase Auth is not used, avoiding a second user identity system and preserving current Django permissions, admin, moderation and sessions.
+## Supabase database
 
-The one-time Supabase bootstrap is stored in `scripts/supabase_bootstrap.sql`.
+Django authentication remains canonical; Supabase Auth is not used.
 
-## Deployment
+Django tables live in the non-exposed `django_app` schema.
 
-- Source: GitHub `eghosa001/canecorsoancestry`, branch `main`.
-- Build: collect static assets.
-- Pre-deploy: run Django migrations.
-- Runtime: Gunicorn.
-- Health: `/healthz/`.
-- Project-level desired state: `.railway/railway.ts` (Railway Infrastructure as Code).
+The target search path is:
 
-## Required variables
+`django_app,extensions,public`
 
-Core production variables:
+`pg_trgm` remains available from the `extensions` schema for duplicate matching.
 
-`DJANGO_SETTINGS_MODULE=config.settings.production`, `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `SITE_URL`, `DATABASE_URL`, `DJANGO_REQUIRE_OBJECT_STORAGE=1`.
+The Supabase security advisor should remain clean after schema changes.
 
-For Supabase database cutover:
+## Cloudflare runtime
 
-- `DATABASE_URL`: use the Supabase **Session pooler** connection string from the project's Connect panel. Railway should use the IPv4-compatible session pooler rather than the direct IPv6-only database endpoint.
-- `DJANGO_DB_SCHEMA=django_app`
-- `DJANGO_DB_SSLMODE=require`
+Cloudflare runs `worker.py`, which loads:
 
-For Supabase Storage:
+`DJANGO_SETTINGS_MODULE=config.settings.cloudflare`
 
-- `SUPABASE_PROJECT_REF=wsntfvpcqloqzwgmsfaz`
-- `SUPABASE_REGION=eu-north-1`
-- `SUPABASE_STORAGE_BUCKET=ancestry-private`
-- `SUPABASE_S3_ENDPOINT_URL=https://wsntfvpcqloqzwgmsfaz.storage.supabase.co/storage/v1/s3`
-- `SUPABASE_S3_ACCESS_KEY_ID`
-- `SUPABASE_S3_SECRET_ACCESS_KEY`
+The Worker requires these bindings:
 
-S3 access keys are server-side secrets and must never be committed. Generate them in Supabase Storage > S3 Configuration. Generic `BUCKET`, `REGION`, `ENDPOINT`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY` variables remain supported for rollback and non-Supabase S3 providers.
+- `HYPERDRIVE` — points to Supabase PostgreSQL
+- `MEDIA_BUCKET` — R2 bucket `canecorsoancestry-media`
+- `ASSETS` — Workers Static Assets bundle
 
-## Cutover sequence
+The only mandatory Worker secret used by Django itself is:
 
-1. Keep Railway PostgreSQL and Railway object storage unchanged.
-2. Bootstrap the Supabase private schema/storage using `scripts/supabase_bootstrap.sql`.
-3. Generate the Supabase database password / Session pooler connection string and S3 access keys in the Supabase dashboard.
-4. Copy the existing production database and media into Supabase.
-5. Set the Supabase production variables on the Railway web service.
-6. Run `python manage.py migrate --noinput`, `python manage.py check`, the focused production tests, and a storage read/write/delete probe.
-7. Verify `/healthz/`, login, moderation, public dog pages, pedigree traversal, search, uploads and signed downloads.
-8. Keep the old Railway database/bucket available until the Supabase production deployment is verified and a rollback window has passed.
+- `DJANGO_SECRET_KEY`
 
-Do not point production at the empty Supabase database before the data copy is complete.
+Do not commit it.
+
+## Static assets
+
+Before deployment:
+
+1. Run Django `collectstatic`.
+2. Run `python scripts/build_cloudflare_assets.py`.
+3. Deploy the generated `worker_assets/` directory with the Worker.
+
+`/static/*` is served directly by Cloudflare's asset layer, while application routes invoke Django.
 
 ## Media
 
-The production bucket is private. Approved media/document URLs are time-limited signed S3 URLs. Evidence is never placed in a public bucket.
+Production uploads use `core.storage.CloudflareR2Storage`.
 
-Supabase Storage S3 access keys are full server-side credentials and bypass Storage RLS; they must stay only in the Railway secret store. The bucket itself remains private.
+The storage backend uses the native R2 Worker binding, not S3 credentials. That avoids carrying Railway bucket credentials or synchronous boto3 networking into Python Workers.
 
-## Email
+Media URLs resolve through Django's `/media/<path>` route. Django authorizes each request before reading the R2 object.
 
-The selected transactional provider is Resend SMTP (`smtp.resend.com:587`, user `resend`). Keep `ANCESTRY_EMAIL_NOTIFICATIONS=0` until the Resend API key and sender-domain verification are present, then store the key only as `EMAIL_HOST_PASSWORD`. Never commit that credential.
+Public access is intentionally narrow:
+- public-dog images;
+- explicitly public documents attached to public dogs.
 
-## Monitoring
+Private submissions, dispute evidence, source documents and private member documents require an authorized user or staff account.
 
-Railway provides deploy/runtime/proxy logs and the health check. Every response gets an `X-Request-ID`. Optional Sentry support is enabled by setting `SENTRY_DSN`; no PII is sent by default.
+## Deployment configs
 
-## Backups
+`wrangler.preview.toml` deploys to workers.dev for verification.
 
-Until the Supabase cutover is verified, retain the existing Railway PostgreSQL backup schedule and do not remove the Railway database volume.
+`wrangler.production.toml` adds:
 
-After cutover, configure and verify Supabase backups appropriate to the project plan, and perform a restore test before removing the Railway database rollback copy.
+`canecorsoancestry.com`
 
-## SEO
+as a Cloudflare Custom Domain.
 
-Public surfaces expose `/robots.txt`, `/sitemap.xml`, canonical/Open Graph metadata, WebSite SearchAction JSON-LD and public dog JSON-LD. Member/login/admin/dashboard surfaces emit noindex headers and private/no-store caching.
+Both files keep the Hyperdrive ID as a placeholder. The deployment pipeline renders a temporary `wrangler.generated.toml` using the `CLOUDFLARE_HYPERDRIVE_ID` GitHub secret.
 
-## Security
+## GitHub deployment secrets
 
-HTTPS redirect, secure cookies, proxy-aware HTTPS detection, CSRF trusted origins, staged HSTS, no framing, MIME sniff protection, same-origin referrer/COOP policy, restrictive permissions policy, private object storage and server-side authorization checks.
+The Cloudflare deploy workflow expects:
 
-Django tables are intentionally placed in `django_app`, not Supabase's exposed `public` schema. Access for `anon` and `authenticated` is revoked at the schema/default-privilege level. Django connects server-side using PostgreSQL credentials.
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_HYPERDRIVE_ID`
+- `DJANGO_SECRET_KEY`
 
-Start HSTS at one hour. After the custom domain and all subdomains are stable on HTTPS, raise `DJANGO_HSTS_SECONDS` to `31536000`; enable preload only after confirming every subdomain is HTTPS-only.
+Those values belong in GitHub Actions secrets, never in the repository.
 
-## Production seed
+## Database migration
 
-The first production import completed successfully: 117 canonical Bellissimo-source dogs were created, including 101 public records and 16 drafts. Subsequent imports reuse external keys and do not create duplicate canonical dogs.
+The existing `copy_to_supabase` management command is the controlled database migration path.
+
+Run it from the existing Railway application while Railway's PostgreSQL database is still the default source and `SUPABASE_DATABASE_URL` points to the Supabase target.
+
+The command:
+
+1. applies Django migrations to the Supabase target;
+2. copies Django auth, accounts and registry data;
+3. verifies source/target model counts;
+4. refuses to overwrite an already populated target unless `--replace` is explicitly supplied.
+
+Do not change production traffic to Supabase until that verification succeeds.
+
+## Cutover order
+
+1. Keep Railway fully intact.
+2. Configure the Supabase database connection for migration.
+3. Run and verify `copy_to_supabase`.
+4. Create the Cloudflare Hyperdrive configuration against Supabase.
+5. Create/verify the `canecorsoancestry-media` R2 bucket.
+6. Deploy the Worker using the **preview** target.
+7. Verify `/healthz/`, login, admin, member dashboard, search, dog profiles, pedigrees, duplicate matching, moderation, submissions, uploads and private/public media access.
+8. Copy any existing production media from the Railway bucket to R2 before domain cutover.
+9. Remove the old apex CNAME that points to Railway.
+10. Deploy using the **production** target so Cloudflare creates the Custom Domain for `canecorsoancestry.com`.
+11. Repeat production smoke tests.
+12. Keep Railway available during the rollback window.
+13. Remove Railway only after the new stack is confirmed stable.
 
 ## Domain
 
-Railway custom domain: `canecorsoancestry.com`.
+Cloudflare Custom Domains are the final origin configuration.
 
-Required DNS record:
+The old Railway CNAME for `canecorsoancestry.com` must be removed before Cloudflare can attach the same hostname as a Custom Domain.
 
-- type: CNAME
-- name: `canecorsoancestry.com`
-- target: `7i4x0mqk.up.railway.app`
+`www.canecorsoancestry.com` should redirect to the apex unless a second Custom Domain is intentionally configured.
 
-The current Railway plan permits one custom domain on this service. Configure `www.canecorsoancestry.com` as a DNS/CDN redirect to the apex rather than attaching it separately to Railway.
+## Email
+
+In-app notifications continue to work.
+
+SMTP mail is disabled in the Cloudflare Worker settings for the initial cutover because the old Railway SMTP path is not required for correctness and should not block the migration. Transactional email can be reintroduced using a Worker-compatible HTTP email provider after the runtime cutover.
+
+## Backups and rollback
+
+Do not remove the Railway PostgreSQL volume or its backups during migration.
+
+After Supabase becomes canonical, enable/verify the Supabase backup policy appropriate to the project plan and perform a restore test before deleting the Railway rollback copy.
+
+R2 media should also have an export/backup procedure before the Railway bucket is deleted.
+
+## Security
+
+- HTTPS-only production
+- secure session and CSRF cookies
+- HSTS staged initially at one hour
+- no framing
+- MIME-sniff protection
+- same-origin referrer/COOP policy
+- private R2 media by default
+- server-side media authorization
+- Django tables outside Supabase `public`
+- no Supabase service-role key in the Worker
+- no R2 access keys in the Worker; the native binding supplies capability access
+
+After all production hostnames are stable on HTTPS, HSTS may be raised to one year and preload considered.
+
+## Production seed
+
+The current source production database previously imported 117 canonical Bellissimo-source dogs, including 101 public records and 16 drafts. The data copy must preserve those canonical IDs and all later member/moderation records rather than re-seeding production from scratch.
