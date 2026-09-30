@@ -8,6 +8,7 @@ from registry.models import Dog
 
 from .services import (
     common_ancestors,
+    descendant_generations,
     pedigree_analysis,
     pedigree_export_rows,
     projected_inbreeding,
@@ -95,6 +96,25 @@ def pedigree_detail(request, slug):
 def pedigree_export(request, slug):
     dog = get_object_or_404(_public_dogs(), slug=slug)
     return _csv_response(dog, _requested_generations(request), public_only=True)
+
+
+def reverse_pedigree(request, slug):
+    dog = get_object_or_404(_public_dogs(), slug=slug)
+    generations = _requested_generations(request)
+    layers = descendant_generations(
+        dog, generations=generations, public_only=True
+    )
+    return render(
+        request,
+        "pedigrees/reverse_pedigree.html",
+        {
+            "dog": dog,
+            "generations": generations,
+            "generation_options": sorted(ALLOWED_GENERATIONS),
+            "layers": layers,
+            "descendant_total": sum(len(layer["dogs"]) for layer in layers),
+        },
+    )
 
 
 def virtual_mating(request):
