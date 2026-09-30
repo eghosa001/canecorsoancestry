@@ -42,7 +42,11 @@ STORAGES = {
     },
 }
 
-if ANCESTRY_EMAIL_NOTIFICATIONS:  # noqa: F405
+if not ACCOUNT_EMAIL_ENABLED and EMAIL_BACKEND.endswith("console.EmailBackend"):  # noqa: F405
+    # Never write password-reset links/tokens to production logs.
+    EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"
+
+if ACCOUNT_EMAIL_ENABLED or ANCESTRY_EMAIL_NOTIFICATIONS:  # noqa: F405
     missing_email = [
         name
         for name, value in {
@@ -54,6 +58,6 @@ if ANCESTRY_EMAIL_NOTIFICATIONS:  # noqa: F405
     ]
     if missing_email:
         raise ImproperlyConfigured(
-            "Email notifications are enabled but these settings are missing: "
+            "Account email is enabled but these settings are missing: "
             + ", ".join(missing_email)
         )
