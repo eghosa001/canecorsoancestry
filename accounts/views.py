@@ -85,12 +85,11 @@ def _member_dogs(user):
 def _send_verification_email(request, user):
     uid = urlsafe_base64_encode(force_bytes(user.pk))
     token = default_token_generator.make_token(user)
-    verify_url = request.build_absolute_uri(
-        reverse(
-            "accounts:verify-email",
-            kwargs={"uidb64": uid, "token": token},
-        )
+    verify_path = reverse(
+        "accounts:verify-email",
+        kwargs={"uidb64": uid, "token": token},
     )
+    verify_url = f"{settings.SITE_URL}{verify_path}"
     return send_mail(
         "Verify your Cane Corso Ancestry email",
         (
