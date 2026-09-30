@@ -1,11 +1,41 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
+from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 from django.db.models import Q
 from django.utils.text import slugify
 
 from registry.models import DisputeCase, Dog, DogDocument, DogRegistration, DogSource, Kennel, Litter, Submission, VerificationState
+
+
+IMAGE_MAX_BYTES = 10 * 1024 * 1024
+DOCUMENT_MAX_BYTES = 20 * 1024 * 1024
+
+
+def validate_image_upload(upload):
+    if upload.size > IMAGE_MAX_BYTES:
+        raise ValidationError("Image files must be 10 MB or smaller.")
+    header = upload.read(16)
+    upload.seek(0)
+    is_jpeg = header.startswith(b"\xff\xd8\xff")
+    is_png = header.startswith(b"\x89PNG\r\n\x1a\n")
+    is_webp = len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
+    if not (is_jpeg or is_png or is_webp):
+        raise ValidationError("The uploaded image content is not a valid JPEG, PNG or WebP file.")
+
+
+def validate_document_upload(upload):
+    if upload.size > DOCUMENT_MAX_BYTES:
+        raise ValidationError("Evidence files must be 20 MB or smaller.")
+    header = upload.read(16)
+    upload.seek(0)
+    is_pdf = header.startswith(b"%PDF-")
+    is_jpeg = header.startswith(b"\xff\xd8\xff")
+    is_png = header.startswith(b"\x89PNG\r\n\x1a\n")
+    is_webp = len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
+    if not (is_pdf or is_jpeg or is_png or is_webp):
+        raise ValidationError("The uploaded evidence is not a valid PDF, JPEG, PNG or WebP file.")
 
 
 class MemberSignUpForm(UserCreationForm):
@@ -146,7 +176,10 @@ class DogCorrectionForm(forms.ModelForm):
 
 class DogImageSubmissionForm(forms.Form):
     attachment = forms.FileField(
-        validators=[FileExtensionValidator(["jpg", "jpeg", "png", "webp"])]
+        validators=[
+            FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
+            validate_image_upload,
+        ]
     )
     caption = forms.CharField(max_length=220, required=False)
     is_primary = forms.BooleanField(required=False)
@@ -157,7 +190,10 @@ class DogDocumentSubmissionForm(forms.Form):
     title = forms.CharField(max_length=220)
     document_type = forms.ChoiceField(choices=DogDocument.DocumentType.choices)
     attachment = forms.FileField(
-        validators=[FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"])]
+        validators=[
+            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            validate_document_upload,
+        ]
     )
     is_public = forms.BooleanField(
         required=False,
@@ -274,7 +310,10 @@ class KennelClaimForm(forms.Form):
     )
     evidence = forms.FileField(
         required=False,
-        validators=[FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"])],
+        validators=[
+            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            validate_document_upload,
+        ],
         help_text="Optional supporting document or image.",
     )
     notes = forms.CharField(
@@ -367,7 +406,10 @@ class DisputeForm(forms.Form):
     )
     attachment = forms.FileField(
         required=False,
-        validators=[FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"])],
+        validators=[
+            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            validate_document_upload,
+        ],
         help_text="Optional pedigree, certificate, screenshot or other supporting evidence.",
     )
 
