@@ -1,8 +1,31 @@
 from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.forms import UserCreationForm
 from django.core.validators import FileExtensionValidator
 from django.db.models import Q
 
 from registry.models import DisputeCase, Dog, DogDocument, DogSource, Kennel, Litter, Submission, VerificationState
+
+
+class MemberSignUpForm(UserCreationForm):
+    email = forms.EmailField(required=True)
+
+    class Meta(UserCreationForm.Meta):
+        model = get_user_model()
+        fields = ("username", "email")
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if get_user_model().objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("An account already uses this email address.")
+        return email
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = self.cleaned_data["email"]
+        if commit:
+            user.save()
+        return user
 
 
 class DogSubmissionForm(forms.Form):
@@ -12,7 +35,7 @@ class DogSubmissionForm(forms.Form):
     colour = forms.CharField(max_length=100, required=False)
     country = forms.CharField(max_length=80, required=False)
     bloodline = forms.CharField(max_length=220, required=False)
-    kennel = forms.ModelChoiceField(queryset=Kennel.objects.none())
+    kennel = forms.ModelChoiceField(queryset=Kennel.objects.none(), required=False)
     sire = forms.ModelChoiceField(queryset=Dog.objects.none(), required=False)
     dam = forms.ModelChoiceField(queryset=Dog.objects.none(), required=False)
     registration = forms.CharField(max_length=120, required=False)
