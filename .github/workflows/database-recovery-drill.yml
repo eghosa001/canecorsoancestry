@@ -2,6 +2,8 @@ name: Database recovery drill
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "27 4 1 * *"
 
 permissions:
   contents: read
