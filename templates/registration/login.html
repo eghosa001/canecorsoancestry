@@ -15,6 +15,7 @@
       {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
       <button class="btn btn-gold" type="submit">Sign in</button>
     </form>
+    <p class="muted">New here? <a class="text-link" href="{% url 'accounts:signup' %}">Create a member account</a>.</p>
   </div>
 </section>
 {% endblock %}

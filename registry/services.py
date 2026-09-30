@@ -145,7 +145,7 @@ def approve_submission(submission, reviewer, resolution_notes=""):
             litter=_resolve_litter(payload.get("litter_id")),
             bio=payload.get("bio", "").strip(),
             verification_state=VerificationState.COMMUNITY,
-            is_public=False,
+            is_public=True,
         )
         dog.full_clean()
         dog.save()
@@ -154,7 +154,7 @@ def approve_submission(submission, reviewer, resolution_notes=""):
             dog=dog,
             state=VerificationState.COMMUNITY,
             reviewer=reviewer,
-            note="Created from an approved member submission; remains private until separately published.",
+            note="Created and published after moderator approval of the member submission.",
         )
 
         registration = payload.get("registration", "").strip()

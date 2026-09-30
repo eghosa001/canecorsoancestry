@@ -52,7 +52,7 @@ class DogMergeTests(TestCase):
 
 
 class SubmissionApprovalTests(TestCase):
-    def test_approved_new_dog_stays_private_and_notifies_submitter(self):
+    def test_approved_new_dog_is_published_and_notifies_submitter(self):
         user = get_user_model().objects.create_user(username="breeder")
         reviewer = get_user_model().objects.create_user(username="mod", is_staff=True)
         kennel = Kennel.objects.create(name="Test Kennel", slug="test-kennel")
@@ -68,7 +68,7 @@ class SubmissionApprovalTests(TestCase):
         submission.refresh_from_db()
         dog = submission.dog
         self.assertEqual(submission.status, Submission.Status.APPROVED)
-        self.assertFalse(dog.is_public)
+        self.assertTrue(dog.is_public)
         self.assertEqual(dog.verification_state, VerificationState.COMMUNITY)
         self.assertTrue(Notification.objects.filter(user=user).exists())
 
