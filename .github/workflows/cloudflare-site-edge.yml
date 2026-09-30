@@ -99,12 +99,19 @@ jobs:
           grep -q 'name="password"' /tmp/auth-page.html
           grep -q 'name="csrfmiddlewaretoken"' /tmp/auth-page.html
 
-          ready_status="$(curl --connect-timeout 4 --max-time 10 -sS -o /tmp/auth-ready.json -w '%{http_code}' "$base/__edge/auth-ready" || true)"
-          if [ "$ready_status" != "200" ] && [ "$ready_status" != "202" ]; then
-            echo "::error::Auth readiness endpoint returned HTTP $ready_status"
-            cat /tmp/auth-ready.json 2>/dev/null || true
-            exit 1
-          fi
+          ready_status=""
+          for attempt in $(seq 1 12); do
+            ready_status="$(curl --connect-timeout 4 --max-time 10 -sS -o /tmp/auth-ready.json -w '%{http_code}' "$base/__edge/auth-ready" || true)"
+            if [ "$ready_status" = "200" ] || [ "$ready_status" = "202" ]; then
+              break
+            fi
+            if [ "$attempt" = "12" ]; then
+              echo "::error::Auth readiness endpoint returned HTTP $ready_status after deployment propagation retries"
+              cat /tmp/auth-ready.json 2>/dev/null || true
+              exit 1
+            fi
+            sleep 3
+          done
 
           echo "Site edge, auth-first login UI, and readiness checks are healthy."
 
