@@ -165,6 +165,8 @@ Do not remove the Railway web service, PostgreSQL volume or bucket until:
 4. `canecorsoancestry.com` is serving the verified Worker deployment;
 5. a rollback window has passed.
 
+Existing Railway media is copied to R2 with the `copy_media_to_cloudflare` management command. The preview Worker exposes a temporary HMAC-authenticated import endpoint that accepts only database-referenced FileField keys and verifies object hashes. The endpoint is disabled in the production Worker configuration.
+
 After those conditions are satisfied, Railway can be retired.
 
 ## CI philosophy
