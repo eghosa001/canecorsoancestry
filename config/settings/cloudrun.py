@@ -20,3 +20,9 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
+    "core.middleware.CloudRunEdgeMiddleware",
+    *MIDDLEWARE[1:],  # noqa: F405
+]
