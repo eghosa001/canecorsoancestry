@@ -1,24 +1,28 @@
-import os
-
-import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
+from workers import env
 
 from .base import *  # noqa: F403,F401
 
 DEBUG = False
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "").strip()
-if not SECRET_KEY:
-    raise ImproperlyConfigured("DJANGO_SECRET_KEY is required in the Worker request context.")
 
-SITE_URL = os.getenv(
+def _binding_text(name, default=""):
+    value = getattr(env, name, default)
+    return str(value or default)
+
+
+SECRET_KEY = _binding_text("DJANGO_SECRET_KEY").strip()
+if not SECRET_KEY:
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY Worker secret is required.")
+
+SITE_URL = _binding_text(
     "SITE_URL",
     "https://canecorsoancestry.com",
 ).rstrip("/")
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv(
+    for host in _binding_text(
         "DJANGO_ALLOWED_HOSTS",
         "canecorsoancestry.com,www.canecorsoancestry.com,.workers.dev",
     ).split(",")
@@ -27,40 +31,27 @@ ALLOWED_HOSTS = [
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
-    for origin in os.getenv(
+    for origin in _binding_text(
         "DJANGO_CSRF_TRUSTED_ORIGINS",
         "https://canecorsoancestry.com,https://www.canecorsoancestry.com,https://*.workers.dev",
     ).split(",")
     if origin.strip()
 ]
 
-connection_string = os.getenv("CLOUDFLARE_DATABASE_URL", "").strip()
-if not connection_string:
-    raise ImproperlyConfigured(
-        "CLOUDFLARE_DATABASE_URL must be injected from the HYPERDRIVE binding "
-        "inside the Worker fetch handler."
-    )
-
 DATABASES = {
-    "default": dj_database_url.parse(
-        connection_string,
-        conn_max_age=0,
-    )
+    "default": {
+        "ENGINE": "django.db.backends.dummy",
+        "NAME": "cloudflare-startup-placeholder",
+    }
 }
-DATABASES["default"]["CONN_HEALTH_CHECKS"] = False
-DATABASES["default"].setdefault("OPTIONS", {})["options"] = (
-    "-c search_path=django_app,extensions,public"
-)
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # noqa: F405
 MEDIA_URL = "/media/"
-MEDIA_MIGRATION_ENABLED = os.getenv("MEDIA_MIGRATION_ENABLED", "0") == "1"
+MEDIA_MIGRATION_ENABLED = _binding_text("MEDIA_MIGRATION_ENABLED", "0") == "1"
 
 STORAGES = {
-    "default": {
-        "BACKEND": "core.storage.CloudflareR2Storage",
-    },
+    "default": {"BACKEND": "core.storage.CloudflareR2Storage"},
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
