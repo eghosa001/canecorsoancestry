@@ -32,6 +32,7 @@ urlpatterns = [
     path("moderation/", views.moderation_queue, name="moderation"),
     path("moderation/bulk/", views.bulk_moderation, name="bulk-moderation"),
     path("moderation/audit/", views.moderation_audit, name="moderation-audit"),
+    path("moderation/data-health/", views.data_health, name="data-health"),
     path(
         "moderation/submissions/<uuid:pk>/<str:decision>/",
         views.review_submission,
