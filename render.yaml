@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: canecorsoancestry
+    runtime: python
+    plan: free
+    region: frankfurt
+    repo: https://github.com/eghosa001/canecorsoancestry
+    branch: main
+    autoDeployTrigger: commit
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      DJANGO_SETTINGS_MODULE=config.settings.development python manage.py collectstatic --noinput
+    startCommand: >-
+      python manage.py migrate --noinput &&
+      gunicorn config.wsgi:application
+      --bind 0.0.0.0:$PORT
+      --workers 1
+      --threads 2
+      --timeout 60
+      --access-logfile -
+      --error-logfile -
+    healthCheckPath: /healthz/
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.render
+      - key: DJANGO_DB_SCHEMA
+        value: django_app
+      - key: DJANGO_DB_SSLMODE
+        value: require
+      - key: DJANGO_ALLOWED_HOSTS
+        value: .onrender.com,canecorsoancestry.com,www.canecorsoancestry.com
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://*.onrender.com,https://canecorsoancestry.com,https://www.canecorsoancestry.com
+      - key: SITE_URL
+        value: https://canecorsoancestry.com
+      - key: R2_GATEWAY_URL
+        value: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
+      - key: MEDIA_EDGE_BASE_URL
+        value: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
+      - key: MEDIA_EDGE_URL_TTL
+        value: "300"
+      - key: ANCESTRY_EMAIL_NOTIFICATIONS
+        value: "0"
+      - key: DATABASE_URL
+        sync: false
+      - key: DJANGO_SECRET_KEY
+        sync: false
