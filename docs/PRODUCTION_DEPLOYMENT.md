@@ -132,6 +132,7 @@ The Blueprint already supplies:
 - `DJANGO_SETTINGS_MODULE=config.settings.render`
 - `DJANGO_DB_SCHEMA=django_app`
 - `DJANGO_DB_SSLMODE=require`
+- `DJANGO_DB_EXTRA_SCHEMAS=public`
 - `REQUIRE_CLOUDFLARE_EDGE=1`
 - the R2 gateway settings
 
