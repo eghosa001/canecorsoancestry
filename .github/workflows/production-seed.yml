@@ -1,10 +1,6 @@
 name: Seed production Bellissimo data
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/production-seed.yml"
   workflow_dispatch:
 
 permissions:
