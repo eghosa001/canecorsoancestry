@@ -583,14 +583,18 @@ def verify_dog(request):
     dog = form.cleaned_data["dog"]
     state = form.cleaned_data["state"]
     field_name = form.cleaned_data["field_name"].strip()
+    source = form.cleaned_data["source"]
     event = VerificationEvent.objects.create(
         dog=dog,
         field_name=field_name,
         state=state,
-        source=form.cleaned_data["source"],
+        source=source,
         reviewer=request.user,
         note=form.cleaned_data["note"],
     )
+    if source and not source.verified_at:
+        source.verified_at = timezone.now()
+        source.save(update_fields=("verified_at",))
     if not field_name:
         dog.verification_state = state
         dog.save(update_fields=("verification_state", "updated_at"))
