@@ -17,17 +17,24 @@
   </header>
   {% if kennel.description %}<p class="kennel-description">{{ kennel.description }}</p>{% endif %}
 
-  <div class="section-heading"><h2>Dogs</h2><span>{{ dogs|length }} public record{{ dogs|length|pluralize }}</span></div>
+  <div class="section-heading"><h2>Dogs</h2><span>{{ dog_total }} public record{{ dog_total|pluralize }}</span></div>
   <div class="dog-card-grid">
     {% for dog in dogs %}
       <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
-        <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}">{% else %}<div class="media-placeholder">CCA</div>{% endif %}</div>
+        <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}" loading="lazy" decoding="async">{% else %}<div class="media-placeholder">CCA</div>{% endif %}</div>
         <div class="dog-card-body"><h3>{{ dog.name }}</h3><p>{{ dog.colour|default:"Colour not recorded" }} · {{ dog.get_sex_display }}</p></div>
       </a>
     {% empty %}<div class="empty-state"><p>No public dogs are linked yet.</p></div>{% endfor %}
   </div>
+  {% if dog_page.has_other_pages %}
+    <nav class="button-row" aria-label="Kennel dog pages">
+      {% if dog_page.has_previous %}<a class="btn btn-outline" href="?dogs_page={{ dog_page.previous_page_number }}{% if litter_page.number %}&litters_page={{ litter_page.number }}{% endif %}">← Previous dogs</a>{% endif %}
+      <span class="muted">Dogs page {{ dog_page.number }} of {{ dog_page.paginator.num_pages }}</span>
+      {% if dog_page.has_next %}<a class="btn btn-outline" href="?dogs_page={{ dog_page.next_page_number }}{% if litter_page.number %}&litters_page={{ litter_page.number }}{% endif %}">Next dogs →</a>{% endif %}
+    </nav>
+  {% endif %}
 
-  <div class="section-heading section-spacer"><h2>Litters</h2></div>
+  <div class="section-heading section-spacer"><h2>Litters</h2><span>{{ litter_total }} public litter{{ litter_total|pluralize }}</span></div>
   <div class="litter-list">
     {% for litter in litters %}
       <a class="litter-row" href="{% url 'registry:litter-detail' litter.pk %}">
@@ -37,5 +44,12 @@
       </a>
     {% empty %}<p class="muted">No public litters are linked yet.</p>{% endfor %}
   </div>
+  {% if litter_page.has_other_pages %}
+    <nav class="button-row" aria-label="Kennel litter pages">
+      {% if litter_page.has_previous %}<a class="btn btn-outline" href="?litters_page={{ litter_page.previous_page_number }}{% if dog_page.number %}&dogs_page={{ dog_page.number }}{% endif %}">← Previous litters</a>{% endif %}
+      <span class="muted">Litters page {{ litter_page.number }} of {{ litter_page.paginator.num_pages }}</span>
+      {% if litter_page.has_next %}<a class="btn btn-outline" href="?litters_page={{ litter_page.next_page_number }}{% if dog_page.number %}&dogs_page={{ dog_page.number }}{% endif %}">Next litters →</a>{% endif %}
+    </nav>
+  {% endif %}
 </section>
 {% endblock %}
