@@ -18,6 +18,7 @@
   {% block extra_head %}{% endblock %}
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="site-header">
     <div class="header-inner">
       <a class="brand" href="{% url 'home' %}" aria-label="Cane Corso Ancestry home"><img class="brand-mark" src="{% static 'core/cane-corso-header-mark.svg' %}" alt="" width="256" height="256"><span class="brand-copy"><span class="brand-small">CaneCorso</span><strong>Ancestry</strong></span></a>
@@ -30,7 +31,7 @@
       </div>
     </div>
   </header>
-  <main>
+  <main id="main-content" tabindex="-1">
   {% if messages %}<div class="flash-stack" aria-live="polite">{% for message in messages %}<div class="flash {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
   {% block content %}{% endblock %}
   </main>
