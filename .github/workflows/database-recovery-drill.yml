@@ -1,0 +1,70 @@
+name: Database recovery drill
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  restore-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: restore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d restore"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SOURCE_DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Verify required secrets
+        shell: bash
+        run: |
+          test -n "$SOURCE_DATABASE_URL" || { echo "::error::AIVEN_DATABASE_URL is missing"; exit 1; }
+          test -n "$DJANGO_SECRET_KEY" || { echo "::error::DJANGO_SECRET_KEY is missing"; exit 1; }
+      - name: Install PostgreSQL client and app dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+          pip install -r requirements.txt
+      - name: Create and validate backup
+        shell: bash
+        run: |
+          pg_dump "$SOURCE_DATABASE_URL" --format=custom --no-owner --no-acl --file=/tmp/canecorso.dump
+          pg_restore --list /tmp/canecorso.dump >/tmp/restore-list.txt
+          test -s /tmp/restore-list.txt
+      - name: Restore backup into isolated PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          pg_restore --dbname=postgresql://postgres:postgres@127.0.0.1:5432/restore --no-owner --no-acl /tmp/canecorso.dump
+      - name: Verify restored Django database
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/restore
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_EXTRA_SCHEMAS: public
+          DJANGO_ALLOWED_HOSTS: testserver
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver
+          SITE_URL: https://testserver
+        run: |
+          python manage.py migrate --check
+          python manage.py audit_pedigree_data --fail-on-critical
+      - name: Remove temporary backup
+        if: always()
+        run: rm -f /tmp/canecorso.dump /tmp/restore-list.txt
