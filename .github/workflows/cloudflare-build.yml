@@ -40,6 +40,10 @@ jobs:
           enable-cache: true
 
       - run: npm install --global wrangler@latest
+
+      - name: Validate deploy workflow YAML
+        run: npx --yes prettier@latest .github/workflows/cloudflare-deploy.yml >/dev/null
+
       - run: uv sync --all-groups
 
       - name: Build static assets
