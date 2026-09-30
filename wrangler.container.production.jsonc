@@ -3,8 +3,16 @@
   "name": "canecorsoancestry",
   "main": "src/container-worker.js",
   "compatibility_date": "2026-09-30",
-  "workers_dev": true,\n  "routes": [{ "pattern": "canecorsoancestry.com", "custom_domain": true }],
-  "observability": { "enabled": true },
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "canecorsoancestry.com",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
   "assets": {
     "directory": "./worker_assets",
     "binding": "ASSETS",
