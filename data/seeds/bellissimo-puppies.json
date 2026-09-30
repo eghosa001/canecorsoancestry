@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "notes": "Verified Bellissimo Geni puppy and young-dog records supplied by the kennel. Availability is shown only when explicitly verified. Sire and dam display names are resolved automatically from the shared dog records.",
+  "litters": [],
+  "puppies": [
+    {
+      "id": "safeera-bellissimo-geni",
+      "name": "Safeera Bellissimo Geni",
+      "sex": "Female",
+      "dateOfBirth": "2025-08-02",
+      "colour": "Brindle",
+      "photo": "assets/puppies/safeera-bellissimo-geni.webp",
+      "status": "AVAILABLE",
+      "sireId": "branco-custodi-nos",
+      "damId": "anthie-custodi-nos",
+      "priceNote": "Price on enquiry",
+      "notes": "Verified available Bellissimo Geni female.",
+      "featuredOrder": 1
+    },
+    {
+      "id": "x-bellissimo-geni",
+      "name": "X Bellissimo Geni",
+      "sex": "Female",
+      "dateOfBirth": "2025-08-02",
+      "colour": "Black Brindle",
+      "photo": "assets/puppies/x-bellissimo-geni-main.avif",
+      "gallery": [
+        "assets/puppies/x-bellissimo-geni-standing.avif"
+      ],
+      "status": "AVAILABLE",
+      "sireId": "branco-custodi-nos",
+      "damId": "anthie-custodi-nos",
+      "priceNote": "Price on enquiry",
+      "notes": "Available Bellissimo Geni female.",
+      "featuredOrder": 2
+    }
+  ],
+  "gallery": [
+    {
+      "id": "sept24-01",
+      "photo": "assets/puppies/bellissimo-puppy-01.webp",
+      "alt": "Bellissimo Geni Cane Corso puppy portrait",
+      "caption": "Kennel-supplied photography. Availability is confirmed separately."
+    },
+    {
+      "id": "sept24-02",
+      "photo": "assets/puppies/bellissimo-puppy-02.webp",
+      "alt": "Bellissimo Geni Cane Corso puppy portrait",
+      "caption": "Kennel-supplied photography. Availability is confirmed separately."
+    },
+    {
+      "id": "sept24-03",
+      "photo": "assets/puppies/bellissimo-puppy-03.webp",
+      "alt": "Bellissimo Geni Cane Corso puppy portrait",
+      "caption": "Kennel-supplied photography. Availability is confirmed separately."
+    },
+    {
+      "id": "sept24-04",
+      "photo": "assets/puppies/bellissimo-puppy-04.webp",
+      "alt": "Bellissimo Geni Cane Corso puppy portrait",
+      "caption": "Kennel-supplied photography. Availability is confirmed separately."
+    },
+    {
+      "id": "sept24-05",
+      "photo": "assets/puppies/bellissimo-young-corso-01.webp",
+      "alt": "Young Bellissimo Geni Cane Corso with handler",
+      "caption": "Kennel-supplied young-dog photography. Availability is confirmed separately."
+    },
+    {
+      "id": "sept24-06",
+      "photo": "assets/puppies/bellissimo-puppy-05.webp",
+      "alt": "Bellissimo Geni Cane Corso puppy portrait",
+      "caption": "Kennel-supplied photography. Availability is confirmed separately."
+    }
+  ],
+  "statuses": [
+    "AVAILABLE",
+    "PAYMENT PENDING",
+    "RESERVED",
+    "SOLD",
+    "COMING SOON",
+    "UNAVAILABLE"
+  ]
+}
