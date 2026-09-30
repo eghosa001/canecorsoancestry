@@ -262,8 +262,13 @@ def mate_relationships(dog, public_only=True):
     )
 
 
-def descendant_generations(dog, generations=4, public_only=True):
-    """Return unique descendant layers derived from sire/dam links."""
+def descendant_generations(
+    dog,
+    generations=4,
+    public_only=True,
+    per_generation_limit=None,
+):
+    """Return unique descendant layers while allowing public views to cap breadth."""
     generations = _bounded_generations(generations)
     layers = []
     frontier = {dog.pk}
@@ -274,7 +279,15 @@ def descendant_generations(dog, generations=4, public_only=True):
         ).select_related("kennel", "sire", "dam")
         if public_only:
             children = children.filter(is_public=True)
-        rows = [child for child in children.order_by("name") if child.pk not in seen]
+        children = children.order_by("name")
+        if per_generation_limit:
+            fetched = list(children[: per_generation_limit + 1])
+            truncated = len(fetched) > per_generation_limit
+            fetched = fetched[:per_generation_limit]
+        else:
+            fetched = list(children)
+            truncated = False
+        rows = [child for child in fetched if child.pk not in seen]
         if not rows:
             break
         layers.append(
@@ -288,6 +301,7 @@ def descendant_generations(dog, generations=4, public_only=True):
                     else f"Descendant generation {generation}"
                 ),
                 "dogs": rows,
+                "truncated": truncated,
             }
         )
         frontier = {child.pk for child in rows}
