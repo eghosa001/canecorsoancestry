@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 19a03bec57c0277e01e1e70e241576af
       AIVEN_DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
 
@@ -56,16 +57,6 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Discover Cloudflare account
-        shell: bash
-        run: |
-          response="$(curl -fsS "https://api.cloudflare.com/client/v4/accounts?per_page=50" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
-          account_id="$(
-            printf '%s' "$response" |
-              python scripts/find_cloudflare_account.py
-          )"
-          echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
 
       - name: Ensure media bucket exists
         run: |
@@ -132,8 +123,8 @@ jobs:
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
           DJANGO_DB_EXTRA_SCHEMAS: public
-          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
-          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         run: DATABASE_URL="$AIVEN_DATABASE_URL" python manage.py import_bellissimo_media --dry-run
 
@@ -143,8 +134,8 @@ jobs:
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
           DJANGO_DB_EXTRA_SCHEMAS: public
-          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
-          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         run: DATABASE_URL="$AIVEN_DATABASE_URL" python manage.py import_bellissimo_media
 
@@ -154,8 +145,8 @@ jobs:
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
           DJANGO_DB_EXTRA_SCHEMAS: public
-          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
-          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         shell: bash
         run: |
