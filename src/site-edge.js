@@ -495,9 +495,12 @@ async function handleRequest(request, env, ctx) {
   }
 
   if (first.type === "timeout") {
+    ctx.waitUntil(wakeCriticalOrigin(env));
     ctx.waitUntil(
       originPromise
-        .then((response) => (canCache ? storeInEdgeCache(cache, key, response) : undefined))
+        .then((response) =>
+          canCache ? storeInEdgeCache(cache, key, response, request) : undefined,
+        )
         .catch(() => undefined),
     );
   } else {
