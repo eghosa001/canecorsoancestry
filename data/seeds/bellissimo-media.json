@@ -1,0 +1,188 @@
+{
+  "source_repository": "eghosa001/bellissimo-geni-cane-corso",
+  "source_commit": "3addd1b186a62bf2040c02980ab0eaa0aad801a7",
+  "source_data_blob": "58e6251733aaefbb2bdea46525ccc5b89932cc40",
+  "namespace": "bellissimo-geni",
+  "items": [
+    {
+      "dog_external_key": "branco-custodi-nos",
+      "source_path": "assets/dogs/branco-02.webp",
+      "r2_key": "dogs/bellissimo/branco-02.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "3e5c8d0e5946c38b58e8bb6ad652bb4a65311271",
+      "size": 227052
+    },
+    {
+      "dog_external_key": "karma-custodi-nos",
+      "source_path": "assets/dogs/karma-custodi-nos.webp",
+      "r2_key": "dogs/bellissimo/karma-custodi-nos.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "46718161de25630e267de5b8cf15cf626fba4c0d",
+      "size": 153624
+    },
+    {
+      "dog_external_key": "karma-custodi-nos",
+      "source_path": "assets/dogs/karma-custodi-nos-02.webp",
+      "r2_key": "dogs/bellissimo/karma-custodi-nos-02.webp",
+      "is_primary": false,
+      "sort_order": 1,
+      "source_blob_sha": "ce7564cb86c6f96491b59c721907c03352d89b98",
+      "size": 146762
+    },
+    {
+      "dog_external_key": "anthie-custodi-nos",
+      "source_path": "assets/dogs/anthie-custodi-nos-main.webp",
+      "r2_key": "dogs/bellissimo/anthie-custodi-nos-main.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "5e971e41e186ad8dcfcc5bad95a7626654c826fa",
+      "size": 253400
+    },
+    {
+      "dog_external_key": "anthie-custodi-nos",
+      "source_path": "assets/dogs/anthie-custodi-nos-02.webp",
+      "r2_key": "dogs/bellissimo/anthie-custodi-nos-02.webp",
+      "is_primary": false,
+      "sort_order": 1,
+      "source_blob_sha": "da70fe326abd08e6d394208948ad0a00a23c8c39",
+      "size": 295026
+    },
+    {
+      "dog_external_key": "anthie-custodi-nos",
+      "source_path": "assets/dogs/anthie-custodi-nos-03.webp",
+      "r2_key": "dogs/bellissimo/anthie-custodi-nos-03.webp",
+      "is_primary": false,
+      "sort_order": 2,
+      "source_blob_sha": "9b46bc78e22988becdde01f29f5f473f8bc404eb",
+      "size": 364042
+    },
+    {
+      "dog_external_key": "tessa-sangue-magnifica",
+      "source_path": "assets/dogs/tessa-sangue-magnifica.webp",
+      "r2_key": "dogs/bellissimo/tessa-sangue-magnifica.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "c75ec6c8688acaa7f2e656c1473dd905414bf1ed",
+      "size": 422238
+    },
+    {
+      "dog_external_key": "daisy-bellissimo-geni",
+      "source_path": "assets/dogs/daisy-bellissimo-geni.webp",
+      "r2_key": "dogs/bellissimo/daisy-bellissimo-geni.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "08713f17e36e4fcb88b966508865a4a05f4614b9",
+      "size": 259624
+    },
+    {
+      "dog_external_key": "twice-as-tall-eden-bellissimo-geni",
+      "source_path": "assets/dogs/eden-01.webp",
+      "r2_key": "dogs/bellissimo/eden-01.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "6ee1911cf0062e718ce9c48c2cea4dfe0a5364a8",
+      "size": 282816
+    },
+    {
+      "dog_external_key": "gyda-bellissimo-geni",
+      "source_path": "assets/dogs/gyda-01.webp",
+      "r2_key": "dogs/bellissimo/gyda-01.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "a989f72dfeae4645768aa544de82aa6f313920fa",
+      "size": 275352
+    },
+    {
+      "dog_external_key": "yasmin-bellissimo-geni",
+      "source_path": "assets/puppies/yasmin-bellissimo-geni.webp",
+      "r2_key": "dogs/bellissimo/yasmin-bellissimo-geni.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "bcfaacafe74c73cb0a45f0edcd8cfdab3af48a66",
+      "size": 275600
+    },
+    {
+      "dog_external_key": "dragoslav-custodi-nos",
+      "source_path": "assets/dogs/dragoslav-custodi-nos.webp",
+      "r2_key": "dogs/bellissimo/dragoslav-custodi-nos.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "d2598f3cdf4f3def537ec076b1a89ac511360536",
+      "size": 247822
+    },
+    {
+      "dog_external_key": "roman-custodi-nos",
+      "source_path": "assets/dogs/roman-custodi-nos.webp",
+      "r2_key": "dogs/bellissimo/roman-custodi-nos.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "eef9537768f76528f81810482c6690aced50fecd",
+      "size": 84110
+    },
+    {
+      "dog_external_key": "roman-custodi-nos",
+      "source_path": "assets/dogs/roman-custodi-nos-02.webp",
+      "r2_key": "dogs/bellissimo/roman-custodi-nos-02.webp",
+      "is_primary": false,
+      "sort_order": 1,
+      "source_blob_sha": "d22e2510d10a2d88a7ef1d9561b19e9760cee0b0",
+      "size": 60808
+    },
+    {
+      "dog_external_key": "limoncello-sangue-magnifica-custodi-nos",
+      "source_path": "assets/dogs/limoncello-sangue-magnifica-custodi-nos.webp",
+      "r2_key": "dogs/bellissimo/limoncello-sangue-magnifica-custodi-nos.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "a23f7470668d109b0f689f378167756e22ba75a7",
+      "size": 41394
+    },
+    {
+      "dog_external_key": "zz-top-sangue-magnifica",
+      "source_path": "assets/dogs/zz-top-sangue-magnifica.webp",
+      "r2_key": "dogs/bellissimo/zz-top-sangue-magnifica.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "ebe3db023ea768d4362b5e19910463ac22558c63",
+      "size": 50520
+    },
+    {
+      "dog_external_key": "zz-top-sangue-magnifica",
+      "source_path": "assets/dogs/zz-top-sangue-magnifica-02.webp",
+      "r2_key": "dogs/bellissimo/zz-top-sangue-magnifica-02.webp",
+      "is_primary": false,
+      "sort_order": 1,
+      "source_blob_sha": "25c6509881bebc66ecffbe64af918aa20c62e05c",
+      "size": 54698
+    },
+    {
+      "dog_external_key": "birba-sangue-magnifica",
+      "source_path": "assets/dogs/birba-sangue-magnifica.webp",
+      "r2_key": "dogs/bellissimo/birba-sangue-magnifica.webp",
+      "is_primary": true,
+      "sort_order": 0,
+      "source_blob_sha": "9b2324840ba3803fa0b322843169176686e39045",
+      "size": 52542
+    },
+    {
+      "dog_external_key": "birba-sangue-magnifica",
+      "source_path": "assets/dogs/birba-sangue-magnifica-02.webp",
+      "r2_key": "dogs/bellissimo/birba-sangue-magnifica-02.webp",
+      "is_primary": false,
+      "sort_order": 1,
+      "source_blob_sha": "b04ee8168559e9ae1e93b4d1d029c6a975e6ceb6",
+      "size": 33416
+    },
+    {
+      "dog_external_key": "birba-sangue-magnifica",
+      "source_path": "assets/dogs/birba-sangue-magnifica-03.webp",
+      "r2_key": "dogs/bellissimo/birba-sangue-magnifica-03.webp",
+      "is_primary": false,
+      "sort_order": 2,
+      "source_blob_sha": "1cba515cbc8eafe29e48d5a57162b46b5b88dbc9",
+      "size": 33400
+    }
+  ]
+}
