@@ -1,0 +1,77 @@
+name: Cloudflare Worker deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deploy target
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_HYPERDRIVE_ID }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Validate deployment secrets
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_HYPERDRIVE_ID"
+          test -n "$DJANGO_SECRET_KEY"
+
+      - run: npm install --global wrangler@latest
+      - run: uv sync --all-groups
+
+      - name: Build Django static assets
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+        run: |
+          uv run python manage.py collectstatic --noinput
+          uv run python scripts/build_cloudflare_assets.py
+
+      - name: Render Wrangler config
+        run: |
+          if [ "${{ inputs.target }}" = "production" ]; then
+            template="wrangler.production.toml"
+          else
+            template="wrangler.preview.toml"
+          fi
+          uv run python scripts/render_wrangler.py "$template" wrangler.generated.toml
+
+      - name: Ensure media bucket exists
+        run: |
+          uv run pywrangler r2 bucket create canecorsoancestry-media --config wrangler.generated.toml ||             uv run pywrangler r2 bucket list --config wrangler.generated.toml
+
+      - name: Set Django Worker secret
+        run: |
+          printf '%s' "$DJANGO_SECRET_KEY" |             uv run pywrangler secret put DJANGO_SECRET_KEY --config wrangler.generated.toml
+
+      - name: Deploy Django Worker
+        run: uv run pywrangler deploy --config wrangler.generated.toml
