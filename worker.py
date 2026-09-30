@@ -30,8 +30,14 @@ def _install_hyperdrive_database(env):
         "-c search_path=django_app,extensions,public"
     )
 
-    settings.DATABASES["default"] = database
-    connections.databases["default"] = database
+    # Normalize the replacement through Django's own ConnectionHandler so all
+    # required defaults (ATOMIC_REQUESTS, AUTOCOMMIT, TIME_ZONE, TEST, etc.)
+    # exist before the request handler inspects the connection settings.
+    configured = connections.configure_settings({"default": database})
+    settings.DATABASES["default"] = configured["default"]
+
+    connections._settings = configured
+    connections.__dict__.pop("settings", None)
 
     local_connections = connections._connections
     if hasattr(local_connections, "default"):
