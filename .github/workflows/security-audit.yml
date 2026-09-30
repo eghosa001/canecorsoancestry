@@ -2,6 +2,13 @@ name: Security audit
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "requirements.txt"
+      - "config/settings/**"
+      - "core/middleware.py"
+      - "accounts/forms.py"
+      - ".github/workflows/security-audit.yml"
   schedule:
     - cron: "17 5 * * 1"
 
