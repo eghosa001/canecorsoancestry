@@ -156,6 +156,10 @@ EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "1") == "1"
 EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10"))
+ACCOUNT_EMAIL_ENABLED = os.getenv(
+    "ACCOUNT_EMAIL_ENABLED",
+    "1" if EMAIL_HOST else "0",
+) == "1"
 
 LOGGING = {
     "version": 1,
