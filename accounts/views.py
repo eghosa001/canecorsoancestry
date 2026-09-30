@@ -2,6 +2,7 @@ import csv
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -51,6 +52,7 @@ from .forms import (
     KennelClaimForm,
     KennelEditForm,
     LitterSubmissionForm,
+    MemberSignUpForm,
     MergeDogsForm,
     ReviewSubmissionForm,
     VerificationEventForm,
@@ -59,6 +61,32 @@ from .forms import (
 
 def _date_value(value):
     return value.isoformat() if value else ""
+
+
+def _member_dogs(user):
+    kennel_ids = user.kennel_memberships.values_list("kennel_id", flat=True)
+    return Dog.objects.filter(
+        Q(kennel_id__in=kennel_ids)
+        | Q(
+            submissions__kind=Submission.Kind.DOG,
+            submissions__status=Submission.Status.APPROVED,
+            submissions__submitted_by=user,
+        )
+    ).distinct()
+
+
+def signup(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+
+    form = MemberSignUpForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        user = form.save()
+        login(request, user)
+        messages.success(request, "Welcome to Cane Corso Ancestry.")
+        return redirect("dashboard")
+
+    return render(request, "registration/signup.html", {"form": form})
 
 
 @login_required
@@ -78,7 +106,7 @@ def submit_dog(request):
     form = DogSubmissionForm(request.POST or None, user=request.user)
     if request.method == "POST" and form.is_valid():
         kennel = form.cleaned_data["kennel"]
-        if not can_contribute_to_kennel(request.user, kennel):
+        if kennel and not can_contribute_to_kennel(request.user, kennel):
             raise PermissionDenied
 
         submission = Submission.objects.create(
@@ -534,12 +562,9 @@ def verify_dog(request):
 
 @login_required
 def my_pedigrees(request):
-    kennel_ids = request.user.kennel_memberships.values_list("kennel_id", flat=True)
-    dogs = (
-        Dog.objects.filter(kennel_id__in=kennel_ids)
-        .select_related("kennel", "sire", "dam")
-        .order_by("name")
-    )
+    dogs = _member_dogs(request.user).select_related(
+        "kennel", "sire", "dam"
+    ).order_by("name")
     rows = [
         {
             "dog": dog,
@@ -556,11 +581,9 @@ def my_pedigrees(request):
 
 @login_required
 def member_pedigree_detail(request, pk):
-    kennel_ids = request.user.kennel_memberships.values_list("kennel_id", flat=True)
     dog = get_object_or_404(
-        Dog.objects.select_related("kennel", "sire", "dam"),
+        _member_dogs(request.user).select_related("kennel", "sire", "dam"),
         pk=pk,
-        kennel_id__in=kennel_ids,
     )
     try:
         requested = int(request.GET.get("generations", "4"))
@@ -588,11 +611,9 @@ def member_pedigree_detail(request, pk):
 
 @login_required
 def member_pedigree_export(request, pk):
-    kennel_ids = request.user.kennel_memberships.values_list("kennel_id", flat=True)
     dog = get_object_or_404(
-        Dog.objects.select_related("kennel"),
+        _member_dogs(request.user).select_related("kennel"),
         pk=pk,
-        kennel_id__in=kennel_ids,
     )
     try:
         requested = int(request.GET.get("generations", "4"))
