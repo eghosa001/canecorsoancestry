@@ -1,0 +1,20 @@
+[project]
+name = "canecorsoancestry-worker"
+version = "0.1.0"
+description = "Cane Corso Ancestry Django application for Cloudflare Workers"
+requires-python = ">=3.13"
+dependencies = [
+    "Django>=5.2,<5.3",
+    "dj-database-url>=2.3,<3",
+    "psycopg>=3.2,<4",
+    "whitenoise>=6.9,<7",
+]
+
+[dependency-groups]
+dev = [
+    "workers-py>=1.72.0",
+    "workers-runtime-sdk",
+]
+
+[tool.uv]
+package = false
