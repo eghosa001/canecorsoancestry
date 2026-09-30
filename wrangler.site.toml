@@ -1,0 +1,10 @@
+name = "canecorsoancestry-site-edge"
+main = "src/site-edge.js"
+compatibility_date = "2026-09-30"
+workers_dev = true
+
+[observability]
+enabled = true
+
+[vars]
+ORIGIN_URL = "https://canecorsoancestry.onrender.com"
