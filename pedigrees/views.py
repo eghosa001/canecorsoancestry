@@ -102,7 +102,10 @@ def reverse_pedigree(request, slug):
     dog = get_object_or_404(_public_dogs(), slug=slug)
     generations = _requested_generations(request)
     layers = descendant_generations(
-        dog, generations=generations, public_only=True
+        dog,
+        generations=generations,
+        public_only=True,
+        per_generation_limit=1000,
     )
     return render(
         request,
@@ -113,6 +116,9 @@ def reverse_pedigree(request, slug):
             "generation_options": sorted(ALLOWED_GENERATIONS),
             "layers": layers,
             "descendant_total": sum(len(layer["dogs"]) for layer in layers),
+            "descendants_truncated": any(
+                layer.get("truncated") for layer in layers
+            ),
         },
     )
 
