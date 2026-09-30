@@ -1,10 +1,66 @@
 const DEFAULT_ORIGIN = "https://canecorsoancestry.onrender.com";
 const CACHE_FRESH_SECONDS = 300;
 const CACHE_RETENTION_SECONDS = 86400;
-const ORIGIN_GRACE_MS = 1800;
+const ORIGIN_GRACE_MS = 1200;
+const AUTH_GRACE_MS = 450;
 const READY_TIMEOUT_MS = 3500;
+const AUTH_READY_TIMEOUT_MS = 4500;
+const STATIC_CACHE_SECONDS = 31536000;
+const SEARCH_CACHE_SECONDS = 60;
+const CSRF_COOKIE_AGE = 31449600;
+const CSRF_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const BOT_RE = /(bot|crawler|spider|slurp|bingpreview|facebookexternalhit|twitterbot|linkedinbot)/i;
 const PRIVATE_PREFIXES = ["/accounts/", "/member/", "/admin/", "/dashboard/", "/media/"];
+
+function isLoginPath(pathname) {
+  return pathname === "/accounts/login/";
+}
+
+function isPrefetchRequest(request) {
+  const purpose = [
+    request.headers.get("purpose") || "",
+    request.headers.get("sec-purpose") || "",
+  ].join(" ");
+  return /prefetch/i.test(purpose);
+}
+
+function randomCsrfString(length = 32) {
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  let value = "";
+  for (const byte of bytes) value += CSRF_CHARS[byte % CSRF_CHARS.length];
+  return value;
+}
+
+function csrfSecretFromRequest(request) {
+  const cookie = request.headers.get("cookie") || "";
+  const match = cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/i);
+  const secret = match ? decodeURIComponent(match[1]) : "";
+  if (secret.length === 32 && [...secret].every((char) => CSRF_CHARS.includes(char))) {
+    return secret;
+  }
+  return randomCsrfString();
+}
+
+function maskCsrfSecret(secret) {
+  const mask = randomCsrfString();
+  let cipher = "";
+  for (let index = 0; index < secret.length; index += 1) {
+    const secretIndex = CSRF_CHARS.indexOf(secret[index]);
+    const maskIndex = CSRF_CHARS.indexOf(mask[index]);
+    cipher += CSRF_CHARS[(secretIndex + maskIndex) % CSRF_CHARS.length];
+  }
+  return mask + cipher;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -29,7 +85,8 @@ function isPrivatePath(pathname) {
 }
 
 function isCacheablePublicPath(url, request) {
-  if (request.method !== "GET" || url.search || hasPrivateCookie(request)) return false;
+  if (request.method !== "GET" || hasPrivateCookie(request)) return false;
+  if (url.search && url.pathname !== "/dogs/" && url.pathname !== "/kennels/") return false;
   const path = url.pathname;
   if (isPrivatePath(path)) return false;
   if (path.startsWith("/static/")) return true;
@@ -107,11 +164,18 @@ function cacheableOriginResponse(response) {
   return !cacheControl.includes("private") && !cacheControl.includes("no-store");
 }
 
-async function storeInEdgeCache(cache, key, response) {
+function edgeRetentionSeconds(request) {
+  const url = new URL(request.url);
+  if (url.pathname.startsWith("/static/")) return STATIC_CACHE_SECONDS;
+  if (url.search) return SEARCH_CACHE_SECONDS;
+  return CACHE_RETENTION_SECONDS;
+}
+
+async function storeInEdgeCache(cache, key, response, request) {
   if (!cacheableOriginResponse(response)) return;
   const headers = new Headers(response.headers);
   headers.delete("set-cookie");
-  headers.set("cache-control", `public, max-age=${CACHE_RETENTION_SECONDS}`);
+  headers.set("cache-control", `public, max-age=${edgeRetentionSeconds(request)}`);
   headers.set("x-cca-edge-stored-at", String(Date.now()));
   headers.set("x-cca-edge-cache", "STORED");
   await cache.put(
@@ -124,9 +188,16 @@ async function storeInEdgeCache(cache, key, response) {
   );
 }
 
-function cachedForVisitor(cached, freshness) {
+function cachedForVisitor(cached, freshness, request) {
   const headers = new Headers(cached.headers);
-  headers.set("cache-control", "public, max-age=30, stale-while-revalidate=300");
+  const url = new URL(request.url);
+  if (url.pathname.startsWith("/static/")) {
+    headers.set("cache-control", `public, max-age=${STATIC_CACHE_SECONDS}, immutable`);
+  } else if (url.search) {
+    headers.set("cache-control", "public, max-age=15, stale-while-revalidate=60");
+  } else {
+    headers.set("cache-control", "public, max-age=30, stale-while-revalidate=300");
+  }
   headers.set("x-cca-edge-cache", freshness);
   return new Response(cached.body, {
     status: cached.status,
@@ -139,45 +210,159 @@ async function fetchOrigin(request, env, pathOverride = null) {
   return fetch(originRequest(request, env, pathOverride));
 }
 
-async function wakeOrigin(env) {
+async function timedOriginGet(env, path, timeoutMs, userAgent, accept) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), READY_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    await fetch(new URL("/healthz/", env.ORIGIN_URL || DEFAULT_ORIGIN), {
+    return await fetch(new URL(path, env.ORIGIN_URL || DEFAULT_ORIGIN), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        "user-agent": "CaneCorsoAncestry-Edge-Warmup/1.0",
+        accept,
+        "user-agent": userAgent,
       },
       signal: controller.signal,
       redirect: "manual",
     });
   } catch {
-    // Reaching the sleeping origin is itself useful: it starts the Render wake-up.
+    return null;
   } finally {
     clearTimeout(timer);
   }
 }
 
+async function wakeCriticalOrigin(env) {
+  await Promise.allSettled([
+    timedOriginGet(
+      env,
+      "/healthz/",
+      READY_TIMEOUT_MS,
+      "CaneCorsoAncestry-Edge-Warmup/1.1",
+      "application/json",
+    ),
+    timedOriginGet(
+      env,
+      "/accounts/login/",
+      AUTH_READY_TIMEOUT_MS,
+      "CaneCorsoAncestry-Edge-Auth-Warmup/1.1",
+      "text/html",
+    ),
+  ]);
+}
+
 async function originReady(env) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), READY_TIMEOUT_MS);
-  try {
-    const response = await fetch(new URL("/healthz/", env.ORIGIN_URL || DEFAULT_ORIGIN), {
-      method: "GET",
-      headers: {
-        accept: "application/json",
-        "user-agent": "CaneCorsoAncestry-Edge-Ready/1.0",
-      },
-      signal: controller.signal,
-      redirect: "manual",
-    });
-    return response.status === 200 && isDjangoResponse(response);
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timer);
-  }
+  const response = await timedOriginGet(
+    env,
+    "/healthz/",
+    READY_TIMEOUT_MS,
+    "CaneCorsoAncestry-Edge-Ready/1.1",
+    "application/json",
+  );
+  return Boolean(response && response.status === 200 && isDjangoResponse(response));
+}
+
+async function authReady(env) {
+  const [health, login] = await Promise.all([
+    timedOriginGet(
+      env,
+      "/healthz/",
+      AUTH_READY_TIMEOUT_MS,
+      "CaneCorsoAncestry-Edge-Auth-Ready/1.1",
+      "application/json",
+    ),
+    timedOriginGet(
+      env,
+      "/accounts/login/",
+      AUTH_READY_TIMEOUT_MS,
+      "CaneCorsoAncestry-Edge-Auth-Ready/1.1",
+      "text/html",
+    ),
+  ]);
+  return Boolean(
+    health &&
+      login &&
+      health.status === 200 &&
+      login.status === 200 &&
+      isDjangoResponse(health) &&
+      isDjangoResponse(login),
+  );
+}
+
+function authWarmingPage(request) {
+  const url = new URL(request.url);
+  const secret = csrfSecretFromRequest(request);
+  const token = maskCsrfSecret(secret);
+  const rawNext = url.searchParams.get("next") || "";
+  const safeNext =
+    rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "";
+  const nextField = safeNext
+    ? `<input type="hidden" name="next" value="${escapeHtml(safeNext)}">`
+    : "";
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign in · Cane Corso Ancestry</title>
+<style>
+:root{color-scheme:dark;--bg:#151515;--panel:#1d1d1d;--gold:#c7a45a;--ivory:#f4efe4;--muted:#aaa396;--line:#373126}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 50% 8%,#28241d 0,#151515 38%,#101010 100%);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ivory);padding:24px}
+main{width:min(440px,100%)}.brand{text-align:center;margin-bottom:22px}.mark{width:68px;height:68px;border:1px solid rgba(199,164,90,.55);border-radius:50%;display:grid;place-items:center;margin:0 auto 15px;font-family:Georgia,serif;font-size:31px;color:var(--gold)}
+.card{background:rgba(29,29,29,.96);border:1px solid var(--line);border-radius:18px;padding:26px;box-shadow:0 18px 60px rgba(0,0,0,.28)}
+.eyebrow{color:var(--gold);font-size:12px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 8px}h1{font-family:Georgia,serif;font-weight:500;font-size:34px;margin:0 0 8px}.sub{color:var(--muted);line-height:1.5;margin:0 0 20px}
+label{display:block;margin:14px 0 7px;font-size:14px}input{width:100%;border:1px solid #474035;background:#111;color:var(--ivory);border-radius:10px;padding:13px 14px;font-size:16px;outline:none}input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(199,164,90,.12)}
+button{width:100%;margin-top:18px;border:0;border-radius:10px;background:var(--gold);color:#16130e;font-weight:750;font-size:15px;padding:13px 16px;cursor:pointer}
+.status{display:flex;gap:8px;align-items:center;margin-top:15px;color:var(--muted);font-size:13px}.dot{width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 4px rgba(199,164,90,.12);animation:pulse 1.4s ease-in-out infinite}
+.links{margin:18px 0 0;text-align:center;font-size:13px}.links a{color:var(--ivory)}@keyframes pulse{50%{opacity:.35;transform:scale(.85)}}
+</style>
+</head>
+<body>
+<main>
+<div class="brand"><div class="mark" aria-hidden="true">C</div><strong>Cane Corso Ancestry</strong></div>
+<section class="card">
+<p class="eyebrow">Member access</p>
+<h1>Sign in</h1>
+<p class="sub">You can enter your details now. The secure Django service is starting in the background.</p>
+<form method="post" action="">
+<input type="hidden" name="csrfmiddlewaretoken" value="${token}">
+${nextField}
+<label for="id_username">Username</label>
+<input id="id_username" name="username" type="text" autocomplete="username" autofocus required>
+<label for="id_password">Password</label>
+<input id="id_password" name="password" type="password" autocomplete="current-password" required>
+<button id="submit" type="submit">Sign in</button>
+</form>
+<div class="status" id="status" role="status" aria-live="polite"><span class="dot"></span><span>Preparing secure sign-in…</span></div>
+<p class="links"><a href="/member/signup/">Create a member account</a></p>
+</section>
+</main>
+<script>
+const status=document.querySelector("#status span:last-child");
+async function check(){
+  try{
+    const r=await fetch("/__edge/auth-ready",{cache:"no-store",credentials:"same-origin"});
+    if(r.ok){status.textContent="Secure sign-in is ready.";return}
+  }catch(e){}
+  setTimeout(check,1600)
+}
+setTimeout(check,500);
+document.querySelector("form").addEventListener("submit",()=>{document.getElementById("submit").textContent="Signing in…"});
+</script>
+</body>
+</html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "set-cookie": `csrftoken=${secret}; Max-Age=${CSRF_COOKIE_AGE}; Path=/; Secure; HttpOnly; SameSite=Lax`,
+      "x-robots-tag": "noindex, nofollow",
+      "x-cca-edge-warming": "auth",
+      "content-security-policy":
+        "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "referrer-policy": "same-origin",
+      "x-content-type-options": "nosniff",
+    },
+  });
 }
 
 function warmingPage(request) {
@@ -237,7 +422,7 @@ retry.addEventListener("click",()=>location.reload());setTimeout(check,700);
 async function refreshCachedPage(request, env, cache, key) {
   try {
     const response = await fetchOrigin(request, env);
-    if (cacheableOriginResponse(response)) await storeInEdgeCache(cache, key, response);
+    if (cacheableOriginResponse(response)) await storeInEdgeCache(cache, key, response, request);
   } catch {
     // Stale cached content remains available if refresh fails.
   }
@@ -261,6 +446,22 @@ async function handleRequest(request, env, ctx) {
     );
   }
 
+  if (url.pathname === "/__edge/auth-ready") {
+    const ready = await authReady(env);
+    return Response.json(
+      { ready },
+      { status: ready ? 200 : 202, headers: { "cache-control": "no-store" } },
+    );
+  }
+
+  if (url.pathname === "/__edge/warm-auth") {
+    ctx.waitUntil(wakeCriticalOrigin(env));
+    return new Response(null, {
+      status: 204,
+      headers: { "cache-control": "no-store" },
+    });
+  }
+
   const canCache = isCacheablePublicPath(url, request);
   const cache = caches.default;
   const key = canCache ? cacheKey(request) : null;
@@ -270,44 +471,49 @@ async function handleRequest(request, env, ctx) {
     if (cached) {
       const storedAt = Number(cached.headers.get("x-cca-edge-stored-at") || "0");
       const ageSeconds = Math.max(0, (Date.now() - storedAt) / 1000);
-      ctx.waitUntil(wakeOrigin(env));
+      ctx.waitUntil(wakeCriticalOrigin(env));
       if (ageSeconds > CACHE_FRESH_SECONDS) {
         ctx.waitUntil(refreshCachedPage(request, env, cache, key));
-        return cachedForVisitor(cached, "STALE");
+        return cachedForVisitor(cached, "STALE", request);
       }
-      return cachedForVisitor(cached, "HIT");
+      return cachedForVisitor(cached, "HIT", request);
     }
   }
 
   const originPromise = fetchOrigin(request, env);
-  const mustWaitForOrigin = isBot(request) || !isHtmlNavigation(request);
+  const loginRequest = isLoginPath(url.pathname) && request.method === "GET";
+  const mustWaitForOrigin =
+    isBot(request) || !isHtmlNavigation(request) || isPrefetchRequest(request);
 
   if (mustWaitForOrigin) {
     const response = await originPromise;
-    if (canCache) ctx.waitUntil(storeInEdgeCache(cache, key, response));
+    if (canCache) ctx.waitUntil(storeInEdgeCache(cache, key, response, request));
     return rewriteForVisitor(response, request, env, { "x-cca-edge-cache": canCache ? "MISS" : "BYPASS" });
   }
 
   const first = await Promise.race([
     originPromise.then((response) => ({ type: "origin", response })).catch(() => ({ type: "error" })),
-    delay(ORIGIN_GRACE_MS).then(() => ({ type: "timeout" })),
+    delay(loginRequest ? AUTH_GRACE_MS : ORIGIN_GRACE_MS).then(() => ({ type: "timeout" })),
   ]);
 
   if (first.type === "origin" && isDjangoResponse(first.response)) {
-    if (canCache) ctx.waitUntil(storeInEdgeCache(cache, key, first.response));
+    if (canCache) ctx.waitUntil(storeInEdgeCache(cache, key, first.response, request));
     return rewriteForVisitor(first.response, request, env, { "x-cca-edge-cache": canCache ? "MISS" : "BYPASS" });
   }
 
   if (first.type === "timeout") {
+    ctx.waitUntil(wakeCriticalOrigin(env));
     ctx.waitUntil(
       originPromise
-        .then((response) => (canCache ? storeInEdgeCache(cache, key, response) : undefined))
+        .then((response) =>
+          canCache ? storeInEdgeCache(cache, key, response, request) : undefined,
+        )
         .catch(() => undefined),
     );
   } else {
-    ctx.waitUntil(wakeOrigin(env));
+    ctx.waitUntil(wakeCriticalOrigin(env));
   }
-  return warmingPage(request);
+  return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
 
 export default {

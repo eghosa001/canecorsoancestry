@@ -89,8 +89,25 @@ jobs:
             exit 1
           fi
 
-          echo "Site edge is healthy and returns either cached Django HTML or the branded warm-up screen within 8 seconds."
+          auth_status="$(curl --connect-timeout 4 --max-time 8 -sS -D /tmp/auth-headers.txt -H 'Accept: text/html' -o /tmp/auth-page.html -w '%{http_code}' "$base/accounts/login/" || true)"
+          if [ "$auth_status" != "200" ]; then
+            echo "::error::Auth-first edge did not return a login UI quickly; HTTP $auth_status"
+            cat /tmp/auth-page.html 2>/dev/null || true
+            exit 1
+          fi
+          grep -q 'name="username"' /tmp/auth-page.html
+          grep -q 'name="password"' /tmp/auth-page.html
+          grep -q 'name="csrfmiddlewaretoken"' /tmp/auth-page.html
+
+          ready_status="$(curl --connect-timeout 4 --max-time 10 -sS -o /tmp/auth-ready.json -w '%{http_code}' "$base/__edge/auth-ready" || true)"
+          if [ "$ready_status" != "200" ] && [ "$ready_status" != "202" ]; then
+            echo "::error::Auth readiness endpoint returned HTTP $ready_status"
+            cat /tmp/auth-ready.json 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "Site edge, auth-first login UI, and readiness checks are healthy."
 
       - name: Clean temporary files
         if: always()
-        run: rm -f /tmp/edge-health.json /tmp/edge-page.html
+        run: rm -f /tmp/edge-health.json /tmp/edge-page.html /tmp/auth-headers.txt /tmp/auth-page.html /tmp/auth-ready.json
