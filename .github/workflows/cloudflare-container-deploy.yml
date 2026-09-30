@@ -1,0 +1,144 @@
+name: Cloudflare Container deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deploy target
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in CLOUDFLARE_API_TOKEN SUPABASE_DATABASE_URL DJANGO_SECRET_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - run: npm install
+      - run: pip install -r requirements.txt
+
+      - name: Discover Cloudflare account
+        shell: bash
+        run: |
+          response="$(curl -fsS "https://api.cloudflare.com/client/v4/accounts?per_page=50" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
+          account_id="$(
+            printf '%s' "$response" |
+              python scripts/find_cloudflare_account.py
+          )"
+          echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
+
+      - name: Validate Supabase Direct connection
+        run: python scripts/validate_supabase_direct_url.py
+
+      - name: Discover Supabase IPv4 session pooler
+        shell: bash
+        run: |
+          session_url="$(python scripts/discover_supabase_session_pooler.py)"
+          echo "::add-mask::$session_url"
+          echo "CONTAINER_DATABASE_URL=$session_url" >> "$GITHUB_ENV"
+
+      - name: Apply Django migrations to Supabase
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: DATABASE_URL="$CONTAINER_DATABASE_URL" python manage.py migrate --noinput
+
+      - name: Build static assets
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+        run: |
+          python manage.py collectstatic --noinput
+          python scripts/build_cloudflare_assets.py
+
+      - name: Select Wrangler config
+        shell: bash
+        run: |
+          if [ "${{ inputs.target }}" = "production" ]; then
+            echo "WRANGLER_CONFIG=wrangler.container.production.jsonc" >> "$GITHUB_ENV"
+            echo "HEALTH_URL=https://canecorsoancestry.com/healthz/" >> "$GITHUB_ENV"
+          else
+            echo "WRANGLER_CONFIG=wrangler.container.preview.jsonc" >> "$GITHUB_ENV"
+            echo "HEALTH_URL=https://canecorsoancestry-container-preview.aighewieghosa111.workers.dev/healthz/" >> "$GITHUB_ENV"
+          fi
+
+      - name: Ensure R2 media bucket exists
+        shell: bash
+        run: |
+          npx wrangler r2 bucket info canecorsoancestry-media >/dev/null 2>&1 || \
+            npx wrangler r2 bucket create canecorsoancestry-media
+
+      - name: Set Django secret on Container Worker
+        shell: bash
+        run: |
+          printf '%s' "$DJANGO_SECRET_KEY" | \
+            npx wrangler secret put DJANGO_SECRET_KEY --config "$WRANGLER_CONFIG"
+
+      - name: Set Supabase connection on Container Worker
+        shell: bash
+        run: |
+          printf '%s' "$CONTAINER_DATABASE_URL" | \
+            npx wrangler secret put CONTAINER_DATABASE_URL --config "$WRANGLER_CONFIG"
+
+      - name: Build Docker image locally
+        run: docker build -t canecorsoancestry-container:ci .
+
+      - name: Deploy Cloudflare Container
+        run: npx wrangler deploy --config "$WRANGLER_CONFIG"
+
+      - name: Verify container health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 36); do
+            status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/health.json -w '%{http_code}' "$HEALTH_URL" || true)"
+            if [ "$status" = "200" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/health.json; then
+              echo "Cloudflare Container health check passed."
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "Container health attempt $attempt returned HTTP $status."
+            cat /tmp/health.json 2>/dev/null || true
+            sleep 10
+          done
+          echo "::error::Cloudflare Container health check failed."
+          exit 1
