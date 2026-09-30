@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Verification link invalid · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="auth-shell">
+  <div class="auth-card">
+    <p class="eyebrow">Member verification</p>
+    <h1>Verification link unavailable</h1>
+    <p class="muted">This verification link is invalid or has expired. Request a new link using the email address on the account.</p>
+    <a class="btn btn-gold" href="{% url 'accounts:resend-verification' %}">Request another link</a>
+  </div>
+</section>
+{% endblock %}
