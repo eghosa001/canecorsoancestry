@@ -2,10 +2,15 @@ __pycache__/
 *.py[cod]
 *.sqlite3
 .env
+.dev.vars
 .venv/
 venv/
 media/
 staticfiles/
+worker_assets/
+wrangler.toml
+wrangler.generated.toml
+.wrangler/
 .pytest_cache/
 .coverage
 .DS_Store
