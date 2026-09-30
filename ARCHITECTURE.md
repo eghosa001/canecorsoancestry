@@ -148,7 +148,7 @@ The repository contains:
 
 - `wrangler.preview.toml` for workers.dev verification;
 - `wrangler.production.toml` for the final `canecorsoancestry.com` Custom Domain;
-- `scripts/render_wrangler.py` to inject the Hyperdrive binding ID without committing it;
+- `scripts/render_wrangler.py` to inject the automatically discovered Hyperdrive binding ID without committing it;
 - `scripts/build_cloudflare_assets.py` to prepare Workers Static Assets;
 - `.github/workflows/cloudflare-build.yml` for bundle dry-run validation;
 - `.github/workflows/cloudflare-deploy.yml` for controlled preview/production deployment.
