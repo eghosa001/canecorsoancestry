@@ -13,7 +13,7 @@ from django.db import connections
 
 
 TARGET_ALIAS = "supabase"
-COPY_LABELS = ("auth.group", "auth.user", "accounts", "registry")
+COPY_LABELS = ("auth.group", "auth.user", "sessions.session", "admin.logentry", "accounts", "registry")
 SKIP_MODELS = {
     ("auth", "permission"),
 }
@@ -58,6 +58,8 @@ def _copied_models():
     allowed_apps = {"accounts", "registry"}
     user_model = get_user_model()
     group_model = apps.get_model("auth", "Group")
+    session_model = apps.get_model("sessions", "Session")
+    log_entry_model = apps.get_model("admin", "LogEntry")
     for model in apps.get_models():
         key = (model._meta.app_label, model._meta.model_name)
         if key in SKIP_MODELS or model._meta.proxy or not model._meta.managed:
@@ -65,6 +67,8 @@ def _copied_models():
         if (
             model is user_model
             or model is group_model
+            or model is session_model
+            or model is log_entry_model
             or model._meta.app_label in allowed_apps
         ):
             selected.append(model)
