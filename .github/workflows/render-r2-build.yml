@@ -6,6 +6,7 @@ on:
       - "render.yaml"
       - "config/settings/render.py"
       - "config/settings/production.py"
+      - "config/settings/development.py"
       - "core/r2_gateway_storage.py"
       - "core/cloudflare_media.py"
       - "core/media_views.py"
@@ -51,6 +52,14 @@ jobs:
           R2_GATEWAY_URL: https://edge.example.workers.dev
           MEDIA_EDGE_BASE_URL: https://edge.example.workers.dev
         run: python manage.py check --deploy
+
+      - name: Verify live Render dashboard collectstatic command
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+        run: |
+          rm -rf staticfiles
+          python manage.py collectstatic --noinput
+          test -f staticfiles/staticfiles.json
 
       - name: Verify Render static files
         env:
