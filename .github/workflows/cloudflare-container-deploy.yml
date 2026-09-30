@@ -64,6 +64,18 @@ jobs:
           )"
           echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
 
+      - name: Preflight Cloudflare Containers access
+        shell: bash
+        run: |
+          body_file="/tmp/cloudflare-containers-preflight.json"
+          status="$(curl -sS -o "$body_file" -w '%{http_code}'             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/containers/me"             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" || true)"
+          if [ "$status" != "200" ]; then
+            echo "::error::Cloudflare Containers is not available to this deployment token/account (HTTP $status). Enable Workers Paid and grant the API token Containers Edit/Write, then rerun this workflow."
+            cat "$body_file" 2>/dev/null || true
+            exit 1
+          fi
+          echo "Cloudflare Containers preflight passed."
+
       - name: Validate Supabase Direct connection
         run: python scripts/validate_supabase_direct_url.py
 
