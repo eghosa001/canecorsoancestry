@@ -4,7 +4,7 @@ Updated: 30 September 2026
 
 ## Current state
 
-The repository has a production-ready Django ancestry platform with owner-style public/member UI, Bellissimo seed data, advanced pedigree analysis, member/kennel workflows and moderation/search intelligence. The active hosting target is Render for Django, Aiven PostgreSQL for relational data, and Cloudflare Worker/R2 for the public edge and media. Supabase remains only as the pre-cutover database source until the verified Aiven migration is run.
+The repository has a production-ready Django ancestry platform with owner-style public/member UI, Bellissimo seed data, advanced pedigree analysis, member/kennel workflows and moderation/search intelligence. The active production stack is intentionally limited to Render for Django/static files, Aiven PostgreSQL for relational data, and Cloudflare R2 for uploaded media. The small Cloudflare Worker is media-only and does not proxy the application.
 
 Current validation:
 
@@ -177,20 +177,17 @@ Current validation:
 - All merges remain explicit moderator actions using the safe atomic merge service.
 - Existing duplicate-match API aliases retained for backward compatibility.
 
-### Production deployment — migration-ready
+### Production deployment — active and simplified
 
-- Render free web-service configuration is committed in `render.yaml`.
-- Render production settings use one Gunicorn worker and two threads to stay within the small free-instance memory footprint and Aiven free-tier connection limits.
-- Normal Render origin traffic can be HMAC-gated behind Cloudflare while `/healthz/` remains directly available to Render health checks.
-- Cloudflare Worker and R2 gateway deployment is independent of the application host.
-- Preview and production Cloudflare Workers now use separate Worker names so preview pushes cannot overwrite production routes.
-- Production Cloudflare routing is prepared for `canecorsoancestry.com` and `www.canecorsoancestry.com`.
+- Render is the only Django application host and serves static files directly with WhiteNoise.
+- Aiven service `pg-e8bf844` is the canonical production PostgreSQL database using schema `django_app`.
 - Cloudflare R2 bucket `canecorsoancestry-media` is the durable media/evidence store.
-- A safe one-time Supabase → Aiven migration workflow is committed. It refuses a non-empty Aiven target, enables `pg_trgm`, copies only `django_app`, compares every table row count and runs Django deployment checks against the target.
-- Production Bellissimo seed and R2 media metadata workflows now target `AIVEN_DATABASE_URL` and are manual-only during cutover.
-- Google Cloud Run deployment workflows/setup and Railway deployment metadata have been removed from the active repository.
-- The legacy Supabase session-pooler discovery helper remains temporarily because the one-time migration still needs to read the existing source database.
-- Full external activation steps are documented in `docs/PRODUCTION_DEPLOYMENT.md`.
+- The Cloudflare Worker is restricted to authenticated R2 operations and signed media delivery; it does not proxy Render, serve the app or manage a custom domain.
+- The live preview/application URL is `https://canecorsoancestry.onrender.com`.
+- Python is pinned to 3.13.15 on Render.
+- The obsolete Supabase migration workflow/helpers, Render bootstrap workflow, Cloudflare app-edge/custom-domain logic, GitHub Pages preview, generic S3 provider code, Sentry dependency and one-time media migration endpoint have been removed.
+- Production Bellissimo seed and R2 media-sync workflows remain manual maintenance tools for the active Aiven/R2 stack.
+- Full current deployment notes are in `docs/PRODUCTION_DEPLOYMENT.md`.
 
 ### Browser/UI acceptance
 
@@ -218,18 +215,9 @@ The verified Bellissimo media sync contains 22 byte-verified R2 objects and corr
 
 ## Remaining external activation
 
-Repository work is ready for the free production stack. The remaining provider-account actions are:
+None is required to run or review the application. Render, Aiven and R2 are already configured.
 
-- create the Aiven Free PostgreSQL service and add its Service URI as GitHub secret `AIVEN_DATABASE_URL`;
-- run the manual **Migrate Supabase database to Aiven** workflow and require it to pass before cutover;
-- create/update the Render service from `render.yaml`, setting `DATABASE_URL` to Aiven and using the same `DJANGO_SECRET_KEY` as GitHub Actions;
-- add GitHub Actions variable `RENDER_ORIGIN` using Render's exact HTTPS `onrender.com` URL;
-- manually deploy the Cloudflare edge with target `production`;
-- verify public pages, authenticated areas, media, moderation and a harmless database write/read;
-- remove Supabase credentials and retire Supabase only after the Aiven-backed deployment is confirmed stable;
-- optionally connect Resend and Sentry later.
-
-See `docs/PRODUCTION_DEPLOYMENT.md` for the exact sequence.
+A custom domain is optional and should be added only after a domain is purchased. If added later, prefer connecting it directly to Render rather than restoring the removed Cloudflare application-proxy architecture.
 
 ## Release principle
 
