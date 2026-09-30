@@ -1,13 +1,16 @@
+import os
+
 from .base import *  # noqa: F403,F401
 
 DEBUG = True
 
-# Render's existing dashboard build command currently runs collectstatic with
-# development settings. Keep its output compatible with the hardened Render
-# runtime until the dashboard command is aligned with render.yaml.
-STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
+# The existing Render dashboard build command runs collectstatic with
+# development settings. Opt into manifest generation only for that build;
+# normal local development and Django tests keep the default static storage.
+if os.getenv("RENDER_STATIC_BUILD", "0") == "1":
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
