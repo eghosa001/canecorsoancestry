@@ -88,8 +88,9 @@ def media_file(request, path):
 
     content_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
     response = FileResponse(handle, content_type=content_type)
+    disposition = "inline" if content_type.startswith("image/") else "attachment"
     response["Content-Disposition"] = (
-        'inline; filename="' + path.rsplit("/", 1)[-1] + '"'
+        disposition + '; filename="' + path.rsplit("/", 1)[-1] + '"'
     )
     response["X-Content-Type-Options"] = "nosniff"
     response["Cache-Control"] = (
