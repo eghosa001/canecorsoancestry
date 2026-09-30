@@ -1,0 +1,40 @@
+name: GitHub Pages frontend preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend-preview/**"
+      - ".github/workflows/pages-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload frontend preview
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: frontend-preview
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
