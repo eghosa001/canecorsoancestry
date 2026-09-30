@@ -17,7 +17,7 @@
   <div class="analysis-grid analysis-grid-four analysis-mobile-summary">
     <article class="analysis-card"><p class="eyebrow">Coefficient of inbreeding</p><strong class="analysis-number">{% if analysis.coi_percent != None %}{{ analysis.coi_percent|floatformat:2 }}%{% else %}—{% endif %}</strong><span>Wright-style coefficient across known ancestry</span></article>
     <article class="analysis-card"><p class="eyebrow">Pedigree coverage</p><strong class="analysis-number">{{ analysis.coverage_percent|floatformat:1 }}%</strong><span>{{ analysis.known_slots }} of {{ analysis.total_slots }} ancestry positions known</span></article>
-    <article class="analysis-card"><p class="eyebrow">Unique ancestors</p><strong class="analysis-number">{{ analysis.unique_ancestor_count }}</strong><span>Across the selected depth</span></article>
+    <article class="analysis-card"><p class="eyebrow">Unique ancestors</p><strong class="analysis-number">{{ analysis.unique_ancestor_count }}</strong><span>Ancestor loss: {{ analysis.ancestor_loss_percent|floatformat:1 }}% across known pedigree positions</span></article>
     <article class="analysis-card"><p class="eyebrow">Repeated ancestors</p><strong class="analysis-number">{{ analysis.linebreeding|length }}</strong><span>Deepest known generation: {{ analysis.deepest_known_generation }}</span></article>
   </div>
   <div class="analysis-detail-grid">

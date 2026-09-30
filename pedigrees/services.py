@@ -4,7 +4,7 @@ from hashlib import sha256
 from django.core.cache import cache
 from django.db.models import Q
 
-from registry.models import Dog
+from registry.models import Dog, HealthRecord
 
 
 class PedigreeCycleError(ValueError):
@@ -234,7 +234,101 @@ def offspring_for(dog, public_only=True):
     queryset = Dog.objects.filter(Q(sire_id=dog.pk) | Q(dam_id=dog.pk))
     if public_only:
         queryset = queryset.filter(is_public=True)
-    return queryset.select_related("kennel").distinct().order_by("name")
+    return queryset.select_related("kennel", "sire", "dam").distinct().order_by("name")
+
+
+def mate_relationships(dog, public_only=True):
+    """Group mating partners automatically from canonical offspring links."""
+    children = list(offspring_for(dog, public_only=public_only))
+    groups = {}
+    for child in children:
+        if child.sire_id == dog.pk:
+            mate = child.dam
+        else:
+            mate = child.sire
+        key = str(mate.pk) if mate else "unknown"
+        group = groups.setdefault(
+            key,
+            {"mate": mate, "offspring": [], "offspring_count": 0},
+        )
+        group["offspring"].append(child)
+        group["offspring_count"] += 1
+    return sorted(
+        groups.values(),
+        key=lambda item: (
+            item["mate"] is None,
+            item["mate"].name.lower() if item["mate"] else "",
+        ),
+    )
+
+
+def descendant_generations(dog, generations=4, public_only=True):
+    """Return unique descendant layers derived from sire/dam links."""
+    generations = _bounded_generations(generations)
+    layers = []
+    frontier = {dog.pk}
+    seen = {dog.pk}
+    for generation in range(1, generations + 1):
+        children = Dog.objects.filter(
+            Q(sire_id__in=frontier) | Q(dam_id__in=frontier)
+        ).select_related("kennel", "sire", "dam")
+        if public_only:
+            children = children.filter(is_public=True)
+        rows = [child for child in children.order_by("name") if child.pk not in seen]
+        if not rows:
+            break
+        layers.append(
+            {
+                "number": generation,
+                "label": (
+                    "Children"
+                    if generation == 1
+                    else "Grandchildren"
+                    if generation == 2
+                    else f"Descendant generation {generation}"
+                ),
+                "dogs": rows,
+            }
+        )
+        frontier = {child.pk for child in rows}
+        seen.update(frontier)
+    return layers
+
+
+def direct_relative_health(dog, public_only=True):
+    """Summarize published health records for parents, siblings and offspring."""
+    relatives = {}
+
+    def add(relative, relation):
+        if relative is None or (public_only and not relative.is_public):
+            return
+        row = relatives.setdefault(
+            relative.pk,
+            {"dog": relative, "relations": [], "records": []},
+        )
+        if relation not in row["relations"]:
+            row["relations"].append(relation)
+
+    add(dog.sire, "Sire")
+    add(dog.dam, "Dam")
+    for item in sibling_relationships(dog, public_only=public_only):
+        add(item["dog"], item["relation"])
+    for child in offspring_for(dog, public_only=public_only):
+        add(child, "Offspring")
+
+    if not relatives:
+        return []
+
+    records = HealthRecord.objects.filter(
+        dog_id__in=relatives.keys()
+    ).select_related("dog").order_by("dog__name", "test_type", "-tested_on")
+    for record in records:
+        relatives[record.dog_id]["records"].append(record)
+
+    return sorted(
+        relatives.values(),
+        key=lambda row: (row["dog"].name.lower(), str(row["dog"].pk)),
+    )
 
 
 def common_ancestors(dog_a, dog_b, generations=10, public_only=False):
@@ -462,13 +556,21 @@ def _analysis_payload(snapshot):
         coi_percent = None
         cycle_error = "This pedigree contains a parent cycle and cannot be analysed safely."
 
+    unique_ancestor_count = len(rows)
+    ancestor_retention_percent = (
+        unique_ancestor_count / known_slots * 100 if known_slots else 100.0
+    )
+    ancestor_loss_percent = max(0.0, 100.0 - ancestor_retention_percent)
+
     return {
         "coi_percent": coi_percent,
         "cycle_error": cycle_error,
         "coverage_percent": (known_slots / total_slots * 100) if total_slots else 0.0,
         "known_slots": known_slots,
         "total_slots": total_slots,
-        "unique_ancestor_count": len(rows),
+        "unique_ancestor_count": unique_ancestor_count,
+        "ancestor_retention_percent": ancestor_retention_percent,
+        "ancestor_loss_percent": ancestor_loss_percent,
         "deepest_known_generation": deepest_known,
         "contributions": contributions,
         "linebreeding": linebreeding,

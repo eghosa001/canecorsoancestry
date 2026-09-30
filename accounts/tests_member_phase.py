@@ -300,3 +300,85 @@ class OptionalEmailNotificationTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("approved", mail.outbox[0].subject.lower())
         self.assertEqual(mail.outbox[0].to, ["member@example.com"])
+
+
+class KennelIdentityProtectionTests(TestCase):
+    def setUp(self):
+        self.first = get_user_model().objects.create_user(
+            username="brand-owner", password="test-pass-123"
+        )
+        self.second = get_user_model().objects.create_user(
+            username="brand-second", password="test-pass-123"
+        )
+        self.reviewer = get_user_model().objects.create_user(
+            username="brand-reviewer", is_staff=True
+        )
+
+    def test_new_kennel_name_is_reserved_then_approved_to_owner(self):
+        self.client.force_login(self.first)
+        response = self.client.post(
+            reverse("accounts:submit-kennel"),
+            {
+                "name": "Unique Cane Corso",
+                "country": "Nigeria",
+                "city": "Benin City",
+                "website": "",
+                "description": "Breeder profile",
+                "notes": "Please verify.",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        submission = Submission.objects.get(
+            kind=Submission.Kind.KENNEL_CREATE,
+            submitted_by=self.first,
+        )
+        self.assertFalse(Kennel.objects.filter(name="Unique Cane Corso").exists())
+
+        self.client.force_login(self.second)
+        duplicate = self.client.post(
+            reverse("accounts:submit-kennel"),
+            {
+                "name": "unique cane corso",
+                "country": "Nigeria",
+                "city": "Abuja",
+                "website": "",
+                "description": "",
+                "notes": "",
+            },
+        )
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertContains(duplicate, "already awaiting review")
+        self.assertEqual(
+            Submission.objects.filter(kind=Submission.Kind.KENNEL_CREATE).count(), 1
+        )
+
+        approve_submission(submission, self.reviewer)
+        kennel = Kennel.objects.get(name="Unique Cane Corso")
+        membership = KennelMembership.objects.get(kennel=kennel, user=self.first)
+        self.assertEqual(membership.role, KennelMembership.Role.OWNER)
+
+    def test_only_one_open_claim_is_allowed_per_kennel(self):
+        kennel = Kennel.objects.create(name="Claim Guard Kennel", slug="claim-guard-kennel")
+        Submission.objects.create(
+            kind=Submission.Kind.KENNEL_CLAIM,
+            submitted_by=self.first,
+            kennel=kennel,
+            payload={"relationship": "Owner"},
+        )
+        self.client.force_login(self.second)
+
+        response = self.client.post(
+            reverse("accounts:claim-kennel", args=[kennel.pk]),
+            {"relationship": "Also owner", "notes": ""},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            Submission.objects.filter(
+                kind=Submission.Kind.KENNEL_CLAIM,
+                kennel=kennel,
+                status=Submission.Status.PENDING,
+            ).count(),
+            1,
+        )

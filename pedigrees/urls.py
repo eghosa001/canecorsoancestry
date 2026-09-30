@@ -8,5 +8,6 @@ urlpatterns = [
     path("", views.pedigree_index, name="index"),
     path("virtual-mating/", views.virtual_mating, name="virtual-mating"),
     path("<slug:slug>/export.csv", views.pedigree_export, name="export"),
+    path("<slug:slug>/descendants/", views.reverse_pedigree, name="reverse"),
     path("<slug:slug>/", views.pedigree_detail, name="detail"),
 ]

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Pedigree statistics · Cane Corso Ancestry{% endblock %}
+{% block meta_description %}Explore popular Cane Corso sires, dams and kennels based on canonical public pedigree relationships.{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Pedigree intelligence</p>
+    <h1>Database statistics</h1>
+    <p>These rankings are calculated from public canonical relationships. Offspring counts update automatically when approved dogs are linked to a sire or dam.</p>
+  </header>
+
+  <div class="profile-section-grid">
+    <article class="panel">
+      <div class="panel-heading"><h2>Popular sires</h2><span>By connected public offspring</span></div>
+      <div class="relationship-list">
+        {% for dog in top_sires %}
+          <a href="{% url 'registry:dog-detail' dog.slug %}"><strong>{{ dog.name }}</strong><span>{{ dog.public_offspring_count }} offspring</span></a>
+        {% empty %}<p class="muted">No sire statistics are available yet.</p>{% endfor %}
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-heading"><h2>Popular dams</h2><span>By connected public offspring</span></div>
+      <div class="relationship-list">
+        {% for dog in top_dams %}
+          <a href="{% url 'registry:dog-detail' dog.slug %}"><strong>{{ dog.name }}</strong><span>{{ dog.public_offspring_count }} offspring</span></a>
+        {% empty %}<p class="muted">No dam statistics are available yet.</p>{% endfor %}
+      </div>
+    </article>
+  </div>
+
+  <article class="panel">
+    <div class="panel-heading"><h2>Kennels by public records</h2><span>Canonical dogs currently linked to each kennel</span></div>
+    <div class="relationship-list">
+      {% for kennel in top_kennels %}
+        <a href="{% url 'registry:kennel-detail' kennel.slug %}"><strong>{{ kennel.name }}</strong><span>{{ kennel.public_dog_count }} public dog{{ kennel.public_dog_count|pluralize }}</span></a>
+      {% empty %}<p class="muted">No kennel statistics are available yet.</p>{% endfor %}
+    </div>
+  </article>
+</section>
+{% endblock %}

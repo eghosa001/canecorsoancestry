@@ -14,6 +14,13 @@
       <input id="q" name="q" value="{{ query }}" placeholder="Dog name, kennel or registration number">
     </div>
     <div>
+      <label for="exact">Match</label>
+      <select id="exact" name="exact">
+        <option value="">Broad search</option>
+        <option value="1" {% if exact %}selected{% endif %}>Exact name / alias / registration</option>
+      </select>
+    </div>
+    <div>
       <label for="sex">Sex</label>
       <select id="sex" name="sex">
         <option value="">All</option>
@@ -40,7 +47,7 @@
   </form>
 
   <div class="result-summary">
-    <strong>{{ dogs|length }} result{{ dogs|length|pluralize }}</strong>
+    <strong>{{ result_count }} result{{ result_count|pluralize }}</strong>
     {% if query %}<span>for “{{ query }}”</span>{% endif %}
   </div>
 
@@ -68,5 +75,13 @@
       </div>
     {% endfor %}
   </div>
+
+  {% if page_obj.has_other_pages %}
+    <nav class="button-row" aria-label="Dog search pages">
+      {% if page_obj.has_previous %}<a class="btn btn-outline" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">← Previous</a>{% endif %}
+      <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a class="btn btn-outline" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>{% endif %}
+    </nav>
+  {% endif %}
 </section>
 {% endblock %}

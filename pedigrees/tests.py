@@ -2,9 +2,12 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
-from registry.models import Dog
+from registry.models import Dog, HealthRecord
 
 from .services import (
+    descendant_generations,
+    direct_relative_health,
+    mate_relationships,
     pedigree_analysis,
     pedigree_generations,
     projected_inbreeding,
@@ -24,6 +27,21 @@ class PedigreeServiceTests(TestCase):
 
         self.assertEqual(repeated[0]["dog"].pk, common.pk)
         self.assertEqual(repeated[0]["occurrences"], 2)
+
+    def test_parent_links_automatically_create_offspring_and_descendant_relationships(self):
+        sire = Dog.objects.create(
+            name="Relationship Sire", slug="relationship-sire", is_public=True
+        )
+        child = Dog.objects.create(
+            name="Relationship Child",
+            slug="relationship-child",
+            sire=sire,
+            is_public=True,
+        )
+
+        layers = descendant_generations(sire, generations=4)
+
+        self.assertEqual(layers[0]["dogs"], [child])
 
     def test_half_siblings_share_one_parent(self):
         sire = Dog.objects.create(name="Shared Sire", slug="shared-sire")
@@ -46,6 +64,46 @@ class PedigreeServiceTests(TestCase):
 
         self.assertAlmostEqual(projected_inbreeding(sire, dam), 0.125)
 
+    def test_relative_health_is_derived_from_connected_family(self):
+        sire = Dog.objects.create(
+            name="Health Sire", slug="health-sire", is_public=True
+        )
+        child = Dog.objects.create(
+            name="Health Child",
+            slug="health-child",
+            sire=sire,
+            is_public=True,
+        )
+        HealthRecord.objects.create(
+            dog=sire, test_type="Hips", result="Good"
+        )
+
+        rows = direct_relative_health(child)
+
+        self.assertEqual(rows[0]["dog"], sire)
+        self.assertEqual(rows[0]["relations"], ["Sire"])
+        self.assertEqual(rows[0]["records"][0].result, "Good")
+
+    def test_mates_are_derived_from_shared_offspring(self):
+        sire = Dog.objects.create(
+            name="Mate Sire", slug="mate-sire", sex=Dog.Sex.MALE, is_public=True
+        )
+        dam = Dog.objects.create(
+            name="Mate Dam", slug="mate-dam", sex=Dog.Sex.FEMALE, is_public=True
+        )
+        Dog.objects.create(
+            name="Mate Child",
+            slug="mate-child",
+            sire=sire,
+            dam=dam,
+            is_public=True,
+        )
+
+        groups = mate_relationships(sire)
+
+        self.assertEqual(groups[0]["mate"], dam)
+        self.assertEqual(groups[0]["offspring_count"], 1)
+
     def test_analysis_reports_contribution_and_linebreeding_paths(self):
         common = Dog.objects.create(name="Common", slug="analysis-common")
         sire = Dog.objects.create(name="Sire", slug="analysis-sire", sire=common)
@@ -62,6 +120,7 @@ class PedigreeServiceTests(TestCase):
             {path["label"] for path in line["paths"]},
             {"Sire → Sire", "Dam → Sire"},
         )
+        self.assertGreater(analysis["ancestor_loss_percent"], 0)
 
     def test_analysis_cache_is_revision_keyed(self):
         cache.clear()

@@ -6,7 +6,7 @@ import re
 from django.conf import settings
 from django.contrib.postgres.search import TrigramSimilarity
 from django.core.mail import send_mail
-from django.db import connection, transaction
+from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
@@ -23,6 +23,7 @@ from .models import (
     DogTitle,
     DisputeCase,
     HealthRecord,
+    Kennel,
     Litter,
     KennelMembership,
     MergeHistory,
@@ -230,6 +231,38 @@ def approve_submission(submission, reviewer, resolution_notes=""):
             source_submission=submission,
         )
 
+    elif submission.kind == Submission.Kind.KENNEL_CREATE:
+        name = str(payload.get("name") or "").strip()
+        kennel_slug = str(payload.get("slug") or slugify(name)[:190]).strip()
+        if not name or not kennel_slug:
+            raise ValueError("Kennel name is required.")
+        if Kennel.objects.filter(
+            Q(name__iexact=name) | Q(slug__iexact=kennel_slug)
+        ).exists():
+            raise ValueError(
+                "That kennel or breeder brand already exists. Link the member to the existing profile instead."
+            )
+        try:
+            with transaction.atomic():
+                kennel = Kennel.objects.create(
+                    name=name,
+                    slug=kennel_slug,
+                    country=str(payload.get("country") or "").strip(),
+                    city=str(payload.get("city") or "").strip(),
+                    description=str(payload.get("description") or "").strip(),
+                    website=str(payload.get("website") or "").strip(),
+                )
+        except IntegrityError as exc:
+            raise ValueError(
+                "That kennel or breeder brand name is already in use."
+            ) from exc
+        submission.kennel = kennel
+        KennelMembership.objects.create(
+            kennel=kennel,
+            user=submission.submitted_by,
+            role=KennelMembership.Role.OWNER,
+        )
+
     elif submission.kind == Submission.Kind.KENNEL:
         kennel = submission.kennel
         if kennel is None:
@@ -309,6 +342,7 @@ def approve_submission(submission, reviewer, resolution_notes=""):
     submission.save(
         update_fields=(
             "dog",
+            "kennel",
             "litter",
             "status",
             "reviewed_by",
@@ -613,6 +647,7 @@ def submission_diff(submission):
     elif submission.kind in {
         Submission.Kind.DOG,
         Submission.Kind.LITTER_CREATE,
+        Submission.Kind.KENNEL_CREATE,
         Submission.Kind.KENNEL_CLAIM,
         Submission.Kind.DOCUMENT,
         Submission.Kind.IMAGE,

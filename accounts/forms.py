@@ -3,8 +3,9 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 from django.core.validators import FileExtensionValidator
 from django.db.models import Q
+from django.utils.text import slugify
 
-from registry.models import DisputeCase, Dog, DogDocument, DogSource, Kennel, Litter, Submission, VerificationState
+from registry.models import DisputeCase, Dog, DogDocument, DogRegistration, DogSource, Kennel, Litter, Submission, VerificationState
 
 
 class MemberSignUpForm(UserCreationForm):
@@ -66,6 +67,30 @@ class DogSubmissionForm(forms.Form):
             self.add_error("sire", "The selected sire is recorded as female.")
         if dam and dam.sex == Dog.Sex.MALE:
             self.add_error("dam", "The selected dam is recorded as male.")
+
+        registration = (cleaned.get("registration") or "").strip()
+        if registration and DogRegistration.objects.filter(
+            authority__isnull=True, number__iexact=registration
+        ).exists():
+            self.add_error(
+                "registration",
+                "This registration number is already attached to a dog. Open the existing record instead of creating a duplicate.",
+            )
+
+        name = (cleaned.get("name") or "").strip()
+        date_of_birth = cleaned.get("date_of_birth")
+        if name and date_of_birth:
+            likely = Dog.objects.filter(
+                name__iexact=name,
+                date_of_birth=date_of_birth,
+                sire=sire,
+                dam=dam,
+            ).first()
+            if likely:
+                self.add_error(
+                    "name",
+                    f"A likely matching dog already exists: {likely.name}. Use the existing record or submit a correction.",
+                )
         return cleaned
 
 
@@ -141,6 +166,40 @@ class DogDocumentSubmissionForm(forms.Form):
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
 
 
+class KennelCreateForm(forms.Form):
+    name = forms.CharField(max_length=180, label="Kennel / breeder brand name")
+    country = forms.CharField(max_length=80, required=False)
+    city = forms.CharField(max_length=120, required=False)
+    website = forms.URLField(required=False)
+    description = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 5}))
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="Optional evidence or context for the moderator reviewing this kennel identity.",
+    )
+
+    def clean_name(self):
+        name = " ".join(self.cleaned_data["name"].split()).strip()
+        candidate_slug = slugify(name)[:190]
+        if not candidate_slug:
+            raise forms.ValidationError("Enter a usable kennel or breeder brand name.")
+        if Kennel.objects.filter(
+            Q(name__iexact=name) | Q(slug__iexact=candidate_slug)
+        ).exists():
+            raise forms.ValidationError(
+                "That kennel or breeder brand already exists. Claim the existing profile instead."
+            )
+        if Submission.objects.filter(
+            kind=Submission.Kind.KENNEL_CREATE,
+            status=Submission.Status.PENDING,
+            payload__slug=candidate_slug,
+        ).exists():
+            raise forms.ValidationError(
+                "That kennel or breeder brand name is already awaiting review."
+            )
+        return name
+
+
 class KennelEditForm(forms.ModelForm):
     notes = forms.CharField(
         required=False,
@@ -152,6 +211,18 @@ class KennelEditForm(forms.ModelForm):
         model = Kennel
         fields = ("name", "country", "city", "description", "website")
         widgets = {"description": forms.Textarea(attrs={"rows": 5})}
+
+    def clean_name(self):
+        name = " ".join(self.cleaned_data["name"].split()).strip()
+        candidate_slug = slugify(name)[:190]
+        conflict = Kennel.objects.exclude(pk=self.instance.pk).filter(
+            Q(name__iexact=name) | Q(slug__iexact=candidate_slug)
+        ).exists()
+        if conflict:
+            raise forms.ValidationError(
+                "Another kennel or breeder brand already uses this name."
+            )
+        return name
 
 
 class ReviewSubmissionForm(forms.Form):
