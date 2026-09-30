@@ -19,6 +19,10 @@ class CloudflareR2Storage(Storage):
         return run_sync(awaitable)
 
     def _save(self, name, content):
+        return self.save_exact(name, content)
+
+    def save_exact(self, name, content):
+        """Write an object at the exact Django FileField key."""
         from js import Uint8Array
 
         data = content.read()
