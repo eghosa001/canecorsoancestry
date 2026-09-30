@@ -422,12 +422,43 @@ def _move_unique_rows(model, duplicate, canonical, unique_fields):
     return moved
 
 
+def _is_ancestor(ancestor_id, dog_id):
+    if not ancestor_id or not dog_id or ancestor_id == dog_id:
+        return bool(ancestor_id and dog_id and ancestor_id == dog_id)
+    frontier = {dog_id}
+    seen = set()
+    while frontier:
+        unseen = frontier - seen
+        if not unseen:
+            return False
+        seen.update(unseen)
+        next_frontier = set()
+        for sire_id, dam_id in Dog.objects.filter(pk__in=unseen).values_list(
+            "sire_id", "dam_id"
+        ):
+            if sire_id == ancestor_id or dam_id == ancestor_id:
+                return True
+            if sire_id:
+                next_frontier.add(sire_id)
+            if dam_id:
+                next_frontier.add(dam_id)
+        frontier = next_frontier
+    return False
+
+
 @transaction.atomic
 def merge_dogs(canonical, duplicate, performed_by=None):
     canonical = Dog.objects.select_for_update().get(pk=canonical.pk)
     duplicate = Dog.objects.select_for_update().get(pk=duplicate.pk)
     if canonical.pk == duplicate.pk:
         raise ValueError("Canonical and duplicate dogs must be different records.")
+    if _is_ancestor(canonical.pk, duplicate.pk) or _is_ancestor(
+        duplicate.pk, canonical.pk
+    ):
+        raise ValueError(
+            "Cannot merge dogs that are connected as ancestor and descendant. "
+            "Resolve the pedigree relationship first."
+        )
 
     retired_id = duplicate.pk
     retired_slug = duplicate.slug
