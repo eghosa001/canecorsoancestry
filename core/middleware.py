@@ -92,6 +92,10 @@ class AbuseProtectionMiddleware:
                 ),
                 None,
             )
+            if not rule and request.path.startswith("/member/"):
+                user = getattr(request, "user", None)
+                if user and user.is_authenticated and not user.is_staff:
+                    rule = (120, 3600)
             if rule:
                 limit, window = rule
                 principal = self._principal(request)
@@ -125,10 +129,10 @@ class AbuseProtectionMiddleware:
     def _principal(request):
         if getattr(request, "user", None) and request.user.is_authenticated:
             return f"user:{request.user.pk}"
-        identifier = (
-            request.POST.get("username")
-            or request.POST.get("email")
-            or ""
-        ).strip().lower()[:180]
-        remote = request.META.get("REMOTE_ADDR", "unknown")
-        return f"anon:{remote}:{identifier}"
+        forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+        remote = (
+            forwarded.split(",", 1)[0].strip()
+            if forwarded
+            else request.META.get("REMOTE_ADDR", "unknown")
+        )
+        return f"anon:{remote}"
