@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Descendants of {{ dog.name }} · Cane Corso Ancestry{% endblock %}
+{% block meta_description %}Explore the reverse pedigree and descendant generations of Cane Corso {{ dog.name }}.{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Reverse pedigree</p>
+    <h1>Descendants of {{ dog.name }}</h1>
+    <p>Every relationship below is derived automatically from canonical sire and dam links. Adding a dog with {{ dog.name }} as a parent makes that dog appear here after approval.</p>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">Back to dog</a>
+      <a class="btn btn-gold" href="{% url 'pedigrees:detail' dog.slug %}">View ancestry</a>
+    </div>
+  </header>
+
+  <form class="filter-panel" method="get">
+    <div>
+      <label for="generations">Descendant depth</label>
+      <select id="generations" name="generations">
+        {% for option in generation_options %}<option value="{{ option }}" {% if generations == option %}selected{% endif %}>{{ option }} generations</option>{% endfor %}
+      </select>
+    </div>
+    <button class="btn btn-gold" type="submit">Update</button>
+  </form>
+
+  <div class="result-summary"><strong>{{ descendant_total }} connected descendant{{ descendant_total|pluralize }}</strong></div>
+
+  {% for layer in layers %}
+    <article class="panel">
+      <div class="panel-heading"><h2>{{ layer.label }}</h2><span>Generation {{ layer.number }}</span></div>
+      <div class="relationship-list">
+        {% for item in layer.dogs %}
+          <a href="{% url 'registry:dog-detail' item.slug %}">
+            <strong>{{ item.name }}</strong>
+            <span>
+              {% if item.sire_id == dog.id %}Child through sire link{% elif item.dam_id == dog.id %}Child through dam link{% else %}Descendant{% endif %}
+              {% if item.kennel %} · {{ item.kennel.name }}{% endif %}
+            </span>
+          </a>
+        {% endfor %}
+      </div>
+    </article>
+  {% empty %}
+    <div class="empty-state"><strong>No public descendants are connected yet.</strong><p>Descendants appear automatically when approved dog records point to this dog as sire or dam.</p></div>
+  {% endfor %}
+</section>
+{% endblock %}
