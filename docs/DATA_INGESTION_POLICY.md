@@ -43,6 +43,9 @@ Hard failures include:
 
 Warnings include same normalized names and incomplete demographic fields. Warnings require review but may be legitimate.
 
-## Current canonical seed
+## Current trusted source snapshots
 
-`data/seeds/bellissimo-dogs.json` remains the controlled Bellissimo Geni seed. The production seed workflow validates the snapshot, imports idempotently, verifies expected public/private counts and runs the full integrity audit.
+- `data/seeds/bellissimo-dogs.json`: 117 canonical Bellissimo pedigree source records, of which 101 are public and 16 remain draft/private.
+- `data/seeds/bellissimo-puppies.json`: two additional kennel-verified young-dog records from the owner's Bellissimo Geni data, imported only as pedigree facts with breeder-source provenance. Sales/availability fields are retained only in the raw provenance payload and are not part of the ancestry site's public data model.
+
+The production seed workflow imports both sources idempotently, verifies expected counts and relationships, and runs the full integrity audit afterward.
