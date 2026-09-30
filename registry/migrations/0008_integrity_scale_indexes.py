@@ -95,6 +95,31 @@ class Migration(migrations.Migration):
                 name="health_dog_test_idx",
             ),
         ),
+        migrations.AddConstraint(
+            model_name="dog",
+            constraint=models.CheckConstraint(
+                condition=models.Q(sire__isnull=True) | ~models.Q(sire=models.F("id")),
+                name="dog_sire_not_self",
+            ),
+        ),
+        migrations.AddConstraint(
+            model_name="dog",
+            constraint=models.CheckConstraint(
+                condition=models.Q(dam__isnull=True) | ~models.Q(dam=models.F("id")),
+                name="dog_dam_not_self",
+            ),
+        ),
+        migrations.AddConstraint(
+            model_name="dog",
+            constraint=models.CheckConstraint(
+                condition=(
+                    models.Q(sire__isnull=True)
+                    | models.Q(dam__isnull=True)
+                    | ~models.Q(sire=models.F("dam"))
+                ),
+                name="dog_parents_must_differ",
+            ),
+        ),
         migrations.RunPython(
             create_postgres_search_indexes,
             migrations.RunPython.noop,
