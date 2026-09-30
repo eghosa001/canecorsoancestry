@@ -19,10 +19,12 @@ class CloudflareR2Storage(Storage):
         return run_sync(awaitable)
 
     def _save(self, name, content):
-        from pyodide.ffi import to_js
+        from js import Uint8Array
 
         data = content.read()
-        self._run(self._bucket().put(name, to_js(data)))
+        payload = Uint8Array.new(len(data))
+        payload.assign(data)
+        self._run(self._bucket().put(name, payload))
         return name
 
     def _open(self, name, mode="rb"):
@@ -32,7 +34,7 @@ class CloudflareR2Storage(Storage):
         if obj is None:
             raise FileNotFoundError(name)
         array_buffer = self._run(obj.arrayBuffer())
-        data = bytes(Uint8Array.new(array_buffer).to_py())
+        data = Uint8Array.new(array_buffer).to_bytes()
         return ContentFile(data, name=name)
 
     def exists(self, name):
