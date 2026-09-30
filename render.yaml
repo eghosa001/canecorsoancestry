@@ -45,6 +45,8 @@ services:
         value: "300"
       - key: ANCESTRY_EMAIL_NOTIFICATIONS
         value: "0"
+      - key: RENDER_STATIC_BUILD
+        value: "1"
       - key: DATABASE_URL
         sync: false
       - key: DJANGO_SECRET_KEY
