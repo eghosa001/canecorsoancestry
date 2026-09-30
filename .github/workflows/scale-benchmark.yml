@@ -1,6 +1,13 @@
 name: Scale benchmark
 
 on:
+  pull_request:
+    paths:
+      - "registry/management/commands/benchmark_scale.py"
+      - "pedigrees/services.py"
+      - "registry/models.py"
+      - "registry/migrations/**"
+      - ".github/workflows/scale-benchmark.yml"
   workflow_dispatch:
     inputs:
       dogs:
@@ -46,4 +53,4 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python manage.py migrate --noinput
       - name: Run rollback-only benchmark
-        run: python manage.py benchmark_scale --dogs "${{ inputs.dogs }}"
+        run: python manage.py benchmark_scale --dogs "${{ inputs.dogs || '10000' }}"
