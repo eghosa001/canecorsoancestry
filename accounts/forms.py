@@ -267,9 +267,37 @@ class ReviewSubmissionForm(forms.Form):
     )
 
 
+class DogReferenceField(forms.CharField):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault(
+            "help_text",
+            "Enter the exact dog name or UUID. Use UUID when names are duplicated.",
+        )
+        super().__init__(*args, **kwargs)
+
+    def clean(self, value):
+        value = super().clean(value).strip()
+        by_id = None
+        try:
+            by_id = Dog.objects.filter(pk=value).first()
+        except (TypeError, ValueError):
+            by_id = None
+        if by_id:
+            return by_id
+
+        matches = list(Dog.objects.filter(name__iexact=value).order_by("pk")[:2])
+        if not matches:
+            raise forms.ValidationError("No dog matches that exact name or UUID.")
+        if len(matches) > 1:
+            raise forms.ValidationError(
+                "More than one dog has that name. Use the UUID shown by moderator search."
+            )
+        return matches[0]
+
+
 class MergeDogsForm(forms.Form):
-    canonical = forms.ModelChoiceField(queryset=Dog.objects.order_by("name"))
-    duplicate = forms.ModelChoiceField(queryset=Dog.objects.order_by("name"))
+    canonical = DogReferenceField(label="Canonical dog")
+    duplicate = DogReferenceField(label="Duplicate to retire")
 
     def clean(self):
         cleaned = super().clean()
@@ -278,27 +306,37 @@ class MergeDogsForm(forms.Form):
         return cleaned
 
 
-
 class VerificationEventForm(forms.Form):
-    dog = forms.ModelChoiceField(queryset=Dog.objects.order_by("name"))
+    dog = DogReferenceField()
     field_name = forms.CharField(
         max_length=80,
         required=False,
         help_text="Leave blank to update the dog's overall verification state.",
     )
     state = forms.ChoiceField(choices=VerificationState.choices)
-    source = forms.ModelChoiceField(
-        queryset=DogSource.objects.select_related("dog").order_by("dog__name", "-created_at"),
+    source_id = forms.IntegerField(
         required=False,
+        min_value=1,
+        label="Source ID",
+        help_text="Optional evidence source ID already attached to this dog.",
     )
     note = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
 
     def clean(self):
         cleaned = super().clean()
         dog = cleaned.get("dog")
-        source = cleaned.get("source")
-        if dog and source and source.dog_id != dog.pk:
-            self.add_error("source", "The selected source belongs to a different dog.")
+        source_id = cleaned.get("source_id")
+        source = None
+        if source_id:
+            source = DogSource.objects.filter(pk=source_id).first()
+            if source is None:
+                self.add_error("source_id", "No evidence source has that ID.")
+            elif dog and source.dog_id != dog.pk:
+                self.add_error(
+                    "source_id",
+                    "The selected source belongs to a different dog.",
+                )
+        cleaned["source"] = source
         return cleaned
 
 
