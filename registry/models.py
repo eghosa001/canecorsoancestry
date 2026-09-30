@@ -339,6 +339,7 @@ class Submission(models.Model):
         IMAGE = "image", "Dog image"
         DOCUMENT = "document", "Dog document"
         KENNEL = "kennel", "Kennel update"
+        KENNEL_CREATE = "kennel_create", "New kennel profile"
         KENNEL_CLAIM = "kennel_claim", "Kennel ownership claim"
         LITTER_CREATE = "litter_create", "New litter"
         LITTER_EDIT = "litter_edit", "Litter correction"
