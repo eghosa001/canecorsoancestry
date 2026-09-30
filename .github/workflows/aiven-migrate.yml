@@ -123,7 +123,7 @@ jobs:
             -e SOURCE_DATABASE_URL \
             -e PGSSLMODE=require \
             -v "$RUNNER_TEMP/aiven-migration:/work" \
-            postgres:${{ env.PG_CLIENT_MAJOR }}-alpine \
+            postgres:${PG_CLIENT_MAJOR}-alpine \
             sh -ec 'pg_dump "$SOURCE_DATABASE_URL" --format=custom --no-owner --no-acl --schema=django_app --file=/work/django_app.dump'
           test -s "$RUNNER_TEMP/aiven-migration/django_app.dump"
 
@@ -134,7 +134,7 @@ jobs:
             -e AIVEN_DATABASE_URL \
             -e PGSSLMODE=require \
             -v "$RUNNER_TEMP/aiven-migration:/work" \
-            postgres:${{ env.PG_CLIENT_MAJOR }}-alpine \
+            postgres:${PG_CLIENT_MAJOR}-alpine \
             sh -ec 'pg_restore --dbname="$AIVEN_DATABASE_URL" --no-owner --no-acl --exit-on-error /work/django_app.dump'
 
       - name: Verify every table row count
@@ -165,7 +165,7 @@ jobs:
           docker run --rm \
             -e AIVEN_DATABASE_URL \
             -e PGSSLMODE=require \
-            postgres:${{ env.PG_CLIENT_MAJOR }}-alpine \
+            postgres:${PG_CLIENT_MAJOR}-alpine \
             sh -ec 'psql "$AIVEN_DATABASE_URL" -v ON_ERROR_STOP=1 -c "ANALYZE django_app.registry_dog;"'
 
       - name: Remove temporary migration dump
