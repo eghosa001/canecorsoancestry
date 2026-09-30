@@ -23,7 +23,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      CLOUDFLARE_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_HYPERDRIVE_ID }}
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
 
     steps:
@@ -44,7 +44,7 @@ jobs:
       - name: Validate deployment secrets
         run: |
           missing=0
-          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_HYPERDRIVE_ID DJANGO_SECRET_KEY; do
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID SUPABASE_DATABASE_URL DJANGO_SECRET_KEY; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing GitHub Actions secret: $name"
               missing=1
@@ -54,6 +54,49 @@ jobs:
 
       - run: npm install --global wrangler@latest
       - run: uv sync --all-groups
+
+      - name: Validate Supabase Direct connection
+        run: uv run python scripts/validate_supabase_direct_url.py
+
+      - name: Ensure cache-disabled Hyperdrive
+        run: |
+          name="canecorsoancestry-supabase"
+          endpoint="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/hyperdrive/configs?per_page=100"
+
+          response="$(curl -fsS "$endpoint"             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
+
+          hyperdrive_id="$(
+            printf '%s' "$response" |             HD_NAME="$name" python -c '
+import json, os, sys
+payload = json.load(sys.stdin)
+matches = [item["id"] for item in payload.get("result", []) if item.get("name") == os.environ["HD_NAME"]]
+print(matches[0] if matches else "")
+'
+          )"
+
+          if [ -z "$hyperdrive_id" ]; then
+            npx wrangler hyperdrive create "$name"               --connection-string="$SUPABASE_DATABASE_URL"               --caching-disabled
+
+            response="$(curl -fsS "$endpoint"               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
+
+            hyperdrive_id="$(
+              printf '%s' "$response" |               HD_NAME="$name" python -c '
+import json, os, sys
+payload = json.load(sys.stdin)
+matches = [item["id"] for item in payload.get("result", []) if item.get("name") == os.environ["HD_NAME"]]
+print(matches[0] if matches else "")
+'
+            )"
+          else
+            npx wrangler hyperdrive update "$hyperdrive_id"               --connection-string="$SUPABASE_DATABASE_URL"               --caching-disabled
+          fi
+
+          if [ -z "$hyperdrive_id" ]; then
+            echo "::error::Hyperdrive could not be created or discovered."
+            exit 1
+          fi
+
+          echo "CLOUDFLARE_HYPERDRIVE_ID=$hyperdrive_id" >> "$GITHUB_ENV"
 
       - name: Build Django static assets
         env:
