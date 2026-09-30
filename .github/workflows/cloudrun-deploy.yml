@@ -169,6 +169,7 @@ jobs:
           DJANGO_ALLOWED_HOSTS: "canecorsoancestry.com,www.canecorsoancestry.com,.run.app,.workers.dev"
           DJANGO_CSRF_TRUSTED_ORIGINS: "https://canecorsoancestry.com,https://www.canecorsoancestry.com,https://canecorsoancestry-edge.aighewieghosa111.workers.dev,https://*.run.app"
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+          REQUIRE_CLOUDFLARE_EDGE: "1"
           SITE_URL: "https://canecorsoancestry.com"
           R2_GATEWAY_URL: "$EDGE_WORKER_URL"
           MEDIA_EDGE_BASE_URL: "$EDGE_WORKER_URL"
@@ -271,6 +272,17 @@ jobs:
           echo "::error::Cloudflare edge health check failed."
           exit 1
 
+      - name: Verify Cloud Run origin gate
+        shell: bash
+        run: |
+          status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/origin-gate.txt -w '%{http_code}' "$CLOUD_RUN_ORIGIN/" || true)"
+          if [ "$status" != "403" ]; then
+            echo "::error::Direct Cloud Run traffic was not blocked; received HTTP $status."
+            cat /tmp/origin-gate.txt 2>/dev/null || true
+            exit 1
+          fi
+          echo "Direct Cloud Run application traffic is correctly gated behind Cloudflare."
+
       - name: Keep Secret Manager free-tier footprint small
         if: success()
         shell: bash
@@ -291,4 +303,4 @@ jobs:
 
       - name: Remove temporary secret files
         if: always()
-        run: rm -f /tmp/edge-secrets.json /tmp/cloudrun-health.json /tmp/edge-health.json /tmp/cloudrun-env.yaml
+        run: rm -f /tmp/edge-secrets.json /tmp/cloudrun-health.json /tmp/edge-health.json /tmp/cloudrun-env.yaml /tmp/origin-gate.txt
