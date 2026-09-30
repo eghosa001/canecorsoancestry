@@ -50,6 +50,10 @@ def validate_document_upload(upload):
         raise ValidationError("The uploaded evidence is not a valid PDF, JPEG, PNG or WebP file.")
 
 
+class VerificationResendForm(forms.Form):
+    email = forms.EmailField()
+
+
 class MemberSignUpForm(UserCreationForm):
     email = forms.EmailField(required=True)
 
