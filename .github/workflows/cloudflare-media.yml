@@ -130,9 +130,13 @@ jobs:
             --secrets-file /tmp/edge-secrets.json
 
       - name: Attach production Worker domains
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'production' || contains(github.event.head_commit.message, '[production-cutover]') }}
         shell: bash
         run: |
+          if [ "$EDGE_TARGET" != "production" ]; then
+            echo "Skipping production domain attachment for preview deployment."
+            exit 0
+          fi
+
           set -euo pipefail
 
           attach_domain() {
@@ -152,8 +156,7 @@ jobs:
 
             success="$(printf '%s' "$response" | jq -r '.success // false')"
             if [ "$success" != "true" ]; then
-              printf '%s
-' "$response"
+              printf '%s\n' "$response"
               echo "::error::Failed to attach Worker domain: $hostname"
               exit 1
             fi
