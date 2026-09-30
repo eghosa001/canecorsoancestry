@@ -1,4 +1,26 @@
+import re
+import unicodedata
+
 from django.db import migrations, models
+
+
+def normalize_name(value):
+    normalized = unicodedata.normalize("NFKD", value or "").casefold()
+    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", "", normalized)
+
+
+def backfill_normalized_names(apps, schema_editor):
+    Dog = apps.get_model("registry", "Dog")
+    batch = []
+    for dog in Dog.objects.only("id", "name").iterator(chunk_size=1000):
+        dog.normalized_name = normalize_name(dog.name)
+        batch.append(dog)
+        if len(batch) >= 1000:
+            Dog.objects.bulk_update(batch, ["normalized_name"], batch_size=1000)
+            batch.clear()
+    if batch:
+        Dog.objects.bulk_update(batch, ["normalized_name"], batch_size=1000)
 
 
 def create_postgres_search_indexes(apps, schema_editor):
@@ -23,6 +45,20 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.AddField(
+            model_name="dog",
+            name="normalized_name",
+            field=models.CharField(
+                blank=True,
+                db_index=True,
+                editable=False,
+                max_length=220,
+            ),
+        ),
+        migrations.RunPython(
+            backfill_normalized_names,
+            migrations.RunPython.noop,
+        ),
         migrations.AddIndex(
             model_name="dog",
             index=models.Index(
