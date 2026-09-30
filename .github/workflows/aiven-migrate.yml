@@ -54,6 +54,35 @@ jobs:
           echo "::add-mask::$source_url"
           echo "SOURCE_DATABASE_URL=$source_url" >> "$GITHUB_ENV"
 
+      - name: Check PostgreSQL version compatibility
+        shell: bash
+        run: |
+          version_info="$(python - <<'PY'
+          import os
+          import psycopg
+
+          def major(url):
+              with psycopg.connect(url, sslmode="require") as connection:
+                  with connection.cursor() as cursor:
+                      cursor.execute("SHOW server_version_num")
+                      return int(cursor.fetchone()[0]) // 10000
+
+          source_major = major(os.environ["SOURCE_DATABASE_URL"])
+          target_major = major(os.environ["AIVEN_DATABASE_URL"])
+          if target_major < source_major:
+              raise SystemExit(
+                  f"Aiven PostgreSQL {target_major} is older than Supabase PostgreSQL "
+                  f"{source_major}. Create an Aiven service on PostgreSQL {source_major} "
+                  "or newer."
+              )
+          print(f"{source_major} {target_major}")
+          PY
+          )"
+          read -r source_major target_major <<< "$version_info"
+          echo "Source PostgreSQL major: $source_major"
+          echo "Target PostgreSQL major: $target_major"
+          echo "PG_CLIENT_MAJOR=$target_major" >> "$GITHUB_ENV"
+
       - name: Confirm source migrations are current
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production
@@ -94,7 +123,7 @@ jobs:
             -e SOURCE_DATABASE_URL \
             -e PGSSLMODE=require \
             -v "$RUNNER_TEMP/aiven-migration:/work" \
-            postgres:17-alpine \
+            postgres:${{ env.PG_CLIENT_MAJOR }}-alpine \
             sh -ec 'pg_dump "$SOURCE_DATABASE_URL" --format=custom --no-owner --no-acl --schema=django_app --file=/work/django_app.dump'
           test -s "$RUNNER_TEMP/aiven-migration/django_app.dump"
 
@@ -105,7 +134,7 @@ jobs:
             -e AIVEN_DATABASE_URL \
             -e PGSSLMODE=require \
             -v "$RUNNER_TEMP/aiven-migration:/work" \
-            postgres:17-alpine \
+            postgres:${{ env.PG_CLIENT_MAJOR }}-alpine \
             sh -ec 'pg_restore --dbname="$AIVEN_DATABASE_URL" --no-owner --no-acl --exit-on-error /work/django_app.dump'
 
       - name: Verify every table row count
@@ -136,7 +165,7 @@ jobs:
           docker run --rm \
             -e AIVEN_DATABASE_URL \
             -e PGSSLMODE=require \
-            postgres:17-alpine \
+            postgres:${{ env.PG_CLIENT_MAJOR }}-alpine \
             sh -ec 'psql "$AIVEN_DATABASE_URL" -v ON_ERROR_STOP=1 -c "ANALYZE django_app.registry_dog;"'
 
       - name: Remove temporary migration dump
