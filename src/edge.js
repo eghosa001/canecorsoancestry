@@ -182,12 +182,12 @@ async function handleSignedMedia(request, env, url) {
   });
 }
 
-async function proxyToCloudRun(request, env, url) {
-  if (!env.CLOUD_RUN_ORIGIN) {
-    return new Response("Cloud Run origin is not configured.", { status: 503 });
+async function proxyToApp(request, env, url) {
+  if (!env.APP_ORIGIN) {
+    return new Response("Application origin is not configured.", { status: 503 });
   }
 
-  const target = new URL(url.pathname + url.search, env.CLOUD_RUN_ORIGIN);
+  const target = new URL(url.pathname + url.search, env.APP_ORIGIN);
   const headers = new Headers(request.headers);
   headers.delete("host");
   headers.set("x-forwarded-host", url.host);
@@ -195,7 +195,7 @@ async function proxyToCloudRun(request, env, url) {
   headers.set("x-cane-edge", "cloudflare");
   headers.set(
     "x-cane-edge-auth",
-    await hmacHex(env.DJANGO_SECRET_KEY, "canecorsoancestry-cloud-run-edge"),
+    await hmacHex(env.DJANGO_SECRET_KEY, "canecorsoancestry-app-edge"),
   );
 
   return fetch(
@@ -229,6 +229,6 @@ export default {
       return handleSignedMedia(request, env, url);
     }
 
-    return proxyToCloudRun(request, env, url);
+    return proxyToApp(request, env, url);
   },
 };

@@ -1,10 +1,6 @@
 name: Sync Bellissimo media to R2
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/sync-bellissimo-media.yml"
   workflow_dispatch:
 
 permissions:
@@ -15,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      AIVEN_DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
 
     steps:
@@ -50,7 +46,7 @@ jobs:
         shell: bash
         run: |
           missing=0
-          for name in CLOUDFLARE_API_TOKEN SUPABASE_DATABASE_URL DJANGO_SECRET_KEY; do
+          for name in CLOUDFLARE_API_TOKEN AIVEN_DATABASE_URL DJANGO_SECRET_KEY; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing GitHub Actions secret: $name"
               missing=1
@@ -130,44 +126,40 @@ jobs:
           fi
           echo "Verified $count R2 media objects byte-for-byte."
 
-      - name: Discover Supabase IPv4 session pooler
-        shell: bash
-        run: |
-          session_url="$(python scripts/discover_supabase_session_pooler.py)"
-          echo "::add-mask::$session_url"
-          echo "SUPABASE_MIGRATION_URL=$session_url" >> "$GITHUB_ENV"
-
       - name: Dry-run media database import
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
+          DJANGO_DB_EXTRA_SCHEMAS: public
           DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
           DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
-        run: DATABASE_URL="$SUPABASE_MIGRATION_URL" python manage.py import_bellissimo_media --dry-run
+        run: DATABASE_URL="$AIVEN_DATABASE_URL" python manage.py import_bellissimo_media --dry-run
 
       - name: Attach R2 media to canonical dogs
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
+          DJANGO_DB_EXTRA_SCHEMAS: public
           DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
           DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
-        run: DATABASE_URL="$SUPABASE_MIGRATION_URL" python manage.py import_bellissimo_media
+        run: DATABASE_URL="$AIVEN_DATABASE_URL" python manage.py import_bellissimo_media
 
       - name: Verify DogImage rows
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
+          DJANGO_DB_EXTRA_SCHEMAS: public
           DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
           DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         shell: bash
         run: |
-          DATABASE_URL="$SUPABASE_MIGRATION_URL" python manage.py shell -c "
+          DATABASE_URL="$AIVEN_DATABASE_URL" python manage.py shell -c "
           from registry.models import DogImage
           qs = DogImage.objects.filter(image__startswith='dogs/bellissimo/')
           primary = qs.filter(is_primary=True)

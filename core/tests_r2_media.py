@@ -9,9 +9,9 @@ from registry.models import Dog, DogImage
 @override_settings(
     MEDIA_EDGE_BASE_URL="https://edge.example.workers.dev",
     MEDIA_EDGE_URL_TTL=300,
-    SECRET_KEY="cloud-run-media-test-secret",
+    SECRET_KEY="r2-media-test-secret",
 )
-class CloudRunMediaDeliveryTests(TestCase):
+class R2MediaDeliveryTests(TestCase):
     def setUp(self):
         self.dog = Dog.objects.create(
             name="Public Media Dog",
@@ -39,7 +39,7 @@ class CloudRunMediaDeliveryTests(TestCase):
         self.assertEqual(
             signature,
             media_signature(
-                "cloud-run-media-test-secret",
+                "r2-media-test-secret",
                 self.path,
                 int(expires),
             ),

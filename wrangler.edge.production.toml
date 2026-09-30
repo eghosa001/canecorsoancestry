@@ -1,5 +1,5 @@
 name = "canecorsoancestry-edge"
-main = "src/cloudrun-edge.js"
+main = "src/edge.js"
 compatibility_date = "2026-09-30"
 workers_dev = true
 

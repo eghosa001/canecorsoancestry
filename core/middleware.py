@@ -8,6 +8,7 @@ from django.http import HttpResponseForbidden
 from django.utils.cache import patch_cache_control
 
 PRIVATE_PREFIXES = ("/member/", "/accounts/", "/admin/", "/dashboard/")
+EDGE_AUTH_MESSAGE = b"canecorsoancestry-app-edge"
 
 
 class RequestSecurityMiddleware:
@@ -32,15 +33,15 @@ class RequestSecurityMiddleware:
         return response
 
 
-class CloudRunEdgeMiddleware:
-    """Reject direct Cloud Run traffic when the Cloudflare edge gate is enabled."""
+class CloudflareEdgeMiddleware:
+    """Reject direct app-host traffic when the Cloudflare edge gate is enabled."""
 
     def __init__(self, get_response):
         self.get_response = get_response
         self.enabled = os.getenv("REQUIRE_CLOUDFLARE_EDGE", "0") == "1"
         self.expected = hmac.new(
             settings.SECRET_KEY.encode("utf-8"),
-            b"canecorsoancestry-cloud-run-edge",
+            EDGE_AUTH_MESSAGE,
             hashlib.sha256,
         ).hexdigest()
 
@@ -55,3 +56,4 @@ class CloudRunEdgeMiddleware:
         ):
             return HttpResponseForbidden("Cloudflare edge authorization required.")
         return self.get_response(request)
+
