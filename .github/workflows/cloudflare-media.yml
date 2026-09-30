@@ -1,52 +1,36 @@
-name: Cloudflare edge and R2 gateway
+name: Cloudflare R2 media gateway
 
 on:
   push:
     branches: [main]
     paths:
-      - "src/edge.js"
-      - "wrangler.edge.preview.toml"
-      - "scripts/build_cloudflare_assets.py"
-      - "core/static/**"
-      - "templates/**"
-      - "package.json"
+      - "src/r2-media.js"
+      - "wrangler.r2.toml"
       - ".github/workflows/cloudflare-media.yml"
   workflow_dispatch:
-    inputs:
-      target:
-        description: Edge deployment target
-        required: true
-        default: preview
-        type: choice
-        options:
-          - preview
-          - production
 
 permissions:
   contents: read
 
+concurrency:
+  group: cloudflare-r2-media
+  cancel-in-progress: true
+
 jobs:
-  deploy-edge:
+  deploy-r2:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 19a03bec57c0277e01e1e70e241576af
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-      RENDER_ORIGIN: ${{ vars.RENDER_ORIGIN || 'https://canecorsoancestry.onrender.com' }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-          cache: pip
-
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-
-      - run: pip install -r requirements.txt
-      - run: npm install
 
       - name: Validate required secrets
         shell: bash
@@ -60,213 +44,43 @@ jobs:
           done
           exit "$missing"
 
-      - name: Choose deployment target
-        shell: bash
-        run: |
-          production_requested=0
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.target }}" = "production" ]; then
-            production_requested=1
-          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ contains(github.event.head_commit.message, '[production-cutover]') }}" = "true" ]; then
-            production_requested=1
-          fi
-
-          if [ "$production_requested" = "1" ]; then
-            if [ -z "$RENDER_ORIGIN" ]; then
-              echo "::error::A Render origin is required for production."
-              exit 1
-            fi
-            case "$RENDER_ORIGIN" in
-              https://*.onrender.com) ;;
-              *)
-                echo "::error::RENDER_ORIGIN must be the HTTPS Render origin, for example https://canecorsoancestry.onrender.com"
-                exit 1
-                ;;
-            esac
-            echo "EDGE_CONFIG=wrangler.edge.production.toml" >> "$GITHUB_ENV"
-            echo "APP_ORIGIN=$RENDER_ORIGIN" >> "$GITHUB_ENV"
-            echo "EDGE_VERIFY_URL=https://canecorsoancestry.com/healthz/" >> "$GITHUB_ENV"
-            echo "EDGE_TARGET=production" >> "$GITHUB_ENV"
-          else
-            echo "EDGE_CONFIG=wrangler.edge.preview.toml" >> "$GITHUB_ENV"
-            echo "APP_ORIGIN=${RENDER_ORIGIN:-https://example.invalid}" >> "$GITHUB_ENV"
-            echo "EDGE_VERIFY_URL=https://canecorsoancestry-edge-preview.aighewieghosa111.workers.dev/" >> "$GITHUB_ENV"
-            echo "EDGE_TARGET=preview" >> "$GITHUB_ENV"
-          fi
-
-      - name: Discover Cloudflare account
-        shell: bash
-        run: |
-          response="$(curl -fsS "https://api.cloudflare.com/client/v4/accounts?per_page=50" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
-          account_id="$(
-            printf '%s' "$response" |
-              python scripts/find_cloudflare_account.py
-          )"
-          echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
-
-      - name: Ensure Cloudflare production zone is active
-        shell: bash
-        run: |
-          if [ "$EDGE_TARGET" != "production" ]; then
-            echo "Skipping zone bootstrap for preview deployment."
-            exit 0
-          fi
-
-          set -euo pipefail
-
-          lookup_zone() {
-            curl --silent --show-error               --url "https://api.cloudflare.com/client/v4/zones?name=canecorsoancestry.com&account.id=$CLOUDFLARE_ACCOUNT_ID"               --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               --header "Accept: application/json"
-          }
-
-          response="$(lookup_zone)"
-          success="$(printf '%s' "$response" | jq -r '.success // false')"
-          count="$(printf '%s' "$response" | jq -r '.result | if type=="array" then length else 0 end')"
-
-          if [ "$success" != "true" ]; then
-            printf '%s\n' "$response" | jq -r '.errors[]? | "Cloudflare zone lookup error \(.code): \(.message)"'
-            exit 1
-          fi
-
-          if [ "$count" -eq 0 ]; then
-            echo "Cloudflare zone is missing; creating canecorsoancestry.com in the selected account."
-            body="$(jq -n               --arg account_id "$CLOUDFLARE_ACCOUNT_ID"               '{account:{id:$account_id},name:"canecorsoancestry.com",type:"full"}')"
-            response="$(curl --silent --show-error               --request POST               --url "https://api.cloudflare.com/client/v4/zones"               --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               --header "Accept: application/json"               --header "Content-Type: application/json"               --data "$body")"
-
-            success="$(printf '%s' "$response" | jq -r '.success // false')"
-            if [ "$success" != "true" ]; then
-              printf '%s\n' "$response" | jq -r '.errors[]? | "Cloudflare zone creation error \(.code): \(.message)"'
-              echo "::error::Unable to create the Cloudflare zone. The API token needs Zone DNS Edit or Zone Zone Edit."
-              exit 1
-            fi
-          else
-            response="$(printf '%s' "$response" | jq '{success:true,result:.result[0]}')"
-          fi
-
-          zone_id="$(printf '%s' "$response" | jq -r '.result.id // empty')"
-          zone_status="$(printf '%s' "$response" | jq -r '.result.status // empty')"
-          mapfile -t nameservers < <(printf '%s' "$response" | jq -r '.result.name_servers[]?')
-
-          if [ -z "$zone_id" ]; then
-            echo "::error::Cloudflare did not return a zone ID."
-            exit 1
-          fi
-
-          echo "CLOUDFLARE_ZONE_ID=$zone_id" >> "$GITHUB_ENV"
-          echo "Cloudflare zone status: $zone_status"
-          if [ "${#nameservers[@]}" -gt 0 ]; then
-            printf 'Cloudflare assigned nameserver: %s\n' "${nameservers[@]}"
-          fi
-
-          if [ "$zone_status" != "active" ]; then
-            echo "::error::Cloudflare zone is $zone_status. Update the domain registrar to the assigned Cloudflare nameservers, then rerun this failed job."
-            exit 1
-          fi
-
-          echo "Cloudflare production zone is active."
-
-      - name: Build static asset bundle
-        env:
-          DJANGO_SETTINGS_MODULE: config.settings.development
-        run: |
-          python manage.py collectstatic --noinput
-          python scripts/build_cloudflare_assets.py
-
       - name: Ensure R2 bucket exists
-        shell: bash
         run: |
-          npx wrangler r2 bucket info canecorsoancestry-media >/dev/null 2>&1 || \
-            npx wrangler r2 bucket create canecorsoancestry-media
+          npx --yes wrangler@4 r2 bucket info canecorsoancestry-media >/dev/null 2>&1 ||             npx --yes wrangler@4 r2 bucket create canecorsoancestry-media
 
       - name: Build Worker secret file
         run: |
-          python -c 'import json, os; open("/tmp/edge-secrets.json", "w", encoding="utf-8").write(json.dumps({"DJANGO_SECRET_KEY": os.environ["DJANGO_SECRET_KEY"]}))'
+          python -c 'import json, os; open("/tmp/r2-secrets.json", "w", encoding="utf-8").write(json.dumps({"DJANGO_SECRET_KEY": os.environ["DJANGO_SECRET_KEY"]}))'
 
-      - name: Deploy Cloudflare edge
+      - name: Deploy R2 media gateway
+        run: |
+          npx --yes wrangler@4 deploy             --config wrangler.r2.toml             --secrets-file /tmp/r2-secrets.json
+
+      - name: Verify R2 media gateway
         shell: bash
         run: |
-          npx wrangler deploy \
-            --config "$EDGE_CONFIG" \
-            --var "APP_ORIGIN:$APP_ORIGIN" \
-            --secrets-file /tmp/edge-secrets.json
+          base="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
 
-      - name: Attach production Worker domains
-        shell: bash
-        run: |
-          if [ "$EDGE_TARGET" != "production" ]; then
-            echo "Skipping production domain attachment for preview deployment."
-            exit 0
-          fi
-
-          set -euo pipefail
-
-          attach_domain() {
-            hostname="$1"
-            body="$(jq -n \
-              --arg hostname "$hostname" \
-              --arg service "canecorsoancestry-edge" \
-              --arg zone_name "canecorsoancestry.com" \
-              --arg zone_id "$CLOUDFLARE_ZONE_ID" \
-              '{hostname:$hostname,service:$service,zone_name:$zone_name,zone_id:$zone_id}')"
-
-            response="$(curl --silent --show-error --fail-with-body \
-              --request PUT \
-              --url "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/domains" \
-              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              --header "Content-Type: application/json" \
-              --data "$body")"
-
-            success="$(printf '%s' "$response" | jq -r '.success // false')"
-            if [ "$success" != "true" ]; then
-              printf '%s\n' "$response"
-              echo "::error::Failed to attach Worker domain: $hostname"
+          for attempt in $(seq 1 12); do
+            status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/r2-health.json -w '%{http_code}' "$base/healthz/" || true)"
+            if [ "$status" = "200" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/r2-health.json; then
+              break
+            fi
+            if [ "$attempt" = "12" ]; then
+              cat /tmp/r2-health.json 2>/dev/null || true
               exit 1
             fi
+            sleep 5
+          done
 
-            printf '%s' "$response" | jq -r '.result | "Attached \(.hostname) to \(.service) in zone \(.zone_name)"'
-          }
-
-          attach_domain canecorsoancestry.com
-          attach_domain www.canecorsoancestry.com
-
-      - name: Verify edge
-        shell: bash
-        run: |
-          if [ "$EDGE_TARGET" = "production" ]; then
-            for attempt in $(seq 1 12); do
-              status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/edge-health.json -w '%{http_code}' "$EDGE_VERIFY_URL" || true)"
-              if [ "$status" = "200" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/edge-health.json; then
-                echo "Production Cloudflare edge health check passed."
-                exit 0
-              fi
-              echo "Edge health attempt $attempt returned HTTP $status."
-              sleep 5
-            done
-            cat /tmp/edge-health.json 2>/dev/null || true
+          unsigned_status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/r2-denied.txt -w '%{http_code}' "$base/_r2/unauthorized-check" || true)"
+          if [ "$unsigned_status" != "403" ]; then
+            echo "::error::Unsigned R2 gateway request was not rejected; HTTP $unsigned_status"
             exit 1
           fi
 
-          status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/edge-preview.txt -w '%{http_code}' "$EDGE_VERIFY_URL" || true)"
-          if [ "$status" = "000" ]; then
-            echo "::error::Cloudflare preview Worker was not reachable."
-            exit 1
-          fi
-          echo "Cloudflare preview Worker reachable (HTTP $status)."
-
-      - name: Verify Render origin gate
-        shell: bash
-        run: |
-          if [ "$EDGE_TARGET" != "production" ]; then
-            echo "Skipping Render origin-gate verification for preview deployment."
-            exit 0
-          fi
-          status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/origin-gate.txt -w '%{http_code}' "$RENDER_ORIGIN/" || true)"
-          if [ "$status" != "403" ]; then
-            echo "::error::Direct Render application traffic was not blocked; received HTTP $status."
-            cat /tmp/origin-gate.txt 2>/dev/null || true
-            exit 1
-          fi
-          echo "Direct Render application traffic is correctly gated behind Cloudflare."
+          echo "R2 media gateway is healthy and private."
 
       - name: Clean temporary files
         if: always()
-        run: rm -f /tmp/edge-secrets.json /tmp/edge-health.json /tmp/edge-preview.txt /tmp/origin-gate.txt
+        run: rm -f /tmp/r2-secrets.json /tmp/r2-health.json /tmp/r2-denied.txt
