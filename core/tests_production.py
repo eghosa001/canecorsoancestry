@@ -32,7 +32,11 @@ class ProductionSurfaceTests(TestCase):
     def test_sitemap_excludes_private_dogs(self):
         Dog.objects.create(name="Public Dog", slug="public-dog", is_public=True)
         Dog.objects.create(name="Private Dog", slug="private-dog", is_public=False)
-        body = self.client.get(reverse("sitemap")).content.decode()
+        index_body = self.client.get(reverse("sitemap")).content.decode()
+        self.assertIn("sitemap-dogs.xml", index_body)
+        body = self.client.get(
+            reverse("sitemap-section", kwargs={"section": "dogs"})
+        ).content.decode()
         self.assertIn("public-dog", body)
         self.assertNotIn("private-dog", body)
 
