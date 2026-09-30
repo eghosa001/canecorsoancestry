@@ -34,6 +34,25 @@ button, input, select { font: inherit; }
 button, select { cursor: pointer; }
 ::selection { background: var(--gold); color: #0a0b0a; }
 
+:focus-visible {
+  outline: 3px solid var(--gold-soft);
+  outline-offset: 3px;
+}
+.skip-link {
+  position: fixed;
+  z-index: 1000;
+  left: 16px;
+  top: 12px;
+  transform: translateY(-180%);
+  padding: 10px 14px;
+  border: 1px solid var(--gold);
+  background: #070908;
+  color: var(--gold-soft);
+  font-weight: 800;
+}
+.skip-link:focus { transform: translateY(0); }
+main:focus { outline: none; }
+
 .site-header {
   position: sticky;
   top: 0;
@@ -1387,4 +1406,16 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   .brand-mark { width: 46px; height: 46px; flex-basis: 46px; }
   .brand-small { font-size: .62rem; }
   .brand strong { font-size: .96rem; }
+}
+
+
+/* Accessibility and motion safety */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
