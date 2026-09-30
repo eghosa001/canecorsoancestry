@@ -104,6 +104,66 @@ jobs:
           )"
           echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
 
+      - name: Ensure Cloudflare production zone is active
+        shell: bash
+        run: |
+          if [ "$EDGE_TARGET" != "production" ]; then
+            echo "Skipping zone bootstrap for preview deployment."
+            exit 0
+          fi
+
+          set -euo pipefail
+
+          lookup_zone() {
+            curl --silent --show-error               --url "https://api.cloudflare.com/client/v4/zones?name=canecorsoancestry.com&account.id=$CLOUDFLARE_ACCOUNT_ID"               --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               --header "Accept: application/json"
+          }
+
+          response="$(lookup_zone)"
+          success="$(printf '%s' "$response" | jq -r '.success // false')"
+          count="$(printf '%s' "$response" | jq -r '.result | if type=="array" then length else 0 end')"
+
+          if [ "$success" != "true" ]; then
+            printf '%s\n' "$response" | jq -r '.errors[]? | "Cloudflare zone lookup error \(.code): \(.message)"'
+            exit 1
+          fi
+
+          if [ "$count" -eq 0 ]; then
+            echo "Cloudflare zone is missing; creating canecorsoancestry.com in the selected account."
+            body="$(jq -n               --arg account_id "$CLOUDFLARE_ACCOUNT_ID"               '{account:{id:$account_id},name:"canecorsoancestry.com",type:"full"}')"
+            response="$(curl --silent --show-error               --request POST               --url "https://api.cloudflare.com/client/v4/zones"               --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               --header "Accept: application/json"               --header "Content-Type: application/json"               --data "$body")"
+
+            success="$(printf '%s' "$response" | jq -r '.success // false')"
+            if [ "$success" != "true" ]; then
+              printf '%s\n' "$response" | jq -r '.errors[]? | "Cloudflare zone creation error \(.code): \(.message)"'
+              echo "::error::Unable to create the Cloudflare zone. The API token needs Zone DNS Edit or Zone Zone Edit."
+              exit 1
+            fi
+          else
+            response="$(printf '%s' "$response" | jq '{success:true,result:.result[0]}')"
+          fi
+
+          zone_id="$(printf '%s' "$response" | jq -r '.result.id // empty')"
+          zone_status="$(printf '%s' "$response" | jq -r '.result.status // empty')"
+          mapfile -t nameservers < <(printf '%s' "$response" | jq -r '.result.name_servers[]?')
+
+          if [ -z "$zone_id" ]; then
+            echo "::error::Cloudflare did not return a zone ID."
+            exit 1
+          fi
+
+          echo "CLOUDFLARE_ZONE_ID=$zone_id" >> "$GITHUB_ENV"
+          echo "Cloudflare zone status: $zone_status"
+          if [ "${#nameservers[@]}" -gt 0 ]; then
+            printf 'Cloudflare assigned nameserver: %s\n' "${nameservers[@]}"
+          fi
+
+          if [ "$zone_status" != "active" ]; then
+            echo "::error::Cloudflare zone is $zone_status. Update the domain registrar to the assigned Cloudflare nameservers, then rerun this failed job."
+            exit 1
+          fi
+
+          echo "Cloudflare production zone is active."
+
       - name: Build static asset bundle
         env:
           DJANGO_SETTINGS_MODULE: config.settings.development
@@ -145,7 +205,8 @@ jobs:
               --arg hostname "$hostname" \
               --arg service "canecorsoancestry-edge" \
               --arg zone_name "canecorsoancestry.com" \
-              '{hostname:$hostname,service:$service,zone_name:$zone_name}')"
+              --arg zone_id "$CLOUDFLARE_ZONE_ID" \
+              '{hostname:$hostname,service:$service,zone_name:$zone_name,zone_id:$zone_id}')"
 
             response="$(curl --silent --show-error --fail-with-body \
               --request PUT \
