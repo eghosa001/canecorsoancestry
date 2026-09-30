@@ -65,6 +65,9 @@ jobs:
           fi
           uv run python scripts/render_wrangler.py "$template" wrangler.generated.toml
 
+      - name: Remove legacy Railway dependency manifest from Worker bundle
+        run: rm requirements.txt
+
       - name: Ensure media bucket exists
         run: |
           uv run pywrangler r2 bucket create canecorsoancestry-media --config wrangler.generated.toml ||             uv run pywrangler r2 bucket list --config wrangler.generated.toml
