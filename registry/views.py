@@ -5,7 +5,7 @@ from django.urls import reverse
 
 from core.seo import json_ld
 
-from pedigrees.services import offspring_for, sibling_relationships
+from pedigrees.services import direct_relative_health, mate_relationships, offspring_for, sibling_relationships
 
 from .models import (
     Dog,
@@ -151,6 +151,8 @@ def dog_detail(request, slug):
             "dog": dog,
             "siblings": sibling_relationships(dog),
             "offspring": offspring_for(dog),
+            "mates": mate_relationships(dog),
+            "relative_health": direct_relative_health(dog),
             "can_contribute": can_contribute_to_dog(request.user, dog),
             "structured_data": json_ld(structured_data),
         },
