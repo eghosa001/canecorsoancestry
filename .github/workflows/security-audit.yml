@@ -1,0 +1,36 @@
+name: Security audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt pip-audit
+      - name: Audit Python dependencies
+        run: pip-audit -r requirements.txt --strict
+      - name: Django production security check
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_SECRET_KEY: ci-security-check-secret-key-with-sufficient-entropy
+          DATABASE_URL: sqlite:///security-check.sqlite3
+          DJANGO_ALLOWED_HOSTS: testserver
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver
+          SITE_URL: https://testserver
+        run: python manage.py check --deploy
