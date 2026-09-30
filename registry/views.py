@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, F, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -114,6 +114,9 @@ def dog_detail(request, slug):
         if old and old.dog.is_public:
             return redirect("registry:dog-detail", slug=old.dog.slug, permanent=True)
         return get_object_or_404(dogs, slug=slug)
+
+    if request.GET.get("source") == "search":
+        Dog.objects.filter(pk=dog.pk).update(search_count=F("search_count") + 1)
 
     image_url = dog.display_images[0].image.url if dog.display_images else None
     structured_data = {
