@@ -149,6 +149,25 @@ jobs:
       - name: Deploy Django Worker
         run: npx wrangler deploy --secrets-file /tmp/worker-secrets.json
 
+      - name: Verify preview health
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'preview' }}
+        shell: bash
+        run: |
+          url="https://canecorsoancestry.aighewieghosa111.workers.dev"
+          for attempt in 1 2 3 4 5 6; do
+            status="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$url/healthz/" || true)"
+            if [ "$status" = "200" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/health.json; then
+              echo "Cloudflare preview health check passed."
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "Preview health attempt $attempt returned HTTP $status."
+            cat /tmp/health.json 2>/dev/null || true
+            sleep 5
+          done
+          echo "::error::Cloudflare preview health check failed."
+          exit 1
+
       - name: Remove temporary Worker secrets file
         if: always()
-        run: rm -f /tmp/worker-secrets.json
+        run: rm -f /tmp/worker-secrets.json /tmp/health.json
