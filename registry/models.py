@@ -71,7 +71,7 @@ class Dog(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=220, db_index=True)
     normalized_name = models.CharField(
-        max_length=220, blank=True, db_index=True, editable=False
+        max_length=220, blank=True, default="", db_index=True, editable=False
     )
     slug = models.SlugField(max_length=230, unique=True)
     sex = models.CharField(max_length=10, choices=Sex.choices, default=Sex.UNKNOWN)
