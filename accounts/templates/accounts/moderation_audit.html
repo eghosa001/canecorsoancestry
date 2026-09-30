@@ -14,18 +14,18 @@
   <form class="moderation-filters audit-filters" method="get">
     <div class="filter-search">
       <label for="audit-q">Search</label>
-      <input id="audit-q" name="q" value="{{ filters.q }}" placeholder="Dog, kennel, litter, moderator or note">
+      <input id="audit-q" name="q" aria-label="Search audit history" value="{{ filters.q }}" placeholder="Dog, kennel, litter, moderator or note">
     </div>
     <div>
       <label for="audit-action">Action</label>
-      <select id="audit-action" name="action">
+      <select id="audit-action" name="action" aria-label="Filter audit history by action">
         <option value="">All actions</option>
         {% for value,label in actions %}<option value="{{ value }}" {% if filters.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
       </select>
     </div>
     <div>
       <label for="audit-actor">Moderator/member</label>
-      <input id="audit-actor" name="actor" value="{{ filters.actor }}" placeholder="Username">
+      <input id="audit-actor" name="actor" aria-label="Filter audit history by moderator or member" value="{{ filters.actor }}" placeholder="Username">
     </div>
     <button class="btn btn-gold" type="submit">Search audit</button>
   </form>
