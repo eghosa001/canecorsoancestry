@@ -2,52 +2,44 @@ import os
 
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
-from workers import env
 
 from .base import *  # noqa: F403,F401
 
 DEBUG = False
 
-SECRET_KEY = str(getattr(env, "DJANGO_SECRET_KEY", "") or "")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "").strip()
 if not SECRET_KEY:
-    raise ImproperlyConfigured("DJANGO_SECRET_KEY Worker secret is required.")
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY is required in the Worker request context.")
 
-SITE_URL = str(
-    getattr(env, "SITE_URL", "https://canecorsoancestry.com")
+SITE_URL = os.getenv(
+    "SITE_URL",
+    "https://canecorsoancestry.com",
 ).rstrip("/")
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in str(
-        getattr(
-            env,
-            "DJANGO_ALLOWED_HOSTS",
-            "canecorsoancestry.com,www.canecorsoancestry.com,.workers.dev",
-        )
+    for host in os.getenv(
+        "DJANGO_ALLOWED_HOSTS",
+        "canecorsoancestry.com,www.canecorsoancestry.com,.workers.dev",
     ).split(",")
     if host.strip()
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
-    for origin in str(
-        getattr(
-            env,
-            "DJANGO_CSRF_TRUSTED_ORIGINS",
-            "https://canecorsoancestry.com,https://www.canecorsoancestry.com,https://*.workers.dev",
-        )
+    for origin in os.getenv(
+        "DJANGO_CSRF_TRUSTED_ORIGINS",
+        "https://canecorsoancestry.com,https://www.canecorsoancestry.com,https://*.workers.dev",
     ).split(",")
     if origin.strip()
 ]
 
-hyperdrive = getattr(env, "HYPERDRIVE", None)
-connection_string = (
-    str(getattr(hyperdrive, "connectionString", "") or "")
-    if hyperdrive is not None
-    else ""
-)
+connection_string = os.getenv("CLOUDFLARE_DATABASE_URL", "").strip()
 if not connection_string:
-    raise ImproperlyConfigured("HYPERDRIVE binding is required.")
+    raise ImproperlyConfigured(
+        "CLOUDFLARE_DATABASE_URL must be injected from the HYPERDRIVE binding "
+        "inside the Worker fetch handler."
+    )
 
 DATABASES = {
     "default": dj_database_url.parse(
@@ -63,9 +55,7 @@ DATABASES["default"].setdefault("OPTIONS", {})["options"] = (
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # noqa: F405
 MEDIA_URL = "/media/"
-MEDIA_MIGRATION_ENABLED = (
-    str(getattr(env, "MEDIA_MIGRATION_ENABLED", "0")) == "1"
-)
+MEDIA_MIGRATION_ENABLED = os.getenv("MEDIA_MIGRATION_ENABLED", "0") == "1"
 
 STORAGES = {
     "default": {
@@ -93,10 +83,6 @@ SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 
-# SMTP and the Railway/S3 stack are intentionally disabled in Workers.
-# Member notifications remain available in-app.
 ANCESTRY_EMAIL_NOTIFICATIONS = False
 EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"
-
-# Sentry's synchronous transport is not enabled in the Worker runtime.
 SENTRY_DSN = ""
