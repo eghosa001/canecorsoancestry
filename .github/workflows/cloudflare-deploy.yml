@@ -70,16 +70,22 @@ jobs:
       - name: Validate Supabase Direct connection
         run: uv run python scripts/validate_supabase_direct_url.py
 
+      - name: Discover Supabase IPv4 session pooler
+        shell: bash
+        run: |
+          session_url="$(uv run python scripts/discover_supabase_session_pooler.py)"
+          echo "::add-mask::$session_url"
+          echo "SUPABASE_MIGRATION_URL=$session_url" >> "$GITHUB_ENV"
+
       - name: Apply Django migrations to Supabase
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production
-          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
           DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
           DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
-        run: uv run python manage.py migrate --noinput
+        run: DATABASE_URL="$SUPABASE_MIGRATION_URL" uv run python manage.py migrate --noinput
 
       - name: Ensure cache-disabled Hyperdrive
         shell: bash
