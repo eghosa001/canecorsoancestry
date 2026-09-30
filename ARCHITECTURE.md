@@ -38,11 +38,11 @@ Django tables live in the private application schema:
 
 `django_app`
 
-The PostgreSQL search path is:
+The Aiven production search path is:
 
-`django_app,extensions,public`
+`django_app,public`
 
-`pg_trgm` supports duplicate and fuzzy matching. On Aiven it is installed through the supported extension mechanism and is visible through `public` in the search path.
+The temporary Supabase migration source continues to use `django_app,extensions,public` until cutover. `pg_trgm` supports duplicate and fuzzy matching; on Aiven it is installed in a supported schema reachable through `public`.
 
 Django authentication remains authoritative. No provider-specific database authentication layer is required.
 
