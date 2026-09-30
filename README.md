@@ -10,40 +10,47 @@ The owner requirement is explicit: **this is a pedigree website, not a registry*
 
 ### Owner-approved visual direction
 
-The supplied WhatsApp design mockups are the authoritative visual reference for the project. They are preserved at:
+The supplied WhatsApp design mockups are the authoritative visual reference:
 
 - `docs/design-reference/public-pedigree-reference.jpg`
 - `docs/design-reference/member-dashboard-reference.jpg`
 
-They define the visual baseline for public pages and the owner/member dashboard. Do not redesign away from the supplied black/charcoal, warm ivory and restrained gold language unless the owner explicitly requests it.
-
-### Technology
-
-- Python 3.13 / Django 5.2
-- PostgreSQL
-- Django templates + progressive enhancement/HTMX where appropriate
-- Cloudflare Worker + R2 for edge routing, static assets and private media
-- Render for the Django web service
-- Aiven for the production PostgreSQL database
-- GitHub Actions for CI, migration and deployment checks
-
-External registration numbers may be stored and displayed with their issuing body, but Cane Corso Ancestry does not present itself as the issuing registry.
+Keep the black/charcoal, warm ivory and restrained gold visual language unless the owner explicitly changes the brief.
 
 ## Production stack
 
-The target production path is:
+The production architecture is deliberately limited to three services:
 
-`Cloudflare Worker → Render Django → Aiven PostgreSQL`
+- **Render** — Django application and static files
+- **Aiven PostgreSQL** — canonical relational database
+- **Cloudflare R2** — uploaded dog photos, evidence and documents
 
-Cloudflare R2 stores user-uploaded media and evidence. The Render origin can be protected with an HMAC edge gate so normal application traffic enters through Cloudflare. Supabase remains only as the temporary source database until the verified one-time Aiven migration is complete.
+The application is currently available directly at:
 
-See `docs/PRODUCTION_DEPLOYMENT.md` for the exact setup and cutover procedure.
+`https://canecorsoancestry.onrender.com`
+
+Cloudflare is **not** an application proxy. A tiny Workers endpoint exists only because it provides authenticated access between Django and the private R2 bucket.
+
+There is no active Supabase, Railway, Google Cloud Run, GitHub Pages preview or custom-domain edge dependency in the application runtime.
+
+## Technology
+
+- Python 3.13 / Django 5.2
+- PostgreSQL
+- Django templates
+- Gunicorn
+- WhiteNoise for static files
+- Cloudflare R2 for durable media
+- Playwright for browser regression checks
+- GitHub Actions for focused CI and R2 deployment
+
+External registration numbers may be stored and displayed with their issuing body, but Cane Corso Ancestry does not present itself as the issuing registry.
 
 ## Documentation
 
-- `PROJECT_PLAN.md` — phased product plan
-- `docs/OWNER_REQUIREMENTS.md` — owner requirements and terminology guardrails
-- `ARCHITECTURE.md` — technical architecture
-- `docs/PRODUCTION_DEPLOYMENT.md` — Render/Aiven/Cloudflare setup and migration runbook
-- `SKILL.md` — working rules for future changes
-- `docs/design-reference/` — permanent owner-approved visual references
+- `PROJECT_PLAN.md` — product plan
+- `docs/OWNER_REQUIREMENTS.md` — terminology and owner requirements
+- `ARCHITECTURE.md` — active technical architecture
+- `docs/PRODUCTION_DEPLOYMENT.md` — current deployment/runbook
+- `SKILL.md` — repository working rules
+- `docs/design-reference/` — owner-approved visual references

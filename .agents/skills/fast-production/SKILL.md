@@ -10,6 +10,11 @@ Finish the requested task correctly with the fewest practical reads, tool calls,
 
 Repository-specific security, business, architecture, data, and release rules override this execution overlay.
 
+## Repository infrastructure guardrail
+- Active production providers are Render, Aiven PostgreSQL, and Cloudflare R2 only.
+- The Cloudflare Worker is R2-media-only; it must not proxy the Django application.
+- Do not reintroduce Supabase, Railway, Google Cloud Run, GitHub Pages preview, custom-domain edge routing, generic S3 provider branches, or completed migration scaffolding unless the owner explicitly requests an architecture change.
+
 ## Default execution
 - Classify work as micro, normal, or cross-cutting/high-risk.
 - Inspect the smallest relevant surface and direct dependencies only.

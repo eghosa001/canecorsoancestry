@@ -182,43 +182,12 @@ async function handleSignedMedia(request, env, url) {
   });
 }
 
-async function proxyToApp(request, env, url) {
-  if (!env.APP_ORIGIN) {
-    return new Response("Application origin is not configured.", { status: 503 });
-  }
-
-  const target = new URL(url.pathname + url.search, env.APP_ORIGIN);
-  const headers = new Headers(request.headers);
-  headers.delete("host");
-  headers.set("x-forwarded-host", url.host);
-  headers.set("x-forwarded-proto", url.protocol.replace(":", ""));
-  headers.set("x-cane-edge", "cloudflare");
-  headers.set(
-    "x-cane-edge-auth",
-    await hmacHex(env.DJANGO_SECRET_KEY, "canecorsoancestry-app-edge"),
-  );
-
-  return fetch(
-    new Request(target.toString(), {
-      method: request.method,
-      headers,
-      body:
-        request.method === "GET" || request.method === "HEAD"
-          ? undefined
-          : request.body,
-      redirect: "manual",
-    }),
-  );
-}
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (url.hostname === "www.canecorsoancestry.com") {
-      const target = new URL(request.url);
-      target.hostname = "canecorsoancestry.com";
-      return Response.redirect(target.toString(), 301);
+    if (url.pathname === "/healthz/") {
+      return Response.json({ status: "ok", service: "r2-media" });
     }
 
     if (url.pathname.startsWith("/_r2/")) {
@@ -229,6 +198,6 @@ export default {
       return handleSignedMedia(request, env, url);
     }
 
-    return proxyToApp(request, env, url);
+    return new Response("Not found", { status: 404 });
   },
 };

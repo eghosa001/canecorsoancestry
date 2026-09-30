@@ -1,15 +1,10 @@
 name = "canecorsoancestry-edge"
-main = "src/edge.js"
+main = "src/r2-media.js"
 compatibility_date = "2026-09-30"
 workers_dev = true
 
 [observability]
 enabled = true
-
-[assets]
-directory = "./worker_assets"
-binding = "ASSETS"
-run_worker_first = ["/*", "!/static/*"]
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"

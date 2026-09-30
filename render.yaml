@@ -32,13 +32,11 @@ services:
       - key: DJANGO_DB_EXTRA_SCHEMAS
         value: public
       - key: DJANGO_ALLOWED_HOSTS
-        value: .onrender.com,canecorsoancestry.com,www.canecorsoancestry.com
+        value: .onrender.com
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
-        value: https://canecorsoancestry.onrender.com,https://canecorsoancestry.com,https://www.canecorsoancestry.com
+        value: https://canecorsoancestry.onrender.com
       - key: SITE_URL
         value: https://canecorsoancestry.onrender.com
-      - key: REQUIRE_CLOUDFLARE_EDGE
-        value: "0"
       - key: R2_GATEWAY_URL
         value: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
       - key: MEDIA_EDGE_BASE_URL

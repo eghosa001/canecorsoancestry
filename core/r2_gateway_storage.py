@@ -23,7 +23,7 @@ class CloudflareR2GatewayStorage(Storage):
         ).rstrip("/")
         self.timeout = timeout
         if not self.base_url:
-            raise RuntimeError("R2_GATEWAY_URL is required for Cloud Run storage.")
+            raise RuntimeError("R2_GATEWAY_URL is required for R2 media storage.")
 
     def _url(self, name):
         encoded = urllib.parse.quote(name, safe="/")

@@ -1,4 +1,4 @@
-name: Render and Cloudflare build check
+name: Render and R2 build check
 
 on:
   pull_request:
@@ -6,17 +6,14 @@ on:
       - "render.yaml"
       - "config/settings/render.py"
       - "config/settings/production.py"
-      - "core/middleware.py"
       - "core/r2_gateway_storage.py"
       - "core/cloudflare_media.py"
       - "core/media_views.py"
-      - "src/edge.js"
-      - "wrangler.edge.*.toml"
-      - "package.json"
+      - "src/r2-media.js"
+      - "wrangler.r2.toml"
       - "requirements.txt"
-      - "scripts/build_cloudflare_assets.py"
       - ".github/workflows/cloudflare-media.yml"
-      - ".github/workflows/render-edge-build.yml"
+      - ".github/workflows/render-r2-build.yml"
       - "core/static/**"
       - "templates/**"
       - "accounts/templates/**"
@@ -42,22 +39,20 @@ jobs:
           node-version: "22"
 
       - run: pip install -r requirements.txt
-      - run: npm install
 
       - name: Check Render Django settings
         env:
           DJANGO_SETTINGS_MODULE: config.settings.render
           DJANGO_SECRET_KEY: ci-render-secret
-          DATABASE_URL: sqlite:///render-edge-check.sqlite3
-          DJANGO_ALLOWED_HOSTS: testserver,localhost,.onrender.com,canecorsoancestry.com
-          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver,https://canecorsoancestry.com
-          SITE_URL: https://canecorsoancestry.com
-          REQUIRE_CLOUDFLARE_EDGE: "1"
+          DATABASE_URL: sqlite:///render-check.sqlite3
+          DJANGO_ALLOWED_HOSTS: testserver,localhost,.onrender.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver,https://canecorsoancestry.onrender.com
+          SITE_URL: https://canecorsoancestry.onrender.com
           R2_GATEWAY_URL: https://edge.example.workers.dev
           MEDIA_EDGE_BASE_URL: https://edge.example.workers.dev
         run: python manage.py check --deploy
 
-      - name: Build Render static manifest
+      - name: Verify Render static files
         env:
           DJANGO_SETTINGS_MODULE: config.settings.render
           DJANGO_SECRET_KEY: ci-render-secret
@@ -65,7 +60,6 @@ jobs:
           DJANGO_ALLOWED_HOSTS: testserver,localhost,.onrender.com
           DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver,https://canecorsoancestry.onrender.com
           SITE_URL: https://canecorsoancestry.onrender.com
-          REQUIRE_CLOUDFLARE_EDGE: "0"
           R2_GATEWAY_URL: https://edge.example.workers.dev
           MEDIA_EDGE_BASE_URL: https://edge.example.workers.dev
         run: |
@@ -84,18 +78,8 @@ jobs:
           print(f"Resolved core/site.css -> {url}")
           PY
 
-      - name: Build Cloudflare static assets
-        env:
-          DJANGO_SETTINGS_MODULE: config.settings.development
-        run: |
-          python manage.py collectstatic --noinput
-          python scripts/build_cloudflare_assets.py
+      - name: Validate R2 media Worker JavaScript
+        run: node --check src/r2-media.js
 
-      - name: Validate edge Worker JavaScript
-        run: node --check src/edge.js
-
-      - name: Validate Cloudflare preview bundle
-        run: npx wrangler deploy --dry-run --config wrangler.edge.preview.toml --var APP_ORIGIN:https://example.onrender.com
-
-      - name: Validate Cloudflare production bundle
-        run: npx wrangler deploy --dry-run --config wrangler.edge.production.toml --var APP_ORIGIN:https://example.onrender.com
+      - name: Validate R2 Worker bundle
+        run: npx --yes wrangler@4 deploy --dry-run --config wrangler.r2.toml
