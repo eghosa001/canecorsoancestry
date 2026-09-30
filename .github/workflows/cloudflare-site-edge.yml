@@ -1,0 +1,96 @@
+name: Cloudflare site edge
+
+on:
+  pull_request:
+    paths:
+      - "src/site-edge.js"
+      - "wrangler.site.toml"
+      - ".github/workflows/cloudflare-site-edge.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/site-edge.js"
+      - "wrangler.site.toml"
+      - ".github/workflows/cloudflare-site-edge.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-site-edge
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate Worker JavaScript
+        run: node --check src/site-edge.js
+
+      - name: Validate Worker bundle
+        run: npx --yes wrangler@4 deploy --dry-run --config wrangler.site.toml
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 19a03bec57c0277e01e1e70e241576af
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate Cloudflare token
+        shell: bash
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Missing secret: CLOUDFLARE_API_TOKEN"
+            exit 1
+          fi
+
+      - name: Deploy site edge
+        run: npx --yes wrangler@4 deploy --config wrangler.site.toml
+
+      - name: Verify edge and fast warm-up response
+        shell: bash
+        run: |
+          base="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+
+          for attempt in $(seq 1 12); do
+            status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/edge-health.json -w '%{http_code}' "$base/__edge/health" || true)"
+            if [ "$status" = "200" ] && grep -q '"service":"site-edge"' /tmp/edge-health.json; then
+              break
+            fi
+            if [ "$attempt" = "12" ]; then
+              cat /tmp/edge-health.json 2>/dev/null || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+          page_status="$(curl --connect-timeout 4 --max-time 8 -sS -H 'Accept: text/html' -o /tmp/edge-page.html -w '%{http_code}' "$base/" || true)"
+          if [ "$page_status" != "200" ]; then
+            echo "::error::Site edge did not return a usable page quickly; HTTP $page_status"
+            cat /tmp/edge-page.html 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "Site edge is healthy and returns either cached Django HTML or the branded warm-up screen within 8 seconds."
+
+      - name: Clean temporary files
+        if: always()
+        run: rm -f /tmp/edge-health.json /tmp/edge-page.html
