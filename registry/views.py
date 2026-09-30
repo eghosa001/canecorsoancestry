@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.paginator import Paginator
 from django.db.models import Count, F, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -43,16 +44,24 @@ def dog_search(request):
     sex = request.GET.get("sex", "").strip()
     country = request.GET.get("country", "").strip()
     kennel_slug = request.GET.get("kennel", "").strip()
+    exact = request.GET.get("exact") == "1"
 
     dogs = _dog_cards(Dog.objects.filter(is_public=True))
     if query:
-        dogs = dogs.filter(
-            Q(name__icontains=query)
-            | Q(bloodline__icontains=query)
-            | Q(aliases__name__icontains=query)
-            | Q(registrations__number__icontains=query)
-            | Q(kennel__name__icontains=query)
-        ).distinct()
+        if exact:
+            dogs = dogs.filter(
+                Q(name__iexact=query)
+                | Q(aliases__name__iexact=query)
+                | Q(registrations__number__iexact=query)
+            ).distinct()
+        else:
+            dogs = dogs.filter(
+                Q(name__icontains=query)
+                | Q(bloodline__icontains=query)
+                | Q(aliases__name__icontains=query)
+                | Q(registrations__number__icontains=query)
+                | Q(kennel__name__icontains=query)
+            ).distinct()
     if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE, Dog.Sex.UNKNOWN}:
         dogs = dogs.filter(sex=sex)
     if country:
@@ -61,6 +70,11 @@ def dog_search(request):
         dogs = dogs.filter(kennel__slug=kennel_slug)
 
     dogs = dogs.order_by("name")
+    paginator = Paginator(dogs, 24)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
+
     countries = (
         Dog.objects.filter(is_public=True)
         .exclude(country="")
@@ -74,8 +88,12 @@ def dog_search(request):
         request,
         "registry/dog_search.html",
         {
-            "dogs": dogs,
+            "dogs": page_obj.object_list,
+            "page_obj": page_obj,
+            "result_count": paginator.count,
+            "querystring": query_params.urlencode(),
             "query": query,
+            "exact": exact,
             "sex": sex,
             "country": country,
             "kennel_slug": kennel_slug,
@@ -155,6 +173,53 @@ def dog_detail(request, slug):
             "relative_health": direct_relative_health(dog),
             "can_contribute": can_contribute_to_dog(request.user, dog),
             "structured_data": json_ld(structured_data),
+        },
+    )
+
+
+def pedigree_statistics(request):
+    top_sires = (
+        _dog_cards(
+            Dog.objects.filter(is_public=True, sex=Dog.Sex.MALE).annotate(
+                public_offspring_count=Count(
+                    "sired_offspring",
+                    filter=Q(sired_offspring__is_public=True),
+                    distinct=True,
+                )
+            )
+        )
+        .filter(public_offspring_count__gt=0)
+        .order_by("-public_offspring_count", "name")[:20]
+    )
+    top_dams = (
+        _dog_cards(
+            Dog.objects.filter(is_public=True, sex=Dog.Sex.FEMALE).annotate(
+                public_offspring_count=Count(
+                    "dammed_offspring",
+                    filter=Q(dammed_offspring__is_public=True),
+                    distinct=True,
+                )
+            )
+        )
+        .filter(public_offspring_count__gt=0)
+        .order_by("-public_offspring_count", "name")[:20]
+    )
+    top_kennels = (
+        Kennel.objects.annotate(
+            public_dog_count=Count(
+                "dogs", filter=Q(dogs__is_public=True), distinct=True
+            )
+        )
+        .filter(public_dog_count__gt=0)
+        .order_by("-public_dog_count", "name")[:20]
+    )
+    return render(
+        request,
+        "registry/statistics.html",
+        {
+            "top_sires": top_sires,
+            "top_dams": top_dams,
+            "top_kennels": top_kennels,
         },
     )
 
