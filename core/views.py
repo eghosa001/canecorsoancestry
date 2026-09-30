@@ -4,12 +4,12 @@ import os
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import connection
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
 
-from registry.models import Dog, DogImage, DogRegistration, HealthRecord, Kennel, Litter
+from registry.models import Dog, DogImage, DogRegistration, HealthRecord, Kennel, Litter, Submission
 
 from .seo import json_ld
 
@@ -51,7 +51,7 @@ def robots_txt(request):
 
 
 def home(request):
-    featured_dogs = _display_dogs(Dog.objects.filter(is_public=True).order_by("-updated_at"))[:4]
+    featured_dogs = _display_dogs(Dog.objects.filter(is_public=True).order_by("-search_count", "-updated_at", "name"))[:4]
     context = {
         "dog_count": Dog.objects.filter(is_public=True).count(),
         "kennel_count": Kennel.objects.count(),
@@ -78,14 +78,22 @@ def home(request):
 def dashboard(request):
     memberships = list(request.user.kennel_memberships.select_related("kennel").order_by("created_at"))
     kennel_ids = [membership.kennel_id for membership in memberships]
-    dogs = _display_dogs(Dog.objects.filter(kennel_id__in=kennel_ids).order_by("-updated_at"))[:8]
+    member_dogs = Dog.objects.filter(
+        Q(kennel_id__in=kennel_ids)
+        | Q(
+            submissions__kind=Submission.Kind.DOG,
+            submissions__status=Submission.Status.APPROVED,
+            submissions__submitted_by=request.user,
+        )
+    ).distinct()
+    dogs = _display_dogs(member_dogs.order_by("-updated_at"))[:8]
     litters = Litter.objects.filter(kennel_id__in=kennel_ids).select_related("kennel", "sire", "dam").order_by("-date_of_birth", "code")[:6]
-    health_records = HealthRecord.objects.filter(dog__kennel_id__in=kennel_ids).select_related("dog").order_by("-created_at")[:8]
+    health_records = HealthRecord.objects.filter(dog__in=member_dogs).select_related("dog").order_by("-created_at")[:8]
     return render(request, "core/dashboard.html", {
         "memberships": memberships,
         "primary_kennel": memberships[0].kennel if memberships else None,
         "dogs": dogs, "litters": litters, "health_records": health_records,
-        "dog_total": Dog.objects.filter(kennel_id__in=kennel_ids).count(),
-        "public_dog_total": Dog.objects.filter(kennel_id__in=kennel_ids, is_public=True).count(),
+        "dog_total": member_dogs.count(),
+        "public_dog_total": member_dogs.filter(is_public=True).count(),
         "litter_total": Litter.objects.filter(kennel_id__in=kennel_ids).count(),
     })
