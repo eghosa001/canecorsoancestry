@@ -1,0 +1,116 @@
+name: Seed Bellissimo media to R2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/bellissimo-media-seed.yml"
+      - "registry/bellissimo_media.py"
+      - "registry/management/commands/import_bellissimo_media.py"
+      - "scripts/sync_bellissimo_media_r2.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seed-media:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in CLOUDFLARE_API_TOKEN SUPABASE_DATABASE_URL DJANGO_SECRET_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - run: pip install -r requirements.txt
+      - run: npm install --global wrangler@latest
+
+      - name: Fetch current Bellissimo source
+        run: git clone --depth 1 https://github.com/eghosa001/bellissimo-geni-cane-corso.git /tmp/bellissimo
+
+      - name: Discover Cloudflare account
+        shell: bash
+        run: |
+          response="$(curl -fsS "https://api.cloudflare.com/client/v4/accounts?per_page=50" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
+          account_id="$(
+            printf '%s' "$response" |
+              python scripts/find_cloudflare_account.py
+          )"
+          echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
+
+      - name: Discover Supabase IPv4 session pooler
+        shell: bash
+        run: |
+          session_url="$(python scripts/discover_supabase_session_pooler.py)"
+          echo "::add-mask::$session_url"
+          echo "SUPABASE_MIGRATION_URL=$session_url" >> "$GITHUB_ENV"
+
+      - name: Ensure R2 media bucket exists
+        shell: bash
+        run: |
+          npx wrangler r2 bucket info canecorsoancestry-media >/dev/null 2>&1 || \
+            npx wrangler r2 bucket create canecorsoancestry-media
+
+      - name: Upload and byte-verify Bellissimo media
+        run: python scripts/sync_bellissimo_media_r2.py /tmp/bellissimo
+
+      - name: Validate DogImage metadata import
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: DATABASE_URL="$SUPABASE_MIGRATION_URL" python manage.py import_bellissimo_media /tmp/bellissimo --dry-run
+
+      - name: Import DogImage metadata
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: DATABASE_URL="$SUPABASE_MIGRATION_URL" python manage.py import_bellissimo_media /tmp/bellissimo
+
+      - name: Verify DogImage metadata
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        shell: bash
+        run: |
+          DATABASE_URL="$SUPABASE_MIGRATION_URL" python manage.py shell -c "
+          from registry.models import DogImage
+          qs = DogImage.objects.filter(image__startswith='bellissimo-geni/')
+          assert qs.count() == 21, f'Expected 21 Bellissimo image records, got {qs.count()}'
+          assert qs.filter(is_primary=True).count() == 13, f'Expected 13 primary images, got {qs.filter(is_primary=True).count()}'
+          print(f'Verified: {qs.count()} Bellissimo images; {qs.filter(is_primary=True).count()} primary')
+          "
