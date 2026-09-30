@@ -26,7 +26,7 @@
       </nav>
       <div class="header-actions">
         <form class="header-search" action="{% url 'registry:dog-search' %}" method="get"><label class="sr-only" for="header-q">Search dogs</label><input id="header-q" name="q" placeholder="Search dog, kennel, registration"></form>
-        {% if user.is_authenticated %}{% if user.is_staff %}<a class="account-link" href="{% url 'accounts:moderation' %}">Moderation</a>{% endif %}<a class="account-link" href="{% url 'dashboard' %}">{{ user.get_username }}</a>{% else %}<a class="account-link" href="{% url 'login' %}">Member access</a>{% endif %}
+        {% if user.is_authenticated %}{% if user.is_staff %}<a class="account-link" href="{% url 'accounts:moderation' %}">Moderation</a>{% endif %}<a class="account-link" href="{% url 'dashboard' %}">{{ user.get_username }}</a>{% else %}<a class="account-link" href="{% url 'login' %}">Sign in</a><a class="account-link" href="{% url 'accounts:signup' %}">Join</a>{% endif %}
       </div>
     </div>
   </header>
