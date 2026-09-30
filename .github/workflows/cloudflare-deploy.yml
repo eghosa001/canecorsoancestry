@@ -140,11 +140,14 @@ jobs:
         run: |
           uv run python -c 'import json, os; open("/tmp/worker-secrets.json", "w", encoding="utf-8").write(json.dumps({"DJANGO_SECRET_KEY": os.environ["DJANGO_SECRET_KEY"]}))'
 
-      - name: Remove local build virtualenv from Worker bundle
-        run: rm -rf .venv
+      - name: Vendor Python Worker dependencies
+        run: uvx --from 'workers-py>=1.17.4,<2' --with workers-runtime-sdk pywrangler sync
+
+      - name: Remove local build environments from Worker upload
+        run: rm -rf .venv .venv-workers
 
       - name: Deploy Django Worker
-        run: uvx --from 'workers-py>=1.17.4,<2' --with workers-runtime-sdk pywrangler deploy --secrets-file /tmp/worker-secrets.json
+        run: npx wrangler deploy --secrets-file /tmp/worker-secrets.json
 
       - name: Remove temporary Worker secrets file
         if: always()
