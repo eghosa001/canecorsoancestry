@@ -131,6 +131,7 @@ jobs:
           DJANGO_SETTINGS_MODULE: config.settings.production
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
+          DJANGO_DB_EXTRA_SCHEMAS: public
           DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
           DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
@@ -141,6 +142,7 @@ jobs:
           DJANGO_SETTINGS_MODULE: config.settings.production
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
+          DJANGO_DB_EXTRA_SCHEMAS: public
           DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
           DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
@@ -151,6 +153,7 @@ jobs:
           DJANGO_SETTINGS_MODULE: config.settings.production
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
+          DJANGO_DB_EXTRA_SCHEMAS: public
           DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
           DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
