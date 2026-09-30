@@ -80,7 +80,7 @@ Private submissions, dispute evidence, source documents and private member docum
 
 as a Cloudflare Custom Domain.
 
-Both files keep the Hyperdrive ID as a placeholder. The deployment pipeline renders a temporary `wrangler.generated.toml` using the `CLOUDFLARE_HYPERDRIVE_ID` GitHub secret.
+Both files keep the Hyperdrive ID as a placeholder. The deployment pipeline creates or updates the cache-disabled `canecorsoancestry-supabase` Hyperdrive from the Direct Supabase database URL, discovers its ID through the Cloudflare API, and renders the temporary `wrangler.toml` without committing credentials or resource IDs.
 
 ## GitHub deployment secrets
 
@@ -88,10 +88,10 @@ The Cloudflare deploy workflow expects:
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_HYPERDRIVE_ID`
+- `SUPABASE_DATABASE_URL` — the **Direct** Supabase PostgreSQL connection string
 - `DJANGO_SECRET_KEY`
 
-Those values belong in GitHub Actions secrets, never in the repository.
+Those values belong in GitHub Actions secrets, never in the repository. The workflow automatically creates or updates a cache-disabled Hyperdrive configuration named `canecorsoancestry-supabase`, so no Hyperdrive ID needs to be entered manually.
 
 ## Database migration
 
