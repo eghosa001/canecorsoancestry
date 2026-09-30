@@ -7,6 +7,9 @@ workers_dev = true
 [observability]
 enabled = true
 
+[python_modules]
+exclude = ["**/*.pyc", "**/__pycache__", "**/tests/**", "**/test/**"]
+
 [assets]
 directory = "./worker_assets"
 binding = "ASSETS"
