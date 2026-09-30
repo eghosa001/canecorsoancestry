@@ -1,0 +1,11 @@
+{
+  "name": "canecorsoancestry-cloudflare",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cloudflare/containers": "^0.0.25"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
