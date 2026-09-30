@@ -57,7 +57,3 @@ class CloudflareEdgeMiddleware:
             return HttpResponseForbidden("Cloudflare edge authorization required.")
         return self.get_response(request)
 
-
-# Backward-compatible alias for any old deployment configuration that still
-# imports the previous Cloud Run-specific middleware name.
-CloudRunEdgeMiddleware = CloudflareEdgeMiddleware
