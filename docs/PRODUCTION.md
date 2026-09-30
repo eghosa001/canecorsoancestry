@@ -117,12 +117,15 @@ Do not change production traffic to Supabase until that verification succeeds.
 5. Create/verify the `canecorsoancestry-media` R2 bucket.
 6. Deploy the Worker using the **preview** target.
 7. Verify `/healthz/`, login, admin, member dashboard, search, dog profiles, pedigrees, duplicate matching, moderation, submissions, uploads and private/public media access.
-8. Copy any existing production media from the Railway bucket to R2 before domain cutover.
-9. Remove the old apex CNAME that points to Railway.
-10. Deploy using the **production** target so Cloudflare creates the Custom Domain for `canecorsoancestry.com`.
-11. Repeat production smoke tests.
-12. Keep Railway available during the rollback window.
-13. Remove Railway only after the new stack is confirmed stable.
+8. Copy existing production media from the Railway bucket to R2 using:
+   `python manage.py copy_media_to_cloudflare --target-url=https://<preview>.workers.dev`.
+   The preview-only importer accepts only database-referenced paths and HMAC-signed bytes, verifies SHA-256, and is disabled in the production Worker config.
+9. Re-run the command until every referenced media object reports stored or already identical. Any missing source object is a blocking error.
+10. Remove the old apex CNAME that points to Railway.
+11. Deploy using the **production** target so Cloudflare creates the Custom Domain for `canecorsoancestry.com`. The production Worker has `MEDIA_MIGRATION_ENABLED=0`.
+12. Repeat production smoke tests.
+13. Keep Railway available during the rollback window.
+14. Remove Railway only after the new stack is confirmed stable.
 
 ## Domain
 
@@ -165,3 +168,12 @@ After all production hostnames are stable on HTTPS, HSTS may be raised to one ye
 ## Production seed
 
 The current source production database previously imported 117 canonical Bellissimo-source dogs, including 101 public records and 16 drafts. The data copy must preserve those canonical IDs and all later member/moderation records rather than re-seeding production from scratch.
+
+
+## Media migration authentication
+
+The preview media importer signs each request with Django's existing `DJANGO_SECRET_KEY`. For the cutover, configure the Cloudflare Worker with the **same Django secret currently used by Railway**. This preserves existing Django signing behavior and lets the Railway source authenticate the one-time R2 copy without introducing another migration secret.
+
+Do not paste the secret into logs, repository files, command arguments, or chat. Store the same value in the GitHub Actions `DJANGO_SECRET_KEY` secret.
+
+The importer is enabled only in `wrangler.preview.toml`; `wrangler.production.toml` disables it.

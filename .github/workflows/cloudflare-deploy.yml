@@ -42,6 +42,7 @@ jobs:
           enable-cache: true
 
       - name: Validate deployment secrets
+        shell: bash
         run: |
           missing=0
           for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID SUPABASE_DATABASE_URL DJANGO_SECRET_KEY; do
@@ -59,37 +60,35 @@ jobs:
         run: uv run python scripts/validate_supabase_direct_url.py
 
       - name: Ensure cache-disabled Hyperdrive
+        shell: bash
         run: |
           name="canecorsoancestry-supabase"
           endpoint="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/hyperdrive/configs?per_page=100"
 
-          response="$(curl -fsS "$endpoint"             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
+          response="$(curl -fsS "$endpoint" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
 
           hyperdrive_id="$(
-            printf '%s' "$response" |             HD_NAME="$name" python -c '
-import json, os, sys
-payload = json.load(sys.stdin)
-matches = [item["id"] for item in payload.get("result", []) if item.get("name") == os.environ["HD_NAME"]]
-print(matches[0] if matches else "")
-'
+            printf '%s' "$response" |
+              uv run python scripts/find_hyperdrive_id.py "$name"
           )"
 
           if [ -z "$hyperdrive_id" ]; then
-            npx wrangler hyperdrive create "$name"               --connection-string="$SUPABASE_DATABASE_URL"               --caching-disabled \
+            npx wrangler hyperdrive create "$name" \
+              --connection-string="$SUPABASE_DATABASE_URL" \
+              --caching-disabled \
               --sslmode require
 
-            response="$(curl -fsS "$endpoint"               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
-
+            response="$(curl -fsS "$endpoint" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
             hyperdrive_id="$(
-              printf '%s' "$response" |               HD_NAME="$name" python -c '
-import json, os, sys
-payload = json.load(sys.stdin)
-matches = [item["id"] for item in payload.get("result", []) if item.get("name") == os.environ["HD_NAME"]]
-print(matches[0] if matches else "")
-'
+              printf '%s' "$response" |
+                uv run python scripts/find_hyperdrive_id.py "$name"
             )"
           else
-            npx wrangler hyperdrive update "$hyperdrive_id"               --connection-string="$SUPABASE_DATABASE_URL"               --caching-disabled \
+            npx wrangler hyperdrive update "$hyperdrive_id" \
+              --connection-string="$SUPABASE_DATABASE_URL" \
+              --caching-disabled \
               --sslmode require
           fi
 
@@ -108,6 +107,7 @@ print(matches[0] if matches else "")
           uv run python scripts/build_cloudflare_assets.py
 
       - name: Render Wrangler config
+        shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.target }}" = "production" ]; then
             template="wrangler.production.toml"
@@ -120,12 +120,18 @@ print(matches[0] if matches else "")
         run: rm requirements.txt
 
       - name: Ensure media bucket exists
+        shell: bash
         run: |
-          uv run pywrangler r2 bucket create canecorsoancestry-media ||             uv run pywrangler r2 bucket list
+          npx wrangler r2 bucket info canecorsoancestry-media >/dev/null 2>&1 || \
+            npx wrangler r2 bucket create canecorsoancestry-media
 
-      - name: Set Django Worker secret
+      - name: Build encrypted Worker secrets file
         run: |
-          printf '%s' "$DJANGO_SECRET_KEY" |             uv run pywrangler secret put DJANGO_SECRET_KEY
+          uv run python -c 'import json, os; open("/tmp/worker-secrets.json", "w", encoding="utf-8").write(json.dumps({"DJANGO_SECRET_KEY": os.environ["DJANGO_SECRET_KEY"]}))'
 
       - name: Deploy Django Worker
-        run: uv run pywrangler deploy
+        run: uv run pywrangler deploy --secrets-file /tmp/worker-secrets.json
+
+      - name: Remove temporary Worker secrets file
+        if: always()
+        run: rm -f /tmp/worker-secrets.json

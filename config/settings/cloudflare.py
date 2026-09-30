@@ -63,6 +63,9 @@ DATABASES["default"].setdefault("OPTIONS", {})["options"] = (
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # noqa: F405
 MEDIA_URL = "/media/"
+MEDIA_MIGRATION_ENABLED = (
+    str(getattr(env, "MEDIA_MIGRATION_ENABLED", "0")) == "1"
+)
 
 STORAGES = {
     "default": {
