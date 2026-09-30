@@ -45,7 +45,7 @@
         {% if dogs %}
           <div class="dog-card-grid compact">
             {% for dog in dogs %}
-              <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
+              <a class="dog-card" href="{% url 'accounts:member-pedigree' dog.pk %}">
                 <div class="dog-card-media">
                   {% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}">{% else %}<div class="media-placeholder">CCA</div>{% endif %}
                   <span class="verification-pill">{{ dog.get_verification_state_display }}</span>
@@ -58,7 +58,7 @@
             {% endfor %}
           </div>
         {% else %}
-          <div class="empty-state"><strong>No kennel dogs yet.</strong><p>Dog submissions will appear here after your kennel is linked.</p></div>
+          <div class="empty-state"><strong>No dogs yet.</strong><p>Submit a dog for review. Approved dogs and dogs from your linked kennels will appear here.</p></div>
         {% endif %}
       </section>
 
