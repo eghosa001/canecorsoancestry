@@ -80,9 +80,9 @@ Django stores R2 object keys in existing FileField columns.
 
 For uploads and storage metadata operations, Render uses:
 
-`core.cloudrun_storage.CloudflareR2GatewayStorage`
+`core.r2_gateway_storage.CloudflareR2GatewayStorage`
 
-The filename is retained for compatibility, but the backend is host-independent. It signs requests to the Cloudflare `/_r2/*` gateway using `DJANGO_SECRET_KEY`.
+It signs requests to the Cloudflare `/_r2/*` gateway using `DJANGO_SECRET_KEY`.
 
 For downloads, Django authorizes the user and redirects to a short-lived `/_media/*` URL. Cloudflare then streams the R2 object directly.
 
