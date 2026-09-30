@@ -44,7 +44,7 @@ The `DJANGO_SECRET_KEY` value in Render must be exactly the same value as the Gi
 4. Select **PostgreSQL**.
 5. Select the **Free** tier/plan.
 6. Name the service `canecorsoancestry-db`. Aiven service names are not renamed in place, so choose the name carefully.
-7. If PostgreSQL version selection is offered, PostgreSQL 17 is a safe choice for this migration. A same-or-newer target PostgreSQL major version is suitable for the logical dump/restore path.
+7. If PostgreSQL version selection is offered, choose the newest stable version Aiven offers on the Free plan. The migration workflow reads both server versions and refuses to migrate into an older PostgreSQL major version.
 8. On the Free tier Aiven assigns the cloud/region; do not upgrade just to choose a region.
 9. Create the service and wait until its status is **Running**.
 
@@ -96,6 +96,8 @@ In GitHub:
 The workflow deliberately:
 
 - validates the Aiven URI;
+- compares the Supabase and Aiven PostgreSQL major versions and refuses a downgrade target;
+- automatically uses the Aiven target major version's PostgreSQL client for dump/restore;
 - discovers a reachable Supabase session-pooler source;
 - confirms the Supabase Django migrations are current;
 - refuses to continue if Aiven already contains the `django_app` schema;
