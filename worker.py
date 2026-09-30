@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 import dj_database_url
@@ -7,12 +8,14 @@ from django.db import connections
 from workers import WorkerEntrypoint, wsgi
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.cloudflare")
+# Python Workers invoke the WSGI bridge from an async event loop but do not
+# provide native threads. This application is intentionally serialized below,
+# so Django's synchronous ORM can safely run in that single request lane.
+os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
-# Build Django during Cloudflare startup while settings use the dummy database
-# backend. WSGI avoids Django/asgiref thread creation, which Python Workers do
-# not support for this synchronous application.
 _application = get_wsgi_application()
 _database_ready = False
+_request_lock = asyncio.Lock()
 
 
 def _install_hyperdrive_database(env):
@@ -30,12 +33,8 @@ def _install_hyperdrive_database(env):
         "-c search_path=django_app,extensions,public"
     )
 
-    # Normalize the replacement through Django's own ConnectionHandler so all
-    # required defaults (ATOMIC_REQUESTS, AUTOCOMMIT, TIME_ZONE, TEST, etc.)
-    # exist before the request handler inspects the connection settings.
     configured = connections.configure_settings({"default": database})
     settings.DATABASES["default"] = configured["default"]
-
     connections._settings = configured
     connections.__dict__.pop("settings", None)
 
@@ -48,8 +47,13 @@ class Default(WorkerEntrypoint):
     async def fetch(self, request):
         global _database_ready
 
-        if not _database_ready:
-            _install_hyperdrive_database(self.env)
-            _database_ready = True
+        # Cloudflare's Python database docs require synchronous DB operations
+        # to be serialized. Since Django's WSGI stack may touch the ORM anywhere
+        # in a request, serialize the full WSGI dispatch rather than individual
+        # cursor calls.
+        async with _request_lock:
+            if not _database_ready:
+                _install_hyperdrive_database(self.env)
+                _database_ready = True
 
-        return await wsgi.fetch(_application, request, self.env)
+            return await wsgi.fetch(_application, request, self.env)
