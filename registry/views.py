@@ -183,15 +183,17 @@ def kennel_detail(request, slug):
         request.user.is_authenticated
         and request.user.kennel_memberships.filter(kennel=kennel).exists()
     )
+    pending_claim = Submission.objects.filter(
+        kind=Submission.Kind.KENNEL_CLAIM,
+        status=Submission.Status.PENDING,
+        kennel=kennel,
+    ).select_related("submitted_by").first()
     claim_pending = bool(
         request.user.is_authenticated
-        and Submission.objects.filter(
-            kind=Submission.Kind.KENNEL_CLAIM,
-            status=Submission.Status.PENDING,
-            submitted_by=request.user,
-            kennel=kennel,
-        ).exists()
+        and pending_claim
+        and pending_claim.submitted_by_id == request.user.id
     )
+    claim_in_review = pending_claim is not None
     return render(
         request,
         "registry/kennel_detail.html",
@@ -203,9 +205,10 @@ def kennel_detail(request, slug):
                 request.user.is_authenticated
                 and not kennel_linked
                 and not is_member
-                and not claim_pending
+                and not claim_in_review
             ),
             "claim_pending": claim_pending,
+            "claim_in_review": claim_in_review,
         },
     )
 
