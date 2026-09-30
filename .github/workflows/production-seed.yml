@@ -45,6 +45,9 @@ jobs:
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         run: python manage.py migrate --check
 
+      - name: Validate Bellissimo source file
+        run: python manage.py validate_pedigree_dataset data/seeds/bellissimo-dogs.json
+
       - name: Validate Bellissimo import
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production
@@ -88,3 +91,14 @@ jobs:
           assert private.count() == 16, f'Expected 16 draft dogs, got {private.count()}'
           print(f'Verified: {external.count()} canonical dogs; {public.count()} public; {private.count()} draft')
           "
+
+      - name: Audit production pedigree integrity
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_DB_EXTRA_SCHEMAS: public
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: python manage.py audit_pedigree_data --fail-on-critical
