@@ -1,0 +1,11 @@
+name = "canecorsoancestry-edge"
+main = "src/r2-media.js"
+compatibility_date = "2026-09-30"
+workers_dev = true
+
+[observability]
+enabled = true
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "canecorsoancestry-media"
