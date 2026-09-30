@@ -1,6 +1,10 @@
 name: Configure and deploy Render
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/render-configure.yml"
   workflow_dispatch:
     inputs:
       confirm:
@@ -17,7 +21,7 @@ concurrency:
 
 jobs:
   configure:
-    if: ${{ inputs.confirm == 'CONFIGURE_RENDER' }}
+    if: ${{ github.event_name == 'push' || inputs.confirm == 'CONFIGURE_RENDER' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
