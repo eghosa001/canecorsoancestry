@@ -7,7 +7,7 @@ on:
       - "config/settings/render.py"
       - "config/settings/production.py"
       - "core/middleware.py"
-      - "core/cloudrun_storage.py"
+      - "core/r2_gateway_storage.py"
       - "core/cloudflare_media.py"
       - "core/media_views.py"
       - "src/edge.js"
