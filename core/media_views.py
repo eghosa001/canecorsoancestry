@@ -107,9 +107,6 @@ def media_import(request, path):
     if not getattr(settings, "MEDIA_MIGRATION_ENABLED", False):
         raise Http404
 
-    if not _known_media_path(path):
-        raise Http404
-
     raw_timestamp = request.headers.get("X-Migration-Timestamp", "")
     provided_signature = request.headers.get("X-Migration-Signature", "")
     try:
@@ -130,6 +127,11 @@ def media_import(request, path):
         provided_signature,
     ):
         return HttpResponseForbidden("Invalid migration signature.")
+
+    # Check the database only after authentication so callers cannot use
+    # status codes to enumerate private FileField keys.
+    if not _known_media_path(path):
+        raise Http404
 
     max_size = int(getattr(settings, "DATA_UPLOAD_MAX_MEMORY_SIZE", 25 * 1024 * 1024))
     if len(body) > max_size:
