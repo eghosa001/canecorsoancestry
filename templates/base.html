@@ -22,7 +22,7 @@
     <div class="header-inner">
       <a class="brand" href="{% url 'home' %}" aria-label="Cane Corso Ancestry home"><span class="brand-small">CANE CORSO</span><strong>ANCESTRY</strong></a>
       <nav class="main-nav" aria-label="Main navigation">
-        <a href="{% url 'home' %}">Home</a><a href="{% url 'registry:dog-search' %}">Dogs</a><a href="{% url 'registry:kennel-list' %}">Kennels</a><a href="{% url 'pedigrees:index' %}">Pedigrees</a><a href="{% url 'pedigrees:virtual-mating' %}">Virtual mating</a>
+        <a href="{% url 'home' %}">Home</a><a href="{% url 'registry:dog-search' %}">Dogs</a><a href="{% url 'registry:kennel-list' %}">Kennels</a><a href="{% url 'pedigrees:index' %}">Pedigrees</a><a href="{% url 'pedigrees:virtual-mating' %}">Virtual mating</a><a href="{% url 'registry:statistics' %}">Statistics</a>
       </nav>
       <div class="header-actions">
         <form class="header-search" action="{% url 'registry:dog-search' %}" method="get"><label class="sr-only" for="header-q">Search dogs</label><input id="header-q" name="q" placeholder="Search dog, kennel, registration"></form>
