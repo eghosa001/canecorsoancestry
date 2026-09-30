@@ -1,0 +1,44 @@
+name: Production data health
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "43 5 * * 4"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-data-health
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      DJANGO_DB_SCHEMA: django_app
+      DJANGO_DB_SSLMODE: require
+      DJANGO_DB_EXTRA_SCHEMAS: public
+      DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
+      DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Verify required secrets
+        shell: bash
+        run: |
+          test -n "$DATABASE_URL" || { echo "::error::AIVEN_DATABASE_URL is missing"; exit 1; }
+          test -n "$DJANGO_SECRET_KEY" || { echo "::error::DJANGO_SECRET_KEY is missing"; exit 1; }
+      - run: pip install -r requirements.txt
+      - name: Check deployed schema expectation
+        run: python manage.py migrate --check
+      - name: Audit pedigree integrity
+        run: python manage.py audit_pedigree_data --fail-on-critical
