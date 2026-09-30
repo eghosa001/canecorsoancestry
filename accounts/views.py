@@ -50,6 +50,7 @@ from .forms import (
     DogSubmissionForm,
     DuplicateMatchForm,
     KennelClaimForm,
+    KennelCreateForm,
     KennelEditForm,
     LitterSubmissionForm,
     MemberSignUpForm,
@@ -275,6 +276,46 @@ def submit_document(request, pk):
             "button_label": "Submit document",
             "multipart": True,
             "dog": dog,
+        },
+    )
+
+
+@login_required
+def submit_kennel(request):
+    form = KennelCreateForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        cleaned = form.cleaned_data
+        from django.utils.text import slugify
+
+        kennel_slug = slugify(cleaned["name"])[:190]
+        Submission.objects.create(
+            kind=Submission.Kind.KENNEL_CREATE,
+            submitted_by=request.user,
+            payload={
+                "name": cleaned["name"],
+                "slug": kennel_slug,
+                "country": cleaned["country"],
+                "city": cleaned["city"],
+                "website": cleaned["website"],
+                "description": cleaned["description"],
+            },
+            notes=cleaned["notes"],
+        )
+        messages.success(
+            request,
+            "Kennel profile submitted for fact-checking. The name is reserved while the submission is pending.",
+        )
+        return redirect("accounts:submissions")
+
+    return render(
+        request,
+        "accounts/submission_form.html",
+        {
+            "form": form,
+            "eyebrow": "Kennel identity",
+            "title": "Create a kennel profile",
+            "intro": "Kennel and breeder brand names are unique. New profiles are reviewed before they are created and linked to your account.",
+            "button_label": "Submit kennel for review",
         },
     )
 
@@ -768,14 +809,19 @@ def claim_kennel(request, pk):
         )
         return redirect("registry:kennel-detail", slug=kennel.slug)
 
-    pending = Submission.objects.filter(
+    pending_claim = Submission.objects.filter(
         kind=Submission.Kind.KENNEL_CLAIM,
         status=Submission.Status.PENDING,
-        submitted_by=request.user,
         kennel=kennel,
-    ).exists()
-    if pending:
-        messages.info(request, "You already have a pending ownership claim for this kennel.")
+    ).select_related("submitted_by").first()
+    if pending_claim:
+        if pending_claim.submitted_by_id == request.user.id:
+            messages.info(request, "You already have a pending ownership claim for this kennel.")
+        else:
+            messages.error(
+                request,
+                "This kennel already has an ownership claim under review. A second claim cannot be opened until that review is resolved.",
+            )
         return redirect("accounts:submissions")
 
     form = KennelClaimForm(request.POST or None, request.FILES or None)
