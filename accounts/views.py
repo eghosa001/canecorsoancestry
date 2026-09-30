@@ -2,9 +2,12 @@ import csv
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
-from django.contrib.auth import login
+from django.conf import settings
+from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
+from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
@@ -59,6 +62,7 @@ from .forms import (
     MergeDogsForm,
     ReviewSubmissionForm,
     VerificationEventForm,
+    VerificationResendForm,
 )
 
 
@@ -78,18 +82,118 @@ def _member_dogs(user):
     ).distinct()
 
 
+def _send_verification_email(request, user):
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    verify_url = request.build_absolute_uri(
+        reverse(
+            "accounts:verify-email",
+            kwargs={"uidb64": uid, "token": token},
+        )
+    )
+    return send_mail(
+        "Verify your Cane Corso Ancestry email",
+        (
+            "Confirm that this email belongs to your Cane Corso Ancestry account.\n\n"
+            f"{verify_url}\n\n"
+            "If you did not create this account, ignore this message."
+        ),
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False,
+    )
+
+
 def signup(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
 
     form = MemberSignUpForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
-        user = form.save()
-        login(request, user)
-        messages.success(request, "Welcome to Cane Corso Ancestry.")
-        return redirect("dashboard")
+        verification_required = (
+            settings.ACCOUNT_EMAIL_ENABLED
+            and settings.REQUIRE_EMAIL_VERIFICATION
+        )
+        user = form.save(commit=False)
+        user.is_active = not verification_required
+        user.save()
+
+        if verification_required:
+            try:
+                sent = _send_verification_email(request, user)
+            except Exception:
+                user.delete()
+                form.add_error(
+                    "email",
+                    "We could not send the verification email. Please try again later.",
+                )
+            else:
+                if not sent:
+                    user.delete()
+                    form.add_error(
+                        "email",
+                        "We could not send the verification email. Please try again later.",
+                    )
+                else:
+                    return render(
+                        request,
+                        "registration/verification_sent.html",
+                        {"email": user.email},
+                    )
+        else:
+            login(request, user)
+            messages.success(request, "Welcome to Cane Corso Ancestry.")
+            return redirect("dashboard")
 
     return render(request, "registration/signup.html", {"form": form})
+
+
+def verify_email(request, uidb64, token):
+    user = None
+    try:
+        user_id = force_str(urlsafe_base64_decode(uidb64))
+        user = get_user_model().objects.filter(pk=user_id).first()
+    except (TypeError, ValueError, OverflowError):
+        user = None
+
+    if user and default_token_generator.check_token(user, token):
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=("is_active",))
+        login(request, user)
+        messages.success(request, "Email verified. Your member account is active.")
+        return redirect("dashboard")
+
+    return render(request, "registration/verification_invalid.html", status=400)
+
+
+def resend_verification(request):
+    form = VerificationResendForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        email = form.cleaned_data["email"].strip().lower()
+        user = get_user_model().objects.filter(
+            email__iexact=email,
+            is_active=False,
+        ).first()
+        if (
+            user
+            and settings.ACCOUNT_EMAIL_ENABLED
+            and settings.REQUIRE_EMAIL_VERIFICATION
+        ):
+            try:
+                _send_verification_email(request, user)
+            except Exception:
+                pass
+        return render(
+            request,
+            "registration/verification_sent.html",
+            {"email": email, "privacy_safe": True},
+        )
+    return render(
+        request,
+        "registration/resend_verification.html",
+        {"form": form},
+    )
 
 
 @login_required
