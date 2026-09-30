@@ -1,0 +1,49 @@
+name: Scale benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      dogs:
+        description: "Synthetic dog count (100-100000)"
+        required: true
+        default: "10000"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scale-benchmark
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: scale
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d scale"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DJANGO_DEBUG: "1"
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/scale
+      DJANGO_SECRET_KEY: scale-benchmark-secret-key-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python manage.py migrate --noinput
+      - name: Run rollback-only benchmark
+        run: python manage.py benchmark_scale --dogs "${{ inputs.dogs }}"
