@@ -52,5 +52,6 @@ jobs:
         run: |
           python manage.py validate_pedigree_dataset data/seeds/bellissimo-dogs.json
           python manage.py import_bellissimo
+          python manage.py import_bellissimo_puppies
           python manage.py audit_pedigree_data --fail-on-critical
       - run: python manage.py test --verbosity 1
