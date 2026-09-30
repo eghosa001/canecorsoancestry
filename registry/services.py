@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib.postgres.search import TrigramSimilarity
 from django.core.mail import send_mail
 from django.db import IntegrityError, connection, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -784,48 +784,39 @@ def duplicate_matches(reference, limit=20):
 
 
 def duplicate_candidates(limit=30):
-    """Return conservative high-signal duplicate pairs without mutating any records."""
-    dogs = list(
-        Dog.objects.select_related("sire", "dam", "kennel")
-        .prefetch_related("registrations")
-        .order_by("name")
+    """Return conservative duplicate pairs without scanning every dog in Python."""
+    bucket_limit = max(limit * 4, 100)
+    duplicate_names = list(
+        Dog.objects.exclude(normalized_name="")
+        .values("normalized_name")
+        .annotate(total=Count("pk"))
+        .filter(total__gt=1)
+        .order_by("-total", "normalized_name")
+        .values_list("normalized_name", flat=True)[:bucket_limit]
     )
-    name_buckets = defaultdict(list)
-    registration_buckets = defaultdict(list)
+    if not duplicate_names:
+        return []
 
+    dogs = list(
+        Dog.objects.filter(normalized_name__in=duplicate_names)
+        .select_related("sire", "dam", "kennel")
+        .prefetch_related("registrations")
+        .order_by("normalized_name", "name")
+    )
+    buckets = defaultdict(list)
     for dog in dogs:
-        normalized = _normalized_name(dog.name)
-        if normalized:
-            name_buckets[normalized].append(dog)
-        for key in _registration_keys(dog):
-            registration_buckets[key].append(dog)
+        buckets[dog.normalized_name].append(dog)
 
-    pairs = {}
+    rows = []
+    for bucket in buckets.values():
+        for index, left in enumerate(bucket):
+            for right in bucket[index + 1 :]:
+                row = _score_duplicate_pair(left, right)
+                if row["score"] >= 60:
+                    rows.append(row)
 
-    def add_pair(left, right):
-        if left.pk == right.pk:
-            return
-        ordered = sorted((left, right), key=lambda item: str(item.pk))
-        key = (ordered[0].pk, ordered[1].pk)
-        if key not in pairs:
-            pairs[key] = _score_duplicate_pair(ordered[0], ordered[1])
-
-    for bucket in name_buckets.values():
-        if len(bucket) > 1:
-            for index, left in enumerate(bucket):
-                for right in bucket[index + 1 :]:
-                    add_pair(left, right)
-
-    for bucket in registration_buckets.values():
-        if len(bucket) > 1:
-            for index, left in enumerate(bucket):
-                for right in bucket[index + 1 :]:
-                    add_pair(left, right)
-
-    rows = [row for row in pairs.values() if row["score"] >= 60]
     rows.sort(key=lambda item: (-item["score"], item["reference"].name.lower()))
     return rows[:limit]
-
 
 
 def moderation_dog_search(query, limit=12):
