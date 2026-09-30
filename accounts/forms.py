@@ -296,7 +296,7 @@ class DogReferenceField(forms.CharField):
         by_id = None
         try:
             by_id = Dog.objects.filter(pk=value).first()
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, ValidationError):
             by_id = None
         if by_id:
             return by_id
