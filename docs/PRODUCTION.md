@@ -115,9 +115,9 @@ Do not change production traffic to Supabase until that verification succeeds.
 1. Keep Railway fully intact.
 2. Configure the Supabase database connection for migration.
 3. Run and verify `copy_to_supabase`.
-4. Create the Cloudflare Hyperdrive configuration against Supabase.
-5. Create/verify the `canecorsoancestry-media` R2 bucket.
-6. Deploy the Worker using the **preview** target.
+4. Run the Cloudflare preview deploy workflow; it creates or updates the cache-disabled Hyperdrive against the validated Supabase Direct connection automatically.
+5. The same workflow creates/verifies the `canecorsoancestry-media` R2 bucket.
+6. Verify the deployed **preview** Worker.
 7. Verify `/healthz/`, login, admin, member dashboard, search, dog profiles, pedigrees, duplicate matching, moderation, submissions, uploads and private/public media access.
 8. Copy existing production media from the Railway bucket to R2 using:
    `python manage.py copy_media_to_cloudflare --target-url=https://<preview>.workers.dev`.
