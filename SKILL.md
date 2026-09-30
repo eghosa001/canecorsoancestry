@@ -27,8 +27,8 @@ Use this file for future implementation work in this repository.
 ## Infrastructure rule
 
 - Production infrastructure is **Render + Aiven PostgreSQL + Cloudflare R2 only**.
-- Cloudflare may be used only for the R2 media gateway unless the owner explicitly changes the architecture.
-- Do not reintroduce Supabase, Railway, Google Cloud Run, GitHub Pages preview, a Cloudflare application proxy, generic S3-provider branches, or migration-only infrastructure without an explicit new request.
+- Cloudflare is used for the R2 media gateway and, by explicit owner request, the public site-edge warm-up/cache proxy. Keep private/authenticated routes uncached.
+- Do not reintroduce Supabase, Railway, Google Cloud Run, GitHub Pages preview, generic S3-provider branches, or migration-only infrastructure without an explicit new request.
 - Prefer direct Render deployment and the existing Aiven/R2 connections over adding another service.
 
 ## Engineering rules
