@@ -27,6 +27,8 @@ services:
         value: django_app
       - key: DJANGO_DB_SSLMODE
         value: require
+      - key: DJANGO_DB_EXTRA_SCHEMAS
+        value: public
       - key: DJANGO_ALLOWED_HOSTS
         value: .onrender.com,canecorsoancestry.com,www.canecorsoancestry.com
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
