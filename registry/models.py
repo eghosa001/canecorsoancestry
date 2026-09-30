@@ -1,9 +1,17 @@
+import re
+import unicodedata
 import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
+
+
+def normalize_identity_name(value):
+    normalized = unicodedata.normalize("NFKD", value or "").casefold()
+    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", "", normalized)
 
 
 class VerificationState(models.TextChoices):
@@ -62,6 +70,9 @@ class Dog(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=220, db_index=True)
+    normalized_name = models.CharField(
+        max_length=220, blank=True, db_index=True, editable=False
+    )
     slug = models.SlugField(max_length=230, unique=True)
     sex = models.CharField(max_length=10, choices=Sex.choices, default=Sex.UNKNOWN)
     date_of_birth = models.DateField(null=True, blank=True)
@@ -182,6 +193,15 @@ class Dog(models.Model):
 
         if errors:
             raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.normalized_name = normalize_identity_name(self.name)
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "name" in update_fields:
+            kwargs["update_fields"] = tuple(
+                dict.fromkeys([*update_fields, "normalized_name"])
+            )
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
