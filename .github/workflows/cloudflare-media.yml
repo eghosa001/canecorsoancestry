@@ -1,0 +1,102 @@
+name: Cloudflare R2 media gateway
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/cloudrun-edge.js"
+      - "wrangler.edge.preview.toml"
+      - "scripts/build_cloudflare_assets.py"
+      - "core/static/**"
+      - "templates/**"
+      - "package.json"
+      - ".github/workflows/cloudflare-media.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-media-gateway:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: pip install -r requirements.txt
+      - run: npm install
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in CLOUDFLARE_API_TOKEN DJANGO_SECRET_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Discover Cloudflare account
+        shell: bash
+        run: |
+          response="$(curl -fsS "https://api.cloudflare.com/client/v4/accounts?per_page=50" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
+          account_id="$(
+            printf '%s' "$response" |
+              python scripts/find_cloudflare_account.py
+          )"
+          echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
+
+      - name: Build static asset bundle
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+        run: |
+          python manage.py collectstatic --noinput
+          python scripts/build_cloudflare_assets.py
+
+      - name: Ensure R2 bucket exists
+        shell: bash
+        run: |
+          npx wrangler r2 bucket info canecorsoancestry-media >/dev/null 2>&1 || \
+            npx wrangler r2 bucket create canecorsoancestry-media
+
+      - name: Build Worker secret file
+        run: |
+          python -c 'import json, os; open("/tmp/edge-secrets.json", "w", encoding="utf-8").write(json.dumps({"DJANGO_SECRET_KEY": os.environ["DJANGO_SECRET_KEY"]}))'
+
+      - name: Deploy media gateway
+        shell: bash
+        run: |
+          npx wrangler deploy \
+            --config wrangler.edge.preview.toml \
+            --var "CLOUD_RUN_ORIGIN:https://example.invalid" \
+            --secrets-file /tmp/edge-secrets.json
+
+      - name: Verify Worker is reachable
+        shell: bash
+        run: |
+          status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/worker.txt -w '%{http_code}' \
+            https://canecorsoancestry-edge.aighewieghosa111.workers.dev/ || true)"
+          if [ "$status" = "000" ]; then
+            echo "::error::Cloudflare Worker was not reachable."
+            exit 1
+          fi
+          echo "Cloudflare media gateway reachable (HTTP $status)."
+
+      - name: Clean temporary secrets
+        if: always()
+        run: rm -f /tmp/edge-secrets.json /tmp/worker.txt
