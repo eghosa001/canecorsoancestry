@@ -38,6 +38,13 @@ jobs:
           DJANGO_SETTINGS_MODULE: config.settings.development
         run: python manage.py check
 
+      - name: Build Worker static assets
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+        run: |
+          python manage.py collectstatic --noinput
+          python scripts/build_cloudflare_assets.py
+
       - name: Build Django container image
         run: docker build -t canecorsoancestry-container:test .
 
