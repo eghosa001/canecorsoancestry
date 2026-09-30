@@ -188,9 +188,16 @@ async function storeInEdgeCache(cache, key, response, request) {
   );
 }
 
-function cachedForVisitor(cached, freshness) {
+function cachedForVisitor(cached, freshness, request) {
   const headers = new Headers(cached.headers);
-  headers.set("cache-control", "public, max-age=30, stale-while-revalidate=300");
+  const url = new URL(request.url);
+  if (url.pathname.startsWith("/static/")) {
+    headers.set("cache-control", `public, max-age=${STATIC_CACHE_SECONDS}, immutable`);
+  } else if (url.search) {
+    headers.set("cache-control", "public, max-age=15, stale-while-revalidate=60");
+  } else {
+    headers.set("cache-control", "public, max-age=30, stale-while-revalidate=300");
+  }
   headers.set("x-cca-edge-cache", freshness);
   return new Response(cached.body, {
     status: cached.status,
@@ -467,9 +474,9 @@ async function handleRequest(request, env, ctx) {
       ctx.waitUntil(wakeCriticalOrigin(env));
       if (ageSeconds > CACHE_FRESH_SECONDS) {
         ctx.waitUntil(refreshCachedPage(request, env, cache, key));
-        return cachedForVisitor(cached, "STALE");
+        return cachedForVisitor(cached, "STALE", request);
       }
-      return cachedForVisitor(cached, "HIT");
+      return cachedForVisitor(cached, "HIT", request);
     }
   }
 
