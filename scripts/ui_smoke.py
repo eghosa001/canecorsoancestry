@@ -17,10 +17,40 @@ def assert_no_global_overflow(page, label):
         raise AssertionError(f"{label} has {overflow}px of global horizontal overflow")
 
 
+def assert_basic_accessibility(page, label):
+    issues = page.evaluate(
+        """() => {
+          const issues = [];
+          if (document.documentElement.lang !== "en") issues.push("document language missing");
+          const ids = [...document.querySelectorAll("[id]")].map((el) => el.id);
+          const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+          if (duplicateIds.length) issues.push("duplicate ids: " + [...new Set(duplicateIds)].join(", "));
+          const images = [...document.querySelectorAll("img:not([alt])")];
+          if (images.length) issues.push(images.length + " image(s) missing alt attributes");
+          const unnamed = [...document.querySelectorAll("button, a[href]")].filter((el) => {
+            const name = (el.getAttribute("aria-label") || el.textContent || "").trim();
+            return !name && !el.querySelector("img[alt]");
+          });
+          if (unnamed.length) issues.push(unnamed.length + " unnamed link/button control(s)");
+          const controls = [...document.querySelectorAll("input:not([type=hidden]), select, textarea")];
+          const unlabeled = controls.filter((el) => {
+            if (el.getAttribute("aria-label") || el.getAttribute("aria-labelledby")) return false;
+            if (!el.id) return true;
+            return !document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+          });
+          if (unlabeled.length) issues.push(unlabeled.length + " unlabeled form control(s)");
+          return issues;
+        }"""
+    )
+    if issues:
+        raise AssertionError(f"{label} accessibility issues: {issues}")
+
+
 def screenshot(page, label, overflow=True):
     page.locator("main").wait_for(state="visible")
     if overflow:
         assert_no_global_overflow(page, label)
+    assert_basic_accessibility(page, label)
     page.screenshot(path=OUT / f"{label}.png", full_page=True)
 
 
