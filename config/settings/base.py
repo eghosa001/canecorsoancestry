@@ -66,7 +66,7 @@ ASGI_APPLICATION = "config.asgi.application"
 
 DATABASES = {"default": dj_database_url.config(
     default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-    conn_max_age=60,
+    conn_max_age=int(os.getenv("DJANGO_DB_CONN_MAX_AGE", "300")),
 )}
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 
@@ -137,6 +137,8 @@ CACHES = {
         "OPTIONS": {"MAX_ENTRIES": 10000},
     }
 }
+
+SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
 
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/dashboard/"
