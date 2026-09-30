@@ -32,7 +32,7 @@ MIDDLEWARE = [
 # fallback for static assets if they are requested from the origin directly.
 STORAGES = {
     "default": {
-        "BACKEND": "core.cloudrun_storage.CloudflareR2GatewayStorage",
+        "BACKEND": "core.r2_gateway_storage.CloudflareR2GatewayStorage",
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
