@@ -63,18 +63,18 @@ jobs:
           else
             template="wrangler.preview.toml"
           fi
-          uv run python scripts/render_wrangler.py "$template" wrangler.generated.toml
+          uv run python scripts/render_wrangler.py "$template" wrangler.toml
 
       - name: Remove legacy Railway dependency manifest from Worker bundle
         run: rm requirements.txt
 
       - name: Ensure media bucket exists
         run: |
-          uv run pywrangler r2 bucket create canecorsoancestry-media --config wrangler.generated.toml ||             uv run pywrangler r2 bucket list --config wrangler.generated.toml
+          uv run pywrangler r2 bucket create canecorsoancestry-media ||             uv run pywrangler r2 bucket list
 
       - name: Set Django Worker secret
         run: |
-          printf '%s' "$DJANGO_SECRET_KEY" |             uv run pywrangler secret put DJANGO_SECRET_KEY --config wrangler.generated.toml
+          printf '%s' "$DJANGO_SECRET_KEY" |             uv run pywrangler secret put DJANGO_SECRET_KEY
 
       - name: Deploy Django Worker
-        run: uv run pywrangler deploy --config wrangler.generated.toml
+        run: uv run pywrangler deploy
