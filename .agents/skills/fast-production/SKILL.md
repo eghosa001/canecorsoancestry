@@ -12,8 +12,9 @@ Repository-specific security, business, architecture, data, and release rules ov
 
 ## Repository infrastructure guardrail
 - Active production providers are Render, Aiven PostgreSQL, and Cloudflare R2 only.
-- The Cloudflare Worker is R2-media-only; it must not proxy the Django application.
-- Do not reintroduce Supabase, Railway, Google Cloud Run, GitHub Pages preview, custom-domain edge routing, generic S3 provider branches, or completed migration scaffolding unless the owner explicitly requests an architecture change.
+- Cloudflare has two explicit production Worker roles: the private R2 media gateway and the public site-edge warm-up/cache proxy in `src/site-edge.js`.
+- The site-edge Worker may cache anonymous public GET pages and wake Render in the background, but must bypass private/authenticated paths and must never cache responses with session/CSRF cookies or `private`/`no-store` cache controls.
+- Do not reintroduce Supabase, Railway, Google Cloud Run, GitHub Pages preview, generic S3 provider branches, or completed migration scaffolding unless the owner explicitly requests an architecture change.
 
 ## Default execution
 - Classify work as micro, normal, or cross-cutting/high-risk.
