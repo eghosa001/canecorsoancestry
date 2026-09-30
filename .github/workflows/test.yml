@@ -35,6 +35,7 @@ jobs:
           DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver
           SITE_URL: https://testserver
           DATABASE_URL: sqlite:///render-check.sqlite3
+          DJANGO_DB_EXTRA_SCHEMAS: public
           R2_GATEWAY_URL: https://edge.example.workers.dev
           MEDIA_EDGE_BASE_URL: https://edge.example.workers.dev
         run: python manage.py check --deploy
