@@ -136,7 +136,7 @@ def submit_dog(request):
         )
         messages.success(
             request,
-            "Dog submission received. It will stay private until a moderator reviews it.",
+            "Dog submission received. It will not appear publicly unless an admin reviews and approves it.",
         )
         return redirect("accounts:submissions")
 
