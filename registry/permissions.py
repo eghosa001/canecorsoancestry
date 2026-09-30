@@ -1,4 +1,4 @@
-from .models import KennelMembership
+from .models import KennelMembership, Submission
 
 
 def membership_for(user, kennel):
@@ -21,4 +21,13 @@ def can_edit_kennel(user, kennel):
 
 
 def can_contribute_to_dog(user, dog):
-    return bool(dog and can_contribute_to_kennel(user, dog.kennel))
+    if not user.is_authenticated or dog is None:
+        return False
+    if can_contribute_to_kennel(user, dog.kennel):
+        return True
+    return Submission.objects.filter(
+        kind=Submission.Kind.DOG,
+        status=Submission.Status.APPROVED,
+        submitted_by=user,
+        dog=dog,
+    ).exists()
