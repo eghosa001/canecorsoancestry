@@ -44,6 +44,8 @@ It measures public search, popularity lookup and reverse-pedigree traversal with
 
 Authentication and contribution endpoints have cache-backed rate limits. Production responses use HSTS, secure cookies, CSRF, CSP, frame blocking and private-page no-cache/noindex rules. Passwords prefer Argon2 and existing supported hashes are upgraded when users authenticate.
 
+When SMTP/account email is configured, set `ACCOUNT_EMAIL_ENABLED=1`. Email verification is then required by default for new member accounts unless `REQUIRE_EMAIL_VERIFICATION=0` is explicitly set. Configure `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` and the SMTP backend before enabling it. Password-reset and verification emails are rate-limited; when account email is disabled, production uses a dummy backend rather than writing reset tokens to logs.
+
 A scheduled Security audit workflow checks Python dependencies weekly. Keep it separate from every PR so normal development remains fast.
 
 ## Backup and recovery
