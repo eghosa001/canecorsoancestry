@@ -69,7 +69,7 @@
           <p class="muted">{{ primary_kennel.city }}{% if primary_kennel.city and primary_kennel.country %}, {% endif %}{{ primary_kennel.country }}</p>
           <div class="button-row"><a class="btn btn-outline" href="{% url 'registry:kennel-detail' primary_kennel.slug %}">View public kennel</a><a class="btn btn-outline" href="{% url 'accounts:edit-kennel' primary_kennel.pk %}">Suggest changes</a></div>
         {% else %}
-          <div class="empty-state"><p>No kennel membership recorded.</p></div>
+          <div class="empty-state"><p>No kennel membership recorded.</p><div class="button-row"><a class="btn btn-gold" href="{% url 'accounts:submit-kennel' %}">Create kennel profile</a><a class="btn btn-outline" href="{% url 'registry:kennel-list' %}">Find an existing kennel</a></div></div>
         {% endif %}
       </section>
 
