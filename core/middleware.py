@@ -76,6 +76,7 @@ class AbuseProtectionMiddleware:
     RULES = (
         ("/accounts/login/", 10, 600),
         ("/member/signup/", 5, 3600),
+        ("/member/resend-verification/", 5, 3600),
         ("/member/submit/", 60, 3600),
     )
 
