@@ -52,5 +52,8 @@ jobs:
       - name: Render preview configuration
         run: uv run python scripts/render_wrangler.py wrangler.preview.toml wrangler.generated.toml
 
+      - name: Remove legacy Railway dependency manifest from Worker bundle
+        run: rm requirements.txt
+
       - name: Worker bundle dry run
         run: uv run pywrangler deploy --dry-run --config wrangler.generated.toml
