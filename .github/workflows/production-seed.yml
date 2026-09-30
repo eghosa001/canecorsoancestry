@@ -70,6 +70,28 @@ jobs:
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         run: python manage.py import_bellissimo
 
+      - name: Validate Bellissimo puppy import
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_DB_EXTRA_SCHEMAS: public
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: python manage.py import_bellissimo_puppies --dry-run
+
+      - name: Import verified Bellissimo puppy records
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_DB_EXTRA_SCHEMAS: public
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: python manage.py import_bellissimo_puppies
+
       - name: Verify imported records
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production
@@ -84,12 +106,16 @@ jobs:
           python manage.py shell -c "
           from registry.models import Dog, DogExternalKey
           external = DogExternalKey.objects.filter(namespace='bellissimo-geni')
+          puppies = DogExternalKey.objects.filter(namespace='bellissimo-geni-puppies')
           public = Dog.objects.filter(external_keys__namespace='bellissimo-geni', is_public=True).distinct()
           private = Dog.objects.filter(external_keys__namespace='bellissimo-geni', is_public=False).distinct()
+          puppy_public = Dog.objects.filter(external_keys__namespace='bellissimo-geni-puppies', is_public=True).distinct()
           assert external.count() == 117, f'Expected 117 Bellissimo external keys, got {external.count()}'
           assert public.count() == 101, f'Expected 101 public dogs, got {public.count()}'
           assert private.count() == 16, f'Expected 16 draft dogs, got {private.count()}'
-          print(f'Verified: {external.count()} canonical dogs; {public.count()} public; {private.count()} draft')
+          assert puppies.count() == 2, f'Expected 2 verified puppy external keys, got {puppies.count()}'
+          assert puppy_public.count() == 2, f'Expected 2 public verified puppies, got {puppy_public.count()}'
+          print(f'Verified: 117 canonical seed keys + {puppies.count()} puppy keys; {public.count() + puppy_public.count()} public source-linked records; {private.count()} draft')
           "
 
       - name: Audit production pedigree integrity
