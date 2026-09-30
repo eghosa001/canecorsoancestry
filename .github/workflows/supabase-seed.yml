@@ -45,7 +45,7 @@ jobs:
           echo "::add-mask::$session_url"
           echo "SUPABASE_MIGRATION_URL=$session_url" >> "$GITHUB_ENV"
 
-      - name: Apply Django migrations
+      - name: Verify Django migrations are current
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production
           DJANGO_DB_SCHEMA: django_app
@@ -53,7 +53,7 @@ jobs:
           DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
           DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
-        run: DATABASE_URL="$SUPABASE_MIGRATION_URL" python manage.py migrate --noinput
+        run: DATABASE_URL="$SUPABASE_MIGRATION_URL" python manage.py migrate --check
 
       - name: Validate Bellissimo import
         env:
