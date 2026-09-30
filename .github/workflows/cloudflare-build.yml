@@ -59,8 +59,11 @@ jobs:
       - name: Remove legacy Railway dependency manifest from Worker bundle
         run: rm requirements.txt
 
-      - name: Remove local build virtualenv from Worker bundle
-        run: rm -rf .venv
+      - name: Vendor Python Worker dependencies
+        run: uvx --from 'workers-py>=1.17.4,<2' --with workers-runtime-sdk pywrangler sync
+
+      - name: Remove local build environments from Worker upload
+        run: rm -rf .venv .venv-workers
 
       - name: Worker bundle dry run
-        run: uvx --from 'workers-py>=1.17.4,<2' --with workers-runtime-sdk pywrangler deploy --dry-run
+        run: npx wrangler deploy --dry-run
