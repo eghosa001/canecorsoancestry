@@ -193,6 +193,10 @@ async function proxyToCloudRun(request, env, url) {
   headers.set("x-forwarded-host", url.host);
   headers.set("x-forwarded-proto", url.protocol.replace(":", ""));
   headers.set("x-cane-edge", "cloudflare");
+  headers.set(
+    "x-cane-edge-auth",
+    await hmacHex(env.DJANGO_SECRET_KEY, "canecorsoancestry-cloud-run-edge"),
+  );
 
   return fetch(
     new Request(target.toString(), {

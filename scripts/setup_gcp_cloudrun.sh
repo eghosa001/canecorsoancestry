@@ -65,7 +65,7 @@ for secret in "$DB_SECRET" "$DJANGO_SECRET"; do
     gcloud secrets create "$secret" --replication-policy=automatic >/dev/null
   fi
 
-  gcloud secrets add-iam-policy-binding "$secret"     --member="serviceAccount:$DEPLOY_SA"     --role="roles/secretmanager.secretVersionAdder" >/dev/null
+  gcloud secrets add-iam-policy-binding "$secret"     --member="serviceAccount:$DEPLOY_SA"     --role="roles/secretmanager.secretVersionManager" >/dev/null
 
   gcloud secrets add-iam-policy-binding "$secret"     --member="serviceAccount:$RUNTIME_SA"     --role="roles/secretmanager.secretAccessor" >/dev/null
 done
