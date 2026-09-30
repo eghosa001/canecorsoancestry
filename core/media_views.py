@@ -136,14 +136,17 @@ def media_import(request, path):
         return JsonResponse({"error": "Object exceeds migration size limit."}, status=413)
 
     if default_storage.exists(path) and default_storage.size(path) == len(body):
-        return JsonResponse(
-            {
-                "status": "exists",
-                "path": path,
-                "size": len(body),
-                "sha256": digest,
-            }
-        )
+        with default_storage.open(path, "rb") as existing:
+            existing_digest = body_sha256(existing.read())
+        if existing_digest == digest:
+            return JsonResponse(
+                {
+                    "status": "exists",
+                    "path": path,
+                    "size": len(body),
+                    "sha256": digest,
+                }
+            )
 
     save_exact = getattr(default_storage, "save_exact", None)
     if save_exact is None:
