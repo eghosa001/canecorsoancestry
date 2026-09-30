@@ -80,8 +80,24 @@ if database.get("ENGINE", "").endswith("postgresql"):
             raise ImproperlyConfigured(
                 "DJANGO_DB_SCHEMA must be a valid PostgreSQL identifier."
             )
+        extra_schemas = [
+            item.strip()
+            for item in os.getenv(
+                "DJANGO_DB_EXTRA_SCHEMAS",
+                "extensions,public",
+            ).split(",")
+            if item.strip()
+        ]
+        if any(
+            not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", schema)
+            for schema in extra_schemas
+        ):
+            raise ImproperlyConfigured(
+                "DJANGO_DB_EXTRA_SCHEMAS must contain valid PostgreSQL identifiers."
+            )
+        search_path = ",".join(dict.fromkeys([db_schema, *extra_schemas]))
         existing_options = db_options.get("options", "").strip()
-        search_path_option = f"-c search_path={db_schema},extensions,public"
+        search_path_option = f"-c search_path={search_path}"
         db_options["options"] = (
             f"{existing_options} {search_path_option}".strip()
         )
