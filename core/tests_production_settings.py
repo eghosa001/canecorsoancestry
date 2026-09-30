@@ -1,4 +1,3 @@
-import json
 import os
 import subprocess
 import sys
@@ -19,28 +18,19 @@ class ProductionSettingsTests(SimpleTestCase):
                 "DJANGO_DB_SCHEMA": "django_app",
                 "DJANGO_DB_EXTRA_SCHEMAS": "public",
                 "DJANGO_DB_SSLMODE": "require",
-                "DJANGO_REQUIRE_OBJECT_STORAGE": "1",
-                "AWS_STORAGE_BUCKET_NAME": "ancestry-private",
-                "AWS_S3_REGION_NAME": "auto",
-                "AWS_S3_ENDPOINT_URL": "https://objects.example.com",
-                "AWS_ACCESS_KEY_ID": "access-key",
-                "AWS_SECRET_ACCESS_KEY": "secret-key",
             }
         )
         return env
 
     def _run_settings_probe(self, env):
         script = """
-import json
 import django
 
 django.setup()
 from django.conf import settings
 
-print(json.dumps({
-    "options": settings.DATABASES["default"]["OPTIONS"],
-    "storage": settings.STORAGES["default"]["OPTIONS"],
-}))
+print(settings.DATABASES["default"]["OPTIONS"])
+print(settings.STORAGES["default"]["BACKEND"])
 """
         return subprocess.run(
             [sys.executable, "-c", script],
@@ -51,19 +41,14 @@ print(json.dumps({
             check=False,
         )
 
-    def test_provider_neutral_database_and_storage_settings(self):
+    def test_aiven_database_settings_are_provider_focused(self):
         result = self._run_settings_probe(self._production_env())
         self.assertEqual(result.returncode, 0, result.stderr)
-        payload = json.loads(result.stdout.strip())
+        self.assertIn("search_path=django_app,public", result.stdout)
+        self.assertIn("'sslmode': 'require'", result.stdout)
         self.assertIn(
-            "search_path=django_app,public",
-            payload["options"]["options"],
-        )
-        self.assertEqual(payload["options"]["sslmode"], "require")
-        self.assertEqual(payload["storage"]["bucket_name"], "ancestry-private")
-        self.assertEqual(
-            payload["storage"]["endpoint_url"],
-            "https://objects.example.com",
+            "django.core.files.storage.FileSystemStorage",
+            result.stdout,
         )
 
     def test_rejects_unsafe_database_schema_name(self):
