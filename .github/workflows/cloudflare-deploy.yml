@@ -24,6 +24,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      SUPABASE_MIGRATION_URL: ${{ secrets.SUPABASE_MIGRATION_URL }}
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
 
     steps:
@@ -45,7 +46,7 @@ jobs:
         shell: bash
         run: |
           missing=0
-          for name in CLOUDFLARE_API_TOKEN SUPABASE_DATABASE_URL DJANGO_SECRET_KEY; do
+          for name in CLOUDFLARE_API_TOKEN SUPABASE_DATABASE_URL SUPABASE_MIGRATION_URL DJANGO_SECRET_KEY; do
             if [ -z "${!name}" ]; then
               echo "::error::Missing GitHub Actions secret: $name"
               missing=1
@@ -73,7 +74,7 @@ jobs:
       - name: Apply Django migrations to Supabase
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production
-          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.SUPABASE_MIGRATION_URL }}
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
           DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
