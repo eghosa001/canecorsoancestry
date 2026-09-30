@@ -1,0 +1,90 @@
+name: Seed production Bellissimo data
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/supabase-seed.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in DATABASE_URL DJANGO_SECRET_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - run: pip install -r requirements.txt
+
+      - name: Verify Django migrations are current
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: python manage.py migrate --check
+
+      - name: Validate Bellissimo import
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: python manage.py import_bellissimo --dry-run
+
+      - name: Import canonical Bellissimo records
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: python manage.py import_bellissimo
+
+      - name: Verify imported records
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        shell: bash
+        run: |
+          python manage.py shell -c "
+          from registry.models import Dog, DogExternalKey
+          external = DogExternalKey.objects.filter(namespace='bellissimo-geni')
+          public = Dog.objects.filter(external_keys__namespace='bellissimo-geni', is_public=True).distinct()
+          private = Dog.objects.filter(external_keys__namespace='bellissimo-geni', is_public=False).distinct()
+          assert external.count() == 117, f'Expected 117 Bellissimo external keys, got {external.count()}'
+          assert public.count() == 101, f'Expected 101 public dogs, got {public.count()}'
+          assert private.count() == 16, f'Expected 16 draft dogs, got {private.count()}'
+          print(f'Verified: {external.count()} canonical dogs; {public.count()} public; {private.count()} draft')
+          "
