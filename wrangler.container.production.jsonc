@@ -1,0 +1,49 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "canecorsoancestry",
+  "main": "src/container-worker.js",
+  "compatibility_date": "2026-09-30",
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "canecorsoancestry.com",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "./worker_assets",
+    "binding": "ASSETS",
+    "run_worker_first": ["/*", "!/static/*"]
+  },
+  "containers": [
+    {
+      "class_name": "DjangoContainer",
+      "image": "./Dockerfile",
+      "max_instances": 1,
+      "instance_type": "lite"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DJANGO_CONTAINER",
+        "class_name": "DjangoContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "container-v1",
+      "new_sqlite_classes": ["DjangoContainer"]
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA_BUCKET",
+      "bucket_name": "canecorsoancestry-media"
+    }
+  ]
+}
