@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 from django.db.models import Q
 from django.utils.text import slugify
+from PIL import Image, UnidentifiedImageError
 
 from registry.models import DisputeCase, Dog, DogDocument, DogRegistration, DogSource, Kennel, Litter, Submission, VerificationState
 
@@ -23,6 +24,17 @@ def validate_image_upload(upload):
     is_webp = len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
     if not (is_jpeg or is_png or is_webp):
         raise ValidationError("The uploaded image content is not a valid JPEG, PNG or WebP file.")
+    try:
+        with Image.open(upload) as image:
+            if image.width > 12000 or image.height > 12000:
+                raise ValidationError("Image dimensions must not exceed 12,000 × 12,000 pixels.")
+            if image.width * image.height > 60_000_000:
+                raise ValidationError("Image contains too many pixels.")
+            image.verify()
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise ValidationError("The uploaded image is damaged or not a supported image.") from exc
+    finally:
+        upload.seek(0)
 
 
 def validate_document_upload(upload):
