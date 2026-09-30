@@ -1,8 +1,27 @@
+import hashlib
 import uuid
 
+from django.core.cache import cache
+from django.http import JsonResponse
 from django.utils.cache import patch_cache_control
 
 PRIVATE_PREFIXES = ("/member/", "/accounts/", "/admin/", "/dashboard/")
+
+CSP = "; ".join(
+    [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "object-src 'none'",
+        "img-src 'self' data: https:",
+        "media-src 'self' https:",
+        "font-src 'self' data:",
+        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self' 'unsafe-inline'",
+        "connect-src 'self'",
+    ]
+)
 
 
 class RequestSecurityMiddleware:
@@ -21,7 +40,79 @@ class RequestSecurityMiddleware:
             "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
         )
         response.setdefault("X-Permitted-Cross-Domain-Policies", "none")
+        response.setdefault("Content-Security-Policy", CSP)
+        response.setdefault("Cross-Origin-Resource-Policy", "same-site")
         if request.path.startswith(PRIVATE_PREFIXES):
             response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
             patch_cache_control(response, private=True, no_store=True)
         return response
+
+
+
+class AbuseProtectionMiddleware:
+    """Small cache-backed guard for authentication and contribution abuse.
+
+    This is intentionally dependency-free so it works on the current Render
+    deployment. A shared cache can replace LocMem later without changing the
+    middleware.
+    """
+
+    RULES = (
+        ("/accounts/login/", 10, 600),
+        ("/member/signup/", 5, 3600),
+        ("/member/submit/", 60, 3600),
+    )
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.method == "POST":
+            rule = next(
+                (
+                    (limit, window)
+                    for prefix, limit, window in self.RULES
+                    if request.path.startswith(prefix)
+                ),
+                None,
+            )
+            if rule:
+                limit, window = rule
+                principal = self._principal(request)
+                digest = hashlib.sha256(
+                    f"{request.path}|{principal}".encode("utf-8")
+                ).hexdigest()
+                key = f"abuse:{digest}"
+                if cache.add(key, 1, timeout=window):
+                    count = 1
+                else:
+                    try:
+                        count = cache.incr(key)
+                    except ValueError:
+                        cache.set(key, 1, timeout=window)
+                        count = 1
+                if count > limit:
+                    response = JsonResponse(
+                        {
+                            "detail": (
+                                "Too many attempts. Please wait before trying again."
+                            )
+                        },
+                        status=429,
+                    )
+                    response["Retry-After"] = str(window)
+                    response["Cache-Control"] = "no-store"
+                    return response
+        return self.get_response(request)
+
+    @staticmethod
+    def _principal(request):
+        if getattr(request, "user", None) and request.user.is_authenticated:
+            return f"user:{request.user.pk}"
+        identifier = (
+            request.POST.get("username")
+            or request.POST.get("email")
+            or ""
+        ).strip().lower()[:180]
+        remote = request.META.get("REMOTE_ADDR", "unknown")
+        return f"anon:{remote}:{identifier}"
