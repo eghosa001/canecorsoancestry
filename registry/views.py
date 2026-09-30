@@ -234,17 +234,26 @@ def kennel_list(request):
         )
         .order_by("name")
     )
-    return render(request, "registry/kennel_list.html", {"kennels": kennels})
+    page_obj = Paginator(kennels, 30).get_page(request.GET.get("page"))
+    return render(
+        request,
+        "registry/kennel_list.html",
+        {"kennels": page_obj.object_list, "page_obj": page_obj},
+    )
 
 
 def kennel_detail(request, slug):
     kennel = get_object_or_404(Kennel, slug=slug)
-    dogs = _dog_cards(Dog.objects.filter(kennel=kennel, is_public=True)).order_by("name")
-    litters = (
+    dog_queryset = _dog_cards(
+        Dog.objects.filter(kennel=kennel, is_public=True)
+    ).order_by("name")
+    litter_queryset = (
         Litter.objects.filter(kennel=kennel, is_public=True)
         .select_related("sire", "dam")
         .order_by("-date_of_birth", "code")
     )
+    dog_page = Paginator(dog_queryset, 24).get_page(request.GET.get("dogs_page"))
+    litter_page = Paginator(litter_queryset, 20).get_page(request.GET.get("litters_page"))
     kennel_linked = kennel.memberships.exists()
     is_member = bool(
         request.user.is_authenticated
@@ -266,8 +275,12 @@ def kennel_detail(request, slug):
         "registry/kennel_detail.html",
         {
             "kennel": kennel,
-            "dogs": dogs,
-            "litters": litters,
+            "dogs": dog_page.object_list,
+            "litters": litter_page.object_list,
+            "dog_page": dog_page,
+            "litter_page": litter_page,
+            "dog_total": dog_page.paginator.count,
+            "litter_total": litter_page.paginator.count,
             "can_claim": (
                 request.user.is_authenticated
                 and not kennel_linked

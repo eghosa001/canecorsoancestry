@@ -5,7 +5,7 @@
   <div class="auth-card">
     <p class="eyebrow">Member access</p>
     <h1>Create account</h1>
-    <p class="muted">Members can submit dogs and pedigree information for admin review, then manage approved dogs from their dashboard.</p>
+    <p class="muted">Members can submit dogs and pedigree information for admin review, then manage approved dogs from their dashboard.{% if account_email_enabled %} You will verify your email before the account becomes active.{% endif %}</p>
     <form method="post">
       {% csrf_token %}
       {{ form.non_field_errors }}

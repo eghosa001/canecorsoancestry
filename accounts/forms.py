@@ -1,11 +1,57 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
+from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 from django.db.models import Q
 from django.utils.text import slugify
+from PIL import Image, UnidentifiedImageError
 
 from registry.models import DisputeCase, Dog, DogDocument, DogRegistration, DogSource, Kennel, Litter, Submission, VerificationState
+
+
+IMAGE_MAX_BYTES = 10 * 1024 * 1024
+DOCUMENT_MAX_BYTES = 20 * 1024 * 1024
+
+
+def validate_image_upload(upload):
+    if upload.size > IMAGE_MAX_BYTES:
+        raise ValidationError("Image files must be 10 MB or smaller.")
+    header = upload.read(16)
+    upload.seek(0)
+    is_jpeg = header.startswith(b"\xff\xd8\xff")
+    is_png = header.startswith(b"\x89PNG\r\n\x1a\n")
+    is_webp = len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
+    if not (is_jpeg or is_png or is_webp):
+        raise ValidationError("The uploaded image content is not a valid JPEG, PNG or WebP file.")
+    try:
+        with Image.open(upload) as image:
+            if image.width > 12000 or image.height > 12000:
+                raise ValidationError("Image dimensions must not exceed 12,000 × 12,000 pixels.")
+            if image.width * image.height > 60_000_000:
+                raise ValidationError("Image contains too many pixels.")
+            image.verify()
+    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+        raise ValidationError("The uploaded image is damaged or not a supported image.") from exc
+    finally:
+        upload.seek(0)
+
+
+def validate_document_upload(upload):
+    if upload.size > DOCUMENT_MAX_BYTES:
+        raise ValidationError("Evidence files must be 20 MB or smaller.")
+    header = upload.read(16)
+    upload.seek(0)
+    is_pdf = header.startswith(b"%PDF-")
+    is_jpeg = header.startswith(b"\xff\xd8\xff")
+    is_png = header.startswith(b"\x89PNG\r\n\x1a\n")
+    is_webp = len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
+    if not (is_pdf or is_jpeg or is_png or is_webp):
+        raise ValidationError("The uploaded evidence is not a valid PDF, JPEG, PNG or WebP file.")
+
+
+class VerificationResendForm(forms.Form):
+    email = forms.EmailField()
 
 
 class MemberSignUpForm(UserCreationForm):
@@ -146,7 +192,10 @@ class DogCorrectionForm(forms.ModelForm):
 
 class DogImageSubmissionForm(forms.Form):
     attachment = forms.FileField(
-        validators=[FileExtensionValidator(["jpg", "jpeg", "png", "webp"])]
+        validators=[
+            FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
+            validate_image_upload,
+        ]
     )
     caption = forms.CharField(max_length=220, required=False)
     is_primary = forms.BooleanField(required=False)
@@ -157,7 +206,10 @@ class DogDocumentSubmissionForm(forms.Form):
     title = forms.CharField(max_length=220)
     document_type = forms.ChoiceField(choices=DogDocument.DocumentType.choices)
     attachment = forms.FileField(
-        validators=[FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"])]
+        validators=[
+            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            validate_document_upload,
+        ]
     )
     is_public = forms.BooleanField(
         required=False,
@@ -231,9 +283,37 @@ class ReviewSubmissionForm(forms.Form):
     )
 
 
+class DogReferenceField(forms.CharField):
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault(
+            "help_text",
+            "Enter the exact dog name or UUID. Use UUID when names are duplicated.",
+        )
+        super().__init__(*args, **kwargs)
+
+    def clean(self, value):
+        value = super().clean(value).strip()
+        by_id = None
+        try:
+            by_id = Dog.objects.filter(pk=value).first()
+        except (TypeError, ValueError, ValidationError):
+            by_id = None
+        if by_id:
+            return by_id
+
+        matches = list(Dog.objects.filter(name__iexact=value).order_by("pk")[:2])
+        if not matches:
+            raise forms.ValidationError("No dog matches that exact name or UUID.")
+        if len(matches) > 1:
+            raise forms.ValidationError(
+                "More than one dog has that name. Use the UUID shown by moderator search."
+            )
+        return matches[0]
+
+
 class MergeDogsForm(forms.Form):
-    canonical = forms.ModelChoiceField(queryset=Dog.objects.order_by("name"))
-    duplicate = forms.ModelChoiceField(queryset=Dog.objects.order_by("name"))
+    canonical = DogReferenceField(label="Canonical dog")
+    duplicate = DogReferenceField(label="Duplicate to retire")
 
     def clean(self):
         cleaned = super().clean()
@@ -242,27 +322,37 @@ class MergeDogsForm(forms.Form):
         return cleaned
 
 
-
 class VerificationEventForm(forms.Form):
-    dog = forms.ModelChoiceField(queryset=Dog.objects.order_by("name"))
+    dog = DogReferenceField()
     field_name = forms.CharField(
         max_length=80,
         required=False,
         help_text="Leave blank to update the dog's overall verification state.",
     )
     state = forms.ChoiceField(choices=VerificationState.choices)
-    source = forms.ModelChoiceField(
-        queryset=DogSource.objects.select_related("dog").order_by("dog__name", "-created_at"),
+    source_id = forms.IntegerField(
         required=False,
+        min_value=1,
+        label="Source ID",
+        help_text="Optional evidence source ID already attached to this dog.",
     )
     note = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
 
     def clean(self):
         cleaned = super().clean()
         dog = cleaned.get("dog")
-        source = cleaned.get("source")
-        if dog and source and source.dog_id != dog.pk:
-            self.add_error("source", "The selected source belongs to a different dog.")
+        source_id = cleaned.get("source_id")
+        source = None
+        if source_id:
+            source = DogSource.objects.filter(pk=source_id).first()
+            if source is None:
+                self.add_error("source_id", "No evidence source has that ID.")
+            elif dog and source.dog_id != dog.pk:
+                self.add_error(
+                    "source_id",
+                    "The selected source belongs to a different dog.",
+                )
+        cleaned["source"] = source
         return cleaned
 
 
@@ -274,7 +364,10 @@ class KennelClaimForm(forms.Form):
     )
     evidence = forms.FileField(
         required=False,
-        validators=[FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"])],
+        validators=[
+            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            validate_document_upload,
+        ],
         help_text="Optional supporting document or image.",
     )
     notes = forms.CharField(
@@ -367,7 +460,10 @@ class DisputeForm(forms.Form):
     )
     attachment = forms.FileField(
         required=False,
-        validators=[FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"])],
+        validators=[
+            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            validate_document_upload,
+        ],
         help_text="Optional pedigree, certificate, screenshot or other supporting evidence.",
     )
 

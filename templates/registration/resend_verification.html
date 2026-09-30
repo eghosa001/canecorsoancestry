@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Resend verification · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="auth-shell">
+  <div class="auth-card">
+    <p class="eyebrow">Member verification</p>
+    <h1>Resend verification email</h1>
+    <p class="muted">Enter the email used when creating the account. For privacy, we do not reveal whether an inactive account exists.</p>
+    <form method="post">
+      {% csrf_token %}
+      <label for="{{ form.email.id_for_label }}">Email</label>
+      {{ form.email }}
+      {{ form.email.errors }}
+      <button class="btn btn-gold" type="submit">Send verification link</button>
+    </form>
+    <p class="muted"><a class="text-link" href="{% url 'login' %}">Back to sign in</a></p>
+  </div>
+</section>
+{% endblock %}

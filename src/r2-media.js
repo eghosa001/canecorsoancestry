@@ -56,6 +56,10 @@ function r2Headers(object, cacheControl = "private, no-store") {
   }
   headers.set("cache-control", cacheControl);
   headers.set("x-content-type-options", "nosniff");
+  const contentType = headers.get("content-type") || "";
+  if (contentType === "application/pdf") {
+    headers.set("content-disposition", "attachment");
+  }
   return headers;
 }
 

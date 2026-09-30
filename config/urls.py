@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.contrib.sitemaps.views import sitemap
+from django.contrib.sitemaps.views import index as sitemap_index, sitemap as sitemap_view
 from django.urls import include, path
 
 from core.media_views import media_file
@@ -12,7 +12,18 @@ urlpatterns = [
     path("", home, name="home"),
     path("healthz/", healthz, name="healthz"),
     path("robots.txt", robots_txt, name="robots"),
-    path("sitemap.xml", sitemap, {"sitemaps": SITEMAPS}, name="sitemap"),
+    path(
+        "sitemap.xml",
+        sitemap_index,
+        {"sitemaps": SITEMAPS, "sitemap_url_name": "sitemap-section"},
+        name="sitemap",
+    ),
+    path(
+        "sitemap-<section>.xml",
+        sitemap_view,
+        {"sitemaps": SITEMAPS},
+        name="sitemap-section",
+    ),
     path("media/<path:path>", media_file, name="media-file"),
     path("dashboard/", dashboard, name="dashboard"),
     path("accounts/", include("django.contrib.auth.urls")),

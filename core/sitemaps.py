@@ -8,7 +8,14 @@ class StaticViewSitemap(Sitemap):
     priority = 0.6
     changefreq = "weekly"
     def items(self):
-        return ("home", "registry:dog-search", "registry:kennel-list", "pedigrees:index", "pedigrees:virtual-mating")
+        return (
+            "home",
+            "registry:dog-search",
+            "registry:kennel-list",
+            "registry:statistics",
+            "pedigrees:index",
+            "pedigrees:virtual-mating",
+        )
     def location(self, item):
         return reverse(item)
 
@@ -28,6 +35,12 @@ class PedigreeSitemap(DogSitemap):
     priority = 0.7
     def location(self, dog):
         return reverse("pedigrees:detail", args=[dog.slug])
+
+
+class ReversePedigreeSitemap(DogSitemap):
+    priority = 0.6
+    def location(self, dog):
+        return reverse("pedigrees:reverse", args=[dog.slug])
 
 
 class KennelSitemap(Sitemap):
@@ -56,6 +69,7 @@ SITEMAPS = {
     "static": StaticViewSitemap,
     "dogs": DogSitemap,
     "pedigrees": PedigreeSitemap,
+    "descendants": ReversePedigreeSitemap,
     "kennels": KennelSitemap,
     "litters": LitterSitemap,
 }

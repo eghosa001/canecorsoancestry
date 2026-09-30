@@ -25,7 +25,7 @@ SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = "Lax"
-SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_HSTS_SECONDS", "3600"))
+SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_HSTS_SECONDS", "31536000"))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("DJANGO_HSTS_INCLUDE_SUBDOMAINS", "1") == "1"
 SECURE_HSTS_PRELOAD = os.getenv("DJANGO_HSTS_PRELOAD", "0") == "1"
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -38,11 +38,15 @@ X_FRAME_OPTIONS = "DENY"
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
 
-if ANCESTRY_EMAIL_NOTIFICATIONS:  # noqa: F405
+if not ACCOUNT_EMAIL_ENABLED and EMAIL_BACKEND.endswith("console.EmailBackend"):  # noqa: F405
+    # Never write password-reset links/tokens to production logs.
+    EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"
+
+if ACCOUNT_EMAIL_ENABLED or ANCESTRY_EMAIL_NOTIFICATIONS:  # noqa: F405
     missing_email = [
         name
         for name, value in {
@@ -54,6 +58,6 @@ if ANCESTRY_EMAIL_NOTIFICATIONS:  # noqa: F405
     ]
     if missing_email:
         raise ImproperlyConfigured(
-            "Email notifications are enabled but these settings are missing: "
+            "Account email is enabled but these settings are missing: "
             + ", ".join(missing_email)
         )

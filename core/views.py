@@ -35,7 +35,11 @@ def healthz(request):
         response = JsonResponse({
             "status": "ok",
             "service": "canecorsoancestry",
-            "release": os.getenv("RAILWAY_GIT_COMMIT_SHA", ""),
+            "release": (
+                os.getenv("RENDER_GIT_COMMIT")
+                or os.getenv("GIT_COMMIT_SHA")
+                or ""
+            ),
         })
     response["Cache-Control"] = "no-store"
     return response

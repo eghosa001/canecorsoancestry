@@ -17,10 +17,45 @@ def assert_no_global_overflow(page, label):
         raise AssertionError(f"{label} has {overflow}px of global horizontal overflow")
 
 
+def assert_basic_accessibility(page, label):
+    issues = page.evaluate(
+        """() => {
+          const issues = [];
+          if (document.documentElement.lang !== "en") issues.push("document language missing");
+          const ids = [...document.querySelectorAll("[id]")].map((el) => el.id);
+          const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+          if (duplicateIds.length) issues.push("duplicate ids: " + [...new Set(duplicateIds)].join(", "));
+          const images = [...document.querySelectorAll("img:not([alt])")];
+          if (images.length) issues.push(images.length + " image(s) missing alt attributes");
+          const unnamed = [...document.querySelectorAll("button, a[href]")].filter((el) => {
+            const name = (el.getAttribute("aria-label") || el.textContent || "").trim();
+            return !name && !el.querySelector("img[alt]");
+          });
+          if (unnamed.length) issues.push(unnamed.length + " unnamed link/button control(s)");
+          const controls = [...document.querySelectorAll("input:not([type=hidden]), select, textarea")];
+          const unlabeled = controls.filter((el) => {
+            if (el.getAttribute("aria-label") || el.getAttribute("aria-labelledby")) return false;
+            if (!el.id) return true;
+            return !document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
+          });
+          if (unlabeled.length) {
+            issues.push(
+              "unlabeled form controls: " +
+              unlabeled.slice(0, 8).map((el) => el.outerHTML).join(" || ")
+            );
+          }
+          return issues;
+        }"""
+    )
+    if issues:
+        raise AssertionError(f"{label} accessibility issues: {issues}")
+
+
 def screenshot(page, label, overflow=True):
     page.locator("main").wait_for(state="visible")
     if overflow:
         assert_no_global_overflow(page, label)
+    assert_basic_accessibility(page, label)
     page.screenshot(path=OUT / f"{label}.png", full_page=True)
 
 
@@ -48,6 +83,7 @@ def main():
         desktop = browser.new_page(viewport={"width": 1440, "height": 1000})
         capture(desktop, "/", "home-desktop")
         capture(desktop, "/dogs/?q=", "dogs-desktop")
+        capture(desktop, "/accounts/password_reset/", "password-reset-desktop")
 
         dog_cards = desktop.locator(".search-result-card")
         if dog_cards.count():
@@ -77,6 +113,7 @@ def main():
         capture(desktop, "/member/documents/", "documents-desktop")
         capture(desktop, "/member/moderation/", "moderation-desktop")
         capture(desktop, "/member/moderation/audit/", "moderation-audit-desktop")
+        capture(desktop, "/member/moderation/data-health/", "data-health-desktop")
         capture(desktop, "/member/disputes/", "my-disputes-desktop")
         capture(desktop, "/member/submit/dog/", "submit-dog-desktop")
         capture(desktop, "/kennels/claimable-kennel/", "claimable-kennel-desktop")
@@ -89,6 +126,7 @@ def main():
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
         capture(mobile, "/", "home-mobile")
         capture(mobile, "/dogs/?q=", "dogs-mobile")
+        capture(mobile, "/accounts/password_reset/", "password-reset-mobile")
         mobile_dogs = mobile.locator(".search-result-card")
         if mobile_dogs.count():
             mobile_dogs.first.click()

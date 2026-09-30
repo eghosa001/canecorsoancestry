@@ -1,16 +1,25 @@
 import csv
+import logging
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
-from django.contrib.auth import login
+from django.conf import settings
+from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
+from django.core.mail import send_mail
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
+from registry.data_quality import quick_quality_report
 from registry.models import (
     DisputeCase,
     Dog,
@@ -40,6 +49,9 @@ from registry.services import (
 
 from pedigrees.services import pedigree_analysis, pedigree_export_rows
 
+logger = logging.getLogger(__name__)
+
+
 from .forms import (
     BulkModerationForm,
     DisputeForm,
@@ -57,6 +69,7 @@ from .forms import (
     MergeDogsForm,
     ReviewSubmissionForm,
     VerificationEventForm,
+    VerificationResendForm,
 )
 
 
@@ -76,18 +89,121 @@ def _member_dogs(user):
     ).distinct()
 
 
+def _send_verification_email(request, user):
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    verify_path = reverse(
+        "accounts:verify-email",
+        kwargs={"uidb64": uid, "token": token},
+    )
+    verify_url = f"{settings.SITE_URL}{verify_path}"
+    return send_mail(
+        "Verify your Cane Corso Ancestry email",
+        (
+            "Confirm that this email belongs to your Cane Corso Ancestry account.\n\n"
+            f"{verify_url}\n\n"
+            "If you did not create this account, ignore this message."
+        ),
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False,
+    )
+
+
 def signup(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
 
     form = MemberSignUpForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
-        user = form.save()
-        login(request, user)
-        messages.success(request, "Welcome to Cane Corso Ancestry.")
-        return redirect("dashboard")
+        verification_required = (
+            settings.ACCOUNT_EMAIL_ENABLED
+            and settings.REQUIRE_EMAIL_VERIFICATION
+        )
+        user = form.save(commit=False)
+        user.is_active = not verification_required
+        user.save()
+
+        if verification_required:
+            try:
+                sent = _send_verification_email(request, user)
+            except Exception:
+                logger.exception(
+                    "member_verification_email_failed user_id=%s",
+                    user.pk,
+                )
+                user.delete()
+                form.add_error(
+                    "email",
+                    "We could not send the verification email. Please try again later.",
+                )
+            else:
+                if not sent:
+                    user.delete()
+                    form.add_error(
+                        "email",
+                        "We could not send the verification email. Please try again later.",
+                    )
+                else:
+                    return render(
+                        request,
+                        "registration/verification_sent.html",
+                        {"email": user.email},
+                    )
+        else:
+            login(request, user)
+            messages.success(request, "Welcome to Cane Corso Ancestry.")
+            return redirect("dashboard")
 
     return render(request, "registration/signup.html", {"form": form})
+
+
+def verify_email(request, uidb64, token):
+    user = None
+    try:
+        user_id = force_str(urlsafe_base64_decode(uidb64))
+        user = get_user_model().objects.filter(pk=user_id).first()
+    except (TypeError, ValueError, OverflowError):
+        user = None
+
+    if user and default_token_generator.check_token(user, token):
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=("is_active",))
+        login(request, user)
+        messages.success(request, "Email verified. Your member account is active.")
+        return redirect("dashboard")
+
+    return render(request, "registration/verification_invalid.html", status=400)
+
+
+def resend_verification(request):
+    form = VerificationResendForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        email = form.cleaned_data["email"].strip().lower()
+        user = get_user_model().objects.filter(
+            email__iexact=email,
+            is_active=False,
+        ).first()
+        if (
+            user
+            and settings.ACCOUNT_EMAIL_ENABLED
+            and settings.REQUIRE_EMAIL_VERIFICATION
+        ):
+            try:
+                _send_verification_email(request, user)
+            except Exception:
+                pass
+        return render(
+            request,
+            "registration/verification_sent.html",
+            {"email": email, "privacy_safe": True},
+        )
+    return render(
+        request,
+        "registration/resend_verification.html",
+        {"form": form},
+    )
 
 
 @login_required
@@ -452,7 +568,13 @@ def moderation_queue(request):
     elif assignment == "unassigned":
         pending = pending.filter(assigned_to__isnull=True)
 
-    pending_items = list(pending.order_by("-priority", "created_at")[:100])
+    pending = pending.order_by("-priority", "created_at")
+    paginator = Paginator(pending, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    pending_items = list(page_obj.object_list)
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
+
     for item in pending_items:
         item.review_diff = submission_diff(item)
         age_days = max(0, (timezone.now() - item.created_at).days)
@@ -490,7 +612,9 @@ def moderation_queue(request):
         "accounts/moderation_queue.html",
         {
             "pending": pending_items,
-            "pending_total": pending.count(),
+            "pending_total": paginator.count,
+            "page_obj": page_obj,
+            "querystring": query_params.urlencode(),
             "merge_form": MergeDogsForm(),
             "verification_form": VerificationEventForm(),
             "duplicate_candidates": duplicate_candidates(),
@@ -573,14 +697,18 @@ def verify_dog(request):
     dog = form.cleaned_data["dog"]
     state = form.cleaned_data["state"]
     field_name = form.cleaned_data["field_name"].strip()
+    source = form.cleaned_data["source"]
     event = VerificationEvent.objects.create(
         dog=dog,
         field_name=field_name,
         state=state,
-        source=form.cleaned_data["source"],
+        source=source,
         reviewer=request.user,
         note=form.cleaned_data["note"],
     )
+    if source and not source.verified_at:
+        source.verified_at = timezone.now()
+        source.save(update_fields=("verified_at",))
     if not field_name:
         dog.verification_state = state
         dog.save(update_fields=("verification_state", "updated_at"))
@@ -1081,6 +1209,30 @@ def review_dispute(request, pk, decision):
 
 
 @staff_member_required
+def data_health(request):
+    report = quick_quality_report(sample_limit=12)
+    counts = report["counts"]
+    critical_total = sum(
+        counts.get(key, 0)
+        for key in (
+            "sire_sex_conflicts",
+            "dam_sex_conflicts",
+            "same_parent_conflicts",
+            "parent_date_conflicts",
+        )
+    )
+    return render(
+        request,
+        "accounts/data_health.html",
+        {
+            "report": report,
+            "counts": counts,
+            "critical_total": critical_total,
+        },
+    )
+
+
+@staff_member_required
 def moderation_audit(request):
     events = ModerationAudit.objects.select_related(
         "actor", "dog", "kennel", "litter", "submission", "dispute"
@@ -1103,11 +1255,18 @@ def moderation_audit(request):
     if actor:
         events = events.filter(actor__username__icontains=actor)
 
+    events = events.order_by("-created_at")
+    paginator = Paginator(events, 100)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
     return render(
         request,
         "accounts/moderation_audit.html",
         {
-            "events": events[:200],
+            "events": page_obj.object_list,
+            "page_obj": page_obj,
+            "querystring": query_params.urlencode(),
             "actions": ModerationAudit.Action.choices,
             "filters": {"q": query, "action": action, "actor": actor},
         },

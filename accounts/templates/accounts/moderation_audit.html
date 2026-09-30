@@ -14,18 +14,20 @@
   <form class="moderation-filters audit-filters" method="get">
     <div class="filter-search">
       <label for="audit-q">Search</label>
-      <input id="audit-q" name="q" value="{{ filters.q }}" placeholder="Dog, kennel, litter, moderator or note">
+      <input id="audit-q" name="q" aria-label="Search audit history" value="{{ filters.q }}" placeholder="Dog, kennel, litter, moderator or note">
     </div>
     <div>
       <label for="audit-action">Action</label>
-      <select id="audit-action" name="action">
+      <select id="audit-action" name="action" aria-label="Filter audit history by action">
         <option value="">All actions</option>
-        {% for value,label in actions %}<option value="{{ value }}" {% if filters.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        {% for value, label in actions %}
+          <option value="{{ value }}"{% if filters.action == value %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
       </select>
     </div>
     <div>
       <label for="audit-actor">Moderator/member</label>
-      <input id="audit-actor" name="actor" value="{{ filters.actor }}" placeholder="Username">
+      <input id="audit-actor" name="actor" aria-label="Filter audit history by moderator or member" value="{{ filters.actor }}" placeholder="Username">
     </div>
     <button class="btn btn-gold" type="submit">Search audit</button>
   </form>
@@ -33,22 +35,47 @@
   <div class="audit-list">
     {% for event in events %}
       <article class="audit-card">
-        <div class="audit-time">{{ event.created_at|date:"d M Y" }}<small>{{ event.created_at|date:"H:i" }}</small></div>
+        <div class="audit-time">
+          {{ event.created_at|date:"d M Y" }}
+          <small>{{ event.created_at|date:"H:i" }}</small>
+        </div>
         <div class="audit-main">
           <span class="eyebrow">{{ event.get_action_display }}</span>
           <h2>
-            {% if event.dog %}{{ event.dog.name }}
-            {% elif event.litter %}{{ event.litter.code }}
-            {% elif event.kennel %}{{ event.kennel.name }}
-            {% else %}Moderation operation{% endif %}
+            {% if event.dog %}
+              {{ event.dog.name }}
+            {% elif event.litter %}
+              {{ event.litter.code }}
+            {% elif event.kennel %}
+              {{ event.kennel.name }}
+            {% else %}
+              Moderation operation
+            {% endif %}
           </h2>
-          <p>{% if event.actor %}By {{ event.actor }}{% else %}System/unknown actor{% endif %}{% if event.note %} · {{ event.note }}{% endif %}</p>
-          {% if event.summary %}<pre class="audit-summary">{{ event.summary }}</pre>{% endif %}
+          <p>
+            {% if event.actor %}By {{ event.actor }}{% else %}System/unknown actor{% endif %}
+            {% if event.note %} · {{ event.note }}{% endif %}
+          </p>
+          {% if event.summary %}
+            <pre class="audit-summary">{{ event.summary }}</pre>
+          {% endif %}
         </div>
       </article>
     {% empty %}
       <div class="empty-state"><p>No audit events match the current filters.</p></div>
     {% endfor %}
   </div>
+
+  {% if page_obj.has_other_pages %}
+    <nav class="button-row" aria-label="Audit history pages">
+      {% if page_obj.has_previous %}
+        <a class="btn btn-outline" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">← Previous</a>
+      {% endif %}
+      <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a class="btn btn-outline" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
+      {% endif %}
+    </nav>
+  {% endif %}
 </section>
 {% endblock %}

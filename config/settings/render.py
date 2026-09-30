@@ -25,6 +25,6 @@ STORAGES = {
         "BACKEND": "core.r2_gateway_storage.CloudflareR2GatewayStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }

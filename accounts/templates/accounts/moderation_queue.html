@@ -8,7 +8,7 @@
       <h1>Fact-check & review queue</h1>
       <p>Check submitted facts and evidence before approval, compare proposed changes against canonical data, investigate disputes, and merge duplicates deliberately.</p>
     </div>
-    <a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a>
+    <div class="button-row"><a class="btn btn-outline" href="{% url 'accounts:data-health' %}">Data health</a><a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a></div>
   </header>
 
   <form class="moderation-filters" method="get">
@@ -71,6 +71,7 @@
             <div>
               <h3>{{ dog.name }}</h3>
               <p>{% if dog.kennel %}{{ dog.kennel.name }}{% else %}Kennel unknown{% endif %}{% if dog.date_of_birth %} · {{ dog.date_of_birth }}{% endif %}</p>
+              <small>UUID: {{ dog.pk }}</small>
             </div>
             <span class="text-link">Inspect matches →</span>
           </a>
@@ -90,6 +91,7 @@
               <span class="confidence-pill confidence-{{ item.confidence|lower }}">{{ item.confidence }} · {{ item.score }}%</span>
               <h3>{{ item.candidate.name }}</h3>
               <p>{{ item.reasons|join:" · " }}</p>
+              <small>Reference UUID: {{ duplicate_reference.pk }} · Candidate UUID: {{ item.candidate.pk }}</small>
             </div>
             <div class="duplicate-record-meta">
               <span>{% if item.candidate.kennel %}{{ item.candidate.kennel.name }}{% else %}Kennel unknown{% endif %}</span>
@@ -112,6 +114,7 @@
                 <span class="confidence-pill confidence-{{ item.confidence|lower }}">{{ item.confidence }} · {{ item.score }}%</span>
                 <strong>{{ item.reference.name }} ↔ {{ item.candidate.name }}</strong>
                 <p>{{ item.reasons|join:" · " }}</p>
+                <small>{{ item.reference.pk }} ↔ {{ item.candidate.pk }}</small>
               </div>
             </article>
           {% endfor %}
@@ -121,7 +124,7 @@
   </section>
 
   <section class="panel moderation-merge">
-    <div class="panel-heading"><h2>Merge duplicate dogs</h2><span>The duplicate is retired only after relationships and attached data are repointed.</span></div>
+    <div class="panel-heading"><h2>Merge duplicate dogs</h2><span>Use exact names or UUIDs from Duplicate intelligence. The duplicate is retired only after relationships and attached data are repointed.</span></div>
     <form class="merge-form" method="post" action="{% url 'accounts:merge-dogs' %}">
       {% csrf_token %}
       <div><label for="{{ merge_form.canonical.id_for_label }}">Canonical dog</label>{{ merge_form.canonical }}</div>
@@ -131,7 +134,7 @@
   </section>
 
   <section class="panel moderation-verify">
-    <div class="panel-heading"><h2>Record verification</h2><span>Verification can apply to an individual field/source or to the overall dog record.</span></div>
+    <div class="panel-heading"><h2>Record verification</h2><span>Use an exact dog name or UUID. Optional source IDs are shown to staff on the dog profile.</span></div>
     <form class="verification-form" method="post" action="{% url 'accounts:verify-dog' %}">
       {% csrf_token %}
       {% for field in verification_form %}
@@ -157,12 +160,12 @@
             <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'assign' %}">{% csrf_token %}<button class="btn btn-outline" type="submit">Assign to me</button></form>
             <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'resolve' %}">
               {% csrf_token %}
-              <textarea name="resolution_notes" rows="2" placeholder="Resolution note"></textarea>
+              <textarea name="resolution_notes" rows="2" placeholder="Resolution note" aria-label="Dispute resolution note"></textarea>
               <button class="btn btn-gold" type="submit">Resolve</button>
             </form>
             <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'dismiss' %}">
               {% csrf_token %}
-              <textarea name="resolution_notes" rows="2" placeholder="Reason for dismissal"></textarea>
+              <textarea name="resolution_notes" rows="2" placeholder="Reason for dismissal" aria-label="Reason for dismissing dispute"></textarea>
               <button class="btn btn-outline" type="submit">Dismiss</button>
             </form>
           </div>
@@ -236,12 +239,12 @@
           <div class="review-actions">
             <form method="post" action="{% url 'accounts:review-submission' item.pk 'approve' %}">
               {% csrf_token %}
-              <textarea name="resolution_notes" rows="2" placeholder="Optional approval note"></textarea>
+              <textarea name="resolution_notes" rows="2" placeholder="Optional approval note" aria-label="Approval note for {{ item.get_kind_display }}"></textarea>
               <button class="btn btn-gold" type="submit">Approve</button>
             </form>
             <form method="post" action="{% url 'accounts:review-submission' item.pk 'reject' %}">
               {% csrf_token %}
-              <textarea name="resolution_notes" rows="2" placeholder="Reason for rejection"></textarea>
+              <textarea name="resolution_notes" rows="2" placeholder="Reason for rejection" aria-label="Reason for rejecting {{ item.get_kind_display }}"></textarea>
               <button class="btn btn-outline" type="submit">Reject</button>
             </form>
           </div>
@@ -251,5 +254,12 @@
       <div class="empty-state"><strong>Queue clear.</strong><p>No contributions match the current filters.</p></div>
     {% endfor %}
   </div>
+  {% if page_obj.has_other_pages %}
+    <nav class="button-row" aria-label="Moderation queue pages">
+      {% if page_obj.has_previous %}<a class="btn btn-outline" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">← Previous</a>{% endif %}
+      <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a class="btn btn-outline" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>{% endif %}
+    </nav>
+  {% endif %}
 </section>
 {% endblock %}

@@ -197,7 +197,7 @@ def repeated_ancestors(dog, generations=4, public_only=False):
     return sorted(result, key=lambda item: (-item["occurrences"], item["dog"].name))
 
 
-def sibling_relationships(dog, public_only=True):
+def sibling_relationships(dog, public_only=True, limit=None):
     """Return full and half siblings derived from shared parent links."""
     parent_filter = Q()
     if dog.sire_id:
@@ -211,6 +211,8 @@ def sibling_relationships(dog, public_only=True):
     if public_only:
         siblings = siblings.filter(is_public=True)
     siblings = siblings.select_related("sire", "dam", "kennel").distinct().order_by("name")
+    if limit:
+        siblings = siblings[:limit]
 
     result = []
     for sibling in siblings:
@@ -237,11 +239,11 @@ def offspring_for(dog, public_only=True):
     return queryset.select_related("kennel", "sire", "dam").distinct().order_by("name")
 
 
-def mate_relationships(dog, public_only=True):
-    """Group mating partners automatically from canonical offspring links."""
-    children = list(offspring_for(dog, public_only=public_only))
+def mate_relationships(dog, public_only=True, preview_limit=5):
+    """Group mating partners while retaining only a small offspring preview per mate."""
     groups = {}
-    for child in children:
+    children = offspring_for(dog, public_only=public_only)
+    for child in children.iterator(chunk_size=500):
         if child.sire_id == dog.pk:
             mate = child.dam
         else:
@@ -251,7 +253,8 @@ def mate_relationships(dog, public_only=True):
             key,
             {"mate": mate, "offspring": [], "offspring_count": 0},
         )
-        group["offspring"].append(child)
+        if len(group["offspring"]) < preview_limit:
+            group["offspring"].append(child)
         group["offspring_count"] += 1
     return sorted(
         groups.values(),
@@ -262,8 +265,13 @@ def mate_relationships(dog, public_only=True):
     )
 
 
-def descendant_generations(dog, generations=4, public_only=True):
-    """Return unique descendant layers derived from sire/dam links."""
+def descendant_generations(
+    dog,
+    generations=4,
+    public_only=True,
+    per_generation_limit=None,
+):
+    """Return unique descendant layers while allowing public views to cap breadth."""
     generations = _bounded_generations(generations)
     layers = []
     frontier = {dog.pk}
@@ -274,7 +282,15 @@ def descendant_generations(dog, generations=4, public_only=True):
         ).select_related("kennel", "sire", "dam")
         if public_only:
             children = children.filter(is_public=True)
-        rows = [child for child in children.order_by("name") if child.pk not in seen]
+        children = children.order_by("name")
+        if per_generation_limit:
+            fetched = list(children[: per_generation_limit + 1])
+            truncated = len(fetched) > per_generation_limit
+            fetched = fetched[:per_generation_limit]
+        else:
+            fetched = list(children)
+            truncated = False
+        rows = [child for child in fetched if child.pk not in seen]
         if not rows:
             break
         layers.append(
@@ -288,6 +304,7 @@ def descendant_generations(dog, generations=4, public_only=True):
                     else f"Descendant generation {generation}"
                 ),
                 "dogs": rows,
+                "truncated": truncated,
             }
         )
         frontier = {child.pk for child in rows}
@@ -311,9 +328,11 @@ def direct_relative_health(dog, public_only=True):
 
     add(dog.sire, "Sire")
     add(dog.dam, "Dam")
-    for item in sibling_relationships(dog, public_only=public_only):
+    for item in sibling_relationships(
+        dog, public_only=public_only, limit=200
+    ):
         add(item["dog"], item["relation"])
-    for child in offspring_for(dog, public_only=public_only):
+    for child in offspring_for(dog, public_only=public_only)[:200]:
         add(child, "Offspring")
 
     if not relatives:

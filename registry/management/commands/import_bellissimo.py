@@ -6,6 +6,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils.text import slugify
 
+from registry.import_validation import DatasetValidationError, validate_records
 from registry.models import (
     Dog,
     DogExternalKey,
@@ -35,46 +36,10 @@ def _parse_date(value):
 
 
 def _validate_graph(records):
-    by_id = {}
-    for record in records:
-        source_id = str(record.get("id") or "").strip()
-        if not source_id:
-            raise CommandError("Every source dog must have an id.")
-        if source_id in by_id:
-            raise CommandError(f"Duplicate source dog id: {source_id}")
-        if not str(record.get("name") or "").strip():
-            raise CommandError(f"Source dog {source_id} has no name.")
-        by_id[source_id] = record
-
-    for source_id, record in by_id.items():
-        for field in ("sireId", "damId"):
-            parent_id = record.get(field)
-            if parent_id and parent_id not in by_id:
-                raise CommandError(
-                    f"{source_id} references missing {field}: {parent_id}"
-                )
-
-    visiting = set()
-    visited = set()
-
-    def visit(source_id):
-        if source_id in visiting:
-            raise CommandError(f"Pedigree cycle detected at {source_id}")
-        if source_id in visited:
-            return
-        visiting.add(source_id)
-        record = by_id[source_id]
-        for field in ("sireId", "damId"):
-            parent_id = record.get(field)
-            if parent_id:
-                visit(parent_id)
-        visiting.remove(source_id)
-        visited.add(source_id)
-
-    for source_id in by_id:
-        visit(source_id)
-
-    return by_id
+    try:
+        return validate_records(records)["by_id"]
+    except DatasetValidationError as exc:
+        raise CommandError(str(exc)) from exc
 
 
 def _sex(value):
