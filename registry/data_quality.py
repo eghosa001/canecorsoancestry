@@ -10,6 +10,9 @@ def quick_quality_report(sample_limit=12):
     public = Dog.objects.filter(is_public=True)
     total_public = public.count()
     source_backed = public.filter(sources__isnull=False).distinct().count()
+    verified_source_backed = public.filter(
+        sources__verified_at__isnull=False
+    ).distinct().count()
     pedigree_linked = public.filter(Q(sire__isnull=False) | Q(dam__isnull=False)).count()
 
     issue_sets = {
@@ -36,6 +39,7 @@ def quick_quality_report(sample_limit=12):
         {
             "public_dogs": total_public,
             "source_backed_public": source_backed,
+            "verified_source_backed_public": verified_source_backed,
             "pedigree_linked_public": pedigree_linked,
             "pending_submissions": Submission.objects.filter(
                 status=Submission.Status.PENDING
@@ -57,6 +61,9 @@ def quick_quality_report(sample_limit=12):
         "counts": counts,
         "source_coverage_percent": (
             source_backed / total_public * 100 if total_public else 100.0
+        ),
+        "verified_source_coverage_percent": (
+            verified_source_backed / total_public * 100 if total_public else 100.0
         ),
         "pedigree_linkage_percent": (
             pedigree_linked / total_public * 100 if total_public else 100.0
