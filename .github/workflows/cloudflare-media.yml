@@ -1,10 +1,10 @@
-name: Cloudflare R2 media gateway
+name: Cloudflare edge and R2 gateway
 
 on:
   push:
     branches: [main]
     paths:
-      - "src/cloudrun-edge.js"
+      - "src/edge.js"
       - "wrangler.edge.preview.toml"
       - "scripts/build_cloudflare_assets.py"
       - "core/static/**"
@@ -12,16 +12,26 @@ on:
       - "package.json"
       - ".github/workflows/cloudflare-media.yml"
   workflow_dispatch:
+    inputs:
+      target:
+        description: Edge deployment target
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - production
 
 permissions:
   contents: read
 
 jobs:
-  deploy-media-gateway:
+  deploy-edge:
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      RENDER_ORIGIN: ${{ vars.RENDER_ORIGIN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +59,32 @@ jobs:
             fi
           done
           exit "$missing"
+
+      - name: Choose deployment target
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.target }}" = "production" ]; then
+            if [ -z "$RENDER_ORIGIN" ]; then
+              echo "::error::GitHub Actions variable RENDER_ORIGIN is required for production."
+              exit 1
+            fi
+            case "$RENDER_ORIGIN" in
+              https://*.onrender.com) ;;
+              *)
+                echo "::error::RENDER_ORIGIN must be the HTTPS Render origin, for example https://canecorsoancestry.onrender.com"
+                exit 1
+                ;;
+            esac
+            echo "EDGE_CONFIG=wrangler.edge.production.toml" >> "$GITHUB_ENV"
+            echo "APP_ORIGIN=$RENDER_ORIGIN" >> "$GITHUB_ENV"
+            echo "EDGE_VERIFY_URL=https://canecorsoancestry.com/healthz/" >> "$GITHUB_ENV"
+            echo "EDGE_TARGET=production" >> "$GITHUB_ENV"
+          else
+            echo "EDGE_CONFIG=wrangler.edge.preview.toml" >> "$GITHUB_ENV"
+            echo "APP_ORIGIN=${RENDER_ORIGIN:-https://example.invalid}" >> "$GITHUB_ENV"
+            echo "EDGE_VERIFY_URL=https://canecorsoancestry-edge-preview.aighewieghosa111.workers.dev/" >> "$GITHUB_ENV"
+            echo "EDGE_TARGET=preview" >> "$GITHUB_ENV"
+          fi
 
       - name: Discover Cloudflare account
         shell: bash
@@ -78,25 +114,38 @@ jobs:
         run: |
           python -c 'import json, os; open("/tmp/edge-secrets.json", "w", encoding="utf-8").write(json.dumps({"DJANGO_SECRET_KEY": os.environ["DJANGO_SECRET_KEY"]}))'
 
-      - name: Deploy media gateway
+      - name: Deploy Cloudflare edge
         shell: bash
         run: |
           npx wrangler deploy \
-            --config wrangler.edge.preview.toml \
-            --var "CLOUD_RUN_ORIGIN:https://example.invalid" \
+            --config "$EDGE_CONFIG" \
+            --var "APP_ORIGIN:$APP_ORIGIN" \
             --secrets-file /tmp/edge-secrets.json
 
-      - name: Verify Worker is reachable
+      - name: Verify edge
         shell: bash
         run: |
-          status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/worker.txt -w '%{http_code}' \
-            https://canecorsoancestry-edge.aighewieghosa111.workers.dev/ || true)"
-          if [ "$status" = "000" ]; then
-            echo "::error::Cloudflare Worker was not reachable."
+          if [ "$EDGE_TARGET" = "production" ]; then
+            for attempt in $(seq 1 12); do
+              status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/edge-health.json -w '%{http_code}' "$EDGE_VERIFY_URL" || true)"
+              if [ "$status" = "200" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/edge-health.json; then
+                echo "Production Cloudflare edge health check passed."
+                exit 0
+              fi
+              echo "Edge health attempt $attempt returned HTTP $status."
+              sleep 5
+            done
+            cat /tmp/edge-health.json 2>/dev/null || true
             exit 1
           fi
-          echo "Cloudflare media gateway reachable (HTTP $status)."
 
-      - name: Clean temporary secrets
+          status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/edge-preview.txt -w '%{http_code}' "$EDGE_VERIFY_URL" || true)"
+          if [ "$status" = "000" ]; then
+            echo "::error::Cloudflare preview Worker was not reachable."
+            exit 1
+          fi
+          echo "Cloudflare preview Worker reachable (HTTP $status)."
+
+      - name: Clean temporary files
         if: always()
-        run: rm -f /tmp/edge-secrets.json /tmp/worker.txt
+        run: rm -f /tmp/edge-secrets.json /tmp/edge-health.json /tmp/edge-preview.txt
