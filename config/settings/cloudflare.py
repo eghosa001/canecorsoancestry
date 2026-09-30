@@ -1,29 +1,24 @@
+import os
+
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
-from workers import env
 
 from .base import *  # noqa: F403,F401
 
 DEBUG = False
 
-
-def _binding_text(name, default=""):
-    value = getattr(env, name, default)
-    return str(value or default)
-
-
-SECRET_KEY = _binding_text("DJANGO_SECRET_KEY").strip()
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "").strip()
 if not SECRET_KEY:
-    raise ImproperlyConfigured("DJANGO_SECRET_KEY Worker secret is required.")
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY is required in the Worker request context.")
 
-SITE_URL = _binding_text(
+SITE_URL = os.getenv(
     "SITE_URL",
     "https://canecorsoancestry.com",
 ).rstrip("/")
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in _binding_text(
+    for host in os.getenv(
         "DJANGO_ALLOWED_HOSTS",
         "canecorsoancestry.com,www.canecorsoancestry.com,.workers.dev",
     ).split(",")
@@ -32,21 +27,23 @@ ALLOWED_HOSTS = [
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
-    for origin in _binding_text(
+    for origin in os.getenv(
         "DJANGO_CSRF_TRUSTED_ORIGINS",
         "https://canecorsoancestry.com,https://www.canecorsoancestry.com,https://*.workers.dev",
     ).split(",")
     if origin.strip()
 ]
 
-# Hyperdrive's connectionString cannot be read during Worker global startup.
-# Keep Django configured with a non-contacted PostgreSQL placeholder so the
-# expensive app registry can initialize during startup. worker.py replaces
-# this config with the real Hyperdrive URL before the first request reaches
-# Django or any ORM code.
+connection_string = os.getenv("CLOUDFLARE_DATABASE_URL", "").strip()
+if not connection_string:
+    raise ImproperlyConfigured(
+        "CLOUDFLARE_DATABASE_URL must be injected from the HYPERDRIVE binding "
+        "inside the Worker fetch handler."
+    )
+
 DATABASES = {
     "default": dj_database_url.parse(
-        "postgresql://worker:worker@127.0.0.1:5432/worker",
+        connection_string,
         conn_max_age=0,
     )
 }
@@ -58,7 +55,7 @@ DATABASES["default"].setdefault("OPTIONS", {})["options"] = (
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # noqa: F405
 MEDIA_URL = "/media/"
-MEDIA_MIGRATION_ENABLED = _binding_text("MEDIA_MIGRATION_ENABLED", "0") == "1"
+MEDIA_MIGRATION_ENABLED = os.getenv("MEDIA_MIGRATION_ENABLED", "0") == "1"
 
 STORAGES = {
     "default": {
