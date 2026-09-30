@@ -1,6 +1,8 @@
 Django>=5.2,<5.3
 dj-database-url>=2.3,<3
 psycopg[binary]>=3.2,<4
+django-pg8000==0.0.5
+pg8000>=1.31.2,<2
 whitenoise>=6.9,<7
 gunicorn>=23,<24
 django-storages[s3]>=1.14,<2
