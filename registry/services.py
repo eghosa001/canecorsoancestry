@@ -23,6 +23,7 @@ from .models import (
     DogTitle,
     DisputeCase,
     HealthRecord,
+    Kennel,
     Litter,
     KennelMembership,
     MergeHistory,
