@@ -2,22 +2,30 @@
 
 ## Final production architecture
 
-Cane Corso Ancestry uses **Cloudflare + Supabase**.
+Cane Corso Ancestry uses **Cloudflare + Google Cloud Run + Supabase**.
 
-- Application runtime: Cloudflare Containers running Django/Gunicorn
-- Edge router and static assets: Cloudflare Workers + Workers Static Assets
-- Database: Supabase PostgreSQL project `wsntfvpcqloqzwgmsfaz` in `eu-north-1`
-- Database connectivity: Supabase Session Pooler from the container
-- Media/evidence: private Cloudflare R2 bucket `canecorsoancestry-media`
-- DNS/TLS/application origin: Cloudflare Custom Domain on `canecorsoancestry.com`
+- **Cloudflare Worker**: public edge proxy, custom domain routing, static assets and private R2 gateway.
+- **Cloudflare R2**: dog photographs, evidence and uploaded documents.
+- **Google Cloud Run**: Django 5.2 + Gunicorn application runtime.
+- **Supabase PostgreSQL**: canonical application database.
+- **GitHub Actions**: migrations, image build/push and controlled preview/production deployment.
 
-Railway is not part of the final architecture. It may remain temporarily only as a rollback/source environment until data and media cutover are verified.
+Railway and Cloudflare Containers are not part of the final runtime.
 
-## Why Containers instead of Python Workers
+## Regions and scaling
 
-The Django application was tested on Cloudflare Python Workers. The package, bindings, Supabase migrations and R2 deployment all worked, but the application used far more CPU than the Workers Free request budget and required a normal synchronous Python/PostgreSQL runtime.
+Cloud Run defaults to `europe-north1` (Finland), close to the Supabase project in `eu-north-1`.
 
-Cloudflare Containers provide a standard Linux/Python environment for Django while retaining Cloudflare routing, R2, static assets and deployment.
+Initial Cloud Run limits are deliberately conservative:
+
+- 1 vCPU
+- 512 MiB memory
+- minimum instances: 0
+- maximum instances: 3
+- concurrency: 40
+- 60 second request timeout
+
+This preserves scale-to-zero behavior and caps unexpected compute growth while the service is small.
 
 ## Supabase
 
@@ -27,96 +35,156 @@ Django tables live in the private `django_app` schema with search path:
 
 `django_app,extensions,public`
 
-`pg_trgm` remains available for duplicate matching.
+The deploy workflow:
 
-The deployment workflow:
-1. validates the Direct Supabase URL;
+1. validates the existing Direct Supabase connection URL;
 2. derives the IPv4 Session Pooler URL automatically;
-3. runs Django migrations against Supabase;
-4. passes the Session Pooler URL to the container as an encrypted Worker secret.
+3. applies Django migrations;
+4. stores the Session Pooler URL in Google Secret Manager;
+5. injects the pinned secret version into Cloud Run.
 
-## Cloudflare Container runtime
+The database already contains the verified Bellissimo canonical dataset.
 
-The container uses:
-- `Dockerfile`
-- `config.settings.container`
-- Gunicorn on port 8080
-- one `lite` container instance initially
-- scale-to-zero after inactivity
+## Cloud Run
 
-The edge router is `src/container-worker.js`.
+`Dockerfile` builds the Django image.
 
-Preview Worker:
-`canecorsoancestry-container-preview`
+Cloud Run uses:
 
-## Media
+`DJANGO_SETTINGS_MODULE=config.settings.cloudrun`
 
-R2 remains private.
+The application listens on the Cloud Run supplied `PORT` and is served by Gunicorn.
 
-The container does not receive R2 access keys. `core.container_storage.CloudflareR2BridgeStorage` sends internal HTTP requests to the Worker, which accesses the native `MEDIA_BUCKET` R2 binding.
+Sensitive values are not placed in plain Cloud Run environment variables. The deployment workflow creates new versions of:
 
-Public/private authorization remains in Django before media objects are served.
+- `canecorsoancestry-database-url`
+- `canecorsoancestry-django-secret`
 
-## Static assets
+in Google Secret Manager and pins the deployed revision to those versions.
 
-Django `collectstatic` builds static files. `scripts/build_cloudflare_assets.py` prepares `worker_assets/`, and Cloudflare serves `/static/*` directly at the edge before starting the container.
+## Cloudflare edge
+
+The edge Worker entrypoint is:
+
+`src/cloudrun-edge.js`
+
+Preview configuration:
+
+`wrangler.edge.preview.toml`
+
+Production configuration:
+
+`wrangler.edge.production.toml`
+
+The Worker performs four jobs:
+
+1. serves `/static/*` from Workers Static Assets;
+2. proxies normal application requests to the current Cloud Run service URL;
+3. exposes the HMAC-authenticated `/_r2/*` backend gateway for Django storage operations;
+4. serves short-lived signed `/_media/*` R2 objects after Django authorizes the request.
+
+The Cloud Run container never receives R2 API keys.
+
+## Media flow
+
+Browser requests continue to use Django's normal `/media/<path>` URLs.
+
+Django first checks whether the user is authorized to read the object. If allowed, Django returns a short-lived HMAC-signed Cloudflare edge URL. Cloudflare then streams the object directly from R2.
+
+This keeps media authorization in Django while avoiding a Cloud Run round trip for the actual image/document bytes.
+
+Uploads, existence checks and deletes use `core.cloudrun_storage.CloudflareR2GatewayStorage`, which signs every backend request with the Django secret.
 
 ## Required GitHub secrets
 
-Only these three are required:
+Existing secrets remain unchanged:
 
 - `CLOUDFLARE_API_TOKEN`
 - `SUPABASE_DATABASE_URL`
 - `DJANGO_SECRET_KEY`
 
-No R2 access keys, Hyperdrive ID or separate pooler secret is required.
+No R2 access keys and no Google service-account JSON key are stored in GitHub.
 
-## Cloudflare prerequisites
+## Required GitHub variables
 
-The Cloudflare account must have **Workers Paid** enabled because Containers are not available on Workers Free.
+After the one-time Google setup, add:
 
-The deployment API token must include:
-- Account Settings: Read
-- Workers: Admin for initial Worker creation
-- Workers R2 Storage: Write
-- **Containers: Write**
-- Zone > Workers Routes: Write for `canecorsoancestry.com`
+- `GCP_PROJECT_ID`
+- `GCP_REGION` (recommended: `europe-north1`)
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`
+- `GCP_SERVICE_ACCOUNT`
 
-The workflow performs a Containers API preflight before migrations, Docker builds or deployment work.
+Google authentication uses Workload Identity Federation.
+
+## One-time Google setup
+
+Run:
+
+`bash scripts/setup_gcp_cloudrun.sh PROJECT_ID`
+
+from Google Cloud Shell after creating/selecting a Google Cloud project with billing enabled.
+
+The script:
+
+- enables required APIs;
+- creates the Artifact Registry repository;
+- applies image cleanup policies;
+- creates deploy/runtime service accounts;
+- creates Secret Manager secrets;
+- grants least-purpose deployment/runtime roles;
+- creates a GitHub Workload Identity provider restricted to `eghosa001/canecorsoancestry`;
+- prints the GitHub repository variables to add.
 
 ## Deployment
 
-Preview:
-`wrangler.container.preview.jsonc`
+Workflow:
 
-Production:
-`wrangler.container.production.jsonc`
+`.github/workflows/cloudrun-deploy.yml`
 
-Container deployments use:
-`.github/workflows/cloudflare-container-deploy.yml`
+A normal `main` push deploys the **preview edge** only when the Google repository variables have been configured.
 
-Production remains an explicit manual target. The legacy Python Worker workflow is retained only as a manual diagnostic/rollback tool and must not auto-deploy from `main`.
+Manual workflow choices:
+
+- `preview`: Cloud Run + workers.dev edge
+- `production`: same Cloud Run service + Cloudflare custom domains `canecorsoancestry.com` and `www.canecorsoancestry.com`
+
+Every deployment performs:
+
+1. Supabase migration;
+2. Docker build and Artifact Registry push;
+3. Google Secret Manager version creation;
+4. Cloud Run deployment;
+5. direct Cloud Run `/healthz/` verification;
+6. Cloudflare edge deployment;
+7. edge `/healthz/` verification.
+
+## Cost controls
+
+To stay inside free allowances as long as practical:
+
+- Cloud Run minimum instances stays at 0.
+- Cloud Run maximum instances is capped at 3.
+- Artifact Registry keeps only recent images and removes older images after the configured retention period.
+- Secret Manager retains only a small number of enabled versions.
+- R2 holds large media outside the PostgreSQL database.
 
 ## Cutover order
 
-1. Keep the existing rollback source untouched.
-2. Enable Workers Paid and ensure the API token has Containers Write.
-3. Deploy the Cloudflare Container preview.
-4. Verify `/healthz/`, login, admin, member dashboard, dog search, pedigrees, moderation and submissions.
-5. Copy existing production media to R2 and verify object counts/hashes.
-6. Verify Supabase production records/counts.
-7. Deploy the production Container target.
-8. Attach `canecorsoancestry.com` as the Cloudflare Custom Domain.
-9. Repeat production smoke tests.
-10. Remove the old environment only after the rollback window has passed.
+1. Create/configure the Google Cloud project with `scripts/setup_gcp_cloudrun.sh`.
+2. Add the printed GitHub repository variables.
+3. Run the Cloud Run workflow with `target=preview`.
+4. Verify health, login, admin, member dashboard, dog search, pedigrees, moderation, submissions and media.
+5. Run the workflow with `target=production`.
+6. Verify `canecorsoancestry.com` end to end.
+7. Remove any remaining obsolete infrastructure only after the rollback window has passed.
 
 ## Security
 
-- HTTPS-only production
-- secure session and CSRF cookies
-- private R2 media
-- server-side media authorization
-- Django tables outside Supabase `public`
-- no Supabase service-role key in the application
-- no R2 access keys in the container
-- encrypted Worker secrets for database URL and Django secret
+- HTTPS-only public traffic.
+- Secure Django session/CSRF cookies.
+- Supabase Django schema remains private from `anon` and `authenticated`.
+- No Supabase service-role key in the application.
+- No R2 access keys in Cloud Run.
+- Cloudflare R2 gateway uses timestamped HMAC signatures.
+- Media delivery uses short-lived signed URLs after Django authorization.
+- GitHub authenticates to Google through Workload Identity Federation, not static Google keys.
