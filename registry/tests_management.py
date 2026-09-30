@@ -50,6 +50,26 @@ class DogMergeTests(TestCase):
         self.assertEqual(response.status_code, 301)
         self.assertEqual(response.url, reverse("registry:dog-detail", args=["karma"]))
 
+    def test_merge_rejects_ancestor_descendant_records(self):
+        ancestor = Dog.objects.create(
+            name="Ancestor Record",
+            slug="merge-ancestor-record",
+            sex=Dog.Sex.MALE,
+        )
+        descendant = Dog.objects.create(
+            name="Descendant Record",
+            slug="merge-descendant-record",
+            sire=ancestor,
+        )
+
+        with self.assertRaisesMessage(
+            ValueError, "connected as ancestor and descendant"
+        ):
+            merge_dogs(ancestor, descendant)
+
+        self.assertTrue(Dog.objects.filter(pk=ancestor.pk).exists())
+        self.assertTrue(Dog.objects.filter(pk=descendant.pk).exists())
+
 
 class SubmissionApprovalTests(TestCase):
     def test_approved_new_dog_is_published_and_notifies_submitter(self):
