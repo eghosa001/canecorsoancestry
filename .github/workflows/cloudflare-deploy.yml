@@ -154,20 +154,40 @@ jobs:
         shell: bash
         run: |
           url="https://canecorsoancestry.aighewieghosa111.workers.dev"
-          for attempt in 1 2 3 4 5 6; do
-            status="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$url/healthz/" || true)"
-            if [ "$status" = "200" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/health.json; then
-              echo "Cloudflare preview health check passed."
-              cat /tmp/health.json
-              exit 0
-            fi
+          : > /tmp/worker-tail.log
+
+          timeout 45s npx wrangler tail canecorsoancestry --format=json > /tmp/worker-tail.log 2>&1 &
+          tail_pid=$!
+          sleep 4
+
+          passed=0
+          for attempt in 1 2 3; do
+            status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/health.json -w '%{http_code}' "$url/healthz/" || true)"
             echo "Preview health attempt $attempt returned HTTP $status."
             cat /tmp/health.json 2>/dev/null || true
-            sleep 5
+            if [ "$status" = "200" ] && grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/health.json; then
+              passed=1
+              break
+            fi
+            sleep 4
           done
+
+          sleep 3
+          kill "$tail_pid" 2>/dev/null || true
+          wait "$tail_pid" 2>/dev/null || true
+
+          echo "----- Cloudflare Worker runtime tail -----"
+          cat /tmp/worker-tail.log || true
+          echo "----- End Worker runtime tail -----"
+
+          if [ "$passed" = "1" ]; then
+            echo "Cloudflare preview health check passed."
+            exit 0
+          fi
+
           echo "::error::Cloudflare preview health check failed."
           exit 1
 
       - name: Remove temporary Worker secrets file
         if: always()
-        run: rm -f /tmp/worker-secrets.json /tmp/health.json
+        run: rm -f /tmp/worker-secrets.json /tmp/health.json /tmp/worker-tail.log
