@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Data Health · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading moderation-heading">
+    <div>
+      <p class="eyebrow">Internal operations</p>
+      <h1>Pedigree data health</h1>
+      <p>Monitor pedigree integrity, source coverage, moderation backlog and records that need stronger evidence before the database grows further.</p>
+    </div>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Review queue</a>
+      <a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a>
+    </div>
+  </header>
+
+  <div class="analysis-grid analysis-grid-four">
+    <article class="analysis-card"><p class="eyebrow">Critical</p><strong class="analysis-number">{{ critical_total }}</strong><span>Impossible relationship/date issues</span></article>
+    <article class="analysis-card"><p class="eyebrow">Source coverage</p><strong class="analysis-number">{{ report.source_coverage_percent|floatformat:1 }}%</strong><span>Public dogs with at least one source</span></article>
+    <article class="analysis-card"><p class="eyebrow">Pedigree linked</p><strong class="analysis-number">{{ report.pedigree_linkage_percent|floatformat:1 }}%</strong><span>Public dogs linked to sire or dam</span></article>
+    <article class="analysis-card"><p class="eyebrow">Backlog</p><strong class="analysis-number">{{ counts.pending_submissions }}</strong><span>{{ counts.aging_submissions }} waiting 7+ days</span></article>
+  </div>
+
+  <div class="profile-section-grid section-spacer">
+    <article class="panel">
+      <div class="panel-heading"><h2>Provenance</h2><span>Records that need stronger source evidence.</span></div>
+      <div class="relationship-list">
+        <div><strong>Public dogs without sources</strong><span>{{ counts.public_without_sources }}</span></div>
+        <div><strong>Community-only public records</strong><span>{{ counts.community_only_public }}</span></div>
+        <div><strong>Public dogs with unknown sex</strong><span>{{ counts.unknown_sex_public }}</span></div>
+        <div><strong>Open disputes</strong><span>{{ counts.open_disputes }}</span></div>
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-heading"><h2>Integrity</h2><span>These should remain at zero.</span></div>
+      <div class="relationship-list">
+        <div><strong>Female records used as sire</strong><span>{{ counts.sire_sex_conflicts }}</span></div>
+        <div><strong>Male records used as dam</strong><span>{{ counts.dam_sex_conflicts }}</span></div>
+        <div><strong>Same dog used as both parents</strong><span>{{ counts.same_parent_conflicts }}</span></div>
+        <div><strong>Impossible parent/child dates</strong><span>{{ counts.parent_date_conflicts }}</span></div>
+      </div>
+    </article>
+  </div>
+
+  <section class="panel section-spacer">
+    <div class="panel-heading">
+      <h2>Records requiring attention</h2>
+      <span>Sample only. Run <code>python manage.py audit_pedigree_data --fail-on-critical</code> for the full integrity audit.</span>
+    </div>
+    {% for key, dogs in report.samples.items %}
+      {% if dogs %}
+        <details class="moderation-details">
+          <summary>{{ key|cut:"_"|title }} · {{ dogs|length }} sample{{ dogs|length|pluralize }}</summary>
+          <div class="relationship-list">
+            {% for dog in dogs %}
+              <a href="{% url 'registry:dog-detail' dog.slug %}">
+                <strong>{{ dog.name }}</strong>
+                <span>{% if dog.kennel %}{{ dog.kennel.name }}{% else %}Kennel unknown{% endif %}{% if dog.date_of_birth %} · {{ dog.date_of_birth }}{% endif %}</span>
+              </a>
+            {% endfor %}
+          </div>
+        </details>
+      {% endif %}
+    {% endfor %}
+  </section>
+</section>
+{% endblock %}
