@@ -146,6 +146,18 @@ jobs:
           fi
           echo "Cloudflare preview Worker reachable (HTTP $status)."
 
+      - name: Verify Render origin gate
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'production' }}
+        shell: bash
+        run: |
+          status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/origin-gate.txt -w '%{http_code}' "$RENDER_ORIGIN/" || true)"
+          if [ "$status" != "403" ]; then
+            echo "::error::Direct Render application traffic was not blocked; received HTTP $status."
+            cat /tmp/origin-gate.txt 2>/dev/null || true
+            exit 1
+          fi
+          echo "Direct Render application traffic is correctly gated behind Cloudflare."
+
       - name: Clean temporary files
         if: always()
-        run: rm -f /tmp/edge-secrets.json /tmp/edge-health.json /tmp/edge-preview.txt
+        run: rm -f /tmp/edge-secrets.json /tmp/edge-health.json /tmp/edge-preview.txt /tmp/origin-gate.txt
