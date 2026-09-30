@@ -12,7 +12,7 @@
     <div class="button-row">
       {% if kennel.website %}<a class="btn btn-outline" href="{{ kennel.website }}" rel="noreferrer">Kennel website</a>{% endif %}
       {% if can_claim %}<a class="btn btn-gold" href="{% url 'accounts:claim-kennel' kennel.pk %}">Claim this kennel</a>{% endif %}
-      {% if claim_pending %}<span class="submission-state pending">Ownership claim pending</span>{% endif %}
+      {% if claim_pending %}<span class="submission-state pending">Your ownership claim is pending</span>{% elif claim_in_review %}<span class="submission-state pending">Ownership review in progress</span>{% endif %}
     </div>
   </header>
   {% if kennel.description %}<p class="kennel-description">{{ kennel.description }}</p>{% endif %}
