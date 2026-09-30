@@ -84,12 +84,13 @@ Both files keep the Hyperdrive ID as a placeholder. The deployment pipeline crea
 
 ## GitHub deployment secrets
 
-The Cloudflare deploy workflow expects:
+The Cloudflare deploy workflow requires only these GitHub Actions secrets:
 
 - `CLOUDFLARE_API_TOKEN`
-- `CLOUDFLARE_ACCOUNT_ID`
 - `SUPABASE_DATABASE_URL` — the **Direct** Supabase PostgreSQL connection string
 - `DJANGO_SECRET_KEY`
+
+The workflow discovers the Cloudflare account ID from the token automatically. If the token can access more than one Cloudflare account, set the optional repository variable `CLOUDFLARE_ACCOUNT_ID` to select the correct one.
 
 Those values belong in GitHub Actions secrets, never in the repository. The workflow automatically creates or updates a cache-disabled Hyperdrive configuration named `canecorsoancestry-supabase`, so no Hyperdrive ID needs to be entered manually.
 
