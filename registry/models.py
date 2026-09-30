@@ -5,7 +5,7 @@ import uuid
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 
 
 def normalize_identity_name(value):
@@ -127,6 +127,20 @@ class Dog(models.Model):
             models.Index(
                 fields=("is_public", "-search_count"),
                 name="dog_public_popularity_idx",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(sire__isnull=True) | ~Q(sire=F("id")),
+                name="dog_sire_not_self",
+            ),
+            models.CheckConstraint(
+                condition=Q(dam__isnull=True) | ~Q(dam=F("id")),
+                name="dog_dam_not_self",
+            ),
+            models.CheckConstraint(
+                condition=Q(sire__isnull=True) | Q(dam__isnull=True) | ~Q(sire=F("dam")),
+                name="dog_parents_must_differ",
             ),
         ]
 
