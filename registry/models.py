@@ -110,14 +110,67 @@ class Dog(models.Model):
 
     class Meta:
         ordering = ("name",)
-        indexes = [models.Index(fields=("is_public", "verification_state"))]
+        indexes = [
+            models.Index(fields=("is_public", "verification_state")),
+            models.Index(fields=("is_public", "name"), name="dog_public_name_idx"),
+            models.Index(
+                fields=("is_public", "-search_count"),
+                name="dog_public_popularity_idx",
+            ),
+        ]
+
+    def _parent_creates_cycle(self, parent_id):
+        if not self.pk or not parent_id:
+            return False
+        frontier = {parent_id}
+        seen = set()
+        while frontier:
+            if self.pk in frontier:
+                return True
+            unseen = frontier - seen
+            if not unseen:
+                return False
+            seen.update(unseen)
+            next_frontier = set()
+            for sire_id, dam_id in Dog.objects.filter(pk__in=unseen).values_list(
+                "sire_id", "dam_id"
+            ):
+                if sire_id:
+                    next_frontier.add(sire_id)
+                if dam_id:
+                    next_frontier.add(dam_id)
+            frontier = next_frontier
+        return False
 
     def clean(self):
         super().clean()
+        errors = {}
+
         if self.pk and self.sire_id == self.pk:
-            raise ValidationError({"sire": "A dog cannot be its own sire."})
+            errors["sire"] = "A dog cannot be its own sire."
         if self.pk and self.dam_id == self.pk:
-            raise ValidationError({"dam": "A dog cannot be its own dam."})
+            errors["dam"] = "A dog cannot be its own dam."
+        if self.sire_id and self.dam_id and self.sire_id == self.dam_id:
+            errors["dam"] = "Sire and dam must be different dogs."
+
+        if self.sire and self.sire.sex == Dog.Sex.FEMALE:
+            errors["sire"] = "The selected sire is recorded as female."
+        if self.dam and self.dam.sex == Dog.Sex.MALE:
+            errors["dam"] = "The selected dam is recorded as male."
+
+        if self.date_of_birth:
+            if self.sire and self.sire.date_of_birth and self.sire.date_of_birth >= self.date_of_birth:
+                errors["sire"] = "The sire must be born before this dog."
+            if self.dam and self.dam.date_of_birth and self.dam.date_of_birth >= self.date_of_birth:
+                errors["dam"] = "The dam must be born before this dog."
+            if self.litter and self.litter.date_of_birth and self.litter.date_of_birth != self.date_of_birth:
+                errors["date_of_birth"] = "Dog date of birth must match the linked litter date."
+
+        if self._parent_creates_cycle(self.sire_id):
+            errors["sire"] = "This sire link would create a pedigree cycle."
+        if self._parent_creates_cycle(self.dam_id):
+            errors["dam"] = "This dam link would create a pedigree cycle."
+
         if (
             self.litter_id
             and self.kennel_id
@@ -125,9 +178,10 @@ class Dog(models.Model):
             and self.litter.kennel_id
             and self.litter.kennel_id != self.kennel_id
         ):
-            raise ValidationError(
-                {"litter": "A dog can only be assigned to a litter from the same kennel."}
-            )
+            errors["litter"] = "A dog can only be assigned to a litter from the same kennel."
+
+        if errors:
+            raise ValidationError(errors)
 
     def __str__(self):
         return self.name
@@ -173,6 +227,11 @@ class Litter(models.Model):
             raise ValidationError({"sire": "The selected sire is recorded as female."})
         if self.dam and self.dam.sex == Dog.Sex.MALE:
             raise ValidationError({"dam": "The selected dam is recorded as male."})
+        if self.date_of_birth:
+            if self.sire and self.sire.date_of_birth and self.sire.date_of_birth >= self.date_of_birth:
+                raise ValidationError({"sire": "The sire must be born before the litter."})
+            if self.dam and self.dam.date_of_birth and self.dam.date_of_birth >= self.date_of_birth:
+                raise ValidationError({"dam": "The dam must be born before the litter."})
 
     def __str__(self):
         return self.code
@@ -302,6 +361,12 @@ class HealthRecord(models.Model):
 
     class Meta:
         ordering = ("test_type", "-tested_on")
+        indexes = [
+            models.Index(
+                fields=("dog", "test_type", "-tested_on"),
+                name="health_dog_test_idx",
+            )
+        ]
 
 
 class DogSource(models.Model):
@@ -418,6 +483,16 @@ class Submission(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+        indexes = [
+            models.Index(
+                fields=("status", "-priority", "created_at"),
+                name="submission_queue_idx",
+            ),
+            models.Index(
+                fields=("submitted_by", "status"),
+                name="submission_member_status_idx",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.get_kind_display()} · {self.submitted_by}"
