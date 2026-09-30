@@ -8,7 +8,7 @@
       <h1>Fact-check & review queue</h1>
       <p>Check submitted facts and evidence before approval, compare proposed changes against canonical data, investigate disputes, and merge duplicates deliberately.</p>
     </div>
-    <a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a>
+    <div class="button-row"><a class="btn btn-outline" href="{% url 'accounts:data-health' %}">Data health</a><a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a></div>
   </header>
 
   <form class="moderation-filters" method="get">
@@ -251,5 +251,12 @@
       <div class="empty-state"><strong>Queue clear.</strong><p>No contributions match the current filters.</p></div>
     {% endfor %}
   </div>
+  {% if page_obj.has_other_pages %}
+    <nav class="button-row" aria-label="Moderation queue pages">
+      {% if page_obj.has_previous %}<a class="btn btn-outline" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">← Previous</a>{% endif %}
+      <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a class="btn btn-outline" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>{% endif %}
+    </nav>
+  {% endif %}
 </section>
 {% endblock %}
