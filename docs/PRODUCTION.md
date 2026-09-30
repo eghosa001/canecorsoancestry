@@ -94,6 +94,18 @@ The workflow discovers the Cloudflare account ID from the token automatically. I
 
 Those values belong in GitHub Actions secrets, never in the repository. The workflow automatically creates or updates a cache-disabled Hyperdrive configuration named `canecorsoancestry-supabase`, so no Hyperdrive ID needs to be entered manually.
 
+### Cloudflare API token scope
+
+For the first cutover deployment, create a narrowly scoped Cloudflare API token with:
+
+- Account Settings: Read — required for automatic account discovery.
+- Workers: Admin at the Workers product scope — required because the workflow may create the Worker on its first deployment.
+- Workers R2 Storage: Write — required to create/inspect the `canecorsoancestry-media` bucket.
+- Hyperdrive: Write — required to create/update the Supabase Hyperdrive configuration.
+- Zone > Workers Routes: Write for the `canecorsoancestry.com` zone — required when the production deployment attaches the Custom Domain.
+
+After the Worker and Custom Domain exist, the token can be tightened: Workers Admin can be reduced to Editor, and Workers Routes Write is only needed again if the route/custom-domain connection changes.
+
 ## Database migration
 
 The existing `copy_to_supabase` management command is the controlled database migration path.
