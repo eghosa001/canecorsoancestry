@@ -63,7 +63,14 @@ jobs:
       - name: Choose deployment target
         shell: bash
         run: |
+          production_requested=0
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.target }}" = "production" ]; then
+            production_requested=1
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ contains(github.event.head_commit.message, '[production-cutover]') }}" = "true" ]; then
+            production_requested=1
+          fi
+
+          if [ "$production_requested" = "1" ]; then
             if [ -z "$RENDER_ORIGIN" ]; then
               echo "::error::A Render origin is required for production."
               exit 1
@@ -147,9 +154,12 @@ jobs:
           echo "Cloudflare preview Worker reachable (HTTP $status)."
 
       - name: Verify Render origin gate
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.target == 'production' }}
         shell: bash
         run: |
+          if [ "$EDGE_TARGET" != "production" ]; then
+            echo "Skipping Render origin-gate verification for preview deployment."
+            exit 0
+          fi
           status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/origin-gate.txt -w '%{http_code}' "$RENDER_ORIGIN/" || true)"
           if [ "$status" != "403" ]; then
             echo "::error::Direct Render application traffic was not blocked; received HTTP $status."
