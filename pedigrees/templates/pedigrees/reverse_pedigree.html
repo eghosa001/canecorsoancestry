@@ -23,7 +23,7 @@
     <button class="btn btn-gold" type="submit">Update</button>
   </form>
 
-  <div class="result-summary"><strong>{{ descendant_total }} connected descendant{{ descendant_total|pluralize }}</strong></div>
+  <div class="result-summary"><strong>{{ descendant_total }} connected descendant{{ descendant_total|pluralize }}</strong>{% if descendants_truncated %}<span> · Very large lineage: display capped at 1,000 dogs per generation.</span>{% endif %}</div>
 
   {% for layer in layers %}
     <article class="panel">
