@@ -9,7 +9,7 @@ STORAGES = {
         "BACKEND": "core.container_storage.CloudflareR2BridgeStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },
 }
 
