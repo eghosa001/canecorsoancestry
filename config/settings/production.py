@@ -33,56 +33,14 @@ SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 
-bucket_name = os.getenv("AWS_STORAGE_BUCKET_NAME") or os.getenv("BUCKET")
-bucket_region = os.getenv("AWS_S3_REGION_NAME") or os.getenv("REGION")
-bucket_endpoint = os.getenv("AWS_S3_ENDPOINT_URL") or os.getenv("ENDPOINT")
-bucket_access_key = os.getenv("AWS_ACCESS_KEY_ID", "")
-bucket_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY", "")
-require_object_storage = os.getenv("DJANGO_REQUIRE_OBJECT_STORAGE", "0") == "1"
-bucket_ready = all(
-    (
-        bucket_name,
-        bucket_region,
-        bucket_endpoint,
-        bucket_access_key,
-        bucket_secret_key,
-    )
-)
-if require_object_storage and not bucket_ready:
-    raise ImproperlyConfigured(
-        "Production object storage is required but S3-compatible bucket credentials are incomplete."
-    )
-
-if bucket_ready:
-    STORAGES = {
-        "default": {
-            "BACKEND": "storages.backends.s3.S3Storage",
-            "OPTIONS": {
-                "bucket_name": bucket_name,
-                "region_name": bucket_region,
-                "endpoint_url": bucket_endpoint,
-                "access_key": bucket_access_key,
-                "secret_key": bucket_secret_key,
-                "location": "media",
-                "default_acl": None,
-                "file_overwrite": False,
-                "querystring_auth": True,
-                "querystring_expire": 3600,
-                "addressing_style": "path",
-                "signature_version": "s3v4",
-            },
-        },
-        "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
-        },
-    }
-else:
-    STORAGES = {
-        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-        "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
-        },
-    }
+# Render overrides the default storage backend with the R2 media gateway.
+# Keeping production.py storage-neutral avoids stale provider-specific branches.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
 
 if ANCESTRY_EMAIL_NOTIFICATIONS:  # noqa: F405
     missing_email = [
@@ -99,15 +57,3 @@ if ANCESTRY_EMAIL_NOTIFICATIONS:  # noqa: F405
             "Email notifications are enabled but these settings are missing: "
             + ", ".join(missing_email)
         )
-
-SENTRY_DSN = os.getenv("SENTRY_DSN", "")
-if SENTRY_DSN:
-    import sentry_sdk
-
-    sentry_sdk.init(
-        dsn=SENTRY_DSN,
-        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
-        release=os.getenv("RENDER_GIT_COMMIT") or os.getenv("K_REVISION") or None,
-        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.05")),
-        send_default_pii=False,
-    )
