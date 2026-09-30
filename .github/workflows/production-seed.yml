@@ -40,8 +40,8 @@ jobs:
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
           DJANGO_DB_EXTRA_SCHEMAS: public
-          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
-          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         run: python manage.py migrate --check
 
@@ -51,8 +51,8 @@ jobs:
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
           DJANGO_DB_EXTRA_SCHEMAS: public
-          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
-          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         run: python manage.py import_bellissimo --dry-run
 
@@ -62,8 +62,8 @@ jobs:
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
           DJANGO_DB_EXTRA_SCHEMAS: public
-          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
-          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         run: python manage.py import_bellissimo
 
@@ -73,8 +73,8 @@ jobs:
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
           DJANGO_DB_EXTRA_SCHEMAS: public
-          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
-          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         shell: bash
         run: |
