@@ -1,60 +1,56 @@
 import os
 
-from workers import WorkerEntrypoint, wsgi
+import dj_database_url
+from django.conf import settings
+from django.core.asgi import get_asgi_application
+from django.db import connections
+from workers import WorkerEntrypoint, asgi
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.cloudflare")
 
-_application = None
+# Build Django's app registry in Cloudflare's startup phase. The settings module
+# intentionally uses Django's dummy database backend here, so startup does not
+# import psycopg or read Hyperdrive.
+_application = get_asgi_application()
+_database_ready = False
 
 
-def _binding_text(env, name, default=""):
-    value = getattr(env, name, default)
-    return str(value or default)
+def _install_hyperdrive_database(env):
+    hyperdrive = getattr(env, "HYPERDRIVE", None)
+    if hyperdrive is None:
+        raise RuntimeError("HYPERDRIVE binding is required.")
+
+    connection_string = str(
+        getattr(hyperdrive, "connectionString", "") or ""
+    )
+    if not connection_string:
+        raise RuntimeError("HYPERDRIVE connection string is unavailable.")
+
+    database = dj_database_url.parse(
+        connection_string,
+        conn_max_age=0,
+    )
+    database["CONN_HEALTH_CHECKS"] = False
+    database.setdefault("OPTIONS", {})["options"] = (
+        "-c search_path=django_app,extensions,public"
+    )
+
+    settings.DATABASES["default"] = database
+    connections.databases["default"] = database
+
+    # A database wrapper should not be created during Django startup, but clear
+    # one defensively if an installed app touched the placeholder connection.
+    local_connections = connections._connections
+    if hasattr(local_connections, "default"):
+        delattr(local_connections, "default")
 
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
-        global _application
+        global _database_ready
 
-        if _application is None:
-            hyperdrive = getattr(self.env, "HYPERDRIVE", None)
-            if hyperdrive is None:
-                raise RuntimeError("HYPERDRIVE binding is required.")
+        if not _database_ready:
+            _install_hyperdrive_database(self.env)
+            _database_ready = True
 
-            connection_string = str(
-                getattr(hyperdrive, "connectionString", "") or ""
-            )
-            if not connection_string:
-                raise RuntimeError("HYPERDRIVE connection string is unavailable.")
-
-            os.environ["CLOUDFLARE_DATABASE_URL"] = connection_string
-            os.environ["DJANGO_SECRET_KEY"] = _binding_text(
-                self.env,
-                "DJANGO_SECRET_KEY",
-            )
-            os.environ["SITE_URL"] = _binding_text(
-                self.env,
-                "SITE_URL",
-                "https://canecorsoancestry.com",
-            )
-            os.environ["DJANGO_ALLOWED_HOSTS"] = _binding_text(
-                self.env,
-                "DJANGO_ALLOWED_HOSTS",
-                "canecorsoancestry.com,www.canecorsoancestry.com,.workers.dev",
-            )
-            os.environ["DJANGO_CSRF_TRUSTED_ORIGINS"] = _binding_text(
-                self.env,
-                "DJANGO_CSRF_TRUSTED_ORIGINS",
-                "https://canecorsoancestry.com,https://www.canecorsoancestry.com,https://*.workers.dev",
-            )
-            os.environ["MEDIA_MIGRATION_ENABLED"] = _binding_text(
-                self.env,
-                "MEDIA_MIGRATION_ENABLED",
-                "0",
-            )
-
-            from django.core.wsgi import get_wsgi_application
-
-            _application = get_wsgi_application()
-
-        return await wsgi.fetch(_application, request, self.env)
+        return await asgi.fetch(_application, request, self.env)
