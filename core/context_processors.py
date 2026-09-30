@@ -9,4 +9,5 @@ def site_metadata(request):
         "site_url": settings.SITE_URL,
         "canonical_url": f"{settings.SITE_URL}{request.path}",
         "page_noindex": request.path.startswith(PRIVATE_PREFIXES),
+        "account_email_enabled": getattr(settings, "ACCOUNT_EMAIL_ENABLED", False),
     }
