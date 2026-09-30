@@ -4,7 +4,10 @@ from unittest.mock import patch
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase
 
-from registry.management.commands.copy_to_supabase import _target_database
+from registry.management.commands.copy_to_supabase import (
+    _copied_models,
+    _target_database,
+)
 
 
 class SupabaseCopyCommandTests(SimpleTestCase):
@@ -40,3 +43,13 @@ class SupabaseCopyCommandTests(SimpleTestCase):
         ):
             with self.assertRaises(CommandError):
                 _target_database()
+
+    def test_copy_set_preserves_sessions_and_admin_audit(self):
+        labels = {model._meta.label_lower for model in _copied_models()}
+
+        self.assertIn("auth.user", labels)
+        self.assertIn("auth.group", labels)
+        self.assertIn("sessions.session", labels)
+        self.assertIn("admin.logentry", labels)
+        self.assertIn("accounts.profile", labels)
+        self.assertIn("registry.dog", labels)

@@ -102,9 +102,11 @@ Run it from the existing Railway application while Railway's PostgreSQL database
 The command:
 
 1. applies Django migrations to the Supabase target;
-2. copies Django auth, accounts and registry data;
-3. verifies source/target model counts;
+2. copies Django users/groups, active database sessions, Django admin log entries, accounts and registry data;
+3. verifies source/target model counts, including sessions and admin audit history;
 4. refuses to overwrite an already populated target unless `--replace` is explicitly supplied.
+
+Use the same `DJANGO_SECRET_KEY` on Cloudflare as Railway so copied database sessions remain valid after cutover.
 
 Do not change production traffic to Supabase until that verification succeeds.
 
