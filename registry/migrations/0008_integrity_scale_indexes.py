@@ -50,6 +50,7 @@ class Migration(migrations.Migration):
             name="normalized_name",
             field=models.CharField(
                 blank=True,
+                default="",
                 db_index=True,
                 editable=False,
                 max_length=220,
