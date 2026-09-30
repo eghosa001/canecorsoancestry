@@ -160,12 +160,12 @@
             <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'assign' %}">{% csrf_token %}<button class="btn btn-outline" type="submit">Assign to me</button></form>
             <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'resolve' %}">
               {% csrf_token %}
-              <textarea name="resolution_notes" rows="2" placeholder="Resolution note"></textarea>
+              <textarea name="resolution_notes" rows="2" placeholder="Resolution note" aria-label="Dispute resolution note"></textarea>
               <button class="btn btn-gold" type="submit">Resolve</button>
             </form>
             <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'dismiss' %}">
               {% csrf_token %}
-              <textarea name="resolution_notes" rows="2" placeholder="Reason for dismissal"></textarea>
+              <textarea name="resolution_notes" rows="2" placeholder="Reason for dismissal" aria-label="Reason for dismissing dispute"></textarea>
               <button class="btn btn-outline" type="submit">Dismiss</button>
             </form>
           </div>
@@ -239,12 +239,12 @@
           <div class="review-actions">
             <form method="post" action="{% url 'accounts:review-submission' item.pk 'approve' %}">
               {% csrf_token %}
-              <textarea name="resolution_notes" rows="2" placeholder="Optional approval note"></textarea>
+              <textarea name="resolution_notes" rows="2" placeholder="Optional approval note" aria-label="Approval note for {{ item.get_kind_display }}"></textarea>
               <button class="btn btn-gold" type="submit">Approve</button>
             </form>
             <form method="post" action="{% url 'accounts:review-submission' item.pk 'reject' %}">
               {% csrf_token %}
-              <textarea name="resolution_notes" rows="2" placeholder="Reason for rejection"></textarea>
+              <textarea name="resolution_notes" rows="2" placeholder="Reason for rejection" aria-label="Reason for rejecting {{ item.get_kind_display }}"></textarea>
               <button class="btn btn-outline" type="submit">Reject</button>
             </form>
           </div>
