@@ -78,6 +78,7 @@ def main():
         desktop = browser.new_page(viewport={"width": 1440, "height": 1000})
         capture(desktop, "/", "home-desktop")
         capture(desktop, "/dogs/?q=", "dogs-desktop")
+        capture(desktop, "/accounts/password_reset/", "password-reset-desktop")
 
         dog_cards = desktop.locator(".search-result-card")
         if dog_cards.count():
@@ -107,6 +108,7 @@ def main():
         capture(desktop, "/member/documents/", "documents-desktop")
         capture(desktop, "/member/moderation/", "moderation-desktop")
         capture(desktop, "/member/moderation/audit/", "moderation-audit-desktop")
+        capture(desktop, "/member/moderation/data-health/", "data-health-desktop")
         capture(desktop, "/member/disputes/", "my-disputes-desktop")
         capture(desktop, "/member/submit/dog/", "submit-dog-desktop")
         capture(desktop, "/kennels/claimable-kennel/", "claimable-kennel-desktop")
@@ -119,6 +121,7 @@ def main():
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
         capture(mobile, "/", "home-mobile")
         capture(mobile, "/dogs/?q=", "dogs-mobile")
+        capture(mobile, "/accounts/password_reset/", "password-reset-mobile")
         mobile_dogs = mobile.locator(".search-result-card")
         if mobile_dogs.count():
             mobile_dogs.first.click()
