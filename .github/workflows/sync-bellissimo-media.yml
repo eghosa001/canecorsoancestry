@@ -1,0 +1,168 @@
+name: Sync Bellissimo media to R2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/sync-bellissimo-media.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+
+    steps:
+      - name: Checkout ancestry app
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned Bellissimo media source
+        uses: actions/checkout@v4
+        with:
+          repository: eghosa001/bellissimo-geni-cane-corso
+          ref: 3addd1b186a62bf2040c02980ab0eaa0aad801a7
+          path: source-bellissimo
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in CLOUDFLARE_API_TOKEN SUPABASE_DATABASE_URL DJANGO_SECRET_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - run: pip install -r requirements.txt
+
+      - name: Discover Cloudflare account
+        shell: bash
+        run: |
+          response="$(curl -fsS "https://api.cloudflare.com/client/v4/accounts?per_page=50" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")"
+          account_id="$(
+            printf '%s' "$response" |
+              python scripts/find_cloudflare_account.py
+          )"
+          echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
+
+      - name: Ensure media bucket exists
+        run: |
+          npx --yes wrangler@latest r2 bucket info canecorsoancestry-media >/dev/null 2>&1 || \
+            npx --yes wrangler@latest r2 bucket create canecorsoancestry-media
+
+      - name: Build media upload list
+        shell: bash
+        run: |
+          python - <<'PY' > /tmp/bellissimo-media.tsv
+          import json
+          import mimetypes
+          from pathlib import Path
+
+          manifest = json.loads(Path("data/seeds/bellissimo-media.json").read_text())
+          for item in manifest["items"]:
+              content_type = mimetypes.guess_type(item["source_path"])[0] or "application/octet-stream"
+              print(
+                  item["source_path"],
+                  item["r2_key"],
+                  content_type,
+                  sep="\t",
+              )
+          PY
+
+      - name: Upload and byte-verify R2 objects
+        shell: bash
+        run: |
+          mkdir -p /tmp/r2-verify
+          count=0
+          while IFS=$'\t' read -r source_path r2_key content_type; do
+            local_path="source-bellissimo/$source_path"
+            if [ ! -f "$local_path" ]; then
+              echo "::error::Pinned source file is missing: $source_path"
+              exit 1
+            fi
+
+            npx --yes wrangler@latest r2 object put \
+              "canecorsoancestry-media/$r2_key" \
+              --file "$local_path" \
+              --content-type "$content_type" \
+              --remote \
+              --force
+
+            verify_path="/tmp/r2-verify/$count"
+            npx --yes wrangler@latest r2 object get \
+              "canecorsoancestry-media/$r2_key" \
+              --file "$verify_path" \
+              --remote
+
+            cmp "$local_path" "$verify_path"
+            count=$((count + 1))
+          done < /tmp/bellissimo-media.tsv
+
+          if [ "$count" -ne 20 ]; then
+            echo "::error::Expected 20 verified media objects, uploaded $count."
+            exit 1
+          fi
+          echo "Verified $count R2 media objects byte-for-byte."
+
+      - name: Discover Supabase IPv4 session pooler
+        shell: bash
+        run: |
+          session_url="$(python scripts/discover_supabase_session_pooler.py)"
+          echo "::add-mask::$session_url"
+          echo "SUPABASE_MIGRATION_URL=$session_url" >> "$GITHUB_ENV"
+
+      - name: Dry-run media database import
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: DATABASE_URL="$SUPABASE_MIGRATION_URL" python manage.py import_bellissimo_media --dry-run
+
+      - name: Attach R2 media to canonical dogs
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: DATABASE_URL="$SUPABASE_MIGRATION_URL" python manage.py import_bellissimo_media
+
+      - name: Verify DogImage rows
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        shell: bash
+        run: |
+          DATABASE_URL="$SUPABASE_MIGRATION_URL" python manage.py shell -c "
+          from registry.models import DogImage
+          qs = DogImage.objects.filter(image__startswith='dogs/bellissimo/')
+          primary = qs.filter(is_primary=True)
+          assert qs.count() == 20, f'Expected 20 Bellissimo DogImage rows, got {qs.count()}'
+          assert primary.count() == 13, f'Expected 13 Bellissimo primary images, got {primary.count()}'
+          print(f'Verified: {qs.count()} Bellissimo images; {primary.count()} primary')
+          "
