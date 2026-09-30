@@ -1,0 +1,143 @@
+name: Migrate Supabase database to Aiven
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type MIGRATE_TO_AIVEN to run the verified one-time copy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    if: ${{ inputs.confirm == 'MIGRATE_TO_AIVEN' }}
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      AIVEN_DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in SUPABASE_DATABASE_URL AIVEN_DATABASE_URL DJANGO_SECRET_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            else
+              echo "::add-mask::${!name}"
+            fi
+          done
+          exit "$missing"
+
+      - name: Validate Aiven destination URL
+        run: python scripts/validate_aiven_database_url.py
+
+      - name: Discover reachable Supabase source
+        shell: bash
+        run: |
+          source_url="$(python scripts/discover_supabase_session_pooler.py)"
+          echo "::add-mask::$source_url"
+          echo "SOURCE_DATABASE_URL=$source_url" >> "$GITHUB_ENV"
+
+      - name: Confirm source migrations are current
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: testserver
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver
+          SITE_URL: https://testserver
+          DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+        run: DATABASE_URL="$SOURCE_DATABASE_URL" python manage.py migrate --check
+
+      - name: Require a clean Aiven target and enable pg_trgm
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import psycopg
+
+          url = os.environ["AIVEN_DATABASE_URL"]
+          with psycopg.connect(url, sslmode="require") as connection:
+              with connection.cursor() as cursor:
+                  cursor.execute(
+                      "SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'django_app')"
+                  )
+                  if cursor.fetchone()[0]:
+                      raise SystemExit(
+                          "Refusing migration: Aiven already contains the django_app schema."
+                      )
+                  cursor.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+          print("Aiven target is clean and pg_trgm is available.")
+          PY
+
+      - name: Dump private Django schema from Supabase
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/aiven-migration"
+          docker run --rm \
+            -e SOURCE_DATABASE_URL \
+            -e PGSSLMODE=require \
+            -v "$RUNNER_TEMP/aiven-migration:/work" \
+            postgres:17-alpine \
+            sh -ec 'pg_dump "$SOURCE_DATABASE_URL" --format=custom --no-owner --no-acl --schema=django_app --file=/work/django_app.dump'
+          test -s "$RUNNER_TEMP/aiven-migration/django_app.dump"
+
+      - name: Restore Django schema into Aiven
+        shell: bash
+        run: |
+          docker run --rm \
+            -e AIVEN_DATABASE_URL \
+            -e PGSSLMODE=require \
+            -v "$RUNNER_TEMP/aiven-migration:/work" \
+            postgres:17-alpine \
+            sh -ec 'pg_restore --dbname="$AIVEN_DATABASE_URL" --no-owner --no-acl --exit-on-error /work/django_app.dump'
+
+      - name: Verify every table row count
+        env:
+          TARGET_DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
+        run: python scripts/compare_postgres_counts.py
+
+      - name: Validate Django against Aiven
+        env:
+          DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
+          DJANGO_SETTINGS_MODULE: config.settings.render
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_ALLOWED_HOSTS: testserver,localhost,.onrender.com,canecorsoancestry.com,www.canecorsoancestry.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver,https://canecorsoancestry.com,https://www.canecorsoancestry.com
+          SITE_URL: https://canecorsoancestry.com
+          REQUIRE_CLOUDFLARE_EDGE: "0"
+          R2_GATEWAY_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
+          MEDIA_EDGE_BASE_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
+        run: |
+          python manage.py migrate --check
+          python manage.py check --deploy
+
+      - name: Analyze migrated tables
+        shell: bash
+        run: |
+          docker run --rm \
+            -e AIVEN_DATABASE_URL \
+            -e PGSSLMODE=require \
+            postgres:17-alpine \
+            sh -ec 'psql "$AIVEN_DATABASE_URL" -v ON_ERROR_STOP=1 -c "ANALYZE django_app.registry_dog;"'
+
+      - name: Remove temporary migration dump
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/aiven-migration"
