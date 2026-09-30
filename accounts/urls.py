@@ -9,6 +9,7 @@ urlpatterns = [
     path("submissions/", views.submission_list, name="submissions"),
     path("disputes/", views.my_disputes, name="my-disputes"),
     path("submit/dog/", views.submit_dog, name="submit-dog"),
+    path("submit/kennel/", views.submit_kennel, name="submit-kennel"),
     path("pedigrees/", views.my_pedigrees, name="my-pedigrees"),
     path("pedigrees/<uuid:pk>/", views.member_pedigree_detail, name="member-pedigree"),
     path("pedigrees/<uuid:pk>/export.csv", views.member_pedigree_export, name="member-pedigree-export"),
