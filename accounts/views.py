@@ -5,12 +5,14 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
+from registry.data_quality import quick_quality_report
 from registry.models import (
     DisputeCase,
     Dog,
@@ -452,7 +454,13 @@ def moderation_queue(request):
     elif assignment == "unassigned":
         pending = pending.filter(assigned_to__isnull=True)
 
-    pending_items = list(pending.order_by("-priority", "created_at")[:100])
+    pending = pending.order_by("-priority", "created_at")
+    paginator = Paginator(pending, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    pending_items = list(page_obj.object_list)
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
+
     for item in pending_items:
         item.review_diff = submission_diff(item)
         age_days = max(0, (timezone.now() - item.created_at).days)
@@ -490,7 +498,9 @@ def moderation_queue(request):
         "accounts/moderation_queue.html",
         {
             "pending": pending_items,
-            "pending_total": pending.count(),
+            "pending_total": paginator.count,
+            "page_obj": page_obj,
+            "querystring": query_params.urlencode(),
             "merge_form": MergeDogsForm(),
             "verification_form": VerificationEventForm(),
             "duplicate_candidates": duplicate_candidates(),
@@ -1081,6 +1091,30 @@ def review_dispute(request, pk, decision):
 
 
 @staff_member_required
+def data_health(request):
+    report = quick_quality_report(sample_limit=12)
+    counts = report["counts"]
+    critical_total = sum(
+        counts.get(key, 0)
+        for key in (
+            "sire_sex_conflicts",
+            "dam_sex_conflicts",
+            "same_parent_conflicts",
+            "parent_date_conflicts",
+        )
+    )
+    return render(
+        request,
+        "accounts/data_health.html",
+        {
+            "report": report,
+            "counts": counts,
+            "critical_total": critical_total,
+        },
+    )
+
+
+@staff_member_required
 def moderation_audit(request):
     events = ModerationAudit.objects.select_related(
         "actor", "dog", "kennel", "litter", "submission", "dispute"
@@ -1103,11 +1137,18 @@ def moderation_audit(request):
     if actor:
         events = events.filter(actor__username__icontains=actor)
 
+    events = events.order_by("-created_at")
+    paginator = Paginator(events, 100)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
     return render(
         request,
         "accounts/moderation_audit.html",
         {
-            "events": events[:200],
+            "events": page_obj.object_list,
+            "page_obj": page_obj,
+            "querystring": query_params.urlencode(),
             "actions": ModerationAudit.Action.choices,
             "filters": {"q": query, "action": action, "actor": actor},
         },
