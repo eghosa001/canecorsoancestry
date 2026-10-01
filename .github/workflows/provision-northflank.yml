@@ -66,8 +66,18 @@ jobs:
           projects="$(curl -fsS "${auth[@]}" "$NF_API/projects")"
           project_id="$(printf '%s' "$projects" | jq -r --arg name "$NF_PROJECT_NAME" '.data.projects[]? | select(.name == $name) | .id' | head -n1)"
 
+          # Developer Sandbox allows one project. Reuse an existing project
+          # rather than trying to create a second project under a different name.
           if [ -z "$project_id" ]; then
-            payload="$(jq -n --arg name "$NF_PROJECT_NAME" '{name:$name,description:"Cane Corso Ancestry Django origin"}')"
+            project_id="$(printf '%s' "$projects" | jq -r '.data.projects[0].id // empty')"
+            if [ -n "$project_id" ]; then
+              existing_name="$(printf '%s' "$projects" | jq -r '.data.projects[0].name // "existing project"')"
+              echo "Reusing existing Northflank Sandbox project: $existing_name ($project_id)"
+            fi
+          fi
+
+          if [ -z "$project_id" ]; then
+            payload="$(jq -n --arg name "$NF_PROJECT_NAME" '{name:$name,description:"Cane Corso Ancestry Django origin",color:"#EF233C",region:"europe-west"}')"
             http_code="$(curl -sS -o /tmp/nf-project.json -w '%{http_code}' "${auth[@]}" -X POST --data "$payload" "$NF_API/projects")"
             if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
               echo "::error::Northflank project creation failed with HTTP $http_code"
