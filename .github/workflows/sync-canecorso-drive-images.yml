@@ -1,0 +1,189 @@
+name: Sync CaneCorso Drive photos to R2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/sync-canecorso-drive-images-now"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Validate mappings without uploading
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-canecorso-drive-images
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      SOURCE_FILE_ID: 1WFeLJjAi728rhzF4z9PJ36QNFFp2qnxs
+      SOURCE_SHA256: 4acfb0e046ada9818719cafa360829a8aba96f3fcb16c630d675dffe3c76669b
+      IMAGE_FOLDER_URL: https://drive.google.com/drive/folders/1p2XuE5WNnpUDfkVIQkqJnyfA4enhTObQ
+      SOURCE_FILE: /tmp/dogs_v4.csv
+      IMAGE_ROOT: /tmp/canecorso-drive-images
+      PUBLIC_SITE: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
+      R2_GATEWAY_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
+      MEDIA_EDGE_BASE_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
+      DJANGO_SETTINGS_MODULE: config.settings.northflank
+      DJANGO_DB_SCHEMA: django_app
+      DJANGO_DB_SSLMODE: require
+      DJANGO_DB_EXTRA_SCHEMAS: extensions,public
+      DJANGO_ALLOWED_HOSTS: .code.run,127.0.0.1,localhost
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
+      SITE_URL: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Verify required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_DATABASE_URL" || { echo "::error::Missing SUPABASE_DATABASE_URL"; exit 1; }
+          test -n "$DJANGO_SECRET_KEY" || { echo "::error::Missing DJANGO_SECRET_KEY"; exit 1; }
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install "gdown>=6,<7"
+
+      - name: Verify Cloudflare auth path before media migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/auth.cookies /tmp/login.html /tmp/login-post.html
+
+          status="$(curl --connect-timeout 10 --max-time 30 -sS             -c /tmp/auth.cookies -H 'Accept: text/html'             -o /tmp/login.html -w '%{http_code}'             "$PUBLIC_SITE/accounts/login/" || true)"
+          echo "Login GET -> HTTP $status"
+          test "$status" = "200"
+          grep -q 'name="username"' /tmp/login.html
+          grep -q 'name="password"' /tmp/login.html
+          grep -q 'name="csrfmiddlewaretoken"' /tmp/login.html
+
+          token="$(python - <<'PY'
+          import re
+          html=open('/tmp/login.html', encoding='utf-8').read()
+          match=re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', html)
+          if not match:
+              raise SystemExit("CSRF token missing")
+          print(match.group(1))
+          PY
+          )"
+
+          post_status="$(curl --connect-timeout 10 --max-time 30 -sS             -b /tmp/auth.cookies -c /tmp/auth.cookies             -H "Referer: $PUBLIC_SITE/accounts/login/"             --data-urlencode "csrfmiddlewaretoken=$token"             --data-urlencode "username=cloudflare-auth-probe-invalid"             --data-urlencode "password=definitely-invalid"             -o /tmp/login-post.html -w '%{http_code}'             "$PUBLIC_SITE/accounts/login/" || true)"
+          echo "Login POST/CSRF -> HTTP $post_status"
+          test "$post_status" = "200"
+          grep -qi 'username or password was not accepted' /tmp/login-post.html
+
+          dashboard_status="$(curl --connect-timeout 10 --max-time 30 -sS             -o /dev/null -w '%{http_code}'             "$PUBLIC_SITE/dashboard/" || true)"
+          echo "Anonymous dashboard -> HTTP $dashboard_status"
+          test "$dashboard_status" = "302"
+
+      - name: Verify R2 gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl --connect-timeout 10 --max-time 30 -sS             -o /tmp/r2-health.json -w '%{http_code}'             "$R2_GATEWAY_URL/healthz/" || true)"
+          echo "R2 gateway -> HTTP $status"
+          test "$status" = "200"
+          grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/r2-health.json
+
+      - name: Download immutable dog mapping
+        shell: bash
+        run: |
+          set -euo pipefail
+          gdown "https://drive.google.com/uc?id=$SOURCE_FILE_ID" -O "$SOURCE_FILE"
+          echo "$SOURCE_SHA256  $SOURCE_FILE" | sha256sum --check -
+
+      - name: Download archived Drive photos
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$IMAGE_ROOT"
+          mkdir -p "$IMAGE_ROOT"
+          python - <<'PY'
+          import gdown, os
+          result = gdown.download_folder(
+              url=os.environ["IMAGE_FOLDER_URL"],
+              output=os.environ["IMAGE_ROOT"] + "/",
+              quiet=False,
+          )
+          if result is None:
+              raise SystemExit("Google Drive image-folder download failed")
+          print(f"Downloaded {len(result)} archived files")
+          PY
+          count="$(find "$IMAGE_ROOT" -type f | wc -l)"
+          echo "Drive files downloaded: $count"
+          test "$count" -ge 14000
+
+      - name: Discover reachable Supabase session pooler
+        shell: bash
+        run: |
+          set -euo pipefail
+          target_url="$(python scripts/discover_supabase_session_pooler.py)"
+          echo "::add-mask::$target_url"
+          echo "DATABASE_URL=$target_url" >> "$GITHUB_ENV"
+
+      - name: Validate archive photo mapping
+        run: |
+          python manage.py import_canecorso_archive_images             "$SOURCE_FILE" "$IMAGE_ROOT" --dry-run
+
+      - name: Upload archived photos to Cloudflare R2
+        if: github.event_name == 'push' || inputs.dry_run == false
+        run: |
+          python manage.py import_canecorso_archive_images             "$SOURCE_FILE" "$IMAGE_ROOT"
+
+      - name: Verify managed image coverage
+        if: github.event_name == 'push' || inputs.dry_run == false
+        shell: bash
+        run: |
+          python manage.py shell -c "
+          from registry.models import DogExternalKey, DogImage
+          dog_ids = DogExternalKey.objects.filter(namespace='canecorsopedigree.com').values('dog_id')
+          count = DogImage.objects.filter(dog_id__in=dog_ids).values('dog_id').distinct().count()
+          assert count >= 9000, f'Expected at least 9000 source-linked dogs with managed photos, got {count}'
+          print(f'Source-linked dogs with managed R2 photos: {count}')
+          "
+
+      - name: Verify one archived photo end to end
+        if: github.event_name == 'push' || inputs.dry_run == false
+        shell: bash
+        run: |
+          set -euo pipefail
+          media_path="$(python manage.py shell -c "
+          from registry.models import DogImage
+          item = DogImage.objects.filter(caption__startswith='Archived source photo').order_by('pk').first()
+          assert item is not None
+          print(item.image.url)
+          ")"
+          echo "Testing managed media path: $media_path"
+          status="$(curl -L --connect-timeout 10 --max-time 30 -sS             -D /tmp/media-headers.txt -o /tmp/media-probe.bin             -w '%{http_code}' "$PUBLIC_SITE$media_path" || true)"
+          echo "Managed media GET -> HTTP $status"
+          test "$status" = "200"
+          test -s /tmp/media-probe.bin
+          grep -qi '^content-type: image/' /tmp/media-headers.txt
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## CaneCorso Drive → R2 sync" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Authentication path checked through Cloudflare" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Private R2 gateway checked" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Archive mapping is idempotent by CaneCorsoPedigree source ID" >> "$GITHUB_STEP_SUMMARY"

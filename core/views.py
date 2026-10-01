@@ -1,5 +1,6 @@
 import logging
 import os
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -9,7 +10,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
 
-from registry.models import Dog, DogImage, DogRegistration, HealthRecord, Kennel, Litter, Submission
+from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
 
 from .seo import json_ld
 
@@ -20,7 +21,33 @@ def _display_dogs(queryset):
     return queryset.select_related("kennel").prefetch_related(
         Prefetch("images", queryset=DogImage.objects.order_by("-is_primary", "sort_order", "created_at"), to_attr="display_images"),
         Prefetch("registrations", queryset=DogRegistration.objects.select_related("authority"), to_attr="display_registrations"),
+        Prefetch("sources", queryset=DogSource.objects.order_by("-verified_at", "-created_at"), to_attr="display_source_media"),
     )
+
+
+def _source_image_url(sources):
+    for source in sources:
+        payload = source.raw_payload if isinstance(source.raw_payload, dict) else {}
+        image_url = str(payload.get("image_url") or "").strip()
+        if not image_url:
+            continue
+        parsed = urlparse(image_url)
+        if (
+            parsed.scheme == "https"
+            and parsed.hostname in {"canecorsopedigree.com", "www.canecorsopedigree.com"}
+            and parsed.path.startswith("/static/images/animal/")
+        ):
+            return image_url
+    return ""
+
+
+def _attach_source_image_urls(dogs):
+    for dog in dogs:
+        dog.source_image_url = ""
+        if not getattr(dog, "display_images", []):
+            dog.source_image_url = _source_image_url(
+                getattr(dog, "display_source_media", [])
+            )
 
 
 def healthz(request):
@@ -55,7 +82,14 @@ def robots_txt(request):
 
 
 def home(request):
-    featured_dogs = _display_dogs(Dog.objects.filter(is_public=True).order_by("-search_count", "-updated_at", "name"))[:4]
+    featured_dogs = list(
+        _display_dogs(
+            Dog.objects.filter(is_public=True).order_by(
+                "-search_count", "-updated_at", "name"
+            )
+        )[:4]
+    )
+    _attach_source_image_urls(featured_dogs)
     context = {
         "dog_count": Dog.objects.filter(is_public=True).count(),
         "kennel_count": Kennel.objects.count(),
@@ -90,7 +124,8 @@ def dashboard(request):
             submissions__submitted_by=request.user,
         )
     ).distinct()
-    dogs = _display_dogs(member_dogs.order_by("-updated_at"))[:8]
+    dogs = list(_display_dogs(member_dogs.order_by("-updated_at"))[:8])
+    _attach_source_image_urls(dogs)
     litters = Litter.objects.filter(kennel_id__in=kennel_ids).select_related("kennel", "sire", "dam").order_by("-date_of_birth", "code")[:6]
     health_records = HealthRecord.objects.filter(dog__in=member_dogs).select_related("dog").order_by("-created_at")[:8]
     return render(request, "core/dashboard.html", {
