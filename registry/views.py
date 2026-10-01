@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.db.models import Count, F, Prefetch, Q, Subquery
+from django.db.models import Count, F, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -31,7 +31,7 @@ from .models import (
     Submission,
 )
 from .permissions import can_contribute_to_dog
-from .querysets import matching_public_dog_ids, one_dog_per_kennel, with_stored_images
+from .querysets import one_dog_per_kennel, public_dog_match_filter, with_stored_images
 
 
 def _dog_cards(queryset, *, include_parents=False, include_sources=True):
@@ -97,9 +97,8 @@ def dog_suggestions(request):
     if len(query) < 2:
         return JsonResponse({"results": []})
 
-    dogs = Dog.objects.filter(
-        is_public=True,
-        pk__in=Subquery(matching_public_dog_ids(query)),
+    dogs = Dog.objects.filter(is_public=True).filter(
+        public_dog_match_filter(query)
     )
     if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE}:
         dogs = dogs.filter(Q(sex=sex) | Q(sex=Dog.Sex.UNKNOWN))
@@ -135,9 +134,8 @@ def dog_search(request):
     exact = request.GET.get("exact") == "1"
 
     if query:
-        base_dogs = Dog.objects.filter(
-            is_public=True,
-            pk__in=Subquery(matching_public_dog_ids(query, exact=exact)),
+        base_dogs = Dog.objects.filter(is_public=True).filter(
+            public_dog_match_filter(query, exact=exact)
         )
     else:
         base_dogs = _public_dogs_with_images()
@@ -277,13 +275,18 @@ def dog_detail(request, slug):
 
 
 def _top_public_parents(parent_field, sex):
-    parent_lookup = f"{parent_field}__isnull"
+    relation = parent_field.removesuffix("_id")
     rows = list(
-        Dog.objects.filter(is_public=True)
-        .filter(**{parent_lookup: False})
+        Dog.objects.filter(
+            is_public=True,
+            **{
+                f"{relation}__is_public": True,
+                f"{relation}__sex": sex,
+            },
+        )
         .values(parent_field)
         .annotate(public_offspring_count=Count("id"))
-        .order_by("-public_offspring_count")[:40]
+        .order_by("-public_offspring_count")[:20]
     )
     parent_ids = [row[parent_field] for row in rows]
     parents = Dog.objects.filter(
