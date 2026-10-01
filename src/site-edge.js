@@ -84,15 +84,17 @@ function isPrivatePath(pathname) {
   return PRIVATE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
+function isSearchTrackingUrl(url) {
+  return url.searchParams.size === 1 && url.searchParams.get("source") === "search";
+}
+
 function isCacheablePublicPath(url, request) {
   if (request.method !== "GET" || hasPrivateCookie(request)) return false;
-  const sourceTrackingOnly =
-    url.searchParams.size === 1 && url.searchParams.get("source") === "search";
   if (
     url.search &&
     url.pathname !== "/dogs/" &&
     url.pathname !== "/kennels/" &&
-    !sourceTrackingOnly
+    !isSearchTrackingUrl(url)
   ) return false;
   const path = url.pathname;
   if (isPrivatePath(path)) return false;
@@ -161,9 +163,7 @@ function rewriteForVisitor(response, request, env, extraHeaders = {}) {
 function cacheKey(request) {
   const url = new URL(request.url);
   url.hash = "";
-  if (url.searchParams.size === 1 && url.searchParams.get("source") === "search") {
-    url.search = "";
-  }
+  if (isSearchTrackingUrl(url)) url.search = "";
   return new Request(url.toString(), { method: "GET" });
 }
 
@@ -481,10 +481,14 @@ async function handleRequest(request, env, ctx) {
     if (cached) {
       const storedAt = Number(cached.headers.get("x-cca-edge-stored-at") || "0");
       const ageSeconds = Math.max(0, (Date.now() - storedAt) / 1000);
-      ctx.waitUntil(wakeCriticalOrigin(env));
       if (ageSeconds > CACHE_FRESH_SECONDS) {
         ctx.waitUntil(refreshCachedPage(request, env, cache, key));
         return cachedForVisitor(cached, "STALE", request);
+      }
+      if (isSearchTrackingUrl(url)) {
+        ctx.waitUntil(fetchOrigin(request, env).catch(() => undefined));
+      } else {
+        ctx.waitUntil(wakeCriticalOrigin(env));
       }
       return cachedForVisitor(cached, "HIT", request);
     }
@@ -526,7 +530,7 @@ async function handleRequest(request, env, ctx) {
   return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
 
-export { hasPrivateCookie, isCacheablePublicPath, cacheKey };
+export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, cacheKey };
 
 export default {
   fetch(request, env, ctx) {
