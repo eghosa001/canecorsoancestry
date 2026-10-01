@@ -120,7 +120,7 @@ def dog_suggestions(request):
             }
         )
     response = JsonResponse({"results": results})
-    response["Cache-Control"] = "private, max-age=30"
+    response["Cache-Control"] = "public, max-age=30, stale-while-revalidate=120"
     return response
 
 
