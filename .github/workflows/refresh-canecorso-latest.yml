@@ -1,10 +1,6 @@
 name: Refresh CaneCorso latest additions
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/refresh-canecorso-latest.yml
   workflow_dispatch:
   schedule:
     - cron: "17 3 * * 0"
@@ -21,12 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
       DJANGO_SETTINGS_MODULE: config.settings.production
       DJANGO_DB_SCHEMA: django_app
       DJANGO_DB_SSLMODE: require
-      DJANGO_DB_EXTRA_SCHEMAS: public
+      DJANGO_DB_EXTRA_SCHEMAS: extensions,public
       DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
       DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
       DJANGO_REQUIRE_OBJECT_STORAGE: "0"
@@ -42,10 +38,18 @@ jobs:
       - name: Validate required secrets
         shell: bash
         run: |
-          test -n "$DATABASE_URL" || { echo "::error::Missing AIVEN_DATABASE_URL"; exit 1; }
+          test -n "$SUPABASE_DATABASE_URL" || { echo "::error::Missing SUPABASE_DATABASE_URL"; exit 1; }
           test -n "$DJANGO_SECRET_KEY" || { echo "::error::Missing DJANGO_SECRET_KEY"; exit 1; }
 
       - run: pip install -r requirements.txt
+
+      - name: Discover reachable Supabase session pooler
+        shell: bash
+        run: |
+          target_url="$(python scripts/discover_supabase_session_pooler.py)"
+          echo "::add-mask::$target_url"
+          echo "DATABASE_URL=$target_url" >> "$GITHUB_ENV"
+
 
       - name: Verify migrations
         run: python manage.py migrate --check

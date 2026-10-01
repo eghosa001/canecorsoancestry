@@ -30,7 +30,7 @@ services:
       - key: DJANGO_DB_SSLMODE
         value: require
       - key: DJANGO_DB_EXTRA_SCHEMAS
-        value: public
+        value: extensions,public
       - key: DJANGO_DB_CONN_MAX_AGE
         value: "300"
       - key: DJANGO_ALLOWED_HOSTS
