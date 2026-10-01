@@ -7,7 +7,14 @@ from urllib.parse import urlparse
 
 from core.seo import json_ld
 
-from pedigrees.services import direct_relative_health, mate_relationships, offspring_for, sibling_relationships
+from pedigrees.services import (
+    PedigreeCycleError,
+    direct_relative_health,
+    inbreeding_coefficient,
+    mate_relationships,
+    offspring_for,
+    sibling_relationships,
+)
 
 from .models import (
     Dog,
@@ -167,6 +174,13 @@ def dog_detail(request, slug):
 
     _attach_source_image_urls([dog])
 
+    try:
+        coi_percent = inbreeding_coefficient(dog, public_only=True) * 100
+        coi_error = ""
+    except PedigreeCycleError:
+        coi_percent = None
+        coi_error = "Pedigree cycle detected"
+
     if request.GET.get("source") == "search":
         Dog.objects.filter(pk=dog.pk).update(search_count=F("search_count") + 1)
 
@@ -209,6 +223,8 @@ def dog_detail(request, slug):
             "offspring": offspring_for(dog),
             "mates": mate_relationships(dog),
             "relative_health": direct_relative_health(dog),
+            "coi_percent": coi_percent,
+            "coi_error": coi_error,
             "can_contribute": can_contribute_to_dog(request.user, dog),
             "structured_data": json_ld(structured_data),
         },
