@@ -31,6 +31,7 @@ from .models import (
     Submission,
 )
 from .permissions import can_contribute_to_dog
+from .querysets import one_dog_per_kennel, with_stored_images
 
 
 def _dog_cards(queryset):
@@ -79,10 +80,7 @@ def _attach_source_image_urls(dogs):
 
 
 def _public_dogs_with_images():
-    return Dog.objects.filter(
-        is_public=True,
-        images__isnull=False,
-    ).distinct()
+    return with_stored_images(Dog.objects.filter(is_public=True))
 
 
 def dog_suggestions(request):
@@ -154,6 +152,9 @@ def dog_search(request):
         dogs = dogs.filter(country__iexact=country)
     if kennel_slug:
         dogs = dogs.filter(kennel__slug=kennel_slug)
+
+    if not query and not kennel_slug:
+        dogs = one_dog_per_kennel(dogs)
 
     dogs = dogs.order_by("name") if query else dogs.order_by("-search_count", "-updated_at", "name")
     paginator = Paginator(dogs, 24)
