@@ -111,20 +111,30 @@ def _layers_from_snapshot(snapshot):
         2: "Grandparents",
         3: "Great-grandparents",
     }
-    return [
-        {
-            "number": index,
-            "label": labels.get(index, f"Generation {index}"),
-            "nodes": [
+    layers = []
+    for generation, layer in enumerate(snapshot["layers"]):
+        nodes = []
+        for index, current in enumerate(layer):
+            relationship = (
+                "Subject"
+                if generation == 0
+                else _path_label(_slot_path(generation, index))
+            )
+            nodes.append(
                 {
                     "dog": current,
+                    "relationship": relationship,
                     "repeated": bool(current and counts[current.pk] > 1),
                 }
-                for current in layer
-            ],
-        }
-        for index, layer in enumerate(snapshot["layers"])
-    ]
+            )
+        layers.append(
+            {
+                "number": generation,
+                "label": labels.get(generation, f"Generation {generation}"),
+                "nodes": nodes,
+            }
+        )
+    return layers
 
 
 def _occurrences_from_snapshot(snapshot):
