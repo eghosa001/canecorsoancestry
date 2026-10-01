@@ -32,6 +32,22 @@ class CaneCorsoLatestParsingTests(SimpleTestCase):
         """
         self.assertEqual(latest.parse_latest_ids(html), ["120753", "120752"])
 
+    def test_latest_table_ignores_parent_links(self):
+        html = """
+        <table>
+          <tr><th>Name</th><th>Parents</th></tr>
+          <tr>
+            <td><a href="/view_pedigree?id=10">NEW ONE</a></td>
+            <td><a href="/view_pedigree?id=1">SIRE</a> x <a href="/view_pedigree?id=2">DAM</a></td>
+          </tr>
+          <tr>
+            <td><a href="/view_pedigree?id=20">NEW TWO</a></td>
+            <td><a href="/view_pedigree?id=3">SIRE</a> x <a href="/view_pedigree?id=4">DAM</a></td>
+          </tr>
+        </table>
+        """
+        self.assertEqual(latest.parse_latest_ids(html), ["10", "20"])
+
     def test_profile_parser_keeps_identity_and_parents(self):
         parsed = latest.parse_profile(
             "120753",
