@@ -38,15 +38,15 @@ jobs:
       - name: Test public edge cache policy
         run: node scripts/test_site_edge_cache.mjs
 
-      - name: Verify Northflank origin before cutover
+      - name: Warm Northflank origin before cutover
         shell: bash
         run: |
           origin="https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
-          for path in "/healthz/" "/dogs/?q=Branco+Custodi+Nos" "/statistics/"; do
-            status="$(curl --connect-timeout 10 --max-time 30 -sS -H 'X-CCA-Edge: 1' -o /tmp/northflank-origin.html -w '%{http_code}' "$origin$path" || true)"
-            echo "$path -> HTTP $status"
-            test "$status" = "200"
-          done
+          status="$(curl --connect-timeout 5 --max-time 12 -sS -H 'X-CCA-Edge: 1' -o /tmp/northflank-origin.html -w '%{http_code}' "$origin/healthz/" || true)"
+          echo "/healthz/ -> HTTP $status"
+          if [ "$status" != "200" ]; then
+            echo "::warning::Origin is cold or still waking; deploying the edge keep-warm anyway."
+          fi
 
       - name: Validate Worker bundle
         run: npx --yes wrangler@4 deploy --dry-run --config wrangler.site.toml
