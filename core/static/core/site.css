@@ -1761,3 +1761,38 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   .action-card small { display: none; }
   .dog-card-grid.compact .dog-card { grid-template-columns: 102px minmax(0,1fr); }
 }
+
+
+@media (max-width: 760px) {
+  .generation-switch {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+  }
+  .generation-switch a { width: 100%; }
+
+  .featured-dog-grid .dog-card {
+    display: grid;
+    grid-template-columns: 108px minmax(0,1fr);
+    min-height: 112px;
+  }
+  .featured-dog-grid .dog-card-media {
+    height: 100%;
+    min-height: 112px;
+    aspect-ratio: auto;
+  }
+  .featured-dog-grid .dog-card-body {
+    min-width: 0;
+    padding: 12px;
+    align-self: center;
+  }
+  .featured-dog-grid .dog-card-body h3 {
+    font-size: 1.04rem;
+    line-height: 1.14;
+  }
+  .featured-dog-grid .dog-card-body p { font-size: .7rem; }
+  .featured-dog-grid .verification-pill {
+    left: 6px;
+    top: 6px;
+    font-size: .54rem;
+  }
+}
