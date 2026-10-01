@@ -72,7 +72,8 @@ def login(page):
     page.goto(f"{BASE_URL}/accounts/login/", wait_until="networkidle")
     page.locator("#id_username").fill("ui-reviewer")
     page.locator("#id_password").fill("ui-reviewer-password")
-    page.locator("button[type=submit]").click()
+    login_form = page.locator("form").filter(has=page.locator("#id_username"))
+    login_form.locator("button[type=submit]").click()
     page.wait_for_url("**/dashboard/")
 
 
@@ -125,6 +126,9 @@ def main():
 
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
         capture(mobile, "/", "home-mobile")
+        mobile.locator(".mobile-nav > summary").click()
+        screenshot(mobile, "home-mobile-menu")
+        mobile.locator(".mobile-nav > summary").click()
         capture(mobile, "/dogs/?q=", "dogs-mobile")
         capture(mobile, "/accounts/password_reset/", "password-reset-mobile")
         mobile_dogs = mobile.locator(".search-result-card")
@@ -143,6 +147,8 @@ def main():
 
         login(mobile)
         screenshot(mobile, "dashboard-mobile")
+        mobile.locator(".dashboard-mobile-nav > summary").click()
+        screenshot(mobile, "dashboard-mobile-menu")
         capture(mobile, "/member/pedigrees/", "my-pedigrees-mobile")
         member_mobile = mobile.locator(".pedigree-workspace-card .btn-gold")
         if member_mobile.count():
