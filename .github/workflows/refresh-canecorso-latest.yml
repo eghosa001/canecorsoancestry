@@ -28,7 +28,7 @@ jobs:
       DJANGO_DB_SSLMODE: require
       DJANGO_DB_EXTRA_SCHEMAS: public
       DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
-      DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
       DJANGO_REQUIRE_OBJECT_STORAGE: "0"
 
     steps:
@@ -51,7 +51,7 @@ jobs:
         run: python manage.py migrate --check
 
       - name: Refresh latest public pedigree records
-        run: python manage.py refresh_canecorso_latest --limit 250 --delay 0.2
+        run: python manage.py refresh_canecorso_latest --limit 250 --delay 0.2 --backfill-images
 
       - name: Audit pedigree integrity
         run: python manage.py audit_pedigree_data --fail-on-critical
