@@ -113,6 +113,13 @@ jobs:
           gdown "https://drive.google.com/uc?id=$SOURCE_FILE_ID" -O "$SOURCE_FILE"
           echo "$SOURCE_SHA256  $SOURCE_FILE" | sha256sum --check -
 
+      - name: Download immutable dog mapping
+        shell: bash
+        run: |
+          set -euo pipefail
+          gdown "https://drive.google.com/uc?id=$SOURCE_FILE_ID" -O "$SOURCE_FILE"
+          echo "$SOURCE_SHA256  $SOURCE_FILE" | sha256sum --check -
+
       - name: Discover reachable Supabase session pooler
         shell: bash
         run: |
