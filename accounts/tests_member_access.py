@@ -12,11 +12,11 @@ class MemberAccessFlowTests(TestCase):
             username="reviewer", is_staff=True
         )
 
-    def test_member_can_sign_up(self):
+    def test_signup_uses_kennel_identity_and_email_login(self):
         response = self.client.post(
             reverse("accounts:signup"),
             {
-                "username": "new-member",
+                "kennel_name": "New Member Kennels",
                 "email": "member@example.com",
                 "password1": "Strong-pass-12345",
                 "password2": "Strong-pass-12345",
@@ -24,7 +24,23 @@ class MemberAccessFlowTests(TestCase):
         )
 
         self.assertRedirects(response, reverse("dashboard"))
-        self.assertTrue(get_user_model().objects.filter(username="new-member").exists())
+        user = get_user_model().objects.get(email="member@example.com")
+        self.assertEqual(user.username, "new-member-kennels")
+        self.assertEqual(user.profile.display_name, "New Member Kennels")
+        self.assertTrue(
+            Submission.objects.filter(
+                submitted_by=user,
+                kind=Submission.Kind.KENNEL_CREATE,
+                status=Submission.Status.PENDING,
+            ).exists()
+        )
+
+        self.client.logout()
+        login_response = self.client.post(
+            reverse("login"),
+            {"username": "member@example.com", "password": "Strong-pass-12345"},
+        )
+        self.assertRedirects(login_response, reverse("dashboard"))
 
     def test_dog_is_private_until_admin_approval_then_member_can_view_pedigree(self):
         member = get_user_model().objects.create_user(
