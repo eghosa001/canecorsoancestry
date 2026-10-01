@@ -63,7 +63,7 @@ class Command(BaseCommand):
             .values_list("dog_id", flat=True)
         )
 
-        records = {}
+        csv_filenames = {}
         with source_csv.open("r", encoding="utf-8-sig", newline="") as handle:
             for row in csv.DictReader(handle):
                 sid = source_id(row.get("id"))
@@ -71,25 +71,45 @@ class Command(BaseCommand):
                     continue
                 filename = archive_filename(row.get("image_file"))
                 if filename:
-                    records[sid] = filename
+                    csv_filenames[sid] = filename
 
-        local_by_source = {}
+        # The physical archive is authoritative for media presence. The scraper wrote
+        # files as <dog_id>_<sanitized_name>.<ext>; a crash could leave the image on
+        # disk before SQLite/CSV received image_file. Therefore never require the CSV
+        # image_file field in order to discover a saved photo.
+        local_candidates = {}
+        malformed_files = []
         for path in image_root.rglob("*"):
             if not path.is_file() or path.suffix.lower() not in ALLOWED_EXTENSIONS:
                 continue
-            match = re.match(r"^(\d+)_", path.name)
-            if match:
-                local_by_source.setdefault(match.group(1), path)
+            match = re.match(r"^(\d+)(?:_|\.)", path.name)
+            if not match:
+                malformed_files.append(path)
+                continue
+            sid = match.group(1).lstrip("0") or "0"
+            local_candidates.setdefault(sid, []).append(path)
+
+        local_by_source = {}
+        duplicate_source_files = {}
+        for sid, paths in local_candidates.items():
+            expected = csv_filenames.get(sid, "")
+            preferred = next((p for p in paths if p.name == expected), None)
+            if preferred is None:
+                # When names drifted between scrape attempts, prefer the largest
+                # non-empty copy. This avoids trusting sanitized dog-name text.
+                preferred = max(paths, key=lambda p: (p.stat().st_size, p.name))
+            local_by_source[sid] = preferred
+            if len(paths) > 1:
+                duplicate_source_files[sid] = paths
 
         candidates = []
-        missing_files = []
-        for sid, filename in records.items():
-            item = external[sid]
-            if item.dog_id in existing_dog_ids:
+        archive_only_not_in_production = 0
+        for sid, path in local_by_source.items():
+            item = external.get(sid)
+            if item is None:
+                archive_only_not_in_production += 1
                 continue
-            path = local_by_source.get(sid)
-            if path is None:
-                missing_files.append((sid, filename))
+            if item.dog_id in existing_dog_ids:
                 continue
             candidates.append((sid, item.dog, path))
 
@@ -99,8 +119,11 @@ class Command(BaseCommand):
 
         self.stdout.write(
             f"Archive media preflight: {len(external)} linked dogs; "
-            f"{len(records)} mapped archive photos; {len(existing_dog_ids)} dogs already have "
-            f"managed images; {len(candidates)} photos ready; {len(missing_files)} mapped files missing locally."
+            f"{len(local_by_source)} physical archive photo IDs; {len(csv_filenames)} CSV image_file mappings; "
+            f"{len(existing_dog_ids)} dogs already have managed images; {len(candidates)} photos ready; "
+            f"{archive_only_not_in_production} archive photos belong to dogs outside the production subset; "
+            f"{len(duplicate_source_files)} dog IDs have duplicate saved files; "
+            f"{len(malformed_files)} image files could not be parsed by numeric dog ID."
         )
 
         if options["dry_run"]:
