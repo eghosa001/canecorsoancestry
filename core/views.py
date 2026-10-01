@@ -84,11 +84,7 @@ def robots_txt(request):
 def home(request):
     image_candidates = list(
         _display_dogs(
-            Dog.objects.filter(is_public=True)
-            .filter(
-                Q(images__isnull=False)
-                | Q(sources__raw_payload__image_url__icontains="/static/images/animal/")
-            )
+            Dog.objects.filter(is_public=True, images__isnull=False)
             .distinct()
             .order_by("-search_count", "-updated_at", "name")
         )[:80]
