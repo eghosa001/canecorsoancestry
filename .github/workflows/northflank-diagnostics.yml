@@ -1,0 +1,64 @@
+name: Northflank diagnostics
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/northflank-diagnostics.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      NORTHFLANK_API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+      NF_API: https://api.northflank.com/v1
+    steps:
+      - name: Inspect Northflank service
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$NORTHFLANK_API_TOKEN"
+          auth=(-H "Authorization: Bearer $NORTHFLANK_API_TOKEN")
+
+          projects="$(curl -fsS "${auth[@]}" "$NF_API/projects")"
+          project_id="$(printf '%s' "$projects" | jq -r '.data.projects[0].id // empty')"
+          test -n "$project_id"
+
+          services="$(curl -fsS "${auth[@]}" "$NF_API/projects/$project_id/services")"
+          printf '%s' "$services" | jq '{services:[.data.services[] | {id,name,serviceType,status}]}'
+
+          service_id="$(printf '%s' "$services" | jq -r '.data.services[] | select(.name=="canecorsoancestry") | .id' | head -n1)"
+          test -n "$service_id"
+
+          echo "Project: $project_id"
+          echo "Service: $service_id"
+
+          echo "=== Builds ==="
+          curl -fsS "${auth[@]}" "$NF_API/projects/$project_id/services/$service_id/build?per_page=5" |
+            jq '{builds:[.data.builds[] | {id,status,sha,concluded,success,message,createdAt}]}'
+
+          echo "=== Ports ==="
+          curl -fsS "${auth[@]}" "$NF_API/projects/$project_id/services/$service_id/ports" |
+            jq '{ports:[.data.ports[] | {name,internalPort,public,protocol,dns,domains}]}'
+
+          echo "=== Recent runtime logs ==="
+          code="$(curl -sS -o /tmp/runtime.json -w '%{http_code}' "${auth[@]}" "$NF_API/projects/$project_id/services/$service_id/logs?queryType=range&duration=900&lineLimit=80&direction=backward&type=runtime")"
+          echo "runtime log HTTP $code"
+          if [ "$code" = "200" ]; then
+            jq -r '.data[]? | [.ts,.log] | @tsv' /tmp/runtime.json
+          else
+            cat /tmp/runtime.json
+          fi
+
+          echo "=== Recent build logs ==="
+          code="$(curl -sS -o /tmp/build.json -w '%{http_code}' "${auth[@]}" "$NF_API/projects/$project_id/services/$service_id/build-logs?queryType=range&duration=900&lineLimit=80&direction=backward")"
+          echo "build log HTTP $code"
+          if [ "$code" = "200" ]; then
+            jq -r '.data[]? | [.ts,.log] | @tsv' /tmp/build.json
+          else
+            cat /tmp/build.json
+          fi
