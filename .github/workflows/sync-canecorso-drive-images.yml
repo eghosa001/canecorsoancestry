@@ -106,6 +106,13 @@ jobs:
           test "$status" = "200"
           grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/r2-health.json
 
+      - name: Download immutable dog mapping
+        shell: bash
+        run: |
+          set -euo pipefail
+          gdown "https://drive.google.com/uc?id=$SOURCE_FILE_ID" -O "$SOURCE_FILE"
+          echo "$SOURCE_SHA256  $SOURCE_FILE" | sha256sum --check -
+
       - name: Discover reachable Supabase session pooler
         shell: bash
         run: |
@@ -118,7 +125,7 @@ jobs:
         if: github.event_name == 'push' || inputs.dry_run == false
         run: |
           python manage.py sync_canecorso_drive_manifest_images \
-            "$DRIVE_MANIFEST_INDEX" \
+            "$DRIVE_MANIFEST_INDEX" "$SOURCE_FILE" \
             --limit 1 --workers 1 --batch-size 1
 
       - name: Verify canary photo end to end
@@ -145,8 +152,8 @@ jobs:
         if: github.event_name == 'push' || inputs.dry_run == false
         run: |
           python manage.py sync_canecorso_drive_manifest_images \
-            "$DRIVE_MANIFEST_INDEX" \
-            --workers 8 --batch-size 100
+            "$DRIVE_MANIFEST_INDEX" "$SOURCE_FILE" \
+            --workers 6 --batch-size 100
 
       - name: Verify managed image coverage
         if: github.event_name == 'push' || inputs.dry_run == false
