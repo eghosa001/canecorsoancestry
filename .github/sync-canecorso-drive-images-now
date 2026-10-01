@@ -9,3 +9,4 @@ Start Worker-verified R2 canary and bulk migration on 2026-10-01.
 Start source-URL canary-verified R2 migration on 2026-10-01.
 Start corrected Cloudflare-edge R2 migration on 2026-10-01.
 Start hardened failure-tolerant CaneCorso R2 migration on 2026-10-01.
+Start final hardened CaneCorso R2 migration after canary-threshold fix on 2026-10-01.
