@@ -7,3 +7,4 @@ Start source-URL canary R2 migration on 2026-10-01.
 Start Cloudflare-edge ingest canary and bulk R2 migration on 2026-10-01.
 Start Worker-verified R2 canary and bulk migration on 2026-10-01.
 Start source-URL canary-verified R2 migration on 2026-10-01.
+Start corrected Cloudflare-edge R2 migration on 2026-10-01.
