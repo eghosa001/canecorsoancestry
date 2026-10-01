@@ -124,14 +124,25 @@ def reverse_pedigree(request, slug):
     )
 
 
-def _resolve_mating_dog(raw_value, expected_sex):
+def _resolve_mating_dog(raw_value, expected_sex, selected_id=""):
     query = (raw_value or "").strip()
-    if not query:
-        return None, ""
-
     candidates = _public_dogs().filter(
         Q(sex=expected_sex) | Q(sex=Dog.Sex.UNKNOWN)
     )
+
+    selected = (selected_id or "").strip()
+    if selected:
+        try:
+            selected_uuid = UUID(selected)
+        except (TypeError, ValueError):
+            selected_uuid = None
+        if selected_uuid:
+            dog = candidates.filter(pk=selected_uuid).first()
+            if dog:
+                return dog, ""
+
+    if not query:
+        return None, ""
 
     try:
         dog_id = UUID(query)
@@ -142,19 +153,26 @@ def _resolve_mating_dog(raw_value, expected_sex):
         if dog:
             return dog, ""
 
-    exact = list(
+    exact_names = list(
+        candidates.filter(name__iexact=query).order_by("name")[:2]
+    )
+    if len(exact_names) == 1:
+        return exact_names[0], ""
+    if len(exact_names) > 1:
+        return None, "More than one dog has that exact name. Select a suggestion or use a registration number."
+
+    exact_other = list(
         candidates.filter(
-            Q(name__iexact=query)
-            | Q(aliases__name__iexact=query)
+            Q(aliases__name__iexact=query)
             | Q(registrations__number__iexact=query)
         )
         .distinct()
         .order_by("name")[:2]
     )
-    if len(exact) == 1:
-        return exact[0], ""
-    if len(exact) > 1:
-        return None, "More than one dog matches that value. Use an exact registration number."
+    if len(exact_other) == 1:
+        return exact_other[0], ""
+    if len(exact_other) > 1:
+        return None, "More than one dog matches that value. Select a suggestion or use a registration number."
 
     partial = list(
         candidates.filter(
@@ -174,11 +192,17 @@ def _resolve_mating_dog(raw_value, expected_sex):
 
 
 def virtual_mating(request):
-    sire_query = (request.GET.get("sire_q") or request.GET.get("sire") or "").strip()
-    dam_query = (request.GET.get("dam_q") or request.GET.get("dam") or "").strip()
+    sire_query = (request.GET.get("sire_q") or "").strip()
+    dam_query = (request.GET.get("dam_q") or "").strip()
+    sire_id = (request.GET.get("sire") or "").strip()
+    dam_id = (request.GET.get("dam") or "").strip()
 
-    sire, sire_error = _resolve_mating_dog(sire_query, Dog.Sex.MALE)
-    dam, dam_error = _resolve_mating_dog(dam_query, Dog.Sex.FEMALE)
+    sire, sire_error = _resolve_mating_dog(
+        sire_query, Dog.Sex.MALE, selected_id=sire_id
+    )
+    dam, dam_error = _resolve_mating_dog(
+        dam_query, Dog.Sex.FEMALE, selected_id=dam_id
+    )
     error = sire_error or dam_error
     projected_percent = None
     common = []
