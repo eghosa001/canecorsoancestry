@@ -1,7 +1,7 @@
 const DEFAULT_ORIGIN = "https://canecorsoancestry.onrender.com";
 const CACHE_FRESH_SECONDS = 300;
 const CACHE_RETENTION_SECONDS = 86400;
-const ORIGIN_GRACE_MS = 1200;
+const ORIGIN_GRACE_MS = 2500;
 const AUTH_GRACE_MS = 450;
 const READY_TIMEOUT_MS = 3500;
 const AUTH_READY_TIMEOUT_MS = 4500;
@@ -77,16 +77,25 @@ function isBot(request) {
 
 function hasPrivateCookie(request) {
   const cookie = request.headers.get("cookie") || "";
-  return /(?:^|;\s*)(sessionid|csrftoken)=/i.test(cookie);
+  return /(?:^|;\s*)sessionid=/i.test(cookie);
 }
 
 function isPrivatePath(pathname) {
   return PRIVATE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
+function isSearchTrackingUrl(url) {
+  return url.searchParams.size === 1 && url.searchParams.get("source") === "search";
+}
+
 function isCacheablePublicPath(url, request) {
   if (request.method !== "GET" || hasPrivateCookie(request)) return false;
-  if (url.search && url.pathname !== "/dogs/" && url.pathname !== "/kennels/") return false;
+  if (
+    url.search &&
+    url.pathname !== "/dogs/" &&
+    url.pathname !== "/kennels/" &&
+    !isSearchTrackingUrl(url)
+  ) return false;
   const path = url.pathname;
   if (isPrivatePath(path)) return false;
   if (path.startsWith("/static/")) return true;
@@ -154,6 +163,7 @@ function rewriteForVisitor(response, request, env, extraHeaders = {}) {
 function cacheKey(request) {
   const url = new URL(request.url);
   url.hash = "";
+  if (isSearchTrackingUrl(url)) url.search = "";
   return new Request(url.toString(), { method: "GET" });
 }
 
@@ -471,10 +481,14 @@ async function handleRequest(request, env, ctx) {
     if (cached) {
       const storedAt = Number(cached.headers.get("x-cca-edge-stored-at") || "0");
       const ageSeconds = Math.max(0, (Date.now() - storedAt) / 1000);
-      ctx.waitUntil(wakeCriticalOrigin(env));
       if (ageSeconds > CACHE_FRESH_SECONDS) {
         ctx.waitUntil(refreshCachedPage(request, env, cache, key));
         return cachedForVisitor(cached, "STALE", request);
+      }
+      if (isSearchTrackingUrl(url)) {
+        ctx.waitUntil(fetchOrigin(request, env).catch(() => undefined));
+      } else {
+        ctx.waitUntil(wakeCriticalOrigin(env));
       }
       return cachedForVisitor(cached, "HIT", request);
     }
@@ -515,6 +529,8 @@ async function handleRequest(request, env, ctx) {
   }
   return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
+
+export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, cacheKey };
 
 export default {
   fetch(request, env, ctx) {
