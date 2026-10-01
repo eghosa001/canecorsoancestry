@@ -67,3 +67,45 @@ class CaneCorsoArchiveImportTests(TestCase):
             DogExternalKey.objects.filter(namespace="canecorsopedigree.com").count(), 3
         )
         self.assertEqual(DogSource.objects.count(), 3)
+
+
+class CaneCorsoArchivePublishTests(TestCase):
+    def test_publish_rerun_only_publishes_archive_created_dogs(self):
+        existing = Dog.objects.create(name="Existing Canonical", slug="existing-canonical")
+        DogExternalKey.objects.create(
+            dog=existing, namespace="canecorsopedigree.com", key="9"
+        )
+        imported = Dog.objects.create(name="Imported", slug="ccp-10-imported")
+        DogExternalKey.objects.create(
+            dog=imported, namespace="canecorsopedigree.com", key="10"
+        )
+
+        rows = [
+            {"id": "9", "name": "Existing Canonical", "dob": "2024/01/01"},
+            {"id": "10", "name": "Imported", "dob": "2024/02/01"},
+        ]
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", encoding="utf-8", newline="", delete=False
+        ) as handle:
+            writer = csv.DictWriter(handle, fieldnames=FIELDS)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+            source = Path(handle.name)
+
+        try:
+            call_command(
+                "import_canecorso_archive",
+                source,
+                start_year=2020,
+                end_year=2026,
+                publish=True,
+                stdout=StringIO(),
+            )
+        finally:
+            source.unlink(missing_ok=True)
+
+        existing.refresh_from_db()
+        imported.refresh_from_db()
+        self.assertFalse(existing.is_public)
+        self.assertTrue(imported.is_public)
