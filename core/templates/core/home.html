@@ -60,7 +60,7 @@
     </div>
     <a class="text-link" href="{% url 'registry:dog-search' %}">View all dogs →</a>
   </div>
-  <div class="dog-card-grid">
+  <div class="dog-card-grid featured-dog-grid">
     {% for dog in featured_dogs %}
       <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
         <div class="dog-card-media">
