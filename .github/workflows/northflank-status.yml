@@ -50,3 +50,6 @@ jobs:
               echo
             fi
           done
+
+          echo "Recent Northflank runtime logs:"
+          curl -fsS "${auth[@]}"             "$NF_API/projects/$project_id/services/$service_id/logs?type=runtime&queryType=range&duration=600&lineLimit=120&direction=backward"             | jq -r '.data[]? | "\(.ts) \(.log)"'             | head -n 120 || true
