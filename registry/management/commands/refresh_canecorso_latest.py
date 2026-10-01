@@ -372,9 +372,13 @@ def import_records(records, publish=True, dry_run=False):
                 if current_id and current_id != parent.pk:
                     preserved_parent_conflicts += 1
                     continue
-                if current_id != parent.pk:
-                    setattr(dog, field, parent)
-                    changed.append(field)
+                if current_id == parent.pk:
+                    continue
+                if dog._parent_creates_cycle(parent.pk):
+                    skipped_parent_links += 1
+                    continue
+                setattr(dog, field, parent)
+                changed.append(field)
             if changed:
                 dog.save(update_fields=[*changed, "updated_at"])
 
