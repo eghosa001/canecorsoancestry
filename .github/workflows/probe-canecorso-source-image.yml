@@ -1,0 +1,21 @@
+name: Probe CaneCorso source image
+
+on:
+  push:
+    paths:
+      - ".github/workflows/probe-canecorso-source-image.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe source image
+        run: |
+          set -euo pipefail
+          url='https://www.canecorsopedigree.com/static/images/animal/thumbnails/img4ba604e9286da.jpg_400.jpeg'
+          status="$(curl -L --connect-timeout 10 --max-time 30 -A 'CaneCorsoResearchArchiver/1.0' -H 'Referer: https://www.canecorsopedigree.com/' -sS -D /tmp/h -o /tmp/img -w '%{http_code}' "$url" || true)"
+          echo "status=$status"
+          echo "bytes=$(wc -c < /tmp/img 2>/dev/null || echo 0)"
+          grep -i '^content-type:' /tmp/h || true
+          test "$status" = "200"
+          test -s /tmp/img
