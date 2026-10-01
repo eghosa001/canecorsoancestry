@@ -23,11 +23,14 @@ if not R2_GATEWAY_URL:
 # Northflank runs the Django origin while Cloudflare remains the public edge
 # and R2 remains the media store. Keeping media behind the existing gateway
 # means changing the application host does not require moving dog images.
+# Use compressed non-manifest static storage on Northflank. The container
+# already runs collectstatic at build time, and avoiding a manifest lookup
+# prevents runtime 500s if Northflank rolls between immutable images.
 STORAGES = {
     "default": {
         "BACKEND": "core.r2_gateway_storage.CloudflareR2GatewayStorage",
     },
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
