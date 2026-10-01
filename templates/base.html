@@ -29,6 +29,33 @@
         <form class="header-search" action="{% url 'registry:dog-search' %}" method="get"><label class="sr-only" for="header-q">Search dogs</label><input id="header-q" name="q" placeholder="Search dog, kennel, registration"></form>
         {% if user.is_authenticated %}{% if user.is_staff %}<a class="account-link" href="{% url 'accounts:moderation' %}">Moderation</a>{% endif %}<a class="account-link" href="{% url 'dashboard' %}">{{ user.get_username }}</a>{% else %}<a class="account-link" href="{% url 'login' %}">Sign in</a><a class="account-link" href="{% url 'accounts:signup' %}">Join</a>{% endif %}
       </div>
+      <details class="mobile-nav">
+        <summary aria-label="Open site navigation"><span>Menu</span><span aria-hidden="true">☰</span></summary>
+        <div class="mobile-nav-panel">
+          <form class="mobile-nav-search" action="{% url 'registry:dog-search' %}" method="get">
+            <label class="sr-only" for="mobile-header-q">Search dogs</label>
+            <input id="mobile-header-q" name="q" placeholder="Search dogs or registrations">
+            <button type="submit">Search</button>
+          </form>
+          <nav aria-label="Mobile navigation">
+            <a href="{% url 'home' %}">Home</a>
+            <a href="{% url 'registry:dog-search' %}">Dogs</a>
+            <a href="{% url 'registry:kennel-list' %}">Kennels</a>
+            <a href="{% url 'pedigrees:index' %}">Pedigrees</a>
+            <a href="{% url 'pedigrees:virtual-mating' %}">Virtual mating</a>
+            <a href="{% url 'registry:statistics' %}">Statistics</a>
+          </nav>
+          <div class="mobile-account-actions">
+            {% if user.is_authenticated %}
+              {% if user.is_staff %}<a href="{% url 'accounts:moderation' %}">Moderation</a>{% endif %}
+              <a class="mobile-account-primary" href="{% url 'dashboard' %}">My account · {{ user.get_username }}</a>
+            {% else %}
+              <a href="{% url 'login' %}">Sign in</a>
+              <a class="mobile-account-primary" href="{% url 'accounts:signup' %}">Join</a>
+            {% endif %}
+          </div>
+        </div>
+      </details>
     </div>
   </header>
   <main id="main-content" tabindex="-1">
