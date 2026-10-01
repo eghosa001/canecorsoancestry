@@ -18,6 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.utils.text import slugify
 
 from registry.data_quality import quick_quality_report
 from registry.models import (
@@ -51,6 +52,8 @@ from pedigrees.services import pedigree_analysis, pedigree_export_rows
 
 logger = logging.getLogger(__name__)
 
+
+from .models import Profile
 
 from .forms import (
     BulkModerationForm,
@@ -123,6 +126,37 @@ def signup(request):
         user = form.save(commit=False)
         user.is_active = not verification_required
         user.save()
+
+        kennel_name = form.cleaned_data["kennel_name"]
+        kennel_slug = slugify(kennel_name)[:190]
+        Profile.objects.update_or_create(
+            user=user,
+            defaults={"display_name": kennel_name},
+        )
+        existing_kennel = Kennel.objects.filter(
+            Q(name__iexact=kennel_name) | Q(slug__iexact=kennel_slug)
+        ).first()
+        if existing_kennel:
+            Submission.objects.get_or_create(
+                kind=Submission.Kind.KENNEL_CLAIM,
+                status=Submission.Status.PENDING,
+                submitted_by=user,
+                kennel=existing_kennel,
+                defaults={
+                    "payload": {
+                        "relationship": "Owner",
+                        "signup_kennel_name": kennel_name,
+                    },
+                    "notes": "Kennel claim created automatically during account signup.",
+                },
+            )
+        else:
+            Submission.objects.create(
+                kind=Submission.Kind.KENNEL_CREATE,
+                submitted_by=user,
+                payload={"name": kennel_name, "slug": kennel_slug},
+                notes="Kennel profile requested automatically during account signup.",
+            )
 
         if verification_required:
             try:

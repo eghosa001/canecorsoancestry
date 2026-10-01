@@ -10,22 +10,17 @@
 
   <form class="mating-form" method="get">
     <div class="mating-select">
-      <label for="sire">Select sire</label>
-      <select id="sire" name="sire" required>
-        <option value="">Choose a sire</option>
-        {% for dog in sires %}<option value="{{ dog.pk }}" {% if sire and sire.pk == dog.pk %}selected{% endif %}>{{ dog.name }}</option>{% endfor %}
-      </select>
+      <label for="sire_q">Sire</label>
+      <input id="sire_q" name="sire_q" value="{{ sire_query }}" placeholder="Dog name or registration" autocomplete="off" required>
     </div>
     <span class="mating-plus">+</span>
     <div class="mating-select">
-      <label for="dam">Select dam</label>
-      <select id="dam" name="dam" required>
-        <option value="">Choose a dam</option>
-        {% for dog in dams %}<option value="{{ dog.pk }}" {% if dam and dam.pk == dog.pk %}selected{% endif %}>{{ dog.name }}</option>{% endfor %}
-      </select>
+      <label for="dam_q">Dam</label>
+      <input id="dam_q" name="dam_q" value="{{ dam_query }}" placeholder="Dog name or registration" autocomplete="off" required>
     </div>
     <button class="btn btn-gold" type="submit">Analyse pairing</button>
   </form>
+  <p class="mating-help muted">Search is resolved on the server, so this works across the full dog database without loading thousands of dogs into the page. Exact registration numbers are best when names are duplicated.</p>
 
   {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
 

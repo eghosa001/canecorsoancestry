@@ -1,4 +1,5 @@
 import csv
+from uuid import UUID
 
 from django.db.models import Q
 from django.http import HttpResponse
@@ -123,24 +124,66 @@ def reverse_pedigree(request, slug):
     )
 
 
-def virtual_mating(request):
-    sires = _public_dogs().filter(sex=Dog.Sex.MALE).order_by("name")
-    dams = _public_dogs().filter(sex=Dog.Sex.FEMALE).order_by("name")
+def _resolve_mating_dog(raw_value, expected_sex):
+    query = (raw_value or "").strip()
+    if not query:
+        return None, ""
 
-    sire = None
-    dam = None
+    candidates = _public_dogs().filter(
+        Q(sex=expected_sex) | Q(sex=Dog.Sex.UNKNOWN)
+    )
+
+    try:
+        dog_id = UUID(query)
+    except (TypeError, ValueError):
+        dog_id = None
+    if dog_id:
+        dog = candidates.filter(pk=dog_id).first()
+        if dog:
+            return dog, ""
+
+    exact = list(
+        candidates.filter(
+            Q(name__iexact=query)
+            | Q(aliases__name__iexact=query)
+            | Q(registrations__number__iexact=query)
+        )
+        .distinct()
+        .order_by("name")[:2]
+    )
+    if len(exact) == 1:
+        return exact[0], ""
+    if len(exact) > 1:
+        return None, "More than one dog matches that value. Use an exact registration number."
+
+    partial = list(
+        candidates.filter(
+            Q(name__icontains=query)
+            | Q(aliases__name__icontains=query)
+            | Q(registrations__number__icontains=query)
+        )
+        .distinct()
+        .order_by("name")[:3]
+    )
+    if len(partial) == 1:
+        return partial[0], ""
+    if len(partial) > 1:
+        names = ", ".join(dog.name for dog in partial)
+        return None, f"Multiple matches found: {names}. Enter a more exact name or registration."
+    return None, "No matching public dog was found."
+
+
+def virtual_mating(request):
+    sire_query = (request.GET.get("sire_q") or request.GET.get("sire") or "").strip()
+    dam_query = (request.GET.get("dam_q") or request.GET.get("dam") or "").strip()
+
+    sire, sire_error = _resolve_mating_dog(sire_query, Dog.Sex.MALE)
+    dam, dam_error = _resolve_mating_dog(dam_query, Dog.Sex.FEMALE)
+    error = sire_error or dam_error
     projected_percent = None
     common = []
-    error = ""
 
-    sire_id = request.GET.get("sire", "").strip()
-    dam_id = request.GET.get("dam", "").strip()
-    if sire_id:
-        sire = sires.filter(pk=sire_id).first()
-    if dam_id:
-        dam = dams.filter(pk=dam_id).first()
-
-    if sire and dam:
+    if sire and dam and not error:
         try:
             projected_percent = projected_inbreeding(
                 sire, dam, public_only=True
@@ -155,10 +198,10 @@ def virtual_mating(request):
         request,
         "pedigrees/virtual_mating.html",
         {
-            "sires": sires,
-            "dams": dams,
             "sire": sire,
             "dam": dam,
+            "sire_query": sire.name if sire else sire_query,
+            "dam_query": dam.name if dam else dam_query,
             "projected_percent": projected_percent,
             "common": common,
             "error": error,

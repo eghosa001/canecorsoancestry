@@ -31,6 +31,38 @@ class DogModelTests(TestCase):
         self.assertEqual(len(response.context["dogs"]), 24)
         self.assertTrue(response.context["page_obj"].has_next())
 
+    def test_public_dog_profile_always_exposes_coi(self):
+        common = Dog.objects.create(
+            name="COI Common", slug="coi-common-profile", is_public=True
+        )
+        sire = Dog.objects.create(
+            name="COI Sire",
+            slug="coi-sire-profile",
+            sex=Dog.Sex.MALE,
+            sire=common,
+            is_public=True,
+        )
+        dam = Dog.objects.create(
+            name="COI Dam",
+            slug="coi-dam-profile",
+            sex=Dog.Sex.FEMALE,
+            sire=common,
+            is_public=True,
+        )
+        dog = Dog.objects.create(
+            name="COI Dog",
+            slug="coi-dog-profile",
+            sire=sire,
+            dam=dam,
+            is_public=True,
+        )
+
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "COI")
+        self.assertContains(response, "12.50%")
+
     def test_public_search_finds_external_registration_number(self):
         dog = Dog.objects.create(name="Branco", slug="branco", is_public=True)
         authority = RegistrationAuthority.objects.create(code="KSS", name="Kennel authority")

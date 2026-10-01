@@ -5,7 +5,7 @@
   <aside class="dashboard-sidebar">
     <div class="dashboard-sidebar-intro">
       <p class="eyebrow">Member area</p>
-      <strong class="sidebar-name">{{ user.get_username }}</strong>
+      <strong class="sidebar-name">{{ account_name }}</strong>
     </div>
     <nav class="dashboard-desktop-nav">
       <a class="active" href="{% url 'dashboard' %}">Dashboard</a>
@@ -44,7 +44,7 @@
     <header class="dashboard-hero">
       <div>
         <p class="eyebrow">Member dashboard</p>
-        <h1>{{ user.get_full_name|default:user.get_username }}</h1>
+        <h1>{{ account_name }}</h1>
         {% if primary_kennel %}
           <p>{{ primary_kennel.name }}{% if primary_kennel.country %} · {{ primary_kennel.country }}{% endif %}</p>
         {% else %}

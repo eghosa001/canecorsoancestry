@@ -63,8 +63,12 @@ jobs:
           )
 
           U = get_user_model()
-          u, _ = U.objects.get_or_create(username="ui-reviewer", defaults={"is_staff": True})
+          u, _ = U.objects.get_or_create(
+              username="ui-reviewer",
+              defaults={"is_staff": True, "email": "ui-reviewer@example.com"},
+          )
           u.is_staff = True
+          u.email = "ui-reviewer@example.com"
           u.set_password("ui-reviewer-password")
           u.save()
 

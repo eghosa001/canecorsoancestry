@@ -53,7 +53,7 @@ class EmailVerificationTests(TestCase):
         response = self.client.post(
             reverse("accounts:signup"),
             {
-                "username": "verify-member",
+                "kennel_name": "Verify Member",
                 "email": "verify@example.com",
                 "password1": "Strong-pass-12345",
                 "password2": "Strong-pass-12345",
