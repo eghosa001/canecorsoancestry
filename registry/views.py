@@ -79,14 +79,10 @@ def _attach_source_image_urls(dogs):
 
 
 def _public_dogs_with_images():
-    return (
-        Dog.objects.filter(is_public=True)
-        .filter(
-            Q(images__isnull=False)
-            | Q(sources__raw_payload__image_url__icontains="/static/images/animal/")
-        )
-        .distinct()
-    )
+    return Dog.objects.filter(
+        is_public=True,
+        images__isnull=False,
+    ).distinct()
 
 
 def dog_suggestions(request):
