@@ -1,0 +1,41 @@
+name: Northflank status probe
+
+on:
+  push:
+    branches: ["diagnose/northflank-status"]
+    paths:
+      - ".github/workflows/northflank-status.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      NORTHFLANK_API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+      NF_API: https://api.northflank.com/v1
+    steps:
+      - name: Inspect Northflank service
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$NORTHFLANK_API_TOKEN"
+          auth=(-H "Authorization: Bearer $NORTHFLANK_API_TOKEN")
+          projects="$(curl -fsS "${auth[@]}" "$NF_API/projects")"
+          project_id="$(printf '%s' "$projects" | jq -r '.data.projects[0].id // empty')"
+          project_name="$(printf '%s' "$projects" | jq -r '.data.projects[0].name // empty')"
+          test -n "$project_id"
+          echo "Project: $project_name ($project_id)"
+
+          services="$(curl -fsS "${auth[@]}" "$NF_API/projects/$project_id/services")"
+          printf '%s' "$services" | jq -r '.data.services[] | "Service: \(.name) id=\(.id) type=\(.serviceType) build=\(.status.build.status // "n/a") deploy=\(.status.deployment.status // "n/a")"'
+
+          service_id="$(printf '%s' "$services" | jq -r '.data.services[]? | select(.name == "canecorsoancestry") | .id' | head -n1)"
+          test -n "$service_id"
+          detail="$(curl -fsS "${auth[@]}" "$NF_API/projects/$project_id/services/$service_id")"
+          printf '%s' "$detail" | jq '{data:{id:.data.id,name:.data.name,serviceType:.data.serviceType,status:.data.status,billing:.data.billing,region:.data.region}}'
+
+          ports="$(curl -fsS "${auth[@]}" "$NF_API/projects/$project_id/services/$service_id/ports")"
+          printf '%s' "$ports" | jq -r '.data.ports[]? | "Port: \(.name) public=\(.public) dns=\(.dns // "pending")"'
