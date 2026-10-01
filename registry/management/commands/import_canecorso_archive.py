@@ -271,7 +271,21 @@ class Command(BaseCommand):
             source_to_dog[source_id] = dog
             newly_attached_ids.append(source_id)
 
+        published_existing = 0
         with transaction.atomic():
+            if options["publish"] and existing_keys:
+                source_created_ids = [
+                    external.dog_id
+                    for external in existing_keys.values()
+                    if external.dog.slug.startswith("ccp-") and not external.dog.is_public
+                ]
+                if source_created_ids:
+                    published_existing = Dog.objects.filter(
+                        pk__in=source_created_ids,
+                        slug__startswith="ccp-",
+                        is_public=False,
+                    ).update(is_public=True)
+
             Dog.objects.bulk_create(
                 [dog for _, dog in created_dogs],
                 batch_size=1000,
@@ -389,6 +403,7 @@ class Command(BaseCommand):
                 f"{mode}: {len(recent_ids)} dogs born {start_year}-{end_year}; "
                 f"{len(records)} records including {len(records)-len(recent_ids)} ancestors; "
                 f"{len(created_dogs)} created; {len(existing_keys)} already linked; "
+                f"{published_existing} existing source-created dogs published; "
                 f"{reused_by_registration} matched by exact registration; "
                 f"{skipped_parent_links} unsafe parent links skipped; "
                 f"{preserved_parent_conflicts} existing parent links preserved."
