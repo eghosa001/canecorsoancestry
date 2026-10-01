@@ -167,9 +167,6 @@ def dog_detail(request, slug):
 
     _attach_source_image_urls([dog])
 
-    if request.GET.get("source") == "search":
-        Dog.objects.filter(pk=dog.pk).update(search_count=F("search_count") + 1)
-
     image_url = (
         dog.display_images[0].image.url
         if dog.display_images
