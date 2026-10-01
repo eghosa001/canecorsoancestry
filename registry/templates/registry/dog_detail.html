@@ -4,7 +4,7 @@
 {% block og_title %}{{ dog.name }} · Cane Corso Pedigree{% endblock %}
 {% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and verified provenance.{% endblock %}
 {% block extra_head %}
-  {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}">{% endif %}
+  {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}">{% elif dog.source_image_url %}<meta property="og:image" content="{{ dog.source_image_url }}">{% endif %}
   <script type="application/ld+json">{{ structured_data }}</script>
 {% endblock %}
 {% block content %}
@@ -13,6 +13,9 @@
     <div class="profile-photo">
       {% if dog.display_images %}
         <img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}">
+      {% elif dog.source_image_url %}
+        <img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" referrerpolicy="no-referrer">
+        <a class="source-photo-credit" href="#sources">Image from source record</a>
       {% else %}
         <div class="media-placeholder large">CCA</div>
       {% endif %}
