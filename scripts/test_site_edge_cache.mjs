@@ -26,7 +26,7 @@ const trackedRequest = new Request(trackedUrl);
 assert.equal(isCacheablePublicPath(trackedUrl, trackedRequest), true);
 assert.equal(
   cacheKey(trackedRequest).url,
-  "https://example.test/dogs/example-dog/",
+  "https://example.test/dogs/example-dog/?__cca_edge_v=images-v2",
 );
 
 console.log("site-edge cache policy tests passed");

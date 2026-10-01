@@ -1,4 +1,5 @@
 const DEFAULT_ORIGIN = "https://canecorsoancestry.onrender.com";
+const EDGE_CACHE_VERSION = "images-v2";
 const CACHE_FRESH_SECONDS = 300;
 const CACHE_RETENTION_SECONDS = 86400;
 const ORIGIN_GRACE_MS = 2500;
@@ -164,6 +165,7 @@ function cacheKey(request) {
   const url = new URL(request.url);
   url.hash = "";
   if (isSearchTrackingUrl(url)) url.search = "";
+  url.searchParams.set("__cca_edge_v", EDGE_CACHE_VERSION);
   return new Request(url.toString(), { method: "GET" });
 }
 
