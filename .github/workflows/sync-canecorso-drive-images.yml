@@ -106,13 +106,6 @@ jobs:
           test "$status" = "200"
           grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/r2-health.json
 
-      - name: Download immutable dog mapping
-        shell: bash
-        run: |
-          set -euo pipefail
-          gdown "https://drive.google.com/uc?id=$SOURCE_FILE_ID" -O "$SOURCE_FILE"
-          echo "$SOURCE_SHA256  $SOURCE_FILE" | sha256sum --check -
-
       - name: Discover reachable Supabase session pooler
         shell: bash
         run: |
@@ -121,280 +114,39 @@ jobs:
           echo "::add-mask::$target_url"
           echo "DATABASE_URL=$target_url" >> "$GITHUB_ENV"
 
-      - name: Validate fixed Drive manifest
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          index_path = Path(os.environ["DRIVE_MANIFEST_INDEX"])
-          index = json.loads(index_path.read_text(encoding="utf-8"))
-          expected = int(index["file_count"])
-          if expected != 15067:
-              raise SystemExit(f"Unexpected manifest index count: {expected}")
-
-          entries = []
-          for part in index["segments"]:
-              path = Path(part["path"])
-              rows = [
-                  json.loads(line)
-                  for line in path.read_text(encoding="utf-8").splitlines()
-                  if line.strip()
-              ]
-              if len(rows) != int(part["count"]):
-                  raise SystemExit(
-                      f"Manifest segment count mismatch for {path}: "
-                      f"{len(rows)} != {part['count']}"
-                  )
-              entries.extend(rows)
-
-          ids = [item["id"] for item in entries]
-          paths = [item["path"] for item in entries]
-          if len(entries) != expected:
-              raise SystemExit(f"Manifest total mismatch: {len(entries)} != {expected}")
-          if len(set(ids)) != expected:
-              raise SystemExit("Drive manifest contains duplicate file IDs")
-          if len(set(paths)) != expected:
-              raise SystemExit("Drive manifest contains duplicate paths")
-
-          for raw in paths:
-              path = Path(raw)
-              if path.is_absolute() or ".." in path.parts:
-                  raise SystemExit(f"Unsafe manifest path: {raw}")
-
-          print(f"Fixed Drive manifest verified: {expected} unique archived image files")
-          PY
-
-      - name: Build missing-photo download plan
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          import os
-          import re
-          from pathlib import Path
-
-          import django
-
-          django.setup()
-
-          from registry.models import DogExternalKey, DogImage
-
-          index = json.loads(
-              Path(os.environ["DRIVE_MANIFEST_INDEX"]).read_text(encoding="utf-8")
-          )
-          entries = []
-          for part in index["segments"]:
-              path = Path(part["path"])
-              entries.extend(
-                  json.loads(line)
-                  for line in path.read_text(encoding="utf-8").splitlines()
-                  if line.strip()
-              )
-
-          by_source = {}
-          malformed = []
-          for item in entries:
-              name = Path(item["path"]).name
-              match = re.match(r"^(\d+)(?:_|\.)", name)
-              if not match:
-                  malformed.append(item["path"])
-                  continue
-              sid = match.group(1).lstrip("0") or "0"
-              previous = by_source.get(sid)
-              score = (int(item.get("size") or 0), item["path"])
-              if previous is None:
-                  by_source[sid] = item
-              else:
-                  old_score = (int(previous.get("size") or 0), previous["path"])
-                  if score > old_score:
-                      by_source[sid] = item
-
-          external = {
-              key: dog_id
-              for key, dog_id in DogExternalKey.objects.filter(
-                  namespace="canecorsopedigree.com"
-              ).values_list("key", "dog_id")
-          }
-          linked_dog_ids = set(external.values())
-          existing_dog_ids = set(
-              DogImage.objects.filter(dog_id__in=linked_dog_ids)
-              .values_list("dog_id", flat=True)
-          )
-
-          targets = []
-          missing_archive = []
-          planned_dogs = set()
-          for sid, dog_id in external.items():
-              if dog_id in existing_dog_ids:
-                  continue
-              item = by_source.get(sid)
-              if item is None:
-                  missing_archive.append(sid)
-                  continue
-              if dog_id in planned_dogs:
-                  continue
-              targets.append(item)
-              planned_dogs.add(dog_id)
-
-          possible_coverage = len(existing_dog_ids) + len(planned_dogs)
-          if possible_coverage < 9000:
-              raise SystemExit(
-                  "Archive cannot satisfy 9000-photo coverage: "
-                  f"existing={len(existing_dog_ids)}, planned={len(planned_dogs)}, "
-                  f"possible={possible_coverage}"
-              )
-
-          plan_path = Path(os.environ["DRIVE_DOWNLOAD_PLAN"])
-          plan_path.write_text(
-              "".join(json.dumps(item) + "\n" for item in targets),
-              encoding="utf-8",
-          )
-
-          print(
-              "Photo plan ready: "
-              f"{len(entries)} physical files; "
-              f"{len(by_source)} source photo IDs; "
-              f"{len(external)} linked source dogs; "
-              f"{len(existing_dog_ids)} already have managed images; "
-              f"{len(targets)} images need download/upload; "
-              f"{len(missing_archive)} linked dogs have no archived photo; "
-              f"{len(malformed)} malformed archive filenames."
-          )
-          PY
-
-      - name: Download planned Drive photos
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf "$IMAGE_ROOT"
-          mkdir -p "$IMAGE_ROOT"
-
-          python - <<'PY'
-          import json
-          import os
-          import time
-          from concurrent.futures import ThreadPoolExecutor, as_completed
-          from pathlib import Path
-
-          import gdown
-
-          root = Path(os.environ["IMAGE_ROOT"]).resolve()
-          plan_path = Path(os.environ["DRIVE_DOWNLOAD_PLAN"])
-          items = [
-              json.loads(line)
-              for line in plan_path.read_text(encoding="utf-8").splitlines()
-              if line.strip()
-          ]
-
-          def target_for(item):
-              rel = Path(item["path"])
-              if rel.is_absolute() or ".." in rel.parts:
-                  raise ValueError(f"Unsafe manifest path: {item['path']}")
-              target = (root / rel).resolve()
-              if root not in target.parents:
-                  raise ValueError(f"Manifest path escaped image root: {item['path']}")
-              return target
-
-          def valid_file(item, target):
-              if not target.is_file() or target.stat().st_size <= 0:
-                  return False
-              expected = item.get("size")
-              return expected in (None, 0) or target.stat().st_size == int(expected)
-
-          def download_one(item, timeout=30, retries=5):
-              target = target_for(item)
-              target.parent.mkdir(parents=True, exist_ok=True)
-              if valid_file(item, target):
-                  return True, item, ""
-              try:
-                  result = gdown.download(
-                      id=item["id"],
-                      output=str(target),
-                      quiet=True,
-                      use_cookies=False,
-                      resume=True,
-                      timeout=timeout,
-                      retries=retries,
-                  )
-                  if result and valid_file(item, target):
-                      return True, item, ""
-                  return False, item, "download returned no valid file"
-              except Exception as exc:
-                  return False, item, f"{type(exc).__name__}: {exc}"
-
-          print(f"Downloading {len(items)} required Drive images with 8 workers...", flush=True)
-          failures = []
-          completed = 0
-          with ThreadPoolExecutor(max_workers=8) as pool:
-              futures = [pool.submit(download_one, item) for item in items]
-              for future in as_completed(futures):
-                  ok, item, error = future.result()
-                  completed += 1
-                  if not ok:
-                      failures.append((item, error))
-                  if completed % 100 == 0 or completed == len(items):
-                      print(
-                          f"Drive progress: {completed}/{len(items)}; "
-                          f"retry_queue={len(failures)}",
-                          flush=True,
-                      )
-
-          if failures:
-              print(
-                  f"Retrying {len(failures)} Drive files with longer timeouts...",
-                  flush=True,
-              )
-              retry_failures = []
-              for number, (item, _) in enumerate(failures, 1):
-                  ok, item, error = download_one(item, timeout=60, retries=10)
-                  if not ok:
-                      time.sleep(1)
-                      ok, item, error = download_one(item, timeout=90, retries=12)
-                  if not ok:
-                      retry_failures.append((item, error))
-                  if number % 25 == 0 or number == len(failures):
-                      print(
-                          f"Drive retry progress: {number}/{len(failures)}; "
-                          f"still_failed={len(retry_failures)}",
-                          flush=True,
-                      )
-              failures = retry_failures
-
-          if failures:
-              for item, error in failures[:25]:
-                  print(f"FAILED {item['id']} {item['path']}: {error}")
-              raise SystemExit(
-                  f"{len(failures)} required Drive images failed after all retries"
-              )
-
-          downloaded = 0
-          for item in items:
-              if valid_file(item, target_for(item)):
-                  downloaded += 1
-          if downloaded != len(items):
-              raise SystemExit(
-                  f"Download verification mismatch: {downloaded}/{len(items)} valid"
-              )
-
-          print(
-              f"Drive download complete and verified: {downloaded}/{len(items)} required images",
-              flush=True,
-          )
-          PY
-
-      - name: Validate archive photo mapping
-        run: |
-          python manage.py import_canecorso_archive_images             "$SOURCE_FILE" "$IMAGE_ROOT" --dry-run
-
-      - name: Upload archived photos to Cloudflare R2
+      - name: Canary upload one archived photo to R2
         if: github.event_name == 'push' || inputs.dry_run == false
         run: |
-          python manage.py import_canecorso_archive_images             "$SOURCE_FILE" "$IMAGE_ROOT"
+          python manage.py sync_canecorso_drive_manifest_images \
+            "$DRIVE_MANIFEST_INDEX" \
+            --limit 1 --workers 1 --batch-size 1
+
+      - name: Verify canary photo end to end
+        if: github.event_name == 'push' || inputs.dry_run == false
+        shell: bash
+        run: |
+          set -euo pipefail
+          media_path="$(python manage.py shell -c "
+          from registry.models import DogImage
+          item = DogImage.objects.filter(caption__startswith='Archived source photo').order_by('-pk').first()
+          assert item is not None
+          print(item.image.url)
+          ")"
+          echo "Testing canary managed media path: $media_path"
+          status="$(curl -L --connect-timeout 10 --max-time 30 -sS \
+            -D /tmp/media-canary-headers.txt -o /tmp/media-canary.bin \
+            -w '%{http_code}' "$PUBLIC_SITE$media_path" || true)"
+          echo "Canary managed media GET -> HTTP $status"
+          test "$status" = "200"
+          test -s /tmp/media-canary.bin
+          grep -qi '^content-type: image/' /tmp/media-canary-headers.txt
+
+      - name: Sync remaining archived photos directly to R2
+        if: github.event_name == 'push' || inputs.dry_run == false
+        run: |
+          python manage.py sync_canecorso_drive_manifest_images \
+            "$DRIVE_MANIFEST_INDEX" \
+            --workers 8 --batch-size 100
 
       - name: Verify managed image coverage
         if: github.event_name == 'push' || inputs.dry_run == false
