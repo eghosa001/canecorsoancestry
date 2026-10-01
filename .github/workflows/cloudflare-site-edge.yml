@@ -35,6 +35,9 @@ jobs:
       - name: Validate Worker JavaScript
         run: node --check src/site-edge.js
 
+      - name: Test public edge cache policy
+        run: node scripts/test_site_edge_cache.mjs
+
       - name: Validate Worker bundle
         run: npx --yes wrangler@4 deploy --dry-run --config wrangler.site.toml
 
