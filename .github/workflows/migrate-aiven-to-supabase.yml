@@ -173,8 +173,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/supabase-cutover"
-          docker run --rm             -e AIVEN_DATABASE_URL             -e PGSSLMODE=require             -v "$RUNNER_TEMP/supabase-cutover:/work"             postgres:17-alpine             sh -ec 'pg_dump "$AIVEN_DATABASE_URL" --format=custom --no-owner --no-acl --schema=django_app --file=/work/django_app.dump'
-          test -s "$RUNNER_TEMP/supabase-cutover/django_app.sql"
+          docker run --rm             -e AIVEN_DATABASE_URL             -e PGSSLMODE=require             -v "$RUNNER_TEMP/supabase-cutover:/work"             postgres:18-alpine             sh -ec 'pg_dump "$AIVEN_DATABASE_URL" --format=custom --no-owner --no-acl --schema=django_app --file=/work/django_app.dump'
+          test -s "$RUNNER_TEMP/supabase-cutover/django_app.dump"
 
       - name: Back up current Supabase Django schema
         shell: bash
@@ -188,7 +188,7 @@ jobs:
           set -euo pipefail
           docker run --rm             -e TARGET_DATABASE_URL             -e PGSSLMODE=require             postgres:17-alpine             sh -ec 'psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP SCHEMA IF EXISTS django_app CASCADE;"'
 
-          if ! docker run --rm             -e TARGET_DATABASE_URL             -e PGSSLMODE=require             -v "$RUNNER_TEMP/supabase-cutover:/work"             postgres:17-alpine             sh -ec 'pg_restore --dbname="$TARGET_DATABASE_URL" --no-owner --no-acl --exit-on-error /work/django_app.dump'; then
+          if ! docker run --rm             -e TARGET_DATABASE_URL             -e PGSSLMODE=require             -v "$RUNNER_TEMP/supabase-cutover:/work"             postgres:18-alpine             sh -ec 'pg_restore --dbname="$TARGET_DATABASE_URL" --no-owner --no-acl --exit-on-error /work/django_app.dump'; then
             echo "::error::Supabase restore failed; restoring its pre-cutover schema."
             docker run --rm               -e TARGET_DATABASE_URL               -e PGSSLMODE=require               postgres:17-alpine               sh -ec 'psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP SCHEMA IF EXISTS django_app CASCADE;"'
             docker run --rm               -e TARGET_DATABASE_URL               -e PGSSLMODE=require               -v "$RUNNER_TEMP/supabase-cutover:/work"               postgres:17-alpine               sh -ec 'pg_restore --dbname="$TARGET_DATABASE_URL" --no-owner --no-acl --exit-on-error /work/supabase-before.dump'
