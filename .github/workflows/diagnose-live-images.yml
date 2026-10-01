@@ -85,7 +85,7 @@ jobs:
                   status, final, headers, detail = fetch(dog_url)
                   print(f"{surface}/{label}: detail status={status} url={dog_url} edge-cache={headers.get('x-cca-edge-cache')}")
                   hero = re.search(
-                      r'<div class="dog-profile-photo">.*?<img[^>]+src="([^"]+)"',
+                      r'<div class="profile-photo">.*?<img[^>]+src="([^"]+)"',
                       detail,
                       re.I | re.S,
                   )
