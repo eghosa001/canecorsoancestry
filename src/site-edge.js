@@ -1,7 +1,7 @@
 const DEFAULT_ORIGIN = "https://canecorsoancestry.onrender.com";
 const CACHE_FRESH_SECONDS = 300;
 const CACHE_RETENTION_SECONDS = 86400;
-const ORIGIN_GRACE_MS = 1200;
+const ORIGIN_GRACE_MS = 2500;
 const AUTH_GRACE_MS = 450;
 const READY_TIMEOUT_MS = 3500;
 const AUTH_READY_TIMEOUT_MS = 4500;
@@ -77,7 +77,7 @@ function isBot(request) {
 
 function hasPrivateCookie(request) {
   const cookie = request.headers.get("cookie") || "";
-  return /(?:^|;\s*)(sessionid|csrftoken)=/i.test(cookie);
+  return /(?:^|;\s*)sessionid=/i.test(cookie);
 }
 
 function isPrivatePath(pathname) {
@@ -86,7 +86,14 @@ function isPrivatePath(pathname) {
 
 function isCacheablePublicPath(url, request) {
   if (request.method !== "GET" || hasPrivateCookie(request)) return false;
-  if (url.search && url.pathname !== "/dogs/" && url.pathname !== "/kennels/") return false;
+  const sourceTrackingOnly =
+    url.searchParams.size === 1 && url.searchParams.get("source") === "search";
+  if (
+    url.search &&
+    url.pathname !== "/dogs/" &&
+    url.pathname !== "/kennels/" &&
+    !sourceTrackingOnly
+  ) return false;
   const path = url.pathname;
   if (isPrivatePath(path)) return false;
   if (path.startsWith("/static/")) return true;
@@ -154,6 +161,9 @@ function rewriteForVisitor(response, request, env, extraHeaders = {}) {
 function cacheKey(request) {
   const url = new URL(request.url);
   url.hash = "";
+  if (url.searchParams.size === 1 && url.searchParams.get("source") === "search") {
+    url.search = "";
+  }
   return new Request(url.toString(), { method: "GET" });
 }
 
@@ -515,6 +525,8 @@ async function handleRequest(request, env, ctx) {
   }
   return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
+
+export { hasPrivateCookie, isCacheablePublicPath, cacheKey };
 
 export default {
   fetch(request, env, ctx) {
