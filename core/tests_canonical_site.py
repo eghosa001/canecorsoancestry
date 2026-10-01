@@ -5,7 +5,8 @@ from core.middleware import RequestSecurityMiddleware
 
 
 @override_settings(
-    SITE_URL="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+    SITE_URL="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",
+    ALLOWED_HOSTS=["testserver", "canecorsoancestry.onrender.com"],
 )
 class CanonicalPublicSiteTests(SimpleTestCase):
     def setUp(self):
