@@ -93,6 +93,7 @@ function isCacheablePublicPath(url, request) {
   if (request.method !== "GET" || hasPrivateCookie(request)) return false;
   if (
     url.search &&
+    !url.pathname.startsWith("/static/") &&
     url.pathname !== "/dogs/" &&
     url.pathname !== "/kennels/" &&
     !isSearchTrackingUrl(url)
