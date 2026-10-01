@@ -9,7 +9,43 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      DJANGO_DB_SCHEMA: django_app
+      DJANGO_DB_SSLMODE: require
+      DJANGO_DB_EXTRA_SCHEMAS: public
+      DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
+      DJANGO_REQUIRE_OBJECT_STORAGE: "0"
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Inspect production media records
+        shell: bash
+        run: |
+          python manage.py shell -c "
+          from registry.models import Dog, DogExternalKey
+          for name in ['Branco Custodi Nos', 'NALAH']:
+              dogs = Dog.objects.filter(name__iexact=name)
+              print('DOG', name, 'count=', dogs.count())
+              for dog in dogs:
+                  print(' ', dog.id, dog.slug, 'public=', dog.is_public, 'images=', dog.images.count())
+                  for image in dog.images.all():
+                      print('    image', image.image.name, 'primary=', image.is_primary)
+                  print('    external=', list(dog.external_keys.values_list('namespace','key')))
+                  for source in dog.sources.all():
+                      payload = source.raw_payload if isinstance(source.raw_payload, dict) else {}
+                      if payload.get('image_url'):
+                          print('    source-image', payload.get('image_url'))
+          "
+
       - name: Probe public dog images
         shell: bash
         run: |
