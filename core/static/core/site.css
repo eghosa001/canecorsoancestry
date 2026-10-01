@@ -1876,3 +1876,100 @@ html[data-theme="light"] .media-placeholder {
   color: rgba(23,111,106,.48);
   background: radial-gradient(circle, rgba(23,111,106,.09), transparent 60%), var(--surface-2);
 }
+
+
+/* Quick mobile/search usability pass. */
+.hero-stats.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.pedigree-relationship { display: none; }
+
+.dog-autocomplete-host {
+  position: relative;
+}
+.dog-suggestions {
+  position: absolute;
+  z-index: 120;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: min(380px, 52vh);
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 18px 42px rgba(0,0,0,.28);
+}
+.dog-suggestions[hidden] { display: none; }
+.dog-suggestion {
+  width: 100%;
+  min-height: 54px;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  text-align: left;
+  cursor: pointer;
+}
+.dog-suggestion:last-child { border-bottom: 0; }
+.dog-suggestion:hover,
+.dog-suggestion:focus-visible {
+  background: var(--surface-2);
+}
+.dog-suggestion strong {
+  font-size: .82rem;
+  line-height: 1.2;
+}
+.dog-suggestion span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: .68rem;
+  line-height: 1.25;
+}
+.header-search .dog-suggestions { min-width: 300px; }
+.mobile-nav-search .dog-suggestions { top: 100%; }
+
+@media (max-width: 760px) {
+  .hero-stats.three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .hero-stats.three article {
+    border-right: 1px solid var(--line-soft);
+    border-bottom: 0;
+  }
+  .hero-stats.three article:last-child { border-right: 0; }
+
+  .pedigree-nodes,
+  .pedigree-column:first-child .pedigree-nodes {
+    grid-template-columns: 1fr;
+  }
+  .pedigree-column {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .pedigree-column h2 {
+    padding: 0 0 7px 10px;
+    border-left: 3px solid var(--gold);
+  }
+  .pedigree-node {
+    min-height: 82px;
+    padding: 12px 13px;
+  }
+  .pedigree-relationship {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--gold);
+    font-size: .58rem !important;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .dog-suggestions {
+    max-height: 42vh;
+  }
+  .header-search .dog-suggestions { min-width: 0; }
+}
