@@ -1,6 +1,10 @@
 name: Import CaneCorsoPedigree archive
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - .github/import-canecorso-now
   workflow_dispatch:
     inputs:
       publish:
