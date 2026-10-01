@@ -1,7 +1,8 @@
 from django.core.management import get_commands
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, TestCase
 
 from registry.management.commands import refresh_canecorso_latest as latest
+from registry.models import Dog, DogExternalKey, DogSource
 from registry.models import Dog, DogExternalKey
 
 
@@ -146,3 +147,44 @@ class CaneCorsoLatestImportTests(TestCase):
                 namespace="canecorsopedigree.com", key="50", dog=existing
             ).exists()
         )
+
+
+class CaneCorsoLatestPersistenceTests(TestCase):
+    def test_collects_missing_parents_and_links_existing_parent(self):
+        sire = Dog.objects.create(
+            name="Known Sire", slug="known-sire", sex=Dog.Sex.MALE, is_public=True
+        )
+        DogExternalKey.objects.create(
+            dog=sire, namespace="canecorsopedigree.com", key="100"
+        )
+
+        source = {
+            "120753": {
+                "id": "120753", "name": "HERA", "gender": "female",
+                "father_id": "100", "mother_id": "200",
+                "dob": "2026/05/11", "colour": "Black",
+                "source_url": "https://www.canecorsopedigree.com/view_dog?id=120753",
+            },
+            "200": {
+                "id": "200", "name": "Known Dam", "gender": "female",
+                "father_id": "", "mother_id": "", "dob": "2020/01/01",
+                "colour": "Grey",
+                "source_url": "https://www.canecorsopedigree.com/view_dog?id=200",
+            },
+        }
+
+        collected = latest.collect_missing_records(
+            ["120753"],
+            fetch_profile=lambda source_id: source[source_id],
+            existing_source_ids={"100"},
+        )
+        self.assertEqual(set(collected), {"120753", "200"})
+
+        summary = latest.persist_records(collected, publish=True)
+
+        dog = Dog.objects.get(external_keys__namespace="canecorsopedigree.com", external_keys__key="120753")
+        self.assertEqual(dog.sire, sire)
+        self.assertEqual(dog.dam.name, "Known Dam")
+        self.assertTrue(dog.is_public)
+        self.assertEqual(summary["created"], 2)
+        self.assertEqual(DogSource.objects.filter(dog=dog).count(), 1)
