@@ -174,7 +174,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/supabase-cutover"
           docker run --rm             -e AIVEN_DATABASE_URL             -e PGSSLMODE=require             -v "$RUNNER_TEMP/supabase-cutover:/work"             postgres:17-alpine             sh -ec 'pg_dump "$AIVEN_DATABASE_URL" --format=custom --no-owner --no-acl --schema=django_app --file=/work/django_app.dump'
-          test -s "$RUNNER_TEMP/supabase-cutover/django_app.dump"
+          test -s "$RUNNER_TEMP/supabase-cutover/django_app.sql"
 
       - name: Back up current Supabase Django schema
         shell: bash
