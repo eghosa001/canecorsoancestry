@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Cane Corso Ancestry · Pedigree & Bloodline Research{% endblock %}
 {% block meta_description %}Search Cane Corso pedigrees, trace ancestors and offspring, explore kennels, compare bloodlines and inspect pedigree provenance.{% endblock %}
 {% block og_title %}Cane Corso Ancestry · Pedigree & Bloodline Research{% endblock %}
@@ -23,8 +24,11 @@
     </div>
   </div>
   <div class="hero-mark" aria-hidden="true">
-    <span>CCA</span>
-    <small>CANECORSOANCESTRY.COM</small>
+    <img src="{% static 'core/cane-corso-premium-logo.webp' %}" alt="" width="560" height="560">
+    <div class="hero-brand-plaque">
+      <small>CANECORSOANCESTRY.COM</small>
+      <span>Pedigree intelligence</span>
+    </div>
   </div>
 </section>
 
