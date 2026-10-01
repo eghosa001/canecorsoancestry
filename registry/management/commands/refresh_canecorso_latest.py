@@ -310,18 +310,6 @@ def import_records(records, publish=True, dry_run=False):
             )
             attached_ids.append(source_id)
 
-            if registration:
-                existing_registration = DogRegistration.objects.filter(
-                    authority__isnull=True,
-                    number=registration,
-                ).first()
-                if existing_registration is None:
-                    DogRegistration.objects.create(
-                        dog=dog,
-                        authority=None,
-                        number=registration,
-                    )
-
             DogSource.objects.update_or_create(
                 dog=dog,
                 title=SOURCE_TITLE,
