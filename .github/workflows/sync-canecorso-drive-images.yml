@@ -18,7 +18,7 @@ permissions:
 
 concurrency:
   group: sync-canecorso-drive-images
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   sync:
@@ -61,7 +61,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          pip install "gdown>=6,<7"
+          pip install "gdown>=6.3,<7"
 
       - name: Verify Cloudflare auth path before media migration
         shell: bash
@@ -117,17 +117,83 @@ jobs:
           set -euo pipefail
           rm -rf "$IMAGE_ROOT"
           mkdir -p "$IMAGE_ROOT"
+
+          # Resolve the public Drive tree once, then download files concurrently.
+          # Per-file timeout/retries prevent one unresponsive Drive object from
+          # freezing the entire 14k+ image migration.
+          gdown "$IMAGE_FOLDER_URL" --folder --json --quiet --timeout 30 > /tmp/canecorso-drive-manifest.json
+
           python - <<'PY'
-          import gdown, os
-          result = gdown.download_folder(
-              url=os.environ["IMAGE_FOLDER_URL"],
-              output=os.environ["IMAGE_ROOT"] + "/",
-              quiet=False,
+          import json
+          import os
+          from concurrent.futures import ThreadPoolExecutor, as_completed
+          from pathlib import Path
+
+          import gdown
+
+          root = Path(os.environ["IMAGE_ROOT"]).resolve()
+          with open("/tmp/canecorso-drive-manifest.json", encoding="utf-8") as handle:
+              items = json.load(handle)
+
+          if len(items) < 14000:
+              raise SystemExit(f"Drive manifest unexpectedly small: {len(items)} files")
+
+          def download_one(item):
+              rel = Path(item["path"])
+              if rel.is_absolute() or ".." in rel.parts:
+                  return False, item["path"], "unsafe manifest path"
+              target = (root / rel).resolve()
+              if root not in target.parents:
+                  return False, item["path"], "manifest path escaped image root"
+              target.parent.mkdir(parents=True, exist_ok=True)
+              try:
+                  gdown.download(
+                      url=item["url"],
+                      output=str(target),
+                      quiet=True,
+                      use_cookies=False,
+                      resume=True,
+                      timeout=30,
+                      retries=5,
+                  )
+                  return target.is_file() and target.stat().st_size > 0, item["path"], ""
+              except Exception as exc:
+                  return False, item["path"], f"{type(exc).__name__}: {exc}"
+
+          failures = []
+          completed = 0
+          workers = 8
+          print(f"Downloading {len(items)} Drive files with {workers} workers...")
+          with ThreadPoolExecutor(max_workers=workers) as pool:
+              futures = [pool.submit(download_one, item) for item in items]
+              for future in as_completed(futures):
+                  ok, path, error = future.result()
+                  completed += 1
+                  if not ok:
+                      failures.append((path, error))
+                  if completed % 250 == 0 or completed == len(items):
+                      print(
+                          f"Drive progress: {completed}/{len(items)}; "
+                          f"failures={len(failures)}",
+                          flush=True,
+                      )
+
+          if failures:
+              print(f"::warning::{len(failures)} Drive files failed after retries")
+              for path, error in failures[:25]:
+                  print(f"FAILED {path}: {error}")
+
+          downloaded = sum(1 for path in root.rglob("*") if path.is_file())
+          print(
+              f"Drive download complete: manifest={len(items)}; "
+              f"downloaded={downloaded}; failures={len(failures)}"
           )
-          if result is None:
-              raise SystemExit("Google Drive image-folder download failed")
-          print(f"Downloaded {len(result)} archived files")
+          if downloaded < 14000:
+              raise SystemExit(
+                  f"Only {downloaded} archived files downloaded; expected at least 14000"
+              )
           PY
+
           count="$(find "$IMAGE_ROOT" -type f | wc -l)"
           echo "Drive files downloaded: $count"
           test "$count" -ge 14000
