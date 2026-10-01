@@ -43,7 +43,7 @@ jobs:
         run: |
           origin="https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
           for path in "/healthz/" "/dogs/?q=Branco+Custodi+Nos" "/statistics/"; do
-            status="$(curl --connect-timeout 10 --max-time 30 -sS -o /tmp/northflank-origin.html -w '%{http_code}' "$origin$path" || true)"
+            status="$(curl --connect-timeout 10 --max-time 30 -sS -H 'X-CCA-Edge: 1' -o /tmp/northflank-origin.html -w '%{http_code}' "$origin$path" || true)"
             echo "$path -> HTTP $status"
             test "$status" = "200"
           done
