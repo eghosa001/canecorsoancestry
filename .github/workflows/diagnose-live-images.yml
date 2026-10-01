@@ -44,6 +44,17 @@ jobs:
                       payload = source.raw_payload if isinstance(source.raw_payload, dict) else {}
                       if payload.get('image_url'):
                           print('    source-image', payload.get('image_url'))
+          from registry.models import DogSource
+          sample = None
+          for source in DogSource.objects.select_related('dog').filter(
+              dog__is_public=True,
+              dog__images__isnull=True,
+          ).order_by('dog__name'):
+              payload = source.raw_payload if isinstance(source.raw_payload, dict) else {}
+              if payload.get('image_url'):
+                  sample = (source.dog.slug, source.dog.name, payload.get('image_url'))
+                  break
+          print('SOURCE_SAMPLE', sample)
           "
 
       - name: Probe public dog images
