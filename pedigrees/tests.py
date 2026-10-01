@@ -64,6 +64,34 @@ class PedigreeServiceTests(TestCase):
 
         self.assertAlmostEqual(projected_inbreeding(sire, dam), 0.125)
 
+    def test_virtual_mating_resolves_names_without_large_dropdowns(self):
+        common = Dog.objects.create(
+            name="Public Common", slug="public-common", is_public=True
+        )
+        sire = Dog.objects.create(
+            name="Searchable Sire",
+            slug="searchable-sire",
+            sex=Dog.Sex.MALE,
+            sire=common,
+            is_public=True,
+        )
+        dam = Dog.objects.create(
+            name="Searchable Dam",
+            slug="searchable-dam",
+            sex=Dog.Sex.FEMALE,
+            sire=common,
+            is_public=True,
+        )
+
+        response = self.client.get(
+            reverse("pedigrees:virtual-mating"),
+            {"sire_q": sire.name, "dam_q": dam.name},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "12.50%")
+        self.assertContains(response, common.name)
+
     def test_relative_health_is_derived_from_connected_family(self):
         sire = Dog.objects.create(
             name="Health Sire", slug="health-sire", is_public=True
