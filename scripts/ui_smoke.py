@@ -149,26 +149,29 @@ def main():
             raise AssertionError("home-mobile-menu does not expose Join")
         screenshot(mobile, "home-mobile-menu")
         mobile.locator(".mobile-nav > summary").click()
+
         capture(mobile, "/accounts/login/", "login-mobile")
         capture(mobile, "/member/signup/", "signup-mobile")
-        capture(mobile, "/dogs/?q=", "dogs-mobile")
-        capture(mobile, "/kennels/", "kennels-mobile")
-        capture(mobile, "/pedigrees/", "pedigrees-mobile")
-        capture(mobile, "/pedigrees/virtual-mating/", "virtual-mating-mobile")
-        capture(mobile, "/statistics/", "statistics-mobile")
         capture(mobile, "/accounts/password_reset/", "password-reset-mobile")
+
+        capture(mobile, "/dogs/?q=", "dogs-mobile")
         mobile_dogs = mobile.locator(".search-result-card")
         if mobile_dogs.count():
             mobile_dogs.first.click()
             mobile.wait_for_load_state("networkidle")
             screenshot(mobile, "dog-profile-mobile")
 
+        capture(mobile, "/kennels/", "kennels-mobile")
+        capture(mobile, "/pedigrees/", "pedigrees-mobile")
         mobile_pedigrees = mobile.locator(".pedigree-index-card")
         if mobile_pedigrees.count():
             mobile_pedigrees.first.click()
             mobile.wait_for_load_state("networkidle")
             mobile.locator(".analysis-mobile-summary").wait_for(state="visible")
             screenshot(mobile, "pedigree-detail-mobile", overflow=False)
+
+        capture(mobile, "/pedigrees/virtual-mating/", "virtual-mating-mobile")
+        capture(mobile, "/statistics/", "statistics-mobile")
 
         login(mobile)
         screenshot(mobile, "dashboard-mobile")
