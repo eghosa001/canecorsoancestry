@@ -253,6 +253,55 @@ def collect_missing_records(start_ids, fetch_profile, existing_source_ids):
     return records
 
 
+def _trusted_source_image_url(value):
+    value = _text(value)
+    return value if (
+        value.startswith("https://www.canecorsopedigree.com/static/images/animal/")
+        or value.startswith("https://canecorsopedigree.com/static/images/animal/")
+    ) else ""
+
+
+def backfill_source_images(source_ids, fetch_profile):
+    external_keys = {
+        item.key: item
+        for item in DogExternalKey.objects.select_related("dog").filter(
+            namespace=DEFAULT_NAMESPACE,
+            key__in=[str(source_id) for source_id in source_ids],
+        )
+    }
+    checked = 0
+    updated = 0
+
+    for source_id in [str(source_id) for source_id in source_ids]:
+        external = external_keys.get(source_id)
+        if not external:
+            continue
+        source = (
+            DogSource.objects.filter(dog=external.dog, title=SOURCE_TITLE)
+            .order_by("-created_at")
+            .first()
+        )
+        if not source:
+            continue
+
+        payload = dict(source.raw_payload or {})
+        if _trusted_source_image_url(payload.get("image_url")):
+            continue
+
+        checked += 1
+        record = fetch_profile(source_id)
+        image_url = _trusted_source_image_url(record.get("image_url"))
+        if not image_url:
+            continue
+
+        payload["image_url"] = image_url
+        source.raw_payload = payload
+        source.save(update_fields=["raw_payload"])
+        updated += 1
+
+    return {"checked": checked, "updated": updated}
+
+
 def collect_missing_profiles(fetch_html, known_ids, limit=250):
     latest_ids = parse_latest_ids(fetch_html(LATEST_URL))[: max(0, limit)]
     return collect_missing_records(
@@ -444,6 +493,7 @@ class Command(BaseCommand):
         parser.add_argument("--private", action="store_true")
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--delay", type=float, default=0.2)
+        parser.add_argument("--backfill-images", action="store_true")
 
     def handle(self, *args, **options):
         limit = max(1, min(options["limit"], 250))
@@ -466,12 +516,31 @@ class Command(BaseCommand):
                 namespace=DEFAULT_NAMESPACE
             ).values_list("key", flat=True)
         )
-        records = collect_missing_profiles(fetch_html, known_ids, limit=limit)
+        latest_ids = parse_latest_ids(fetch_html(LATEST_URL))[:limit]
+
+        def fetch_profile(source_id):
+            return parse_profile(
+                source_id,
+                fetch_html(PROFILE_URL.format(source_id)),
+            )
+
+        records = collect_missing_records(
+            latest_ids,
+            fetch_profile=fetch_profile,
+            existing_source_ids=known_ids,
+        )
         stats = import_records(
             records,
             publish=not options["private"],
             dry_run=options["dry_run"],
         )
+        image_stats = {"checked": 0, "updated": 0}
+        if options["backfill_images"] and not options["dry_run"]:
+            image_stats = backfill_source_images(
+                latest_ids,
+                fetch_profile=fetch_profile,
+            )
+
         mode = "Dry run" if options["dry_run"] else "Refresh complete"
         self.stdout.write(
             self.style.SUCCESS(
@@ -479,6 +548,8 @@ class Command(BaseCommand):
                 f"{stats['created']} dogs created; "
                 f"{stats['registration_matches']} exact registration matches; "
                 f"{stats['skipped_parent_links']} unsafe parent links skipped; "
-                f"{stats['preserved_parent_conflicts']} existing parent links preserved."
+                f"{stats['preserved_parent_conflicts']} existing parent links preserved; "
+                f"{image_stats['checked']} existing records checked for images; "
+                f"{image_stats['updated']} source images backfilled."
             )
         )
