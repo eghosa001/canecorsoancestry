@@ -67,17 +67,25 @@ jobs:
 
       - name: Dry-run archive import
         env: *django_env
+        shell: bash
         run: |
+          publish_arg=""
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.publish }}" = "true" ]; then
+            publish_arg="--publish"
+          fi
           python manage.py import_canecorso_archive "$SOURCE_FILE" \
-            --start-year 2020 --end-year 2026 --dry-run \
-            ${{ inputs.publish && '--publish' || '' }}
+            --start-year 2020 --end-year 2026 --dry-run $publish_arg
 
       - name: Import 2020-present dogs and required ancestors
         env: *django_env
+        shell: bash
         run: |
+          publish_arg=""
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.publish }}" = "true" ]; then
+            publish_arg="--publish"
+          fi
           python manage.py import_canecorso_archive "$SOURCE_FILE" \
-            --start-year 2020 --end-year 2026 \
-            ${{ inputs.publish && '--publish' || '' }}
+            --start-year 2020 --end-year 2026 $publish_arg
 
       - name: Verify archive links
         env: *django_env
