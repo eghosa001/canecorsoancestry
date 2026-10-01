@@ -255,14 +255,28 @@ async function handleR2Ingest(request, env, url) {
     httpMetadata: { contentType },
   });
 
+  const verified = await env.MEDIA_BUCKET.head(key);
+  if (!verified || verified.size !== data.byteLength) {
+    return Response.json(
+      {
+        status: "r2_verify_failed",
+        key,
+        expected_size: data.byteLength,
+        actual_size: verified ? verified.size : null,
+      },
+      { status: 500 },
+    );
+  }
+
   return Response.json(
     {
       status: "stored",
       key,
-      size: data.byteLength,
+      size: verified.size,
       etag: stored.httpEtag,
       source_status: upstream.status,
       content_type: contentType,
+      r2_verified: true,
     },
     { status: 201 },
   );
