@@ -17,6 +17,20 @@ def assert_no_global_overflow(page, label):
         raise AssertionError(f"{label} has {overflow}px of global horizontal overflow")
 
 
+def assert_mobile_header(page, label):
+    if page.evaluate("() => window.innerWidth > 760 || !document.querySelector('.site-header')"):
+        return
+    state = page.evaluate(
+        """() => ({
+          mainNav: getComputedStyle(document.querySelector(".main-nav")).display,
+          actions: getComputedStyle(document.querySelector(".header-actions")).display,
+          mobileNav: getComputedStyle(document.querySelector(".mobile-nav")).display,
+        })"""
+    )
+    if state["mainNav"] != "none" or state["actions"] != "none" or state["mobileNav"] == "none":
+        raise AssertionError(f"{label} mobile header visibility is wrong: {state}")
+
+
 def assert_basic_accessibility(page, label):
     issues = page.evaluate(
         """() => {
@@ -56,6 +70,7 @@ def screenshot(page, label, overflow=True):
     if overflow:
         assert_no_global_overflow(page, label)
     assert_basic_accessibility(page, label)
+    assert_mobile_header(page, label)
     page.screenshot(path=OUT / f"{label}.png", full_page=True)
 
 
@@ -127,16 +142,26 @@ def main():
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
         capture(mobile, "/", "home-mobile")
         mobile.locator(".mobile-nav > summary").click()
+        mobile_panel = mobile.locator(".mobile-nav-panel")
+        if not mobile_panel.get_by_role("link", name="Sign in", exact=True).is_visible():
+            raise AssertionError("home-mobile-menu does not expose Sign in")
+        if not mobile_panel.get_by_role("link", name="Join", exact=True).is_visible():
+            raise AssertionError("home-mobile-menu does not expose Join")
         screenshot(mobile, "home-mobile-menu")
         mobile.locator(".mobile-nav > summary").click()
-        capture(mobile, "/dogs/?q=", "dogs-mobile")
+
+        capture(mobile, "/accounts/login/", "login-mobile")
+        capture(mobile, "/member/signup/", "signup-mobile")
         capture(mobile, "/accounts/password_reset/", "password-reset-mobile")
+
+        capture(mobile, "/dogs/?q=", "dogs-mobile")
         mobile_dogs = mobile.locator(".search-result-card")
         if mobile_dogs.count():
             mobile_dogs.first.click()
             mobile.wait_for_load_state("networkidle")
             screenshot(mobile, "dog-profile-mobile")
 
+        capture(mobile, "/kennels/", "kennels-mobile")
         capture(mobile, "/pedigrees/", "pedigrees-mobile")
         mobile_pedigrees = mobile.locator(".pedigree-index-card")
         if mobile_pedigrees.count():
@@ -144,6 +169,9 @@ def main():
             mobile.wait_for_load_state("networkidle")
             mobile.locator(".analysis-mobile-summary").wait_for(state="visible")
             screenshot(mobile, "pedigree-detail-mobile", overflow=False)
+
+        capture(mobile, "/pedigrees/virtual-mating/", "virtual-mating-mobile")
+        capture(mobile, "/statistics/", "statistics-mobile")
 
         login(mobile)
         screenshot(mobile, "dashboard-mobile")
