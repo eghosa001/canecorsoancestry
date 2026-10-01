@@ -48,4 +48,6 @@ Warnings include same normalized names and incomplete demographic fields. Warnin
 - `data/seeds/bellissimo-dogs.json`: 117 canonical Bellissimo pedigree source records, of which 101 are public and 16 remain draft/private.
 - `data/seeds/bellissimo-puppies.json`: two additional kennel-verified young-dog records from the owner's Bellissimo Geni data, imported only as pedigree facts with breeder-source provenance. Sales/availability fields are retained only in the raw provenance payload and are not part of the ancestry site's public data model.
 
-The production seed workflow imports both sources idempotently, verifies expected counts and relationships, and runs the full integrity audit afterward.
+- CaneCorsoPedigree.com archive snapshot (Google Drive file id \`1WFeLJjAi728rhzF4z9PJ36QNFFp2qnxs\`): scraped 2026-09-15, SHA-256 \`4acfb0e046ada9818719cafa360829a8aba96f3fcb16c630d675dffe3c76669b\`. The production importer selects the 13,416 source records whose DOB begins with 2020-2026 and recursively includes 19,726 required ancestors, for 33,142 source-linked records. Imported images are not republished by this workflow. Unsafe or conflicting parent links are skipped rather than overwriting canonical relationships.
+
+The production seed workflows import approved sources idempotently, verify expected counts and relationships, and run the full integrity audit afterward.
