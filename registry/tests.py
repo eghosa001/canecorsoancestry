@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Dog, DogRegistration, RegistrationAuthority
+from .models import Dog, DogImage, DogRegistration, RegistrationAuthority
 
 
 class DogModelTests(TestCase):
@@ -25,11 +25,57 @@ class DogModelTests(TestCase):
                 is_public=True,
             )
 
-        response = self.client.get(reverse("registry:dog-search"))
+        response = self.client.get(reverse("registry:dog-search"), {"q": "Paged Dog"})
 
         self.assertEqual(response.context["result_count"], 25)
         self.assertEqual(len(response.context["dogs"]), 24)
         self.assertTrue(response.context["page_obj"].has_next())
+
+    def test_default_browse_only_shows_imaged_dogs_by_popularity(self):
+        popular = Dog.objects.create(
+            name="Popular Imaged Dog",
+            slug="popular-imaged-dog",
+            is_public=True,
+            search_count=50,
+        )
+        quieter = Dog.objects.create(
+            name="Quieter Imaged Dog",
+            slug="quieter-imaged-dog",
+            is_public=True,
+            search_count=3,
+        )
+        Dog.objects.create(
+            name="No Image Dog",
+            slug="no-image-dog",
+            is_public=True,
+            search_count=500,
+        )
+        DogImage.objects.create(dog=popular, image="dogs/popular.jpg", is_primary=True)
+        DogImage.objects.create(dog=quieter, image="dogs/quieter.jpg", is_primary=True)
+
+        response = self.client.get(reverse("registry:dog-search"))
+
+        self.assertEqual(
+            [dog.name for dog in response.context["dogs"]],
+            ["Popular Imaged Dog", "Quieter Imaged Dog"],
+        )
+        self.assertNotContains(response, "No Image Dog")
+
+    def test_dog_suggestions_return_live_matches(self):
+        Dog.objects.create(
+            name="Suggestion Champion",
+            slug="suggestion-champion",
+            is_public=True,
+            search_count=8,
+        )
+
+        response = self.client.get(
+            reverse("registry:dog-suggestions"),
+            {"q": "Suggestion"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["name"], "Suggestion Champion")
 
     def test_public_dog_profile_always_exposes_coi(self):
         common = Dog.objects.create(

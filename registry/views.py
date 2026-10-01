@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.db.models import Count, F, Prefetch, Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from urllib.parse import urlparse
@@ -77,6 +78,51 @@ def _attach_source_image_urls(dogs):
             )
 
 
+def _public_dogs_with_images():
+    return Dog.objects.filter(
+        is_public=True,
+        images__isnull=False,
+    ).distinct()
+
+
+def dog_suggestions(request):
+    query = request.GET.get("q", "").strip()
+    sex = request.GET.get("sex", "").strip()
+    if len(query) < 2:
+        return JsonResponse({"results": []})
+
+    dogs = Dog.objects.filter(is_public=True).filter(
+        Q(name__icontains=query)
+        | Q(aliases__name__icontains=query)
+        | Q(registrations__number__icontains=query)
+        | Q(kennel__name__icontains=query)
+    )
+    if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE}:
+        dogs = dogs.filter(Q(sex=sex) | Q(sex=Dog.Sex.UNKNOWN))
+
+    dogs = (
+        dogs.select_related("kennel")
+        .prefetch_related("registrations")
+        .distinct()
+        .order_by("-search_count", "name")[:8]
+    )
+    results = []
+    for dog in dogs:
+        registration = next(iter(dog.registrations.all()), None)
+        results.append(
+            {
+                "name": dog.name,
+                "slug": dog.slug,
+                "sex": dog.get_sex_display(),
+                "kennel": dog.kennel.name if dog.kennel_id else "",
+                "registration": registration.number if registration else "",
+            }
+        )
+    response = JsonResponse({"results": results})
+    response["Cache-Control"] = "private, max-age=30"
+    return response
+
+
 def dog_search(request):
     query = request.GET.get("q", "").strip()
     sex = request.GET.get("sex", "").strip()
@@ -84,7 +130,8 @@ def dog_search(request):
     kennel_slug = request.GET.get("kennel", "").strip()
     exact = request.GET.get("exact") == "1"
 
-    dogs = _dog_cards(Dog.objects.filter(is_public=True))
+    base_dogs = Dog.objects.filter(is_public=True) if query else _public_dogs_with_images()
+    dogs = _dog_cards(base_dogs)
     if query:
         if exact:
             dogs = dogs.filter(
@@ -107,7 +154,7 @@ def dog_search(request):
     if kennel_slug:
         dogs = dogs.filter(kennel__slug=kennel_slug)
 
-    dogs = dogs.order_by("name")
+    dogs = dogs.order_by("name") if query else dogs.order_by("-search_count", "-updated_at", "name")
     paginator = Paginator(dogs, 24)
     page_obj = paginator.get_page(request.GET.get("page"))
     _attach_source_image_urls(page_obj.object_list)

@@ -25,7 +25,7 @@
       }
     })();
   </script>
-  <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261001-theme5">
+  <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261001-mobile-search-v6">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -37,7 +37,7 @@
         <a href="{% url 'home' %}">Home</a><a href="{% url 'registry:dog-search' %}">Dogs</a><a href="{% url 'registry:kennel-list' %}">Kennels</a><a href="{% url 'pedigrees:index' %}">Pedigrees</a><a href="{% url 'pedigrees:virtual-mating' %}">Virtual mating</a><a href="{% url 'registry:statistics' %}">Statistics</a>
       </nav>
       <div class="header-actions">
-        <form class="header-search" action="{% url 'registry:dog-search' %}" method="get"><label class="sr-only" for="header-q">Search dogs</label><input id="header-q" name="q" placeholder="Search dog, kennel, registration"></form>
+        <form class="header-search" action="{% url 'registry:dog-search' %}" method="get"><label class="sr-only" for="header-q">Search dogs</label><input id="header-q" name="q" data-dog-autocomplete placeholder="Search dog, kennel, registration" autocomplete="off"></form>
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Change colour theme">Theme</button>
         {% if user.is_authenticated %}{% if user.is_staff %}<a class="account-link" href="{% url 'accounts:moderation' %}">Moderation</a>{% endif %}<a class="account-link" href="{% url 'dashboard' %}">{{ account_name }}</a>{% else %}<a class="account-link" href="{% url 'login' %}">Sign in</a><a class="account-link" href="{% url 'accounts:signup' %}">Join</a>{% endif %}
       </div>
@@ -46,7 +46,7 @@
         <div class="mobile-nav-panel">
           <form class="mobile-nav-search" action="{% url 'registry:dog-search' %}" method="get">
             <label class="sr-only" for="mobile-header-q">Search dogs</label>
-            <input id="mobile-header-q" name="q" placeholder="Search dogs or registrations">
+            <input id="mobile-header-q" name="q" data-dog-autocomplete placeholder="Search dogs or registrations" autocomplete="off">
             <button type="submit">Search</button>
           </form>
           <nav aria-label="Mobile navigation">
@@ -99,6 +99,106 @@
         });
       });
       refresh();
+    })();
+
+    (function () {
+      var openSuggestions = [];
+
+      function closeMobileMenus() {
+        document.querySelectorAll(".mobile-nav[open], .dashboard-mobile-nav[open]").forEach(function (menu) {
+          menu.removeAttribute("open");
+        });
+      }
+
+      window.addEventListener("scroll", function () {
+        closeMobileMenus();
+        openSuggestions.forEach(function (panel) { panel.hidden = true; });
+      }, { passive: true });
+
+      document.querySelectorAll(".mobile-nav a, .dashboard-mobile-nav a").forEach(function (link) {
+        link.addEventListener("click", closeMobileMenus);
+      });
+
+      document.querySelectorAll("[data-dog-autocomplete]").forEach(function (input) {
+        var host = input.closest(".mating-select, .filter-search, .hero-search, .header-search, .mobile-nav-search") || input.parentElement;
+        host.classList.add("dog-autocomplete-host");
+        var panel = document.createElement("div");
+        panel.className = "dog-suggestions";
+        panel.setAttribute("role", "listbox");
+        panel.hidden = true;
+        host.appendChild(panel);
+        openSuggestions.push(panel);
+
+        var timer = null;
+        var requestSerial = 0;
+
+        function close() {
+          panel.hidden = true;
+          panel.replaceChildren();
+        }
+
+        function render(results) {
+          panel.replaceChildren();
+          if (!results.length) {
+            close();
+            return;
+          }
+          results.forEach(function (dog) {
+            var mode = input.dataset.dogAutocompleteMode || "navigate";
+            var item = document.createElement(mode === "fill" ? "button" : "a");
+            item.className = "dog-suggestion";
+            if (mode === "fill") {
+              item.type = "button";
+              item.addEventListener("click", function () {
+                input.value = dog.name;
+                close();
+                input.focus();
+              });
+            } else {
+              item.href = "/dogs/" + encodeURIComponent(dog.slug) + "/?source=search";
+            }
+
+            var title = document.createElement("strong");
+            title.textContent = dog.name;
+            var meta = document.createElement("span");
+            meta.textContent = [dog.registration, dog.kennel, dog.sex].filter(Boolean).join(" · ");
+            item.append(title, meta);
+            panel.appendChild(item);
+          });
+          panel.hidden = false;
+        }
+
+        input.addEventListener("input", function () {
+          clearTimeout(timer);
+          var value = input.value.trim();
+          if (value.length < 2) {
+            close();
+            return;
+          }
+          timer = setTimeout(function () {
+            var serial = ++requestSerial;
+            var url = "/dogs/suggestions/?q=" + encodeURIComponent(value);
+            if (input.dataset.dogSex) {
+              url += "&sex=" + encodeURIComponent(input.dataset.dogSex);
+            }
+            fetch(url, { headers: { "Accept": "application/json" } })
+              .then(function (response) { return response.ok ? response.json() : { results: [] }; })
+              .then(function (data) {
+                if (serial === requestSerial && input.value.trim() === value) {
+                  render(data.results || []);
+                }
+              })
+              .catch(close);
+          }, 120);
+        });
+
+        input.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") close();
+        });
+        input.addEventListener("blur", function () {
+          window.setTimeout(close, 140);
+        });
+      });
     })();
   </script>
 </body>

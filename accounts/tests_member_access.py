@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from registry.models import Dog, Submission
+from registry.models import Dog, DogImage, Submission
 from registry.services import approve_submission
 
 
@@ -73,6 +73,11 @@ class PopularDogTests(TestCase):
     def test_homepage_uses_search_originated_popularity(self):
         popular = Dog.objects.create(
             name="Popular Dog", slug="popular-dog", is_public=True
+        )
+        DogImage.objects.create(
+            dog=popular,
+            image="dogs/popular-dog.jpg",
+            is_primary=True,
         )
         Dog.objects.create(name="Other Dog", slug="other-dog", is_public=True)
 

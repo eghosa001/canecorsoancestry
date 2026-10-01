@@ -9,7 +9,7 @@
   </header>
   <form class="hero-search compact-search" method="get">
     <label class="sr-only" for="pedigree-q">Search pedigrees</label>
-    <input id="pedigree-q" name="q" value="{{ query }}" placeholder="Dog name, kennel or registration">
+    <input id="pedigree-q" name="q" value="{{ query }}" data-dog-autocomplete placeholder="Dog name, kennel or registration" autocomplete="off">
     <button type="submit">Search</button>
   </form>
   <div class="pedigree-index-grid">
