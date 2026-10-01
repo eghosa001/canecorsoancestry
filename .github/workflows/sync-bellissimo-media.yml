@@ -137,7 +137,7 @@ jobs:
           DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
           DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
-        run: DATABASE_URL="$DATABASE_URL" python manage.py import_bellissimo_media --dry-run
+        run: python manage.py import_bellissimo_media --dry-run
 
       - name: Attach R2 media to canonical dogs
         env:
@@ -148,7 +148,7 @@ jobs:
           DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
           DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
-        run: DATABASE_URL="$DATABASE_URL" python manage.py import_bellissimo_media
+        run: python manage.py import_bellissimo_media
 
       - name: Verify DogImage rows
         env:
@@ -161,7 +161,7 @@ jobs:
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         shell: bash
         run: |
-          DATABASE_URL="$DATABASE_URL" python manage.py shell -c "
+          python manage.py shell -c "
           from registry.models import DogImage
           qs = DogImage.objects.filter(image__startswith='dogs/bellissimo/')
           primary = qs.filter(is_primary=True)
