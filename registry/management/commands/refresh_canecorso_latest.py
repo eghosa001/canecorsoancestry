@@ -343,6 +343,25 @@ def import_records(records, publish=True, dry_run=False):
 
         skipped_parent_links = 0
         preserved_parent_conflicts = 0
+        accepted_source_parents = {}
+
+        def source_cycle(child_source_id, parent_source_id):
+            frontier = {parent_source_id}
+            seen = set()
+            while frontier:
+                if child_source_id in frontier:
+                    return True
+                unseen = frontier - seen
+                if not unseen:
+                    return False
+                seen.update(unseen)
+                frontier = {
+                    ancestor
+                    for node in unseen
+                    for ancestor in accepted_source_parents.get(node, set())
+                }
+            return False
+
         for source_id in attached_ids:
             dog = source_to_dog[source_id]
             record = records[source_id]
@@ -373,11 +392,13 @@ def import_records(records, publish=True, dry_run=False):
                     preserved_parent_conflicts += 1
                     continue
                 if current_id == parent.pk:
+                    accepted_source_parents.setdefault(source_id, set()).add(parent_id)
                     continue
-                if dog._parent_creates_cycle(parent.pk):
+                if source_cycle(source_id, parent_id) or dog._parent_creates_cycle(parent.pk):
                     skipped_parent_links += 1
                     continue
                 setattr(dog, field, parent)
+                accepted_source_parents.setdefault(source_id, set()).add(parent_id)
                 changed.append(field)
             if changed:
                 dog.save(update_fields=[*changed, "updated_at"])
