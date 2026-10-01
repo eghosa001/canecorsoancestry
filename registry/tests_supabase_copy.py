@@ -31,6 +31,10 @@ class SupabaseCopyCommandTests(SimpleTestCase):
             "search_path=django_app,extensions,public",
             database["OPTIONS"]["options"],
         )
+        self.assertIsNone(database["TIME_ZONE"])
+        self.assertTrue(database["AUTOCOMMIT"])
+        self.assertFalse(database["ATOMIC_REQUESTS"])
+        self.assertIn("TEST", database)
 
     def test_rejects_non_supabase_target(self):
         with patch.dict(
