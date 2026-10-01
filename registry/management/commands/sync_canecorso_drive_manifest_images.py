@@ -1,31 +1,27 @@
 import csv
 import json
-import mimetypes
 import re
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from urllib.parse import quote, urlparse
 
 import requests
-from django.core.files.base import ContentFile
+from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from core.cloudflare_media import gateway_signature, sha256_hex
 from registry.models import DogExternalKey, DogImage
 
 
 DEFAULT_NAMESPACE = "canecorsopedigree.com"
 SOURCE_ID_RE = re.compile(r"^(\d+)(?:_|\.)")
-USER_AGENT = (
-    "CaneCorsoResearchArchiver/1.0 "
-    "(+personal archival/research; respectful rate-limited crawler)"
-)
-_thread_local = threading.local()
+ALLOWED_SOURCE_HOSTS = {"canecorsopedigree.com", "www.canecorsopedigree.com"}
+ALLOWED_SOURCE_PREFIX = "/static/images/animal/"
 
 
 def source_id(value):
@@ -96,18 +92,20 @@ def load_source_urls(source_csv):
     return urls, image_file_ids
 
 
-def http_session():
-    session = getattr(_thread_local, "session", None)
-    if session is not None:
-        return session
-    session = requests.Session()
-    session.headers.update(
-        {
-            "User-Agent": USER_AGENT,
-            "Referer": "https://www.canecorsopedigree.com/",
-            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-        }
+def validate_source_url(value):
+    parsed = urlparse(value)
+    return (
+        parsed.scheme == "https"
+        and (parsed.hostname or "").lower() in ALLOWED_SOURCE_HOSTS
+        and parsed.path.startswith(ALLOWED_SOURCE_PREFIX)
+        and not parsed.username
+        and not parsed.password
+        and parsed.port in (None, 443)
     )
+
+
+def retry_session():
+    session = requests.Session()
     retry = Retry(
         total=4,
         connect=4,
@@ -115,21 +113,20 @@ def http_session():
         status=4,
         backoff_factor=1.0,
         status_forcelist=(429, 500, 502, 503, 504),
-        allowed_methods=frozenset(["GET"]),
+        allowed_methods=frozenset(["POST"]),
         respect_retry_after_header=True,
     )
     session.mount(
         "https://",
         HTTPAdapter(max_retries=retry, pool_connections=8, pool_maxsize=8),
     )
-    _thread_local.session = session
     return session
 
 
 class Command(BaseCommand):
     help = (
-        "Fetch missing CaneCorso archive photos from their saved original image "
-        "URLs and persist each verified image directly to Cloudflare R2."
+        "Ask the signed Cloudflare media gateway to fetch saved CaneCorso "
+        "source-image URLs and persist each verified object directly to R2."
     )
 
     def add_arguments(self, parser):
@@ -178,14 +175,20 @@ class Command(BaseCommand):
                 f"{len(missing_urls)} archived photo IDs have no saved original "
                 f"image_url; first IDs: {missing_urls[:20]}"
             )
-        missing_image_file_rows = sorted(
-            manifest_ids - image_file_ids,
-            key=int,
-        )
+        missing_image_file_rows = sorted(manifest_ids - image_file_ids, key=int)
         if missing_image_file_rows:
             raise CommandError(
                 f"{len(missing_image_file_rows)} manifest IDs are not recorded as "
                 f"downloaded image_file rows in the source CSV."
+            )
+        invalid_urls = sorted(
+            (sid for sid in manifest_ids if not validate_source_url(source_urls[sid])),
+            key=int,
+        )
+        if invalid_urls:
+            raise CommandError(
+                f"{len(invalid_urls)} archived photo URLs fail the strict source "
+                f"allowlist; first IDs: {invalid_urls[:20]}"
             )
 
         external_rows = list(
@@ -217,7 +220,7 @@ class Command(BaseCommand):
                     "dog_id": dog_id,
                     "drive_id": item["id"],
                     "path": item["path"],
-                    "size": item.get("size"),
+                    "size": int(item.get("size") or 0),
                     "source_url": source_urls[sid],
                 }
             )
@@ -250,78 +253,67 @@ class Command(BaseCommand):
         if options["dry_run"] or not candidates:
             return
 
-        with TemporaryDirectory(prefix="canecorso-r2-sync-") as temp_name:
-            temp_root = Path(temp_name)
-            created = 0
-            skipped = 0
-            failures = []
+        created = 0
+        skipped = 0
+        failures = []
 
-            for offset in range(0, len(candidates), batch_size):
-                batch = candidates[offset : offset + batch_size]
-                with ThreadPoolExecutor(max_workers=workers) as pool:
-                    future_map = {
-                        pool.submit(self._download, item, temp_root): item
-                        for item in batch
-                    }
-                    for future in as_completed(future_map):
-                        item = future_map[future]
-                        try:
-                            local_path = future.result()
-                        except Exception as exc:
-                            failures.append((item, f"download: {exc}"))
-                            continue
-
-                        try:
-                            outcome = self._persist(item, local_path)
-                            if outcome == "created":
-                                created += 1
-                            else:
-                                skipped += 1
-                        except Exception as exc:
-                            failures.append((item, f"r2/database: {exc}"))
-                        finally:
-                            local_path.unlink(missing_ok=True)
-
-                        processed = created + skipped + len(failures)
-                        if processed % 50 == 0:
-                            self.stdout.write(
-                                f"R2 progress: processed={processed}/{len(candidates)}; "
-                                f"created={created}; skipped={skipped}; "
-                                f"retry_queue={len(failures)}"
-                            )
-
-            if failures:
-                self.stdout.write(
-                    f"Retrying {len(failures)} failed photo syncs sequentially..."
-                )
-                retry_failures = []
-                for number, (item, _) in enumerate(failures, 1):
+        for offset in range(0, len(candidates), batch_size):
+            batch = candidates[offset : offset + batch_size]
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                future_map = {
+                    pool.submit(self._ingest, item): item
+                    for item in batch
+                }
+                for future in as_completed(future_map):
+                    item = future_map[future]
                     try:
-                        local_path = self._download(item, temp_root)
-                        outcome = self._persist(item, local_path)
+                        result = future.result()
+                        outcome = self._record(item, result["key"], result["size"])
                         if outcome == "created":
                             created += 1
                         else:
                             skipped += 1
-                        local_path.unlink(missing_ok=True)
                     except Exception as exc:
-                        retry_failures.append((item, str(exc)))
-                    if number % 25 == 0 or number == len(failures):
-                        self.stdout.write(
-                            f"Retry progress: {number}/{len(failures)}; "
-                            f"still_failed={len(retry_failures)}"
-                        )
-                failures = retry_failures
+                        failures.append((item, str(exc)))
 
-            if failures:
-                for item, error in failures[:25]:
-                    self.stderr.write(
-                        f"FAILED source={item['sid']} "
-                        f"url={item['source_url']} path={item['path']}: {error}"
+                    processed = created + skipped + len(failures)
+                    if processed % 50 == 0 or processed == len(candidates):
+                        self.stdout.write(
+                            f"R2 progress: processed={processed}/{len(candidates)}; "
+                            f"created={created}; skipped={skipped}; "
+                            f"retry_queue={len(failures)}"
+                        )
+
+        if failures:
+            self.stdout.write(
+                f"Retrying {len(failures)} failed Cloudflare ingests sequentially..."
+            )
+            retry_failures = []
+            for number, (item, _) in enumerate(failures, 1):
+                try:
+                    result = self._ingest(item)
+                    outcome = self._record(item, result["key"], result["size"])
+                    if outcome == "created":
+                        created += 1
+                    else:
+                        skipped += 1
+                except Exception as exc:
+                    retry_failures.append((item, str(exc)))
+                if number % 25 == 0 or number == len(failures):
+                    self.stdout.write(
+                        f"Retry progress: {number}/{len(failures)}; "
+                        f"still_failed={len(retry_failures)}"
                     )
-                raise CommandError(
-                    f"{len(failures)} required photos still failed after retries."
+            failures = retry_failures
+
+        if failures:
+            for item, error in failures[:25]:
+                self.stderr.write(
+                    f"FAILED source={item['sid']} path={item['path']}: {error}"
                 )
+            raise CommandError(
+                f"{len(failures)} required photos still failed after retries."
+            )
 
         final = (
             DogImage.objects.filter(dog_id__in=linked_dog_ids)
@@ -331,102 +323,103 @@ class Command(BaseCommand):
         )
         self.stdout.write(
             self.style.SUCCESS(
-                f"Direct source → R2 sync complete: created={created}; "
+                f"Cloudflare source → R2 sync complete: created={created}; "
                 f"skipped={skipped}; source-linked dogs with managed images={final}."
             )
         )
 
-    def _download(self, item, temp_root):
-        suffix = Path(item["path"]).suffix.lower() or ".jpg"
-        target = temp_root / f"{item['sid']}{suffix}"
-        partial = target.with_suffix(target.suffix + ".part")
-        expected = int(item.get("size") or 0)
-
-        last_error = None
-        for timeout in (30, 60, 90):
-            try:
-                partial.unlink(missing_ok=True)
-                response = http_session().get(
-                    item["source_url"],
-                    timeout=timeout,
-                    stream=True,
-                )
-                response.raise_for_status()
-                content_type = (
-                    response.headers.get("content-type") or ""
-                ).split(";", 1)[0].lower()
-                if not content_type.startswith("image/"):
-                    raise RuntimeError(
-                        f"non-image content-type: {content_type or 'missing'}"
-                    )
-
-                with partial.open("wb") as handle:
-                    for chunk in response.iter_content(256 * 1024):
-                        if chunk:
-                            handle.write(chunk)
-
-                actual = partial.stat().st_size if partial.exists() else 0
-                if actual <= 0:
-                    raise RuntimeError("empty image response")
-                if expected and actual != expected:
-                    raise RuntimeError(
-                        f"source size mismatch: expected={expected}, actual={actual}"
-                    )
-
-                partial.replace(target)
-                return target
-            except Exception as exc:
-                last_error = exc
-                time.sleep(1)
-
-        partial.unlink(missing_ok=True)
-        raise RuntimeError(
-            f"source image download failed after retries: {last_error}"
-        )
-
-    def _persist(self, item, local_path):
-        dog_id = item["dog_id"]
-        if DogImage.objects.filter(dog_id=dog_id).exists():
-            return "skipped"
-
+    def _destination_key(self, item):
+        ext = Path(item["path"]).suffix.lower() or ".jpg"
         sid = item["sid"]
-        ext = local_path.suffix.lower()
-        key = f"dogs/archive/{int(sid) // 1000:03d}/{sid}{ext}"
-        data = local_path.read_bytes()
-        if not data:
-            raise RuntimeError("Downloaded file is empty")
+        return f"dogs/archive/{int(sid) // 1000:03d}/{sid}{ext}"
 
-        content_type = (
-            mimetypes.guess_type(item["path"])[0]
-            or "application/octet-stream"
-        )
+    def _ingest(self, item):
+        key = self._destination_key(item)
+        payload = {
+            "url": item["source_url"],
+            "expected_size": int(item.get("size") or 0),
+        }
+        body = json.dumps(
+            payload,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        digest = sha256_hex(body)
 
+        base_url = str(getattr(settings, "R2_GATEWAY_URL", "") or "").rstrip("/")
+        if not base_url:
+            raise RuntimeError("R2_GATEWAY_URL is not configured")
+
+        endpoint = f"{base_url}/_r2_ingest/{quote(key, safe='/')}"
         last_error = None
         for attempt in range(1, 6):
+            timestamp = str(int(time.time()))
+            signature = gateway_signature(
+                settings.SECRET_KEY,
+                "POST",
+                key,
+                timestamp,
+                digest,
+            )
+            headers = {
+                "Content-Type": "application/json",
+                "X-R2-Timestamp": timestamp,
+                "X-R2-Content-SHA256": digest,
+                "X-R2-Signature": signature,
+            }
             try:
-                content = ContentFile(data, name=local_path.name)
-                content.content_type = content_type
-                if hasattr(default_storage, "save_exact"):
-                    default_storage.save_exact(key, content)
-                else:
-                    if default_storage.exists(key):
-                        default_storage.delete(key)
-                    default_storage.save(key, content)
-
-                remote_size = default_storage.size(key)
-                if remote_size != len(data):
-                    raise RuntimeError(
-                        f"R2 size mismatch for {key}: {remote_size} != {len(data)}"
+                with retry_session() as session:
+                    response = session.post(
+                        endpoint,
+                        data=body,
+                        headers=headers,
+                        timeout=(15, 90),
                     )
-                last_error = None
-                break
+                if response.status_code == 201:
+                    result = response.json()
+                    if result.get("status") != "stored":
+                        raise RuntimeError(
+                            f"unexpected ingest response: {result!r}"
+                        )
+                    stored_size = int(result.get("size") or 0)
+                    expected = int(item.get("size") or 0)
+                    if stored_size <= 0:
+                        raise RuntimeError("Cloudflare reported an empty R2 object")
+                    if expected and stored_size != expected:
+                        raise RuntimeError(
+                            f"Cloudflare stored-size mismatch: "
+                            f"{stored_size} != {expected}"
+                        )
+                    remote_size = default_storage.size(key)
+                    if remote_size != stored_size:
+                        raise RuntimeError(
+                            f"R2 HEAD size mismatch: "
+                            f"{remote_size} != {stored_size}"
+                        )
+                    return {"key": key, "size": stored_size}
+
+                detail = response.text[:1000]
+                last_error = RuntimeError(
+                    f"Cloudflare ingest HTTP {response.status_code}: {detail}"
+                )
+                if response.status_code in (400, 401, 403, 404, 409, 422):
+                    break
             except Exception as exc:
                 last_error = exc
-                if attempt < 5:
-                    time.sleep(min(2 ** attempt, 15))
 
-        if last_error is not None:
-            raise last_error
+            if attempt < 5:
+                time.sleep(min(2 ** attempt, 15))
+
+        raise last_error or RuntimeError("Cloudflare ingest failed")
+
+    def _record(self, item, key, stored_size):
+        dog_id = item["dog_id"]
+        expected = int(item.get("size") or 0)
+        if expected and int(stored_size) != expected:
+            raise RuntimeError(
+                f"Refusing database record for size mismatch: "
+                f"{stored_size} != {expected}"
+            )
 
         with transaction.atomic():
             if DogImage.objects.filter(dog_id=dog_id).exists():
