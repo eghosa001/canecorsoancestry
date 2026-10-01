@@ -1,2 +1,3 @@
 Rescan every physical archived image by numeric dog ID, regardless of CSV image_file/name mapping, then sync missing production dog photos to R2.
 Retry resilient parallel Drive download after stalled file on 2026-10-01.
+Run repaired v2 concurrency sync on 2026-10-01.
