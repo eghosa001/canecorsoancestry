@@ -81,6 +81,24 @@ def parse_latest_ids(html):
     soup = BeautifulSoup(html, "html.parser")
     ids = []
     seen = set()
+
+    rows = soup.find_all("tr")
+    row_ids = []
+    for row in rows:
+        source_id = next(
+            (
+                _dog_id(anchor.get("href"))
+                for anchor in row.find_all("a", href=True)
+                if _dog_id(anchor.get("href"))
+            ),
+            "",
+        )
+        if source_id and source_id not in seen:
+            seen.add(source_id)
+            row_ids.append(source_id)
+    if row_ids:
+        return row_ids
+
     for anchor in soup.find_all("a", href=True):
         source_id = _dog_id(anchor.get("href"))
         if source_id and source_id not in seen:
