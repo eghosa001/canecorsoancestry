@@ -169,29 +169,35 @@ jobs:
               )
           PY
 
-      - name: Dump current Aiven Django schema
-        shell: bash
-        run: |
-          mkdir -p "$RUNNER_TEMP/supabase-cutover"
-          docker run --rm             -e AIVEN_DATABASE_URL             -e PGSSLMODE=require             -v "$RUNNER_TEMP/supabase-cutover:/work"             postgres:18-alpine             sh -ec 'pg_dump "$AIVEN_DATABASE_URL" --format=custom --no-owner --no-acl --schema=django_app --file=/work/django_app.dump'
-          test -s "$RUNNER_TEMP/supabase-cutover/django_app.dump"
-
       - name: Back up current Supabase Django schema
         shell: bash
         run: |
+          mkdir -p "$RUNNER_TEMP/supabase-cutover"
           docker run --rm             -e TARGET_DATABASE_URL             -e PGSSLMODE=require             -v "$RUNNER_TEMP/supabase-cutover:/work"             postgres:17-alpine             sh -ec 'pg_dump "$TARGET_DATABASE_URL" --format=custom --no-owner --no-acl --schema=django_app --file=/work/supabase-before.dump'
           test -s "$RUNNER_TEMP/supabase-cutover/supabase-before.dump"
 
-      - name: Replace Supabase Django schema from Aiven
+      - name: Bring Supabase schema to current Django migrations
+        env:
+          DATABASE_URL: ${{ env.TARGET_DATABASE_URL }}
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_DB_SCHEMA: django_app
+          DJANGO_DB_SSLMODE: require
+          DJANGO_DB_EXTRA_SCHEMAS: extensions,public
+          DJANGO_ALLOWED_HOSTS: testserver
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver
+          SITE_URL: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
+          R2_GATEWAY_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
+          MEDIA_EDGE_BASE_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
+        run: python manage.py migrate --noinput
+
+      - name: Transactionally replace Supabase data from Aiven
+        env:
+          SOURCE_DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
         shell: bash
         run: |
           set -euo pipefail
-          docker run --rm             -e TARGET_DATABASE_URL             -e PGSSLMODE=require             postgres:17-alpine             sh -ec 'psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP SCHEMA IF EXISTS django_app CASCADE;"'
-
-          if ! docker run --rm             -e TARGET_DATABASE_URL             -e PGSSLMODE=require             -v "$RUNNER_TEMP/supabase-cutover:/work"             postgres:18-alpine             sh -ec 'pg_restore --dbname="$TARGET_DATABASE_URL" --no-owner --no-acl --exit-on-error /work/django_app.dump'; then
-            echo "::error::Supabase restore failed; restoring its pre-cutover schema."
-            docker run --rm               -e TARGET_DATABASE_URL               -e PGSSLMODE=require               postgres:17-alpine               sh -ec 'psql "$TARGET_DATABASE_URL" -v ON_ERROR_STOP=1 -c "DROP SCHEMA IF EXISTS django_app CASCADE;"'
-            docker run --rm               -e TARGET_DATABASE_URL               -e PGSSLMODE=require               -v "$RUNNER_TEMP/supabase-cutover:/work"               postgres:17-alpine               sh -ec 'pg_restore --dbname="$TARGET_DATABASE_URL" --no-owner --no-acl --exit-on-error /work/supabase-before.dump'
+          if ! python scripts/copy_postgres_schema_data.py; then
+            echo "::error::Transactional copy failed. Existing Supabase data was rolled back."
             exit 1
           fi
 
