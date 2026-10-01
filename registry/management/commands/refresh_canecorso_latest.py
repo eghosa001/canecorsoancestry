@@ -183,20 +183,20 @@ def parse_profile(source_id, html):
     return record
 
 
-def collect_missing_profiles(fetch_html, known_ids, limit=250):
-    latest_ids = parse_latest_ids(fetch_html(LATEST_URL))[: max(0, limit)]
+def collect_missing_records(start_ids, fetch_profile, existing_source_ids):
     records = {}
     queued = set()
     queue = deque()
 
-    for source_id in latest_ids:
-        if source_id not in known_ids and source_id not in queued:
+    for source_id in start_ids:
+        source_id = str(source_id)
+        if source_id not in existing_source_ids and source_id not in queued:
             queue.append(source_id)
             queued.add(source_id)
 
     while queue:
         source_id = queue.popleft()
-        record = parse_profile(source_id, fetch_html(PROFILE_URL.format(source_id)))
+        record = fetch_profile(source_id)
         name = _text(record.get("name"))
         if not name:
             continue
@@ -205,7 +205,7 @@ def collect_missing_profiles(fetch_html, known_ids, limit=250):
             parent_id = str(record.get(field) or "").strip()
             if (
                 parent_id
-                and parent_id not in known_ids
+                and parent_id not in existing_source_ids
                 and parent_id not in records
                 and parent_id not in queued
             ):
@@ -213,6 +213,17 @@ def collect_missing_profiles(fetch_html, known_ids, limit=250):
                 queued.add(parent_id)
 
     return records
+
+
+def collect_missing_profiles(fetch_html, known_ids, limit=250):
+    latest_ids = parse_latest_ids(fetch_html(LATEST_URL))[: max(0, limit)]
+    return collect_missing_records(
+        latest_ids,
+        fetch_profile=lambda source_id: parse_profile(
+            source_id, fetch_html(PROFILE_URL.format(source_id))
+        ),
+        existing_source_ids=known_ids,
+    )
 
 
 def _unique_slug(source_id, name):
@@ -389,6 +400,10 @@ def import_records(records, publish=True, dry_run=False):
         "skipped_parent_links": skipped_parent_links,
         "preserved_parent_conflicts": preserved_parent_conflicts,
     }
+
+
+def persist_records(records, publish=True, dry_run=False):
+    return import_records(records, publish=publish, dry_run=dry_run)
 
 
 class Command(BaseCommand):
