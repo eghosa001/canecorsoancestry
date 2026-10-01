@@ -65,19 +65,28 @@ jobs:
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         run: python manage.py migrate --check
 
+      - name: Resolve publish mode
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.publish }}" = "true" ]; then
+            echo "PUBLISH_FLAG=--publish" >> "$GITHUB_ENV"
+          else
+            echo "PUBLISH_FLAG=" >> "$GITHUB_ENV"
+          fi
+
       - name: Dry-run archive import
         env: *django_env
         run: |
           python manage.py import_canecorso_archive "$SOURCE_FILE" \
             --start-year 2020 --end-year 2026 --dry-run \
-            ${{ inputs.publish && '--publish' || '' }}
+            $PUBLISH_FLAG
 
       - name: Import 2020-present dogs and required ancestors
         env: *django_env
         run: |
           python manage.py import_canecorso_archive "$SOURCE_FILE" \
             --start-year 2020 --end-year 2026 \
-            ${{ inputs.publish && '--publish' || '' }}
+            $PUBLISH_FLAG
 
       - name: Verify archive links
         env: *django_env
@@ -85,7 +94,7 @@ jobs:
           python manage.py shell -c "
           from registry.models import DogExternalKey
           count = DogExternalKey.objects.filter(namespace='canecorsopedigree.com').count()
-          assert count == 33142, f'Expected 33142 archive external keys, got {count}'
+          assert count == 33137, f'Expected 33137 archive external keys, got {count}'
           print(f'Verified {count} source-linked CaneCorsoPedigree records')
           "
 

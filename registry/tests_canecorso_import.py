@@ -44,9 +44,9 @@ class CaneCorsoArchiveImportTests(TestCase):
                 source,
                 start_year=2020,
                 end_year=2026,
-                publish=True,
                 stdout=StringIO(),
             )
+            self.assertFalse(Dog.objects.get(name="Recent Dog").is_public)
             call_command(
                 "import_canecorso_archive",
                 source,
