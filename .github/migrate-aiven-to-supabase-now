@@ -1,0 +1,2 @@
+Aiven -> Supabase cutover requested 2026-10-01.
+Source remains Aiven until the workflow verifies all Django table counts on Supabase.
