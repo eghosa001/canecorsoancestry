@@ -1,4 +1,4 @@
-const DEFAULT_ORIGIN = "https://canecorsoancestry.onrender.com";
+const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
 const EDGE_CACHE_VERSION = "images-v2";
 const CACHE_FRESH_SECONDS = 300;
 const CACHE_RETENTION_SECONDS = 86400;
