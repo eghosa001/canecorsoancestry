@@ -8,11 +8,8 @@ from urllib.parse import quote, urlparse
 
 import requests
 from django.conf import settings
-from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from core.cloudflare_media import gateway_signature, sha256_hex
 from registry.models import DogExternalKey, DogImage
@@ -105,22 +102,7 @@ def validate_source_url(value):
 
 
 def retry_session():
-    session = requests.Session()
-    retry = Retry(
-        total=4,
-        connect=4,
-        read=4,
-        status=4,
-        backoff_factor=1.0,
-        status_forcelist=(429, 500, 502, 503, 504),
-        allowed_methods=frozenset(["POST"]),
-        respect_retry_after_header=True,
-    )
-    session.mount(
-        "https://",
-        HTTPAdapter(max_retries=retry, pool_connections=8, pool_maxsize=8),
-    )
-    return session
+    return requests.Session()
 
 
 class Command(BaseCommand):
@@ -352,7 +334,7 @@ class Command(BaseCommand):
 
         endpoint = f"{base_url}/_r2_ingest/{quote(key, safe='/')}"
         last_error = None
-        for attempt in range(1, 6):
+        for attempt in range(1, 5):
             timestamp = str(int(time.time()))
             signature = gateway_signature(
                 settings.SECRET_KEY,
@@ -390,11 +372,9 @@ class Command(BaseCommand):
                             f"Cloudflare stored-size mismatch: "
                             f"{stored_size} != {expected}"
                         )
-                    remote_size = default_storage.size(key)
-                    if remote_size != stored_size:
+                    if result.get("r2_verified") is not True:
                         raise RuntimeError(
-                            f"R2 HEAD size mismatch: "
-                            f"{remote_size} != {stored_size}"
+                            f"Cloudflare did not confirm R2 verification: {result!r}"
                         )
                     return {"key": key, "size": stored_size}
 
@@ -407,8 +387,8 @@ class Command(BaseCommand):
             except Exception as exc:
                 last_error = exc
 
-            if attempt < 5:
-                time.sleep(min(2 ** attempt, 15))
+            if attempt < 4:
+                time.sleep(min(2 ** attempt, 10))
 
         raise last_error or RuntimeError("Cloudflare ingest failed")
 
