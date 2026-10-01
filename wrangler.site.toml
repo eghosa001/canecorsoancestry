@@ -9,3 +9,7 @@ enabled = true
 
 [vars]
 ORIGIN_URL = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
+
+
+[triggers]
+crons = ["*/5 * * * *"]
