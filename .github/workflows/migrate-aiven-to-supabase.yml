@@ -7,11 +7,13 @@ on:
       - "scripts/discover_supabase_session_pooler.py"
       - "scripts/compare_postgres_counts.py"
       - "scripts/validate_supabase_direct_url.py"
+      - "registry/management/commands/copy_to_supabase.py"
   push:
     branches: [main]
     paths:
       - ".github/workflows/migrate-aiven-to-supabase.yml"
       - ".github/migrate-aiven-to-supabase-now"
+      - "registry/management/commands/copy_to_supabase.py"
 
 permissions:
   contents: read
