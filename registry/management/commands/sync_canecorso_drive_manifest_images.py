@@ -325,7 +325,7 @@ class Command(BaseCommand):
             .distinct()
             .count()
         )
-        if final < 9000:
+        if options["limit"] <= 0 and final < 9000:
             raise CommandError(
                 f"Managed photo coverage is still below 9000 after retries: "
                 f"{final}; unresolved photos={len(failures)}"
