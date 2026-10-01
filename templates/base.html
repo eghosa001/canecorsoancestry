@@ -110,9 +110,39 @@
         });
       }
 
+      function dismissSearchUI() {
+        openSuggestions.forEach(function (panel) {
+          panel.hidden = true;
+          panel.replaceChildren();
+        });
+        var active = document.activeElement;
+        if (active && active.matches && active.matches("[data-dog-autocomplete]")) {
+          active.blur();
+        }
+      }
+
       window.addEventListener("scroll", function () {
         closeMobileMenus();
-        openSuggestions.forEach(function (panel) { panel.hidden = true; });
+        dismissSearchUI();
+      }, { passive: true });
+
+      document.addEventListener("pointerdown", function (event) {
+        if (!event.target.closest(".dog-autocomplete-host")) {
+          dismissSearchUI();
+        }
+      });
+
+      var searchTouchStartY = null;
+      document.addEventListener("touchstart", function (event) {
+        if (event.touches.length === 1) {
+          searchTouchStartY = event.touches[0].clientY;
+        }
+      }, { passive: true });
+      document.addEventListener("touchend", function (event) {
+        if (searchTouchStartY === null || !event.changedTouches.length) return;
+        var deltaY = event.changedTouches[0].clientY - searchTouchStartY;
+        searchTouchStartY = null;
+        if (deltaY < -30) dismissSearchUI();
       }, { passive: true });
 
       document.querySelectorAll(".mobile-nav a, .dashboard-mobile-nav a").forEach(function (link) {
@@ -205,7 +235,10 @@
         });
 
         input.addEventListener("keydown", function (event) {
-          if (event.key === "Escape") close();
+          if (event.key === "Escape") {
+            close();
+            input.blur();
+          }
         });
         input.addEventListener("blur", function () {
           window.setTimeout(close, 140);

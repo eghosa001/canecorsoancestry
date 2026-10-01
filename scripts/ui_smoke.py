@@ -159,6 +159,18 @@ def main():
         capture(mobile, "/accounts/password_reset/", "password-reset-mobile")
 
         capture(mobile, "/dogs/?q=", "dogs-mobile")
+        dog_search = mobile.locator("#q")
+        dog_search.focus()
+        mobile.locator("h1").click()
+        if mobile.evaluate("document.activeElement && document.activeElement.id") == "q":
+            raise AssertionError("mobile dog search stays focused after outside tap")
+        dog_search.focus()
+        mobile.evaluate("window.scrollTo(0, 320)")
+        mobile.wait_for_timeout(100)
+        if mobile.evaluate("document.activeElement && document.activeElement.id") == "q":
+            raise AssertionError("mobile dog search stays focused after upward page movement")
+        mobile.evaluate("window.scrollTo(0, 0)")
+
         mobile_dogs = mobile.locator(".search-result-card")
         if mobile_dogs.count():
             mobile_dogs.first.click()
