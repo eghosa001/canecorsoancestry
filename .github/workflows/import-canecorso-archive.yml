@@ -67,26 +67,42 @@ jobs:
 
       - name: Dry-run archive import
         env: *django_env
+        shell: bash
         run: |
+          publish_arg=""
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.publish }}" = "true" ]; then
+            publish_arg="--publish"
+          fi
           python manage.py import_canecorso_archive "$SOURCE_FILE" \
-            --start-year 2020 --end-year 2026 --dry-run \
-            ${{ inputs.publish && '--publish' || '' }}
+            --start-year 2020 --end-year 2026 --dry-run $publish_arg
 
       - name: Import 2020-present dogs and required ancestors
         env: *django_env
+        shell: bash
         run: |
+          publish_arg=""
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ inputs.publish }}" = "true" ]; then
+            publish_arg="--publish"
+          fi
           python manage.py import_canecorso_archive "$SOURCE_FILE" \
-            --start-year 2020 --end-year 2026 \
-            ${{ inputs.publish && '--publish' || '' }}
+            --start-year 2020 --end-year 2026 $publish_arg
 
       - name: Verify archive links
         env: *django_env
         run: |
           python manage.py shell -c "
-          from registry.models import DogExternalKey
-          count = DogExternalKey.objects.filter(namespace='canecorsopedigree.com').count()
-          assert count == 33142, f'Expected 33142 archive external keys, got {count}'
-          print(f'Verified {count} source-linked CaneCorsoPedigree records')
+          from registry.models import Dog, DogExternalKey
+          keys = DogExternalKey.objects.filter(namespace='canecorsopedigree.com')
+          imported = Dog.objects.filter(
+              external_keys__namespace='canecorsopedigree.com',
+              slug__startswith='ccp-',
+          ).distinct()
+          count = keys.count()
+          public_count = imported.filter(is_public=True).count()
+          assert count == 33137, f'Expected 33137 archive external keys, got {count}'
+          assert imported.count() == 33099, f'Expected 33099 new archive dogs, got {imported.count()}'
+          assert public_count == 33099, f'Expected 33099 public archive dogs, got {public_count}'
+          print(f'Verified {count} source links; {public_count} imported dogs are public')
           "
 
       - name: Audit production pedigree integrity
