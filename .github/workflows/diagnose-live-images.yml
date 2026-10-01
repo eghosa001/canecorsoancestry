@@ -19,45 +19,49 @@ jobs:
           import urllib.parse
           import urllib.request
 
-          base = "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+          bases = [
+              ("edge", "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"),
+              ("origin", "https://canecorsoancestry.onrender.com"),
+          ]
 
           def fetch(url):
               req = urllib.request.Request(url, headers={"User-Agent":"CCA-image-diagnostic/1.0"})
               with urllib.request.urlopen(req, timeout=30) as r:
                   return r.status, r.geturl(), r.headers, r.read().decode("utf-8", "replace")
 
-          for label, query in [("bellissimo", "Branco Custodi Nos"), ("source", "NALAH")]:
-              url = base + "/dogs/?" + urllib.parse.urlencode({"q": query})
-              status, final, headers, body = fetch(url)
-              print(f"{label}: search status={status} final={final}")
-              dog_links = [
-                  html.unescape(x)
-                  for x in re.findall(
-                      r'<a[^>]+class="search-result-card"[^>]+href="([^"]+)"',
-                      body,
-                      re.I,
+          for surface, base in bases:
+              for label, query in [("bellissimo", "Branco Custodi Nos"), ("source", "NALAH")]:
+                  url = base + "/dogs/?" + urllib.parse.urlencode({"q": query})
+                  status, final, headers, body = fetch(url)
+                  print(f"{surface}/{label}: search status={status} final={final} edge-cache={headers.get('x-cca-edge-cache')}")
+                  dog_links = [
+                      html.unescape(x)
+                      for x in re.findall(
+                          r'<a[^>]+class="search-result-card"[^>]+href="([^"]+)"',
+                          body,
+                          re.I,
+                      )
+                  ]
+                  if not dog_links:
+                      print(f"{surface}/{label}: no dog detail link found")
+                      continue
+                  dog_url = urllib.parse.urljoin(base, dog_links[0])
+                  status, final, headers, detail = fetch(dog_url)
+                  print(f"{surface}/{label}: detail status={status} url={dog_url} edge-cache={headers.get('x-cca-edge-cache')}")
+                  hero = re.search(
+                      r'<div class="dog-profile-photo">.*?<img[^>]+src="([^"]+)"',
+                      detail,
+                      re.I | re.S,
                   )
-              ]
-              if not dog_links:
-                  print(f"{label}: no dog detail link found")
-                  continue
-              dog_url = urllib.parse.urljoin(base, dog_links[0])
-              status, final, headers, detail = fetch(dog_url)
-              print(f"{label}: detail status={status} url={dog_url}")
-              hero = re.search(
-                  r'<div class="dog-profile-photo">.*?<img[^>]+src="([^"]+)"',
-                  detail,
-                  re.I | re.S,
-              )
-              if not hero:
-                  print(f"{label}: no dog-profile img src found on detail")
-                  continue
-              image_url = urllib.parse.urljoin(base, html.unescape(hero.group(1)))
-              print(f"{label}: image={image_url}")
-              req = urllib.request.Request(image_url, headers={"User-Agent":"CCA-image-diagnostic/1.0"})
-              try:
-                  with urllib.request.urlopen(req, timeout=30) as r:
-                      print(f"{label}: image status={r.status} final={r.geturl()} content-type={r.headers.get('content-type')} length={r.headers.get('content-length')}")
-              except Exception as exc:
-                  print(f"{label}: image ERROR {type(exc).__name__}: {exc}")
+                  if not hero:
+                      print(f"{surface}/{label}: no dog-profile img src found on detail")
+                      continue
+                  image_url = urllib.parse.urljoin(base, html.unescape(hero.group(1)))
+                  print(f"{surface}/{label}: image={image_url}")
+                  req = urllib.request.Request(image_url, headers={"User-Agent":"CCA-image-diagnostic/1.0"})
+                  try:
+                      with urllib.request.urlopen(req, timeout=30) as r:
+                          print(f"{surface}/{label}: image status={r.status} final={r.geturl()} content-type={r.headers.get('content-type')} length={r.headers.get('content-length')}")
+                  except Exception as exc:
+                      print(f"{surface}/{label}: image ERROR {type(exc).__name__}: {exc}")
           PY
