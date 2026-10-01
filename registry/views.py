@@ -111,6 +111,7 @@ def dog_suggestions(request):
         registration = next(iter(dog.registrations.all()), None)
         results.append(
             {
+                "id": str(dog.pk),
                 "name": dog.name,
                 "slug": dog.slug,
                 "sex": dog.get_sex_display(),
