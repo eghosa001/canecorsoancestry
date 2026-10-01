@@ -218,6 +218,13 @@ class Command(BaseCommand):
             )
         }
         source_to_dog = {key: external.dog for key, external in existing_keys.items()}
+        publish_existing = {
+            dog.pk: dog
+            for dog in source_to_dog.values()
+            if options["publish"] and dog.slug.startswith("ccp-") and not dog.is_public
+        }
+        for dog in publish_existing.values():
+            dog.is_public = True
 
         missing_ids = selected_ids - set(existing_keys)
         registrations = {
@@ -276,6 +283,12 @@ class Command(BaseCommand):
                 [dog for _, dog in created_dogs],
                 batch_size=1000,
             )
+            if publish_existing:
+                Dog.objects.bulk_update(
+                    list(publish_existing.values()),
+                    ["is_public"],
+                    batch_size=1000,
+                )
 
             DogExternalKey.objects.bulk_create(
                 [
@@ -389,6 +402,7 @@ class Command(BaseCommand):
                 f"{mode}: {len(recent_ids)} dogs born {start_year}-{end_year}; "
                 f"{len(records)} records including {len(records)-len(recent_ids)} ancestors; "
                 f"{len(created_dogs)} created; {len(existing_keys)} already linked; "
+                f"{len(publish_existing)} existing archive dogs published; "
                 f"{reused_by_registration} matched by exact registration; "
                 f"{skipped_parent_links} unsafe parent links skipped; "
                 f"{preserved_parent_conflicts} existing parent links preserved."
