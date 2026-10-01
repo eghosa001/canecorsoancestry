@@ -77,7 +77,7 @@ jobs:
                   return r.status, r.geturl(), r.headers, r.read().decode("utf-8", "replace")
 
           for surface, base in bases:
-              for label, query in [("bellissimo", "Branco Custodi Nos"), ("source", "NALAH")]:
+              for label, query in [("bellissimo", "Branco Custodi Nos"), ("source", "A-1 BRUNO")]:
                   url = base + "/dogs/?" + urllib.parse.urlencode({"q": query})
                   status, final, headers, body = fetch(url)
                   print(f"{surface}/{label}: search status={status} final={final} edge-cache={headers.get('x-cca-edge-cache')}")
