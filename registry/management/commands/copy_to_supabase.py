@@ -42,7 +42,23 @@ def _target_database():
     options["sslmode"] = os.getenv("DJANGO_DB_SSLMODE", "require")
     schema = os.getenv("DJANGO_DB_SCHEMA", "django_app").strip()
     options["options"] = f"-c search_path={schema},extensions,public"
+
+    # Database aliases added after Django startup do not pass through
+    # ConnectionHandler.configure_settings(), so provide the defaults Django
+    # normally injects for every configured database.
+    database.setdefault("ATOMIC_REQUESTS", False)
+    database.setdefault("AUTOCOMMIT", True)
+    database.setdefault("CONN_MAX_AGE", 0)
     database["CONN_HEALTH_CHECKS"] = True
+    database.setdefault("TIME_ZONE", None)
+    for key in ("NAME", "USER", "PASSWORD", "HOST", "PORT"):
+        database.setdefault(key, "")
+    test_settings = database.setdefault("TEST", {})
+    test_settings.setdefault("CHARSET", None)
+    test_settings.setdefault("COLLATION", None)
+    test_settings.setdefault("MIGRATE", True)
+    test_settings.setdefault("MIRROR", None)
+    test_settings.setdefault("NAME", None)
     return database
 
 
