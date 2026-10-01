@@ -210,3 +210,36 @@ class CaneCorsoLatestExistingParentTests(TestCase):
             dog.sources.get(title=latest.SOURCE_TITLE).raw_payload["pedigree_number"],
             "UNVERIFIED-PED-90",
         )
+
+
+class CaneCorsoLatestCycleSafetyTests(TestCase):
+    def test_import_skips_parent_link_that_would_create_cycle(self):
+        records = {
+            "301": {
+                "id": "301",
+                "name": "CYCLE A",
+                "gender": "male",
+                "father_id": "302",
+                "mother_id": "",
+                "dob": "",
+                "pedigree_number": "",
+                "source_url": latest.PROFILE_URL.format("301"),
+            },
+            "302": {
+                "id": "302",
+                "name": "CYCLE B",
+                "gender": "male",
+                "father_id": "301",
+                "mother_id": "",
+                "dob": "",
+                "pedigree_number": "",
+                "source_url": latest.PROFILE_URL.format("302"),
+            },
+        }
+
+        summary = latest.import_records(records, publish=True)
+
+        a = Dog.objects.get(external_keys__key="301")
+        b = Dog.objects.get(external_keys__key="302")
+        self.assertFalse(a.sire_id == b.pk and b.sire_id == a.pk)
+        self.assertGreaterEqual(summary["skipped_parent_links"], 1)
