@@ -178,7 +178,6 @@ jobs:
 
       - name: Bring Supabase schema to current Django migrations
         env:
-          DATABASE_URL: ${{ env.TARGET_DATABASE_URL }}
           DJANGO_SETTINGS_MODULE: config.settings.production
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
@@ -188,7 +187,7 @@ jobs:
           SITE_URL: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
           R2_GATEWAY_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
           MEDIA_EDGE_BASE_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
-        run: python manage.py migrate --noinput
+        run: DATABASE_URL="$TARGET_DATABASE_URL" python manage.py migrate --noinput
 
       - name: Transactionally replace Supabase data from Aiven
         env:
@@ -221,7 +220,6 @@ jobs:
 
       - name: Validate Django against Supabase
         env:
-          DATABASE_URL: ${{ env.TARGET_DATABASE_URL }}
           DJANGO_SETTINGS_MODULE: config.settings.production
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
@@ -232,10 +230,10 @@ jobs:
           R2_GATEWAY_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
           MEDIA_EDGE_BASE_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
         run: |
-          python manage.py migrate --check
-          python manage.py check --deploy
-          python manage.py audit_pedigree_data --fail-on-critical
-          python manage.py shell -c "
+          DATABASE_URL="$TARGET_DATABASE_URL" python manage.py migrate --check
+          DATABASE_URL="$TARGET_DATABASE_URL" python manage.py check --deploy
+          DATABASE_URL="$TARGET_DATABASE_URL" python manage.py audit_pedigree_data --fail-on-critical
+          DATABASE_URL="$TARGET_DATABASE_URL" python manage.py shell -c "
           from registry.models import Dog
           count = Dog.objects.count()
           assert count >= 33000, count
