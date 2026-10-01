@@ -240,16 +240,8 @@ async function handleR2Ingest(request, env, url) {
   if (!data.byteLength) {
     return Response.json({ status: "source_empty" }, { status: 422 });
   }
-  if (expectedSize && data.byteLength !== expectedSize) {
-    return Response.json(
-      {
-        status: "source_size_mismatch",
-        expected_size: expectedSize,
-        actual_size: data.byteLength,
-      },
-      { status: 409 },
-    );
-  }
+  const archivedSizeMatch =
+    !expectedSize || data.byteLength === expectedSize;
 
   const stored = await env.MEDIA_BUCKET.put(key, data, {
     httpMetadata: { contentType },
@@ -277,6 +269,8 @@ async function handleR2Ingest(request, env, url) {
       source_status: upstream.status,
       content_type: contentType,
       r2_verified: true,
+      archived_size_match: archivedSizeMatch,
+      archived_expected_size: expectedSize || null,
     },
     { status: 201 },
   );
