@@ -1,1 +1,1 @@
-Sync the archived CaneCorsoPedigree Drive photos into Cloudflare R2 and verify Cloudflare auth/media end to end.
+Rescan every physical archived image by numeric dog ID, regardless of CSV image_file/name mapping, then sync missing production dog photos to R2.
