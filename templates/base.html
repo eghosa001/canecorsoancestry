@@ -151,9 +151,21 @@
               item.type = "button";
               item.addEventListener("click", function () {
                 input.value = dog.name;
+                var targetId = input.dataset.dogAutocompleteTarget;
+                if (targetId) {
+                  var target = document.getElementById(targetId);
+                  if (target) target.value = dog.id || "";
+                }
                 close();
                 input.focus();
               });
+              input.addEventListener("input", function () {
+                var targetId = input.dataset.dogAutocompleteTarget;
+                if (targetId) {
+                  var target = document.getElementById(targetId);
+                  if (target) target.value = "";
+                }
+              }, { once: true });
             } else {
               item.href = "/dogs/" + encodeURIComponent(dog.slug) + "/?source=search";
             }

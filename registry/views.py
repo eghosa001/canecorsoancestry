@@ -111,6 +111,7 @@ def dog_suggestions(request):
         registration = next(iter(dog.registrations.all()), None)
         results.append(
             {
+                "id": str(dog.pk),
                 "name": dog.name,
                 "slug": dog.slug,
                 "sex": dog.get_sex_display(),
@@ -119,7 +120,7 @@ def dog_suggestions(request):
             }
         )
     response = JsonResponse({"results": results})
-    response["Cache-Control"] = "private, max-age=30"
+    response["Cache-Control"] = "public, max-age=30, stale-while-revalidate=120"
     return response
 
 

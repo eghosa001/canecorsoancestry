@@ -11,12 +11,14 @@
   <form class="mating-form" method="get">
     <div class="mating-select">
       <label for="sire_q">Sire</label>
-      <input id="sire_q" name="sire_q" value="{{ sire_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-sex="male" placeholder="Dog name or registration" autocomplete="off" required>
+      <input type="hidden" id="sire" name="sire" value="{% if sire %}{{ sire.pk }}{% endif %}">
+      <input id="sire_q" name="sire_q" value="{{ sire_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-autocomplete-target="sire" data-dog-sex="male" placeholder="Dog name or registration" autocomplete="off" required>
     </div>
     <span class="mating-plus">+</span>
     <div class="mating-select">
       <label for="dam_q">Dam</label>
-      <input id="dam_q" name="dam_q" value="{{ dam_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-sex="female" placeholder="Dog name or registration" autocomplete="off" required>
+      <input type="hidden" id="dam" name="dam" value="{% if dam %}{{ dam.pk }}{% endif %}">
+      <input id="dam_q" name="dam_q" value="{{ dam_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-autocomplete-target="dam" data-dog-sex="female" placeholder="Dog name or registration" autocomplete="off" required>
     </div>
     <button class="btn btn-gold" type="submit">Analyse pairing</button>
   </form>

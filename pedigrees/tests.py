@@ -92,6 +92,40 @@ class PedigreeServiceTests(TestCase):
         self.assertContains(response, "12.50%")
         self.assertContains(response, common.name)
 
+    def test_virtual_mating_selected_ids_avoid_duplicate_name_ambiguity(self):
+        sire = Dog.objects.create(
+            name="Selected Sire",
+            slug="selected-sire",
+            sex=Dog.Sex.MALE,
+            is_public=True,
+        )
+        chosen = Dog.objects.create(
+            name="Duplicate Dam",
+            slug="duplicate-dam-one",
+            sex=Dog.Sex.FEMALE,
+            is_public=True,
+        )
+        Dog.objects.create(
+            name="Duplicate Dam",
+            slug="duplicate-dam-two",
+            sex=Dog.Sex.FEMALE,
+            is_public=True,
+        )
+
+        response = self.client.get(
+            reverse("pedigrees:virtual-mating"),
+            {
+                "sire_q": sire.name,
+                "sire": str(sire.pk),
+                "dam_q": chosen.name,
+                "dam": str(chosen.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["dam"], chosen)
+        self.assertEqual(response.context["error"], "")
+
     def test_relative_health_is_derived_from_connected_family(self):
         sire = Dog.objects.create(
             name="Health Sire", slug="health-sire", is_public=True
