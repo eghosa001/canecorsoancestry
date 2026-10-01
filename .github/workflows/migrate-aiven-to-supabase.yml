@@ -105,7 +105,7 @@ jobs:
     needs: validate
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       AIVEN_DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
       SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
@@ -183,11 +183,20 @@ jobs:
             sh -ec 'pg_dump "$TARGET_DATABASE_URL" --format=custom --no-owner --no-acl --schema=django_app --file=/work/supabase-before.dump'
           test -s "$RUNNER_TEMP/supabase-cutover/supabase-before.dump"
 
-      - name: Copy canonical Django data from Aiven to Supabase
+      - name: Build fast Aiven data-only archive
+        shell: bash
+        run: |
+          docker run --rm \
+            -e AIVEN_DATABASE_URL \
+            -e PGSSLMODE=require \
+            -v "$RUNNER_TEMP/supabase-cutover:/work" \
+            postgres:18-alpine \
+            sh -ec 'pg_dump "$AIVEN_DATABASE_URL" --format=custom --data-only --no-owner --no-acl --schema=django_app --file=/work/aiven-data.dump'
+          test -s "$RUNNER_TEMP/supabase-cutover/aiven-data.dump"
+
+      - name: Bring Supabase schema to current Django migrations
         env:
-          DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
-          SUPABASE_DATABASE_URL: ${{ env.TARGET_DATABASE_URL }}
-          SUPABASE_PROJECT_REF: wsntfvpcqloqzwgmsfaz
+          DATABASE_URL: ${{ env.TARGET_DATABASE_URL }}
           DJANGO_SETTINGS_MODULE: config.settings.production
           DJANGO_DB_SCHEMA: django_app
           DJANGO_DB_SSLMODE: require
@@ -197,11 +206,15 @@ jobs:
           SITE_URL: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
           R2_GATEWAY_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
           MEDIA_EDGE_BASE_URL: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
+        run: python manage.py migrate --noinput
+
+      - name: Replace Supabase data from Aiven
         shell: bash
         run: |
           set -euo pipefail
-          if ! python manage.py copy_to_supabase --replace; then
-            echo "::error::Django data copy failed; restoring the previous Supabase schema."
+
+          restore_backup() {
+            echo "::warning::Restoring pre-cutover Supabase schema."
             docker run --rm \
               -e TARGET_DATABASE_URL \
               -e PGSSLMODE=require \
@@ -213,6 +226,54 @@ jobs:
               -v "$RUNNER_TEMP/supabase-cutover:/work" \
               postgres:17-alpine \
               sh -ec 'pg_restore --dbname="$TARGET_DATABASE_URL" --no-owner --no-acl --exit-on-error /work/supabase-before.dump'
+          }
+
+          if ! python - <<'PY'
+          import os
+          import psycopg
+          from psycopg import sql
+
+          with psycopg.connect(
+              os.environ["TARGET_DATABASE_URL"],
+              sslmode="require",
+              autocommit=True,
+          ) as connection:
+              with connection.cursor() as cursor:
+                  cursor.execute(
+                      """
+                      SELECT tablename
+                      FROM pg_tables
+                      WHERE schemaname = 'django_app'
+                      ORDER BY tablename
+                      """
+                  )
+                  tables = [row[0] for row in cursor.fetchall()]
+                  if not tables:
+                      raise SystemExit("No django_app tables found in Supabase.")
+                  identifiers = [
+                      sql.Identifier("django_app", table) for table in tables
+                  ]
+                  cursor.execute(
+                      sql.SQL("TRUNCATE TABLE {} RESTART IDENTITY CASCADE").format(
+                          sql.SQL(", ").join(identifiers)
+                      )
+                  )
+                  print(f"Truncated {len(tables)} Supabase Django tables.")
+          PY
+          then
+            restore_backup
+            exit 1
+          fi
+
+          if ! docker run --rm \
+            -e TARGET_DATABASE_URL \
+            -e PGSSLMODE=require \
+            -v "$RUNNER_TEMP/supabase-cutover:/work" \
+            postgres:18-alpine \
+            sh -ec 'pg_restore --dbname="$TARGET_DATABASE_URL" --data-only --no-owner --no-acl --exit-on-error --single-transaction /work/aiven-data.dump'
+          then
+            echo "::error::Fast Aiven data restore failed."
+            restore_backup
             exit 1
           fi
 
