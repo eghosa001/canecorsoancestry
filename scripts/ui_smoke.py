@@ -85,7 +85,7 @@ def capture(page, path, label, overflow=True):
 
 def login(page):
     page.goto(f"{BASE_URL}/accounts/login/", wait_until="networkidle")
-    page.locator("#id_username").fill("ui-reviewer")
+    page.locator("#id_username").fill("ui-reviewer@example.com")
     page.locator("#id_password").fill("ui-reviewer-password")
     login_form = page.locator("form").filter(has=page.locator("#id_username"))
     login_form.locator("button[type=submit]").click()
