@@ -30,6 +30,14 @@ const matingUrl = new URL(
 );
 const matingRequest = new Request(matingUrl);
 assert.equal(isCacheablePublicPath(matingUrl, matingRequest), true);
+
+const suggestionsUrl = new URL(
+  "https://example.test/dogs/suggestions/?q=Anthie",
+);
+const suggestionsRequest = new Request(suggestionsUrl, {
+  headers: { accept: "application/json" },
+});
+assert.equal(isCacheablePublicPath(suggestionsUrl, suggestionsRequest), true);
 assert.equal(
   cacheKey(trackedRequest).url,
   "https://example.test/dogs/example-dog/?__cca_edge_v=warm-origin-v7",
