@@ -18,12 +18,16 @@ from .seo import json_ld
 logger = logging.getLogger(__name__)
 
 
-def _display_dogs(queryset):
-    return queryset.select_related("kennel").prefetch_related(
+def _display_dogs(queryset, *, include_sources=True):
+    queryset = queryset.select_related("kennel").prefetch_related(
         Prefetch("images", queryset=DogImage.objects.order_by("-is_primary", "sort_order", "created_at"), to_attr="display_images"),
         Prefetch("registrations", queryset=DogRegistration.objects.select_related("authority"), to_attr="display_registrations"),
-        Prefetch("sources", queryset=DogSource.objects.order_by("-verified_at", "-created_at"), to_attr="display_source_media"),
     )
+    if include_sources:
+        queryset = queryset.prefetch_related(
+            Prefetch("sources", queryset=DogSource.objects.order_by("-verified_at", "-created_at"), to_attr="display_source_media")
+        )
+    return queryset
 
 
 def _source_image_url(sources):
@@ -87,8 +91,9 @@ def home(request):
         _display_dogs(
             one_dog_per_kennel(
                 with_stored_images(Dog.objects.filter(is_public=True))
-            ).order_by("-search_count", "-updated_at", "name")
-        )[:80]
+            ).order_by("-search_count", "-updated_at", "name"),
+            include_sources=False,
+        )[:4]
     )
     _attach_source_image_urls(image_candidates)
     featured_dogs = [
