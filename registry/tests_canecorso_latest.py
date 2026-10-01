@@ -1,9 +1,8 @@
 from django.core.management import get_commands
-from django.test import SimpleTestCase, TestCase, TestCase
+from django.test import SimpleTestCase, TestCase
 
 from registry.management.commands import refresh_canecorso_latest as latest
-from registry.models import Dog, DogExternalKey, DogSource
-from registry.models import Dog, DogExternalKey
+from registry.models import Dog, DogExternalKey, DogRegistration, DogSource
 
 
 def profile(name, gender="", father="", mother="", dob="", pedigree=""):
@@ -149,42 +148,65 @@ class CaneCorsoLatestImportTests(TestCase):
         )
 
 
-class CaneCorsoLatestPersistenceTests(TestCase):
-    def test_collects_missing_parents_and_links_existing_parent(self):
+class CaneCorsoLatestExistingParentTests(TestCase):
+    def test_existing_source_parent_is_linked_without_refetch(self):
         sire = Dog.objects.create(
             name="Known Sire", slug="known-sire", sex=Dog.Sex.MALE, is_public=True
         )
         DogExternalKey.objects.create(
             dog=sire, namespace="canecorsopedigree.com", key="100"
         )
-
-        source = {
-            "120753": {
-                "id": "120753", "name": "HERA", "gender": "female",
-                "father_id": "100", "mother_id": "200",
-                "dob": "2026/05/11", "colour": "Black",
-                "source_url": "https://www.canecorsopedigree.com/view_dog?id=120753",
-            },
-            "200": {
-                "id": "200", "name": "Known Dam", "gender": "female",
-                "father_id": "", "mother_id": "", "dob": "2020/01/01",
-                "colour": "Grey",
-                "source_url": "https://www.canecorsopedigree.com/view_dog?id=200",
-            },
+        pages = {
+            latest.LATEST_URL: '<table><tr><td><a href="/view_pedigree?id=120753">HERA</a></td></tr></table>',
+            latest.PROFILE_URL.format("120753"): profile(
+                "HERA", gender="female", father="100", mother="200", dob="2026/05/11"
+            ),
+            latest.PROFILE_URL.format("200"): profile(
+                "Known Dam", gender="female", dob="2020/01/01"
+            ),
         }
+        calls = []
 
-        collected = latest.collect_missing_records(
-            ["120753"],
-            fetch_profile=lambda source_id: source[source_id],
-            existing_source_ids={"100"},
+        def fetch_html(url):
+            calls.append(url)
+            return pages[url]
+
+        records = latest.collect_missing_profiles(
+            fetch_html, known_ids={"100"}, limit=250
         )
-        self.assertEqual(set(collected), {"120753", "200"})
+        summary = latest.import_records(records, publish=True)
 
-        summary = latest.persist_records(collected, publish=True)
-
-        dog = Dog.objects.get(external_keys__namespace="canecorsopedigree.com", external_keys__key="120753")
+        dog = Dog.objects.get(
+            external_keys__namespace="canecorsopedigree.com",
+            external_keys__key="120753",
+        )
         self.assertEqual(dog.sire, sire)
         self.assertEqual(dog.dam.name, "Known Dam")
-        self.assertTrue(dog.is_public)
+        self.assertNotIn(latest.PROFILE_URL.format("100"), calls)
         self.assertEqual(summary["created"], 2)
         self.assertEqual(DogSource.objects.filter(dog=dog).count(), 1)
+
+    def test_source_pedigree_number_is_not_created_without_authority(self):
+        records = {
+            "90": latest.parse_profile(
+                "90",
+                profile(
+                    "SOURCE ONLY",
+                    gender="male",
+                    dob="2025/01/01",
+                    pedigree="UNVERIFIED-PED-90",
+                ),
+            )
+        }
+
+        latest.import_records(records, publish=True)
+
+        dog = Dog.objects.get(
+            external_keys__namespace="canecorsopedigree.com",
+            external_keys__key="90",
+        )
+        self.assertFalse(DogRegistration.objects.filter(dog=dog).exists())
+        self.assertEqual(
+            dog.sources.get(title=latest.SOURCE_TITLE).raw_payload["pedigree_number"],
+            "UNVERIFIED-PED-90",
+        )
