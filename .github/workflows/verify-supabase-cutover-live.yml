@@ -1,0 +1,36 @@
+name: Verify Supabase cutover live
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-supabase-cutover-live.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify Render and Cloudflare endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          probe() {
+            url="$1"
+            output="$2"
+            status="$(curl --retry 2 --retry-delay 2 --connect-timeout 15 --max-time 45 -sS -L -o "$output" -w '%{http_code}' "$url")"
+            echo "$url -> HTTP $status"
+            test "$status" = "200"
+          }
+
+          probe "https://canecorsoancestry.onrender.com/healthz/" /tmp/render-health.txt
+          probe "https://canecorsoancestry.onrender.com/dogs/?q=Branco+Custodi+Nos" /tmp/render-dog.html
+          grep -qi "Branco" /tmp/render-dog.html
+
+          probe "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev/healthz/" /tmp/edge-health.txt
+          probe "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev/dogs/?q=Branco+Custodi+Nos" /tmp/edge-dog.html
+          grep -qi "Branco" /tmp/edge-dog.html
+          probe "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev/statistics/" /tmp/edge-statistics.html
