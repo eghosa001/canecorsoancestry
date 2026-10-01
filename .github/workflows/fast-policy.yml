@@ -1,0 +1,42 @@
+name: Fast Policy Guard
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.agents/**'
+      - 'AGENTS.md'
+      - 'SKILL.md'
+      - 'CLAUDE.md'
+      - 'GEMINI.md'
+      - '.github/copilot-instructions.md'
+      - 'scripts/fast_path_guard.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - '.agents/**'
+      - 'AGENTS.md'
+      - 'SKILL.md'
+      - 'CLAUDE.md'
+      - 'GEMINI.md'
+      - '.github/copilot-instructions.md'
+      - 'scripts/fast_path_guard.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fast-policy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - run: python3 scripts/fast_path_guard.py

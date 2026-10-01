@@ -1,63 +1,107 @@
 ---
 name: fast-production
-description: Fast, risk-based repository execution for implementation, fixes, QA, CI, releases, deployment, UI, data, and production work.
+description: Mandatory shortest-path execution policy for implementation, fixes, QA, CI, release, deployment, UI, data, and production work.
 ---
+
+FAST_PATH_POLICY_VERSION: 3
 
 # Fast Production Execution
 
-## Goal
-Finish the requested task correctly with the fewest practical reads, tool calls, commits, test runs, CI minutes, and deployments.
+## Non-negotiable default
 
-Repository-specific security, business, architecture, data, and release rules override this execution overlay.
+**DEFAULT: ONE DIRECT PATH, ZERO SUBAGENTS.**
 
-## Repository infrastructure guardrail
-- Active production providers are Render, Aiven PostgreSQL, and Cloudflare R2 only.
-- Cloudflare has two explicit production Worker roles: the private R2 media gateway and the public site-edge warm-up/cache proxy in `src/site-edge.js`.
-- The site-edge Worker may cache anonymous public GET pages and wake Render in the background, but must bypass private/authenticated paths and must never cache responses with session/CSRF cookies or `private`/`no-store` cache controls.
-- Do not reintroduce Supabase, Railway, Google Cloud Run, GitHub Pages preview, generic S3 provider branches, or completed migration scaffolding unless the owner explicitly requests an architecture change.
+Start with the smallest direct implementation that can produce and verify the requested result. Do not fan out work merely because parallel tools or agents exist.
 
-## Default execution
-- Classify work as micro, normal, or cross-cutting/high-risk.
-- Inspect the smallest relevant surface and direct dependencies only.
-- Patch the cause in one pass; avoid unrelated refactors.
-- Keep tests short, behavior-specific, and tied to the changed risk.
-- Run focused checks while iterating; run the full required gate once on the final candidate.
-- Do not rerun a passing unchanged suite.
-- Prefer one commit for small/normal work and squash large branches.
-- Do not repeatedly poll CI; inspect one failure, fix it, then re-run only what failed or what changed.
+Repository-specific security, business, architecture, data, and release rules still apply.
 
-## Subagents and parallel work
-Use real subagents when there are at least two independent workstreams and a runner is available.
-- Dispatch 2-4 non-overlapping tracks immediately.
-- Good splits: backend/API vs UI, implementation vs regression tests, migration vs parity check, independent bug clusters.
-- One coordinator owns integration.
-- If no real subagent runner exists, check once and stop looking; batch safe tool/connector calls concurrently instead.
-- Never simulate or claim subagents that were not actually used.
+## Shortest-path algorithm
 
-## Risk-based testing
-- Docs/comments/agent instructions: no runtime tests.
-- Copy/CSS/local navigation: one focused browser or component check.
-- Data/content: schema/content validation; link/source checks only when those changed.
-- API/server logic: focused unit/integration test plus type/static check.
-- Auth/security/write paths: positive path plus relevant negative tests.
-- Shared schema/migration/release logic: focused invariant test plus the repository's final required gate.
+1. State the exact requested outcome and the minimum evidence that proves it.
+2. Inspect the exact failing/requested surface first.
+3. If the implementation path is clear, edit it immediately; stop exploring alternatives.
+4. Add or adjust only the smallest regression check that protects the changed risk.
+5. Run the cheapest relevant check first.
+6. Run a broader required gate once only when the changed risk or repository rules require it.
+7. Stop when the requested result is verified.
+
+Do not restart discovery after the cause is known. Do not turn a local task into a repository audit unless the user asked for an audit.
+
+## Subagent gate
+
+Subagents are opt-in, not a default. Use them only when **all** of these are true:
+- there are at least two genuinely independent workstreams;
+- the workstreams do not compete for the same files or decisions;
+- each workstream is substantial enough to justify coordination overhead;
+- parallel execution is expected to shorten wall-clock time versus one direct path;
+- one coordinator can integrate the results without repeating the work.
+
+If any condition is false, use no subagents.
+
+Additional limits:
+- Default maximum: 2 subagents.
+- Use 3 only for an explicitly requested broad audit/release or three clearly independent high-risk domains.
+- Never create multiple agents to inspect the same problem, rerun the same tests, compare equivalent implementations, or “be thorough.”
+- Never search repeatedly for a subagent runner. If unavailable, continue directly.
+- Safe independent tool reads may be batched without creating agents.
+
+## Investigation limits
+
+- Prefer direct file/path/log access when the location is known.
+- Search once for an unknown location; refine only if the first search is insufficient.
+- Read direct dependencies only when needed.
+- Do not reread unchanged files or logs.
+- Do not create plan/status/audit documents unless requested.
+- Do not add a dependency, abstraction, service, branch, or workflow when the existing path can solve the task.
+- When the user says “continue,” resume from the current state instead of re-auditing completed work.
+
+## Testing limits
+
+- Docs/comments/agent-instruction-only changes: no runtime product tests.
+- Copy/CSS/local navigation: one focused UI/component/browser check.
+- Data/content: validate the changed schema/content; check links/sources only when they changed.
+- API/server logic: focused unit/integration check plus relevant static/type check.
+- Auth/security/write paths: focused positive path plus relevant negative cases.
+- Shared schema/migration/release logic: focused invariant check plus the final required gate.
 - Packaging/store artifacts: build only when packaging/release inputs changed or a release was requested.
 
-## CI workflow rules
-Ordinary PR/push CI must be fast and only protect merge-critical behavior.
-- Keep one small required verification path where practical.
-- Do not run release packaging, APK/AAB/Windows installers, full visual audits, exhaustive simulations, OCR/import/migration jobs, production seeding, or live production audits on every ordinary PR.
-- Put deep/release/maintenance workflows behind manual dispatch, release tags, schedules, or narrow path filters according to their actual purpose.
-- Preserve required status-check names. If branch protection requires a check, keep the workflow/job present and make irrelevant work short-circuit safely instead of skipping the required check entirely.
-- Add concurrency with cancel-in-progress to PR/push workflows so stale runs stop.
-- Set realistic job timeouts.
-- Cache package/tool dependencies when supported.
-- Prefer deterministic installs such as npm ci when a lockfile exists.
-- Avoid duplicate checkout/setup/install work. Combine checks sharing the same environment unless true parallelism shortens the critical path.
-- Avoid test matrices unless multiple runtime versions are genuinely supported targets.
-- Upload diagnostics on failure; upload build artifacts only when the artifact is the purpose of the workflow.
-- Use shallow checkout unless history is required.
-- Scheduled monitoring should run only as often as the monitored condition can materially change.
+Keep new tests short and behavior-specific. Do not rerun a passing unchanged suite. Do not run the full suite after every patch.
 
-## Completion
-Stop when the requested behavior works, the smallest relevant regression check passes, required final checks are green, and the exact production deployment is verified only when deployment was part of the task.
+## CI/workflow limits
+
+Ordinary PR/push CI must protect merge-critical behavior, not reproduce release certification.
+- Cancel stale automatic runs.
+- Set bounded timeouts.
+- Path-scope specialized workflows.
+- Keep release packaging, installers, APK/AAB exports, exhaustive simulations, visual matrices, OCR/import/migration/seed jobs, and deep audits manual, tag-scoped, scheduled, or narrowly path-scoped.
+- Avoid duplicate install/build/test work across workflows.
+- Prefer one environment setup for checks that can run sequentially cheaply.
+- Upload diagnostics on failure; upload build artifacts only when the artifact is the purpose.
+- Preserve required status-check names.
+- Run `python3 scripts/fast_path_guard.py` after changing workflows or agent instructions.
+
+## Guard integrity
+
+`.github/workflows/fast-policy.yml` and `scripts/fast_path_guard.py` enforce this policy.
+
+Do not delete, disable, weaken, skip, or bypass the guard merely to make CI pass. Fix the underlying workflow/instruction violation instead. A broad automatic heavy workflow is allowed only when it is genuinely required for deployment and contains a narrow documented `# fast-policy: allow-broad-auto` exception.
+
+## Commits, deployments, and polling
+
+- Small/normal task: prefer one cohesive commit.
+- Larger branch: keep commits logical and squash when appropriate.
+- Do not commit merely to retrigger CI.
+- Do not deploy intermediate cosmetic states.
+- Do not poll unchanged workflow status repeatedly.
+- Inspect a failing log once, act on the concrete failure, then rerun only the relevant check.
+- Ignore superseded runs/commits.
+
+## Stop rule
+
+Stop work when:
+- the requested behavior exists;
+- the smallest relevant regression check passes;
+- required final gates for the changed risk are green;
+- production is verified only when deployment was part of the request.
+
+Do not continue polishing unrelated areas after these conditions are met.
