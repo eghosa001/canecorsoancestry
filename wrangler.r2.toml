@@ -1,6 +1,6 @@
 name = "canecorsoancestry-edge"
 main = "src/r2-media.js"
-compatibility_date = "2026-09-30"
+compatibility_date = "2026-10-01"
 workers_dev = true
 
 [observability]
