@@ -28,8 +28,8 @@ jobs:
       DJANGO_DB_SCHEMA: django_app
       DJANGO_DB_SSLMODE: require
       DJANGO_DB_EXTRA_SCHEMAS: extensions,public
-      DJANGO_ALLOWED_HOSTS: canecorsoancestry.onrender.com
-      DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.onrender.com
+      DJANGO_ALLOWED_HOSTS: .code.run,127.0.0.1,localhost
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://web--canecorsoancestry--4w9gl8jxj4yr.code.run,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
       DJANGO_REQUIRE_OBJECT_STORAGE: "0"
       PUBLIC_SITE: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
     steps:
