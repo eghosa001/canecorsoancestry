@@ -82,14 +82,23 @@ def robots_txt(request):
 
 
 def home(request):
-    featured_dogs = list(
+    image_candidates = list(
         _display_dogs(
-            Dog.objects.filter(is_public=True).order_by(
-                "-search_count", "-updated_at", "name"
+            Dog.objects.filter(is_public=True)
+            .filter(
+                Q(images__isnull=False)
+                | Q(sources__raw_payload__image_url__icontains="/static/images/animal/")
             )
-        )[:4]
+            .distinct()
+            .order_by("-search_count", "-updated_at", "name")
+        )[:80]
     )
-    _attach_source_image_urls(featured_dogs)
+    _attach_source_image_urls(image_candidates)
+    featured_dogs = [
+        dog
+        for dog in image_candidates
+        if dog.display_images or dog.source_image_url
+    ][:4]
     context = {
         "dog_count": Dog.objects.filter(is_public=True).count(),
         "kennel_count": Kennel.objects.count(),
