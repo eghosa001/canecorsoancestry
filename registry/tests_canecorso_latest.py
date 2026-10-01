@@ -263,3 +263,74 @@ class CaneCorsoLatestImageParsingTests(SimpleTestCase):
             parsed["image_url"],
             "https://www.canecorsopedigree.com/static/images/animal/120753.jpg",
         )
+
+
+class CaneCorsoLatestImageBackfillTests(TestCase):
+    def test_backfill_updates_only_missing_live_source_image(self):
+        dog = Dog.objects.create(
+            name="Backfill Dog",
+            slug="backfill-dog",
+            is_public=True,
+            verification_state="source",
+        )
+        DogExternalKey.objects.create(
+            dog=dog,
+            namespace="canecorsopedigree.com",
+            key="700",
+        )
+        source = DogSource.objects.create(
+            dog=dog,
+            source_type=DogSource.SourceType.PEDIGREE,
+            title=latest.SOURCE_TITLE,
+            source_url=latest.PROFILE_URL.format("700"),
+            raw_payload={"id": "700", "name": "Backfill Dog", "image_url": ""},
+        )
+        calls = []
+
+        def fetch_profile(source_id):
+            calls.append(source_id)
+            return {
+                "id": source_id,
+                "name": "Backfill Dog",
+                "image_url": "https://www.canecorsopedigree.com/static/images/animal/700.jpg",
+            }
+
+        summary = latest.backfill_source_images(["700"], fetch_profile=fetch_profile)
+
+        source.refresh_from_db()
+        self.assertEqual(calls, ["700"])
+        self.assertEqual(summary, {"checked": 1, "updated": 1})
+        self.assertEqual(
+            source.raw_payload["image_url"],
+            "https://www.canecorsopedigree.com/static/images/animal/700.jpg",
+        )
+
+    def test_backfill_does_not_refetch_source_that_already_has_image(self):
+        dog = Dog.objects.create(
+            name="Existing Image",
+            slug="existing-image",
+            is_public=True,
+            verification_state="source",
+        )
+        DogExternalKey.objects.create(
+            dog=dog,
+            namespace="canecorsopedigree.com",
+            key="701",
+        )
+        DogSource.objects.create(
+            dog=dog,
+            source_type=DogSource.SourceType.PEDIGREE,
+            title=latest.SOURCE_TITLE,
+            source_url=latest.PROFILE_URL.format("701"),
+            raw_payload={
+                "id": "701",
+                "image_url": "https://www.canecorsopedigree.com/static/images/animal/701.jpg",
+            },
+        )
+
+        summary = latest.backfill_source_images(
+            ["701"],
+            fetch_profile=lambda source_id: self.fail("already-imaged source refetched"),
+        )
+
+        self.assertEqual(summary, {"checked": 0, "updated": 0})
