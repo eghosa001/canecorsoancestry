@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 from django.db.models import Q
@@ -54,12 +54,46 @@ class VerificationResendForm(forms.Form):
     email = forms.EmailField()
 
 
+class EmailAuthenticationForm(AuthenticationForm):
+    username = forms.EmailField(
+        label="Email",
+        widget=forms.EmailInput(attrs={"autocomplete": "email"}),
+    )
+
+    def clean(self):
+        email = (self.cleaned_data.get("username") or "").strip().lower()
+        if email:
+            user = get_user_model().objects.filter(email__iexact=email).only("username").first()
+            if user:
+                self.cleaned_data["username"] = user.get_username()
+        return super().clean()
+
+
 class MemberSignUpForm(UserCreationForm):
-    email = forms.EmailField(required=True)
+    username = forms.CharField(required=False, widget=forms.HiddenInput())
+    kennel_name = forms.CharField(
+        max_length=180,
+        label="Kennel name",
+        help_text="This is the public account name shown across the site.",
+    )
+    email = forms.EmailField(
+        required=True,
+        label="Email",
+        widget=forms.EmailInput(attrs={"autocomplete": "email"}),
+    )
 
     class Meta(UserCreationForm.Meta):
         model = get_user_model()
-        fields = ("username", "email")
+        fields = ("username", "kennel_name", "email")
+
+    def clean_kennel_name(self):
+        name = " ".join(self.cleaned_data["kennel_name"].split()).strip()
+        account_username = slugify(name)[:150]
+        if not account_username:
+            raise forms.ValidationError("Enter a usable kennel name.")
+        if get_user_model().objects.filter(username__iexact=account_username).exists():
+            raise forms.ValidationError("An account already uses this kennel name.")
+        return name
 
     def clean_email(self):
         email = self.cleaned_data["email"].strip().lower()
@@ -67,8 +101,17 @@ class MemberSignUpForm(UserCreationForm):
             raise forms.ValidationError("An account already uses this email address.")
         return email
 
+    def clean(self):
+        cleaned = super().clean()
+        kennel_name = cleaned.get("kennel_name")
+        if kennel_name:
+            cleaned["username"] = slugify(kennel_name)[:150]
+            self.instance.username = cleaned["username"]
+        return cleaned
+
     def save(self, commit=True):
         user = super().save(commit=False)
+        user.username = slugify(self.cleaned_data["kennel_name"])[:150]
         user.email = self.cleaned_data["email"]
         if commit:
             user.save()
