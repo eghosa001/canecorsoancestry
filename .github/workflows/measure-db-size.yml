@@ -1,0 +1,50 @@
+name: Measure production database size
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      DJANGO_DB_SCHEMA: django_app
+      DJANGO_DB_SSLMODE: require
+      DJANGO_DB_EXTRA_SCHEMAS: public
+      DJANGO_ALLOWED_HOSTS: localhost
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://localhost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Measure database
+        shell: bash
+        run: |
+          python manage.py shell -c "
+          from django.db import connection
+          from registry.models import Dog
+          with connection.cursor() as c:
+              c.execute('SELECT pg_database_size(current_database())')
+              total = c.fetchone()[0]
+              c.execute(\"\"\"
+                  SELECT schemaname, relname,
+                         pg_total_relation_size(quote_ident(schemaname)||'.'||quote_ident(relname)) AS bytes
+                  FROM pg_stat_user_tables
+                  ORDER BY bytes DESC
+                  LIMIT 20
+              \"\"\")
+              rows = c.fetchall()
+          print('DOG_COUNT', Dog.objects.count())
+          print('DB_BYTES', total)
+          print('DB_MB', round(total/1024/1024, 2))
+          for schema, rel, size in rows:
+              print('TABLE', schema, rel, size, round(size/1024/1024, 2))
+          "
