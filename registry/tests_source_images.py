@@ -30,7 +30,8 @@ class CaneCorsoSourceImageFallbackTests(TestCase):
             'src="https://www.canecorsopedigree.com/static/images/animal/123.jpg"',
             html=False,
         )
-        self.assertContains(response, "Image from source record")
+        self.assertNotContains(response, "Image from source record")
+        self.assertNotContains(response, "Sources & provenance")
 
     def test_untrusted_external_image_url_is_not_rendered(self):
         dog = Dog.objects.create(

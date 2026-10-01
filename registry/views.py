@@ -193,11 +193,6 @@ def dog_detail(request, slug):
             to_attr="display_health_records",
         ),
         Prefetch(
-            "sources",
-            queryset=DogSource.objects.order_by("-verified_at", "-created_at"),
-            to_attr="display_sources",
-        ),
-        Prefetch(
             "titles",
             queryset=DogTitle.objects.order_by("name"),
             to_attr="display_titles",
