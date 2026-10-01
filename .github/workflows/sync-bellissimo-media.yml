@@ -2,6 +2,11 @@ name: Sync Bellissimo media to R2
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "data/seeds/bellissimo-media.json"
+      - ".github/workflows/sync-bellissimo-media.yml"
 
 permissions:
   contents: read

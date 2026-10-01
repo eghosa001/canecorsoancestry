@@ -243,3 +243,23 @@ class CaneCorsoLatestCycleSafetyTests(TestCase):
         b = Dog.objects.get(external_keys__key="302")
         self.assertFalse(a.sire_id == b.pk and b.sire_id == a.pk)
         self.assertGreaterEqual(summary["skipped_parent_links"], 1)
+
+
+class CaneCorsoLatestImageParsingTests(SimpleTestCase):
+    def test_profile_parser_captures_subject_image(self):
+        html = """
+        <div>
+          <span>Picture</span>
+          <img src="/static/images/animal/120753.jpg" alt="HERA">
+        </div>
+        <div>Name</div><div><a href="/view_pedigree?id=120753">HERA</a></div>
+        <div>children</div>
+        <img src="/static/images/animal/999.jpg" alt="child">
+        """
+
+        parsed = latest.parse_profile("120753", html)
+
+        self.assertEqual(
+            parsed["image_url"],
+            "https://www.canecorsopedigree.com/static/images/animal/120753.jpg",
+        )

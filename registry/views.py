@@ -3,6 +3,7 @@ from django.core.paginator import Paginator
 from django.db.models import Count, F, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from urllib.parse import urlparse
 
 from core.seo import json_ld
 
@@ -36,7 +37,37 @@ def _dog_cards(queryset):
             queryset=DogRegistration.objects.select_related("authority"),
             to_attr="display_registrations",
         ),
+        Prefetch(
+            "sources",
+            queryset=DogSource.objects.order_by("-verified_at", "-created_at"),
+            to_attr="display_source_media",
+        ),
     )
+
+
+def _source_image_url(sources):
+    for source in sources:
+        payload = source.raw_payload if isinstance(source.raw_payload, dict) else {}
+        image_url = str(payload.get("image_url") or "").strip()
+        if not image_url:
+            continue
+        parsed = urlparse(image_url)
+        if (
+            parsed.scheme == "https"
+            and parsed.hostname in {"canecorsopedigree.com", "www.canecorsopedigree.com"}
+            and parsed.path.startswith("/static/images/animal/")
+        ):
+            return image_url
+    return ""
+
+
+def _attach_source_image_urls(dogs):
+    for dog in dogs:
+        dog.source_image_url = ""
+        if not getattr(dog, "display_images", []):
+            dog.source_image_url = _source_image_url(
+                getattr(dog, "display_source_media", [])
+            )
 
 
 def dog_search(request):
@@ -72,6 +103,7 @@ def dog_search(request):
     dogs = dogs.order_by("name")
     paginator = Paginator(dogs, 24)
     page_obj = paginator.get_page(request.GET.get("page"))
+    _attach_source_image_urls(page_obj.object_list)
     query_params = request.GET.copy()
     query_params.pop("page", None)
 
@@ -133,10 +165,16 @@ def dog_detail(request, slug):
             return redirect("registry:dog-detail", slug=old.dog.slug, permanent=True)
         return get_object_or_404(dogs, slug=slug)
 
+    _attach_source_image_urls([dog])
+
     if request.GET.get("source") == "search":
         Dog.objects.filter(pk=dog.pk).update(search_count=F("search_count") + 1)
 
-    image_url = dog.display_images[0].image.url if dog.display_images else None
+    image_url = (
+        dog.display_images[0].image.url
+        if dog.display_images
+        else (dog.source_image_url or None)
+    )
     structured_data = {
         "@context": "https://schema.org",
         "@type": "Thing",
@@ -253,6 +291,7 @@ def kennel_detail(request, slug):
         .order_by("-date_of_birth", "code")
     )
     dog_page = Paginator(dog_queryset, 24).get_page(request.GET.get("dogs_page"))
+    _attach_source_image_urls(dog_page.object_list)
     litter_page = Paginator(litter_queryset, 20).get_page(request.GET.get("litters_page"))
     kennel_linked = kennel.memberships.exists()
     is_member = bool(

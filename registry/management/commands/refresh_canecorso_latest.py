@@ -149,6 +149,43 @@ def _parent_id_after_label(soup, label):
     return ""
 
 
+def discover_image(soup):
+    node = soup.find(string=lambda x: _clean(x).rstrip(":") == "Picture" if x else False)
+    if node:
+        current = node.parent
+        for _ in range(5):
+            if current is None:
+                break
+            for image in current.find_all("img"):
+                src = (image.get("src") or "").strip()
+                low = src.lower()
+                if (
+                    "/static/images/animal/" in low
+                    and not any(token in low for token in ("male", "female", "dna", "icon", "logo", "spacer"))
+                ):
+                    return urljoin(BASE_URL, src)
+            current = current.parent
+
+    stop = soup.find(string=lambda x: _clean(x).lower() == "children" if x else False)
+    for image in soup.find_all("img"):
+        if (
+            stop
+            and stop.parent
+            and image.sourceline
+            and getattr(stop.parent, "sourceline", None)
+            and image.sourceline >= stop.parent.sourceline
+        ):
+            break
+        src = (image.get("src") or "").strip()
+        low = src.lower()
+        if (
+            "/static/images/animal/" in low
+            and not any(token in low for token in ("male", "female", "dna", "icon", "logo", "spacer"))
+        ):
+            return urljoin(BASE_URL, src)
+    return ""
+
+
 def parse_profile(source_id, html):
     soup = BeautifulSoup(html, "html.parser")
     name = _label_value(soup, "Name")
@@ -178,6 +215,7 @@ def parse_profile(source_id, html):
         "dvl2_result": _label_value(soup, "DVL2 Result"),
         "dvl2_certified": _label_value(soup, "DVL2 Result Certified"),
         "inbred_percentage": _label_value(soup, "Inbred percentage"),
+        "image_url": discover_image(soup),
         "source_url": PROFILE_URL.format(source_id),
     }
     return record
