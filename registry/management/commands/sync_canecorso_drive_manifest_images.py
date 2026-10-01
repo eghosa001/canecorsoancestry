@@ -1,22 +1,38 @@
+import csv
 import json
 import mimetypes
 import re
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import gdown
+import requests
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from registry.models import DogExternalKey, DogImage
 
 
 DEFAULT_NAMESPACE = "canecorsopedigree.com"
 SOURCE_ID_RE = re.compile(r"^(\d+)(?:_|\.)")
+USER_AGENT = (
+    "CaneCorsoResearchArchiver/1.0 "
+    "(+personal archival/research; respectful rate-limited crawler)"
+)
+_thread_local = threading.local()
+
+
+def source_id(value):
+    try:
+        return str(int(float(str(value).strip())))
+    except (TypeError, ValueError):
+        return ""
 
 
 def source_id_from_path(value):
@@ -63,29 +79,81 @@ def load_manifest(index_path):
     return entries
 
 
+def load_source_urls(source_csv):
+    urls = {}
+    image_file_ids = set()
+    with source_csv.open("r", encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            sid = source_id(row.get("id"))
+            if not sid:
+                continue
+            image_url = str(row.get("image_url") or "").strip()
+            image_file = str(row.get("image_file") or "").strip()
+            if image_url:
+                urls[sid] = image_url
+            if image_file:
+                image_file_ids.add(sid)
+    return urls, image_file_ids
+
+
+def http_session():
+    session = getattr(_thread_local, "session", None)
+    if session is not None:
+        return session
+    session = requests.Session()
+    session.headers.update(
+        {
+            "User-Agent": USER_AGENT,
+            "Referer": "https://www.canecorsopedigree.com/",
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        }
+    )
+    retry = Retry(
+        total=4,
+        connect=4,
+        read=4,
+        status=4,
+        backoff_factor=1.0,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset(["GET"]),
+        respect_retry_after_header=True,
+    )
+    session.mount(
+        "https://",
+        HTTPAdapter(max_retries=retry, pool_connections=8, pool_maxsize=8),
+    )
+    _thread_local.session = session
+    return session
+
+
 class Command(BaseCommand):
     help = (
-        "Download missing CaneCorso archive photos by fixed Drive file ID and "
-        "persist each verified image directly to Cloudflare R2."
+        "Fetch missing CaneCorso archive photos from their saved original image "
+        "URLs and persist each verified image directly to Cloudflare R2."
     )
 
     def add_arguments(self, parser):
         parser.add_argument("manifest_index")
+        parser.add_argument("source_csv")
         parser.add_argument("--namespace", default=DEFAULT_NAMESPACE)
         parser.add_argument("--limit", type=int, default=0)
-        parser.add_argument("--workers", type=int, default=8)
+        parser.add_argument("--workers", type=int, default=6)
         parser.add_argument("--batch-size", type=int, default=100)
         parser.add_argument("--dry-run", action="store_true")
 
     def handle(self, *args, **options):
         index_path = Path(options["manifest_index"])
+        source_csv = Path(options["source_csv"])
         if not index_path.is_file():
             raise CommandError(f"Manifest index not found: {index_path}")
+        if not source_csv.is_file():
+            raise CommandError(f"Source CSV not found: {source_csv}")
 
         namespace = options["namespace"].strip()
-        workers = max(1, min(int(options["workers"]), 16))
+        workers = max(1, min(int(options["workers"]), 8))
         batch_size = max(workers, min(int(options["batch_size"]), 500))
         entries = load_manifest(index_path)
+        source_urls, image_file_ids = load_source_urls(source_csv)
 
         by_source = {}
         malformed = []
@@ -102,6 +170,23 @@ class Command(BaseCommand):
                 old_score = (int(previous.get("size") or 0), previous["path"])
                 if score > old_score:
                     by_source[sid] = item
+
+        manifest_ids = set(by_source)
+        missing_urls = sorted(manifest_ids - set(source_urls), key=int)
+        if missing_urls:
+            raise CommandError(
+                f"{len(missing_urls)} archived photo IDs have no saved original "
+                f"image_url; first IDs: {missing_urls[:20]}"
+            )
+        missing_image_file_rows = sorted(
+            manifest_ids - image_file_ids,
+            key=int,
+        )
+        if missing_image_file_rows:
+            raise CommandError(
+                f"{len(missing_image_file_rows)} manifest IDs are not recorded as "
+                f"downloaded image_file rows in the source CSV."
+            )
 
         external_rows = list(
             DogExternalKey.objects.filter(namespace=namespace)
@@ -130,9 +215,10 @@ class Command(BaseCommand):
                 {
                     "sid": sid,
                     "dog_id": dog_id,
-                    "id": item["id"],
+                    "drive_id": item["id"],
                     "path": item["path"],
                     "size": item.get("size"),
+                    "source_url": source_urls[sid],
                 }
             )
             planned_dogs.add(dog_id)
@@ -153,6 +239,7 @@ class Command(BaseCommand):
             "Manifest sync preflight: "
             f"{len(entries)} physical image files; "
             f"{len(by_source)} source photo IDs; "
+            f"{len(source_urls)} saved source image URLs; "
             f"{len(linked_dog_ids)} linked source dogs; "
             f"{len(existing_dog_ids)} already have managed images; "
             f"{len(candidates)} selected for this run; "
@@ -229,8 +316,8 @@ class Command(BaseCommand):
             if failures:
                 for item, error in failures[:25]:
                     self.stderr.write(
-                        f"FAILED source={item['sid']} drive={item['id']} "
-                        f"path={item['path']}: {error}"
+                        f"FAILED source={item['sid']} "
+                        f"url={item['source_url']} path={item['path']}: {error}"
                     )
                 raise CommandError(
                     f"{len(failures)} required photos still failed after retries."
@@ -244,7 +331,7 @@ class Command(BaseCommand):
         )
         self.stdout.write(
             self.style.SUCCESS(
-                f"Direct Drive → R2 sync complete: created={created}; "
+                f"Direct source → R2 sync complete: created={created}; "
                 f"skipped={skipped}; source-linked dogs with managed images={final}."
             )
         )
@@ -252,30 +339,49 @@ class Command(BaseCommand):
     def _download(self, item, temp_root):
         suffix = Path(item["path"]).suffix.lower() or ".jpg"
         target = temp_root / f"{item['sid']}{suffix}"
+        partial = target.with_suffix(target.suffix + ".part")
         expected = int(item.get("size") or 0)
 
-        for timeout, retries in ((30, 5), (60, 10), (90, 12)):
+        last_error = None
+        for timeout in (30, 60, 90):
             try:
-                result = gdown.download(
-                    id=item["id"],
-                    output=str(target),
-                    quiet=True,
-                    use_cookies=False,
-                    resume=True,
+                partial.unlink(missing_ok=True)
+                response = http_session().get(
+                    item["source_url"],
                     timeout=timeout,
-                    retries=retries,
+                    stream=True,
                 )
-                if result and target.is_file() and target.stat().st_size > 0:
-                    if not expected or target.stat().st_size == expected:
-                        return target
-            except Exception:
-                pass
-            time.sleep(1)
+                response.raise_for_status()
+                content_type = (
+                    response.headers.get("content-type") or ""
+                ).split(";", 1)[0].lower()
+                if not content_type.startswith("image/"):
+                    raise RuntimeError(
+                        f"non-image content-type: {content_type or 'missing'}"
+                    )
 
-        actual = target.stat().st_size if target.exists() else 0
+                with partial.open("wb") as handle:
+                    for chunk in response.iter_content(256 * 1024):
+                        if chunk:
+                            handle.write(chunk)
+
+                actual = partial.stat().st_size if partial.exists() else 0
+                if actual <= 0:
+                    raise RuntimeError("empty image response")
+                if expected and actual != expected:
+                    raise RuntimeError(
+                        f"source size mismatch: expected={expected}, actual={actual}"
+                    )
+
+                partial.replace(target)
+                return target
+            except Exception as exc:
+                last_error = exc
+                time.sleep(1)
+
+        partial.unlink(missing_ok=True)
         raise RuntimeError(
-            f"Drive download did not verify after retries "
-            f"(expected={expected or 'non-empty'}, actual={actual})"
+            f"source image download failed after retries: {last_error}"
         )
 
     def _persist(self, item, local_path):
