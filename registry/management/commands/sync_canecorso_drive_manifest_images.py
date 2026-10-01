@@ -1,36 +1,24 @@
 import csv
 import json
-import mimetypes
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from urllib.parse import quote, urlparse
 
 import requests
-from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
+from core.cloudflare_media import gateway_signature, sha256_hex
 from registry.models import DogExternalKey, DogImage
 
 
 DEFAULT_NAMESPACE = "canecorsopedigree.com"
 SOURCE_ID_RE = re.compile(r"^(\d+)(?:_|\.)")
-USER_AGENT = (
-    "CaneCorsoResearchArchiver/1.0 "
-    "(+personal archival/research; respectful rate-limited crawler)"
-)
-
-
-def source_id_from_path(value):
-    match = SOURCE_ID_RE.match(Path(value).name)
-    if not match:
-        return ""
-    return match.group(1).lstrip("0") or "0"
+ALLOWED_SOURCE_HOSTS = {"canecorsopedigree.com", "www.canecorsopedigree.com"}
+ALLOWED_SOURCE_PREFIX = "/static/images/animal/"
 
 
 def source_id(value):
@@ -40,9 +28,11 @@ def source_id(value):
         return ""
 
 
-def archive_filename(value):
-    raw = str(value or "").strip().replace("\\", "/")
-    return raw.rsplit("/", 1)[-1] if raw else ""
+def source_id_from_path(value):
+    match = SOURCE_ID_RE.match(Path(value).name)
+    if not match:
+        return ""
+    return match.group(1).lstrip("0") or "0"
 
 
 def load_manifest(index_path):
@@ -82,33 +72,43 @@ def load_manifest(index_path):
     return entries
 
 
-def build_session():
-    session = requests.Session()
-    session.headers["User-Agent"] = USER_AGENT
-    retry = Retry(
-        total=5,
-        connect=5,
-        read=5,
-        status=5,
-        backoff_factor=1.0,
-        status_forcelist=(408, 425, 429, 500, 502, 503, 504),
-        allowed_methods=frozenset(["GET"]),
-        respect_retry_after_header=True,
+def load_source_urls(source_csv):
+    urls = {}
+    image_file_ids = set()
+    with source_csv.open("r", encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            sid = source_id(row.get("id"))
+            if not sid:
+                continue
+            image_url = str(row.get("image_url") or "").strip()
+            image_file = str(row.get("image_file") or "").strip()
+            if image_url:
+                urls[sid] = image_url
+            if image_file:
+                image_file_ids.add(sid)
+    return urls, image_file_ids
+
+
+def validate_source_url(value):
+    parsed = urlparse(value)
+    return (
+        parsed.scheme == "https"
+        and (parsed.hostname or "").lower() in ALLOWED_SOURCE_HOSTS
+        and parsed.path.startswith(ALLOWED_SOURCE_PREFIX)
+        and not parsed.username
+        and not parsed.password
+        and parsed.port in (None, 443)
     )
-    adapter = HTTPAdapter(
-        max_retries=retry,
-        pool_connections=16,
-        pool_maxsize=16,
-    )
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-    return session
+
+
+def retry_session():
+    return requests.Session()
 
 
 class Command(BaseCommand):
     help = (
-        "Re-fetch archived CaneCorso source images from their original public "
-        "image URLs and persist each verified image directly to Cloudflare R2."
+        "Ask the signed Cloudflare media gateway to fetch saved CaneCorso "
+        "source-image URLs and persist each verified object directly to R2."
     )
 
     def add_arguments(self, parser):
@@ -116,7 +116,7 @@ class Command(BaseCommand):
         parser.add_argument("source_csv")
         parser.add_argument("--namespace", default=DEFAULT_NAMESPACE)
         parser.add_argument("--limit", type=int, default=0)
-        parser.add_argument("--workers", type=int, default=8)
+        parser.add_argument("--workers", type=int, default=6)
         parser.add_argument("--batch-size", type=int, default=100)
         parser.add_argument("--dry-run", action="store_true")
 
@@ -129,9 +129,10 @@ class Command(BaseCommand):
             raise CommandError(f"Source CSV not found: {source_csv}")
 
         namespace = options["namespace"].strip()
-        workers = max(1, min(int(options["workers"]), 16))
+        workers = max(1, min(int(options["workers"]), 8))
         batch_size = max(workers, min(int(options["batch_size"]), 500))
         entries = load_manifest(index_path)
+        source_urls, image_file_ids = load_source_urls(source_csv)
 
         by_source = {}
         malformed = []
@@ -140,21 +141,37 @@ class Command(BaseCommand):
             if not sid:
                 malformed.append(item["path"])
                 continue
-            by_source[sid] = item
+            previous = by_source.get(sid)
+            score = (int(item.get("size") or 0), item["path"])
+            if previous is None:
+                by_source[sid] = item
+            else:
+                old_score = (int(previous.get("size") or 0), previous["path"])
+                if score > old_score:
+                    by_source[sid] = item
 
-        csv_rows = {}
-        with source_csv.open("r", encoding="utf-8-sig", newline="") as handle:
-            for row in csv.DictReader(handle):
-                sid = source_id(row.get("id"))
-                if not sid:
-                    continue
-                image_url = str(row.get("image_url") or "").strip()
-                image_file = archive_filename(row.get("image_file"))
-                if image_url or image_file:
-                    csv_rows[sid] = {
-                        "image_url": image_url,
-                        "image_file": image_file,
-                    }
+        manifest_ids = set(by_source)
+        missing_urls = sorted(manifest_ids - set(source_urls), key=int)
+        if missing_urls:
+            raise CommandError(
+                f"{len(missing_urls)} archived photo IDs have no saved original "
+                f"image_url; first IDs: {missing_urls[:20]}"
+            )
+        missing_image_file_rows = sorted(manifest_ids - image_file_ids, key=int)
+        if missing_image_file_rows:
+            raise CommandError(
+                f"{len(missing_image_file_rows)} manifest IDs are not recorded as "
+                f"downloaded image_file rows in the source CSV."
+            )
+        invalid_urls = sorted(
+            (sid for sid in manifest_ids if not validate_source_url(source_urls[sid])),
+            key=int,
+        )
+        if invalid_urls:
+            raise CommandError(
+                f"{len(invalid_urls)} archived photo URLs fail the strict source "
+                f"allowlist; first IDs: {invalid_urls[:20]}"
+            )
 
         external_rows = list(
             DogExternalKey.objects.filter(namespace=namespace)
@@ -172,28 +189,21 @@ class Command(BaseCommand):
         candidates = []
         planned_dogs = set()
         missing_archive = []
-        missing_url = []
         for sid, dog_id in external_rows:
             if dog_id in existing_dog_ids or dog_id in planned_dogs:
                 continue
-            archived = by_source.get(sid)
-            if archived is None:
+            item = by_source.get(sid)
+            if item is None:
                 missing_archive.append(sid)
                 continue
-            csv_item = csv_rows.get(sid) or {}
-            image_url = csv_item.get("image_url") or ""
-            if not image_url:
-                missing_url.append(sid)
-                continue
-
             candidates.append(
                 {
                     "sid": sid,
                     "dog_id": dog_id,
-                    "url": image_url,
-                    "path": archived["path"],
-                    "expected_size": int(archived.get("size") or 0),
-                    "csv_image_file": csv_item.get("image_file") or "",
+                    "drive_id": item["id"],
+                    "path": item["path"],
+                    "size": int(item.get("size") or 0),
+                    "source_url": source_urls[sid],
                 }
             )
             planned_dogs.add(dog_id)
@@ -211,104 +221,81 @@ class Command(BaseCommand):
             candidates = candidates[: options["limit"]]
 
         self.stdout.write(
-            "Source-image sync preflight: "
-            f"{len(entries)} archived image files; "
-            f"{len(by_source)} archived source photo IDs; "
-            f"{len(csv_rows)} CSV rows with image metadata; "
+            "Manifest sync preflight: "
+            f"{len(entries)} physical image files; "
+            f"{len(by_source)} source photo IDs; "
+            f"{len(source_urls)} saved source image URLs; "
             f"{len(linked_dog_ids)} linked source dogs; "
             f"{len(existing_dog_ids)} already have managed images; "
             f"{len(candidates)} selected for this run; "
             f"{len(missing_archive)} linked source IDs have no archived image; "
-            f"{len(missing_url)} archived source IDs have no original image URL; "
             f"{len(malformed)} malformed archive filenames."
         )
 
         if options["dry_run"] or not candidates:
             return
 
-        with TemporaryDirectory(prefix="canecorso-r2-sync-") as temp_name:
-            temp_root = Path(temp_name)
-            created = 0
-            skipped = 0
-            warnings = 0
-            failures = []
+        created = 0
+        skipped = 0
+        failures = []
 
-            for offset in range(0, len(candidates), batch_size):
-                batch = candidates[offset : offset + batch_size]
-                with ThreadPoolExecutor(max_workers=workers) as pool:
-                    future_map = {
-                        pool.submit(self._download, item, temp_root): item
-                        for item in batch
-                    }
-                    for future in as_completed(future_map):
-                        item = future_map[future]
-                        try:
-                            local_path, size_warning = future.result()
-                            if size_warning:
-                                warnings += 1
-                                self.stderr.write(
-                                    self.style.WARNING(size_warning)
-                                )
-                        except Exception as exc:
-                            failures.append((item, f"download: {exc}"))
-                            continue
-
-                        try:
-                            outcome = self._persist(item, local_path)
-                            if outcome == "created":
-                                created += 1
-                            else:
-                                skipped += 1
-                        except Exception as exc:
-                            failures.append((item, f"r2/database: {exc}"))
-                        finally:
-                            local_path.unlink(missing_ok=True)
-
-                        processed = created + skipped + len(failures)
-                        if processed % 50 == 0:
-                            self.stdout.write(
-                                f"R2 progress: processed={processed}/{len(candidates)}; "
-                                f"created={created}; skipped={skipped}; "
-                                f"retry_queue={len(failures)}; warnings={warnings}"
-                            )
-
-            if failures:
-                self.stdout.write(
-                    f"Retrying {len(failures)} failed photo syncs sequentially..."
-                )
-                retry_failures = []
-                for number, (item, _) in enumerate(failures, 1):
+        for offset in range(0, len(candidates), batch_size):
+            batch = candidates[offset : offset + batch_size]
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                future_map = {
+                    pool.submit(self._ingest, item): item
+                    for item in batch
+                }
+                for future in as_completed(future_map):
+                    item = future_map[future]
                     try:
-                        local_path, size_warning = self._download(
-                            item, temp_root, final_retry=True
-                        )
-                        if size_warning:
-                            warnings += 1
-                            self.stderr.write(self.style.WARNING(size_warning))
-                        outcome = self._persist(item, local_path)
+                        result = future.result()
+                        outcome = self._record(item, result["key"], result["size"])
                         if outcome == "created":
                             created += 1
                         else:
                             skipped += 1
-                        local_path.unlink(missing_ok=True)
                     except Exception as exc:
-                        retry_failures.append((item, str(exc)))
-                    if number % 25 == 0 or number == len(failures):
-                        self.stdout.write(
-                            f"Retry progress: {number}/{len(failures)}; "
-                            f"still_failed={len(retry_failures)}"
-                        )
-                failures = retry_failures
+                        failures.append((item, str(exc)))
 
-            if failures:
-                for item, error in failures[:25]:
-                    self.stderr.write(
-                        f"FAILED source={item['sid']} "
-                        f"url={item['url']} path={item['path']}: {error}"
+                    processed = created + skipped + len(failures)
+                    if processed % 50 == 0 or processed == len(candidates):
+                        self.stdout.write(
+                            f"R2 progress: processed={processed}/{len(candidates)}; "
+                            f"created={created}; skipped={skipped}; "
+                            f"retry_queue={len(failures)}"
+                        )
+
+        if failures:
+            self.stdout.write(
+                f"Retrying {len(failures)} failed Cloudflare ingests sequentially..."
+            )
+            retry_failures = []
+            for number, (item, _) in enumerate(failures, 1):
+                try:
+                    result = self._ingest(item)
+                    outcome = self._record(item, result["key"], result["size"])
+                    if outcome == "created":
+                        created += 1
+                    else:
+                        skipped += 1
+                except Exception as exc:
+                    retry_failures.append((item, str(exc)))
+                if number % 25 == 0 or number == len(failures):
+                    self.stdout.write(
+                        f"Retry progress: {number}/{len(failures)}; "
+                        f"still_failed={len(retry_failures)}"
                     )
-                raise CommandError(
-                    f"{len(failures)} required photos still failed after retries."
+            failures = retry_failures
+
+        if failures:
+            for item, error in failures[:25]:
+                self.stderr.write(
+                    f"FAILED source={item['sid']} path={item['path']}: {error}"
                 )
+            raise CommandError(
+                f"{len(failures)} required photos still failed after retries."
+            )
 
         final = (
             DogImage.objects.filter(dog_id__in=linked_dog_ids)
@@ -318,99 +305,101 @@ class Command(BaseCommand):
         )
         self.stdout.write(
             self.style.SUCCESS(
-                f"Direct source → R2 sync complete: created={created}; "
-                f"skipped={skipped}; warnings={warnings}; "
-                f"source-linked dogs with managed images={final}."
+                f"Cloudflare source → R2 sync complete: created={created}; "
+                f"skipped={skipped}; source-linked dogs with managed images={final}."
             )
         )
 
-    def _download(self, item, temp_root, final_retry=False):
-        suffix = Path(item["path"]).suffix.lower() or ".jpg"
-        target = temp_root / f"{item['sid']}{suffix}"
-        expected = int(item.get("expected_size") or 0)
-        timeout = (20, 90) if final_retry else (10, 45)
-
-        session = build_session()
-        try:
-            response = session.get(
-                item["url"],
-                timeout=timeout,
-                stream=True,
-                allow_redirects=True,
-            )
-            response.raise_for_status()
-            content_type = (
-                response.headers.get("content-type") or ""
-            ).split(";", 1)[0].strip().lower()
-            if not content_type.startswith("image/"):
-                raise RuntimeError(
-                    f"non-image content-type: {content_type or 'missing'}"
-                )
-
-            total = 0
-            with target.open("wb") as handle:
-                for chunk in response.iter_content(256 * 1024):
-                    if chunk:
-                        handle.write(chunk)
-                        total += len(chunk)
-
-            if total <= 0:
-                raise RuntimeError("empty image body")
-
-            size_warning = ""
-            if expected and total != expected:
-                size_warning = (
-                    f"Source {item['sid']} image size changed since archive: "
-                    f"archived={expected}, current={total}; "
-                    "using current verified image bytes."
-                )
-            return target, size_warning
-        finally:
-            session.close()
-
-    def _persist(self, item, local_path):
-        dog_id = item["dog_id"]
-        if DogImage.objects.filter(dog_id=dog_id).exists():
-            return "skipped"
-
+    def _destination_key(self, item):
+        ext = Path(item["path"]).suffix.lower() or ".jpg"
         sid = item["sid"]
-        ext = local_path.suffix.lower()
-        key = f"dogs/archive/{int(sid) // 1000:03d}/{sid}{ext}"
-        data = local_path.read_bytes()
-        if not data:
-            raise RuntimeError("Downloaded file is empty")
+        return f"dogs/archive/{int(sid) // 1000:03d}/{sid}{ext}"
 
-        content_type = (
-            mimetypes.guess_type(item["path"])[0]
-            or "application/octet-stream"
-        )
+    def _ingest(self, item):
+        key = self._destination_key(item)
+        payload = {
+            "url": item["source_url"],
+            "expected_size": int(item.get("size") or 0),
+        }
+        body = json.dumps(
+            payload,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        digest = sha256_hex(body)
 
+        base_url = str(getattr(settings, "R2_GATEWAY_URL", "") or "").rstrip("/")
+        if not base_url:
+            raise RuntimeError("R2_GATEWAY_URL is not configured")
+
+        endpoint = f"{base_url}/_r2_ingest/{quote(key, safe='/')}"
         last_error = None
-        for attempt in range(1, 6):
+        for attempt in range(1, 5):
+            timestamp = str(int(time.time()))
+            signature = gateway_signature(
+                settings.SECRET_KEY,
+                "POST",
+                key,
+                timestamp,
+                digest,
+            )
+            headers = {
+                "Content-Type": "application/json",
+                "X-R2-Timestamp": timestamp,
+                "X-R2-Content-SHA256": digest,
+                "X-R2-Signature": signature,
+            }
             try:
-                content = ContentFile(data, name=local_path.name)
-                content.content_type = content_type
-                if hasattr(default_storage, "save_exact"):
-                    default_storage.save_exact(key, content)
-                else:
-                    if default_storage.exists(key):
-                        default_storage.delete(key)
-                    default_storage.save(key, content)
-
-                remote_size = default_storage.size(key)
-                if remote_size != len(data):
-                    raise RuntimeError(
-                        f"R2 size mismatch for {key}: {remote_size} != {len(data)}"
+                with retry_session() as session:
+                    response = session.post(
+                        endpoint,
+                        data=body,
+                        headers=headers,
+                        timeout=(15, 90),
                     )
-                last_error = None
-                break
+                if response.status_code == 201:
+                    result = response.json()
+                    if result.get("status") != "stored":
+                        raise RuntimeError(
+                            f"unexpected ingest response: {result!r}"
+                        )
+                    stored_size = int(result.get("size") or 0)
+                    expected = int(item.get("size") or 0)
+                    if stored_size <= 0:
+                        raise RuntimeError("Cloudflare reported an empty R2 object")
+                    if expected and stored_size != expected:
+                        raise RuntimeError(
+                            f"Cloudflare stored-size mismatch: "
+                            f"{stored_size} != {expected}"
+                        )
+                    if result.get("r2_verified") is not True:
+                        raise RuntimeError(
+                            f"Cloudflare did not confirm R2 verification: {result!r}"
+                        )
+                    return {"key": key, "size": stored_size}
+
+                detail = response.text[:1000]
+                last_error = RuntimeError(
+                    f"Cloudflare ingest HTTP {response.status_code}: {detail}"
+                )
+                if response.status_code in (400, 401, 403, 404, 409, 422):
+                    break
             except Exception as exc:
                 last_error = exc
-                if attempt < 5:
-                    time.sleep(min(2 ** attempt, 15))
 
-        if last_error is not None:
-            raise last_error
+            if attempt < 4:
+                time.sleep(min(2 ** attempt, 10))
+
+        raise last_error or RuntimeError("Cloudflare ingest failed")
+
+    def _record(self, item, key, stored_size):
+        dog_id = item["dog_id"]
+        expected = int(item.get("size") or 0)
+        if expected and int(stored_size) != expected:
+            raise RuntimeError(
+                f"Refusing database record for size mismatch: "
+                f"{stored_size} != {expected}"
+            )
 
         with transaction.atomic():
             if DogImage.objects.filter(dog_id=dog_id).exists():
