@@ -5,3 +5,4 @@ Start fixed-manifest production-linked R2 migration on 2026-10-01.
 Start direct canary-verified Drive to R2 pipeline on 2026-10-01.
 Start source-URL canary R2 migration on 2026-10-01.
 Start Cloudflare-edge ingest canary and bulk R2 migration on 2026-10-01.
+Start Worker-verified R2 canary and bulk migration on 2026-10-01.
