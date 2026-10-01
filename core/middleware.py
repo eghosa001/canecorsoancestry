@@ -3,8 +3,9 @@ import logging
 import time
 import uuid
 
+from django.conf import settings
 from django.core.cache import cache
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.utils.cache import patch_cache_control
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,20 @@ class RequestSecurityMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        host = request.get_host().split(":", 1)[0].lower()
+        is_direct_render_request = (
+            host.endswith(".onrender.com")
+            and request.headers.get("X-CCA-Edge") != "1"
+            and request.path != "/healthz/"
+        )
+        if is_direct_render_request:
+            target = f"{settings.SITE_URL}{request.get_full_path()}"
+            response = HttpResponse(status=308)
+            response["Location"] = target
+            response["Cache-Control"] = "no-store"
+            response["X-Robots-Tag"] = "noindex, nofollow"
+            return response
+
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
         request.request_id = request_id
         started = time.perf_counter()
