@@ -1,0 +1,65 @@
+name: Delete retired Render service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/delete-render-service.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: delete-retired-render-service
+  cancel-in-progress: false
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_SERVICE_ID: srv-dauluqnlk1mc73ddgo40
+      PUBLIC_SITE: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
+
+    steps:
+      - name: Verify live site before Render deletion
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RENDER_API_KEY" || { echo "::error::Missing RENDER_API_KEY"; exit 1; }
+          echo "::add-mask::$RENDER_API_KEY"
+          for path in "/healthz/" "/dogs/?q=Branco+Custodi+Nos" "/statistics/" "/accounts/login/"; do
+            status="$(curl --connect-timeout 10 --max-time 30 -sS -o /tmp/pre-delete.html -w '%{http_code}' "$PUBLIC_SITE$path" || true)"
+            echo "$path -> HTTP $status"
+            test "$status" = "200"
+          done
+
+      - name: Delete retired Render service
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error             --output /tmp/render-delete.txt             --write-out '%{http_code}'             --request DELETE             --url "https://api.render.com/v1/services/$RENDER_SERVICE_ID"             --header "Authorization: Bearer $RENDER_API_KEY"             --header "Accept: application/json")"
+          echo "Render delete -> HTTP $status"
+          if [ "$status" != "204" ] && [ "$status" != "404" ] && [ "$status" != "410" ]; then
+            cat /tmp/render-delete.txt 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Verify production after Render deletion
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in "/healthz/" "/dogs/?q=Branco+Custodi+Nos" "/statistics/" "/accounts/login/"; do
+            ok=0
+            for attempt in $(seq 1 6); do
+              status="$(curl --connect-timeout 10 --max-time 30 -sS -o /tmp/post-delete.html -w '%{http_code}' "$PUBLIC_SITE$path" || true)"
+              echo "$path attempt $attempt -> HTTP $status"
+              if [ "$status" = "200" ]; then
+                ok=1
+                break
+              fi
+              sleep 5
+            done
+            test "$ok" = "1"
+          done
