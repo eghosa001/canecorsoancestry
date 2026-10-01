@@ -38,11 +38,22 @@ def _target_database():
         )
 
     database = dj_database_url.parse(url, conn_max_age=0)
+    database.setdefault("ATOMIC_REQUESTS", False)
+    database.setdefault("AUTOCOMMIT", True)
+    database.setdefault("CONN_MAX_AGE", 0)
+    database.setdefault("CONN_HEALTH_CHECKS", True)
+    database.setdefault("TIME_ZONE", None)
+    database.setdefault("NAME", "")
+    database.setdefault("USER", "")
+    database.setdefault("PASSWORD", "")
+    database.setdefault("HOST", "")
+    database.setdefault("PORT", "")
+    database.setdefault("TEST", {})
+
     options = database.setdefault("OPTIONS", {})
     options["sslmode"] = os.getenv("DJANGO_DB_SSLMODE", "require")
     schema = os.getenv("DJANGO_DB_SCHEMA", "django_app").strip()
     options["options"] = f"-c search_path={schema},extensions,public"
-    database["CONN_HEALTH_CHECKS"] = True
     return database
 
 
