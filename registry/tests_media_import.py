@@ -4,7 +4,7 @@ from io import StringIO
 from pathlib import Path
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from registry.models import Dog, DogExternalKey, DogImage
 
@@ -115,3 +115,99 @@ class BellissimoMediaImportTests(TestCase):
             manifest.unlink(missing_ok=True)
 
         self.assertFalse(DogImage.objects.exists())
+
+
+
+class CaneCorsoArchiveImageImportTests(TestCase):
+    def setUp(self):
+        self.dog = Dog.objects.create(
+            name="Archive Dog",
+            slug="archive-dog",
+            is_public=True,
+        )
+        DogExternalKey.objects.create(
+            dog=self.dog,
+            namespace="canecorsopedigree.com",
+            key="12345",
+        )
+
+    def test_physical_file_is_imported_even_when_csv_image_file_is_blank(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "dogs.csv"
+            images = root / "images"
+            images.mkdir()
+            source.write_text(
+                "id,name,image_url,image_file\n"
+                "12345,Archive Dog,https://example.invalid/photo.jpg,\n",
+                encoding="utf-8",
+            )
+            # Name deliberately differs from any CSV mapping. Numeric source ID is
+            # the authoritative association produced by the scraper.
+            (images / "12345_COMPLETELY_DIFFERENT_NAME.jpg").write_bytes(
+                b"not-a-real-jpeg-but-nonempty"
+            )
+            media_root = root / "media"
+            with override_settings(
+                MEDIA_ROOT=media_root,
+                STORAGES={
+                    "default": {
+                        "BACKEND": "django.core.files.storage.FileSystemStorage"
+                    },
+                    "staticfiles": {
+                        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+                    },
+                },
+            ):
+                call_command(
+                    "import_canecorso_archive_images",
+                    source,
+                    images,
+                    stdout=StringIO(),
+                )
+
+        image = DogImage.objects.get(dog=self.dog)
+        self.assertTrue(image.is_primary)
+        self.assertIn("dogs/archive/012/12345.jpg", image.image.name)
+        self.assertTrue(image.caption.startswith("Archived source photo"))
+
+    def test_existing_curated_image_wins_over_archive_file(self):
+        DogImage.objects.create(
+            dog=self.dog,
+            image="dogs/manual/curated.webp",
+            is_primary=True,
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "dogs.csv"
+            images = root / "images"
+            images.mkdir()
+            source.write_text(
+                "id,name,image_url,image_file\n"
+                "12345,Archive Dog,,,\n",
+                encoding="utf-8",
+            )
+            (images / "12345_OTHER_NAME.jpg").write_bytes(b"archive-copy")
+            with override_settings(
+                MEDIA_ROOT=root / "media",
+                STORAGES={
+                    "default": {
+                        "BACKEND": "django.core.files.storage.FileSystemStorage"
+                    },
+                    "staticfiles": {
+                        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+                    },
+                },
+            ):
+                call_command(
+                    "import_canecorso_archive_images",
+                    source,
+                    images,
+                    stdout=StringIO(),
+                )
+
+        self.assertEqual(DogImage.objects.filter(dog=self.dog).count(), 1)
+        self.assertEqual(
+            DogImage.objects.get(dog=self.dog).image.name,
+            "dogs/manual/curated.webp",
+        )
