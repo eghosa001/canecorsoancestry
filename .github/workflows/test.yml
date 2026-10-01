@@ -35,18 +35,32 @@ jobs:
           DATABASE_URL: sqlite:///production-check.sqlite3
           DJANGO_REQUIRE_OBJECT_STORAGE: "0"
         run: python manage.py check --deploy
-      - name: Render deploy checks
+      - name: Northflank deploy checks
         env:
-          DJANGO_SETTINGS_MODULE: config.settings.render
-          DJANGO_SECRET_KEY: ci-only-render-check-secret-key
-          DJANGO_ALLOWED_HOSTS: testserver,localhost,.onrender.com
-          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver
+          DJANGO_SETTINGS_MODULE: config.settings.northflank
+          DJANGO_SECRET_KEY: ci-only-northflank-check-secret-key
+          DJANGO_ALLOWED_HOSTS: testserver,localhost,127.0.0.1,.code.run
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver,https://example.code.run
           SITE_URL: https://testserver
-          DATABASE_URL: sqlite:///render-check.sqlite3
-          DJANGO_DB_EXTRA_SCHEMAS: public
+          DATABASE_URL: sqlite:///northflank-check.sqlite3
+          DJANGO_DB_EXTRA_SCHEMAS: extensions,public
           R2_GATEWAY_URL: https://edge.example.workers.dev
           MEDIA_EDGE_BASE_URL: https://edge.example.workers.dev
-        run: python manage.py check --deploy
+        run: |
+          python manage.py check --deploy
+          python - <<'PY'
+          import os
+          import django
+
+          os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.northflank")
+          django.setup()
+          from django.contrib.staticfiles.storage import staticfiles_storage
+
+          url = staticfiles_storage.url("core/site.css")
+          if url != "/static/core/site.css":
+              raise SystemExit(f"Unexpected Northflank static URL: {url}")
+          print(f"Northflank static URL: {url}")
+          PY
       - run: python manage.py migrate --noinput
       - name: Validate and audit canonical seed
         run: |
