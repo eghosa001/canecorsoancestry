@@ -1,7 +1,7 @@
 const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
 // Bump this whenever public HTML/static layout assets must invalidate edge cache.
 const EDGE_CACHE_VERSION = "warm-origin-v7";
-const CACHE_FRESH_SECONDS = 900;
+const CACHE_FRESH_SECONDS = 300;
 const CACHE_RETENTION_SECONDS = 604800;
 const ORIGIN_GRACE_MS = 2500;
 const AUTH_GRACE_MS = 450;
@@ -96,6 +96,7 @@ function isCacheablePublicPath(url, request) {
     url.search &&
     !url.pathname.startsWith("/static/") &&
     url.pathname !== "/dogs/" &&
+    url.pathname !== "/dogs/suggestions/" &&
     url.pathname !== "/kennels/" &&
     url.pathname !== "/pedigrees/virtual-mating/" &&
     !isSearchTrackingUrl(url)
@@ -103,7 +104,7 @@ function isCacheablePublicPath(url, request) {
   const path = url.pathname;
   if (isPrivatePath(path)) return false;
   if (path.startsWith("/static/")) return true;
-  if (path === "/" || path === "/dogs/" || path === "/kennels/" || path === "/statistics/" || path === "/pedigrees/" || path === "/pedigrees/virtual-mating/") return true;
+  if (path === "/" || path === "/dogs/" || path === "/dogs/suggestions/" || path === "/kennels/" || path === "/statistics/" || path === "/pedigrees/" || path === "/pedigrees/virtual-mating/") return true;
   if (/^\/dogs\/[-a-z0-9]+\/$/i.test(path)) return true;
   if (/^\/kennels\/[-a-z0-9]+\/$/i.test(path)) return true;
   if (/^\/litters\/[0-9a-f-]+\/$/i.test(path)) return true;
