@@ -148,7 +148,11 @@ def main():
         if not mobile_panel.get_by_role("link", name="Join", exact=True).is_visible():
             raise AssertionError("home-mobile-menu does not expose Join")
         screenshot(mobile, "home-mobile-menu")
-        mobile.locator(".mobile-nav > summary").click()
+        mobile.evaluate("window.scrollTo(0, 360)")
+        mobile.wait_for_timeout(150)
+        if mobile.locator(".mobile-nav").get_attribute("open") is not None:
+            raise AssertionError("home-mobile-menu stays open after page scroll")
+        mobile.evaluate("window.scrollTo(0, 0)")
 
         capture(mobile, "/accounts/login/", "login-mobile")
         capture(mobile, "/member/signup/", "signup-mobile")
@@ -168,6 +172,9 @@ def main():
             mobile_pedigrees.first.click()
             mobile.wait_for_load_state("networkidle")
             mobile.locator(".analysis-mobile-summary").wait_for(state="visible")
+            relationships = mobile.locator(".pedigree-relationship")
+            if relationships.count() and not relationships.first.is_visible():
+                raise AssertionError("mobile pedigree relationship labels are not visible")
             screenshot(mobile, "pedigree-detail-mobile", overflow=False)
 
         capture(mobile, "/pedigrees/virtual-mating/", "virtual-mating-mobile")
