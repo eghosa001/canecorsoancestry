@@ -11,6 +11,7 @@ from django.shortcuts import render
 from django.urls import reverse
 
 from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
+from registry.querysets import one_dog_per_kennel, with_stored_images
 
 from .seo import json_ld
 
@@ -84,9 +85,9 @@ def robots_txt(request):
 def home(request):
     image_candidates = list(
         _display_dogs(
-            Dog.objects.filter(is_public=True, images__isnull=False)
-            .distinct()
-            .order_by("-search_count", "-updated_at", "name")
+            one_dog_per_kennel(
+                with_stored_images(Dog.objects.filter(is_public=True))
+            ).order_by("-search_count", "-updated_at", "name")
         )[:80]
     )
     _attach_source_image_urls(image_candidates)

@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from registry.models import Dog, DogImage, Submission
+from registry.models import Dog, DogImage, Kennel, Submission
 from registry.services import approve_submission
 
 
@@ -71,15 +71,26 @@ class MemberAccessFlowTests(TestCase):
 
 class PopularDogTests(TestCase):
     def test_homepage_uses_search_originated_popularity(self):
+        kennel = Kennel.objects.create(name="Popular Kennel", slug="popular-kennel")
         popular = Dog.objects.create(
-            name="Popular Dog", slug="popular-dog", is_public=True
+            name="Popular Dog", slug="popular-dog", kennel=kennel, is_public=True
+        )
+        same_kennel = Dog.objects.create(
+            name="Second Kennel Dog",
+            slug="second-kennel-dog",
+            kennel=kennel,
+            is_public=True,
         )
         DogImage.objects.create(
             dog=popular,
             image="dogs/popular-dog.jpg",
             is_primary=True,
         )
-        Dog.objects.create(name="Other Dog", slug="other-dog", is_public=True)
+        DogImage.objects.create(
+            dog=same_kennel,
+            image="dogs/second-kennel-dog.jpg",
+            is_primary=True,
+        )
 
         self.client.get(
             reverse("registry:dog-detail", args=[popular.slug]),
@@ -90,3 +101,4 @@ class PopularDogTests(TestCase):
 
         featured = list(self.client.get(reverse("home")).context["featured_dogs"])
         self.assertEqual(featured[0], popular)
+        self.assertNotIn(same_kennel, featured)
