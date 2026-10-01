@@ -67,8 +67,8 @@ jobs:
           project_id="$(printf '%s' "$projects" | jq -r --arg name "$NF_PROJECT_NAME" '.data.projects[]? | select(.name == $name) | .id' | head -n1)"
 
           if [ -z "$project_id" ]; then
-            payload="$(jq -n               --arg name "$NF_PROJECT_NAME"               '{name:$name,description:"Cane Corso Ancestry Django origin",region:"europe-west-frankfurt"}')"
-            created="$(curl -fsS "${auth[@]}" -X POST --data "$payload" "$NF_API/projects")"
+            payload="$(jq -n               --arg name "$NF_PROJECT_NAME"               '{name:$name,description:"Cane Corso Ancestry Django origin",region:"europe-west"}')"
+            created="$(curl -sS --fail-with-body "${auth[@]}" -X POST --data "$payload" "$NF_API/projects")"
             project_id="$(printf '%s' "$created" | jq -r '.data.id')"
           fi
 
@@ -155,7 +155,7 @@ jobs:
             }')"
 
           if [ -z "$service_id" ]; then
-            response="$(curl -fsS "${auth[@]}" -X POST --data "$payload" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/combined")"
+            response="$(curl -sS --fail-with-body "${auth[@]}" -X POST --data "$payload" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/combined")"
             service_id="$(printf '%s' "$response" | jq -r '.data.id')"
           else
             curl -fsS "${auth[@]}" -X PATCH --data "$payload" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/combined/$service_id" >/tmp/nf-service.json
