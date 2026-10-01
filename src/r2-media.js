@@ -1,4 +1,5 @@
 const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 
 function bytesToHex(bytes) {
   return Array.from(new Uint8Array(bytes))
@@ -144,6 +145,129 @@ async function handleR2Gateway(request, env, url) {
   });
 }
 
+async function handleR2Ingest(request, env, url) {
+  if (request.method !== "POST") {
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: { allow: "POST" },
+    });
+  }
+
+  const key = safeKey(url, "/_r2_ingest/");
+  if (!key) return new Response("Invalid key", { status: 400 });
+
+  const body = await request.arrayBuffer();
+  if (!(await verifyGatewayRequest(request, env, key, body))) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(decoder.decode(body));
+  } catch {
+    return new Response("Invalid JSON", { status: 400 });
+  }
+
+  let source;
+  try {
+    source = new URL(String(payload.url || ""));
+  } catch {
+    return new Response("Invalid source URL", { status: 400 });
+  }
+
+  const allowedHost =
+    source.hostname === "www.canecorsopedigree.com" ||
+    source.hostname === "canecorsopedigree.com";
+  const allowedPath = source.pathname.startsWith("/static/images/animal/");
+  const allowedProtocol = source.protocol === "https:";
+  const allowedPort = !source.port || source.port === "443";
+  if (
+    !allowedHost ||
+    !allowedPath ||
+    !allowedProtocol ||
+    !allowedPort ||
+    source.username ||
+    source.password
+  ) {
+    return new Response("Source URL not allowed", { status: 400 });
+  }
+
+  const expectedSize = Number(payload.expected_size || 0);
+  if (!Number.isSafeInteger(expectedSize) || expectedSize < 0) {
+    return new Response("Invalid expected size", { status: 400 });
+  }
+
+  let upstream;
+  try {
+    upstream = await fetch(source.toString(), {
+      redirect: "follow",
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+          "AppleWebKit/537.36 (KHTML, like Gecko) " +
+          "Chrome/154.0.0.0 Safari/537.36",
+        "referer": "https://www.canecorsopedigree.com/",
+        "accept":
+          "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
+      },
+    });
+  } catch (error) {
+    return Response.json(
+      { status: "source_fetch_error", error: String(error) },
+      { status: 502 },
+    );
+  }
+
+  if (!upstream.ok) {
+    return Response.json(
+      { status: "source_http_error", source_status: upstream.status },
+      { status: 502 },
+    );
+  }
+
+  const contentType = (
+    upstream.headers.get("content-type") || ""
+  ).split(";", 1)[0].toLowerCase();
+  if (!contentType.startsWith("image/")) {
+    return Response.json(
+      { status: "source_not_image", content_type: contentType },
+      { status: 422 },
+    );
+  }
+
+  const data = await upstream.arrayBuffer();
+  if (!data.byteLength) {
+    return Response.json({ status: "source_empty" }, { status: 422 });
+  }
+  if (expectedSize && data.byteLength !== expectedSize) {
+    return Response.json(
+      {
+        status: "source_size_mismatch",
+        expected_size: expectedSize,
+        actual_size: data.byteLength,
+      },
+      { status: 409 },
+    );
+  }
+
+  const stored = await env.MEDIA_BUCKET.put(key, data, {
+    httpMetadata: { contentType },
+  });
+
+  return Response.json(
+    {
+      status: "stored",
+      key,
+      size: data.byteLength,
+      etag: stored.httpEtag,
+      source_status: upstream.status,
+      content_type: contentType,
+    },
+    { status: 201 },
+  );
+}
+
 async function handleSignedMedia(request, env, url) {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response("Method not allowed", {
@@ -196,6 +320,10 @@ export default {
 
     if (url.pathname.startsWith("/_r2/")) {
       return handleR2Gateway(request, env, url);
+    }
+
+    if (url.pathname.startsWith("/_r2_ingest/")) {
+      return handleR2Ingest(request, env, url);
     }
 
     if (url.pathname.startsWith("/_media/")) {
