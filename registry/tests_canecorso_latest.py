@@ -12,8 +12,10 @@ def profile(name, gender="", father="", mother="", dob="", pedigree=""):
     <div>Father</div><div>{f'<a href="/view_dog?id={father}">SIRE</a>' if father else ''}</div>
     <div>Mother</div><div>{f'<a href="/view_dog?id={mother}">DAM</a>' if mother else ''}</div>
     <div>Ped#</div><div>{pedigree}</div>
+    <div>Titles</div><div>CH.TEST</div>
     <div>DOB</div><div>{dob}</div>
     <div>Colour</div><div>Black/Nero</div>
+    <div>HD</div><div>HD A</div>
     """
 
 
@@ -47,6 +49,8 @@ class CaneCorsoLatestParsingTests(SimpleTestCase):
         self.assertEqual(parsed["mother_id"], "200")
         self.assertEqual(parsed["dob"], "2026/05/11")
         self.assertEqual(parsed["pedigree_number"], "JR 123")
+        self.assertEqual(parsed["titles"], "CH.TEST")
+        self.assertEqual(parsed["hd"], "HD A")
 
     def test_crawler_fetches_only_missing_latest_and_ancestors(self):
         pages = {
