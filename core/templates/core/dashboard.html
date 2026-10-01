@@ -3,9 +3,11 @@
 {% block content %}
 <div class="dashboard-shell">
   <aside class="dashboard-sidebar">
-    <p class="eyebrow">Member area</p>
-    <strong class="sidebar-name">{{ user.get_username }}</strong>
-    <nav>
+    <div class="dashboard-sidebar-intro">
+      <p class="eyebrow">Member area</p>
+      <strong class="sidebar-name">{{ user.get_username }}</strong>
+    </div>
+    <nav class="dashboard-desktop-nav">
       <a class="active" href="{% url 'dashboard' %}">Dashboard</a>
       <a href="#my-dogs">My dogs</a>
       <a href="{% url 'accounts:my-pedigrees' %}">My pedigrees</a>
@@ -19,6 +21,23 @@
       <a href="{% url 'password_change' %}">Account settings</a>
       <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="sidebar-logout" type="submit">Sign out</button></form>
     </nav>
+    <details class="dashboard-mobile-nav">
+      <summary><span>Member menu</span><span aria-hidden="true">⌄</span></summary>
+      <nav>
+      <a class="active" href="{% url 'dashboard' %}">Dashboard</a>
+      <a href="#my-dogs">My dogs</a>
+      <a href="{% url 'accounts:my-pedigrees' %}">My pedigrees</a>
+      <a href="{% url 'accounts:my-litters' %}">My litters</a>
+      <a href="#my-kennel">My kennel</a>
+      <a href="#health">Health & DNA</a>
+      <a href="{% url 'accounts:documents' %}">My documents</a>
+      <a href="{% url 'accounts:submissions' %}">Submissions</a>
+      <a href="{% url 'accounts:my-disputes' %}">Review cases</a>
+      <a href="{% url 'accounts:notifications' %}">Notifications</a>
+      <a href="{% url 'password_change' %}">Account settings</a>
+      <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button class="sidebar-logout" type="submit">Sign out</button></form>
+      </nav>
+    </details>
   </aside>
 
   <section class="dashboard-main">
