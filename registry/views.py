@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.db.models import Count, F, Prefetch, Q
+from django.db.models import Count, F, Prefetch, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -31,11 +31,15 @@ from .models import (
     Submission,
 )
 from .permissions import can_contribute_to_dog
-from .querysets import one_dog_per_kennel, with_stored_images
+from .querysets import matching_public_dog_ids, one_dog_per_kennel, with_stored_images
 
 
-def _dog_cards(queryset):
-    return queryset.select_related("kennel", "sire", "dam").prefetch_related(
+def _dog_cards(queryset, *, include_parents=False, include_sources=True):
+    related = ["kennel"]
+    if include_parents:
+        related.extend(["sire", "dam"])
+
+    queryset = queryset.select_related(*related).prefetch_related(
         Prefetch(
             "images",
             queryset=DogImage.objects.order_by("-is_primary", "sort_order", "created_at"),
@@ -46,12 +50,16 @@ def _dog_cards(queryset):
             queryset=DogRegistration.objects.select_related("authority"),
             to_attr="display_registrations",
         ),
-        Prefetch(
-            "sources",
-            queryset=DogSource.objects.order_by("-verified_at", "-created_at"),
-            to_attr="display_source_media",
-        ),
     )
+    if include_sources:
+        queryset = queryset.prefetch_related(
+            Prefetch(
+                "sources",
+                queryset=DogSource.objects.order_by("-verified_at", "-created_at"),
+                to_attr="display_source_media",
+            )
+        )
+    return queryset
 
 
 def _source_image_url(sources):
@@ -89,11 +97,9 @@ def dog_suggestions(request):
     if len(query) < 2:
         return JsonResponse({"results": []})
 
-    dogs = Dog.objects.filter(is_public=True).filter(
-        Q(name__icontains=query)
-        | Q(aliases__name__icontains=query)
-        | Q(registrations__number__icontains=query)
-        | Q(kennel__name__icontains=query)
+    dogs = Dog.objects.filter(
+        is_public=True,
+        pk__in=Subquery(matching_public_dog_ids(query)),
     )
     if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE}:
         dogs = dogs.filter(Q(sex=sex) | Q(sex=Dog.Sex.UNKNOWN))
@@ -101,7 +107,6 @@ def dog_suggestions(request):
     dogs = (
         dogs.select_related("kennel")
         .prefetch_related("registrations")
-        .distinct()
         .order_by("-search_count", "name")[:8]
     )
     results = []
@@ -129,23 +134,14 @@ def dog_search(request):
     kennel_slug = request.GET.get("kennel", "").strip()
     exact = request.GET.get("exact") == "1"
 
-    base_dogs = Dog.objects.filter(is_public=True) if query else _public_dogs_with_images()
-    dogs = _dog_cards(base_dogs)
     if query:
-        if exact:
-            dogs = dogs.filter(
-                Q(name__iexact=query)
-                | Q(aliases__name__iexact=query)
-                | Q(registrations__number__iexact=query)
-            ).distinct()
-        else:
-            dogs = dogs.filter(
-                Q(name__icontains=query)
-                | Q(bloodline__icontains=query)
-                | Q(aliases__name__icontains=query)
-                | Q(registrations__number__icontains=query)
-                | Q(kennel__name__icontains=query)
-            ).distinct()
+        base_dogs = Dog.objects.filter(
+            is_public=True,
+            pk__in=Subquery(matching_public_dog_ids(query, exact=exact)),
+        )
+    else:
+        base_dogs = _public_dogs_with_images()
+    dogs = _dog_cards(base_dogs, include_sources=bool(query))
     if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE, Dog.Sex.UNKNOWN}:
         dogs = dogs.filter(sex=sex)
     if country:
@@ -192,7 +188,7 @@ def dog_search(request):
 
 
 def dog_detail(request, slug):
-    dogs = _dog_cards(Dog.objects.filter(is_public=True)).prefetch_related(
+    dogs = _dog_cards(Dog.objects.filter(is_public=True), include_parents=True).prefetch_related(
         Prefetch(
             "health_records",
             queryset=HealthRecord.objects.order_by("test_type", "-tested_on"),
@@ -280,33 +276,35 @@ def dog_detail(request, slug):
     )
 
 
+def _top_public_parents(parent_field, sex):
+    parent_lookup = f"{parent_field}__isnull"
+    rows = list(
+        Dog.objects.filter(is_public=True)
+        .filter(**{parent_lookup: False})
+        .values(parent_field)
+        .annotate(public_offspring_count=Count("id"))
+        .order_by("-public_offspring_count")[:40]
+    )
+    parent_ids = [row[parent_field] for row in rows]
+    parents = Dog.objects.filter(
+        pk__in=parent_ids,
+        is_public=True,
+        sex=sex,
+    ).in_bulk()
+    ranked = []
+    for row in rows:
+        parent = parents.get(row[parent_field])
+        if parent is None:
+            continue
+        parent.public_offspring_count = row["public_offspring_count"]
+        ranked.append(parent)
+    ranked.sort(key=lambda dog: (-dog.public_offspring_count, dog.name.lower()))
+    return ranked[:20]
+
+
 def pedigree_statistics(request):
-    top_sires = (
-        _dog_cards(
-            Dog.objects.filter(is_public=True, sex=Dog.Sex.MALE).annotate(
-                public_offspring_count=Count(
-                    "sired_offspring",
-                    filter=Q(sired_offspring__is_public=True),
-                    distinct=True,
-                )
-            )
-        )
-        .filter(public_offspring_count__gt=0)
-        .order_by("-public_offspring_count", "name")[:20]
-    )
-    top_dams = (
-        _dog_cards(
-            Dog.objects.filter(is_public=True, sex=Dog.Sex.FEMALE).annotate(
-                public_offspring_count=Count(
-                    "dammed_offspring",
-                    filter=Q(dammed_offspring__is_public=True),
-                    distinct=True,
-                )
-            )
-        )
-        .filter(public_offspring_count__gt=0)
-        .order_by("-public_offspring_count", "name")[:20]
-    )
+    top_sires = _top_public_parents("sire_id", Dog.Sex.MALE)
+    top_dams = _top_public_parents("dam_id", Dog.Sex.FEMALE)
     top_kennels = (
         Kennel.objects.annotate(
             public_dog_count=Count(
