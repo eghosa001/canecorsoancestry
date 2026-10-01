@@ -219,6 +219,8 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   display: grid;
   place-items: center;
   align-content: center;
+  justify-items: center;
+  text-align: center;
   border: 1px solid var(--line);
   background:
     radial-gradient(circle at 50% 42%, rgba(210,173,87,.18), transparent 42%),
@@ -226,7 +228,15 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   box-shadow: 0 26px 70px rgba(0,0,0,.42);
 }
 .hero-mark span { font-family: var(--serif); font-size: clamp(5rem, 11vw, 9rem); color: rgba(239,213,141,.2); letter-spacing: -.06em; }
-.hero-mark small { color: var(--gold); letter-spacing: .2em; font-size: .6rem; }
+.hero-mark small {
+  display: block;
+  width: 100%;
+  max-width: none;
+  color: var(--gold);
+  letter-spacing: .2em;
+  font-size: .6rem;
+  text-align: center;
+}
 
 .page-shell { max-width: var(--max); margin: auto; padding: 56px 24px; }
 .page-heading { max-width: 850px; margin-bottom: 28px; }
@@ -1567,12 +1577,16 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   .hero-stats strong { font-size: 1.45rem; }
   .hero-mark {
     min-height: 132px;
-    grid-template-columns: auto auto;
-    gap: 12px;
+    grid-template-columns: 1fr;
+    gap: 4px;
     padding: 18px;
   }
   .hero-mark span { font-size: clamp(3.6rem, 18vw, 5rem); }
-  .hero-mark small { max-width: 120px; line-height: 1.5; }
+  .hero-mark small {
+    max-width: 100%;
+    line-height: 1.35;
+    text-align: center;
+  }
   .action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .action-card { min-height: 122px; padding: 17px; }
   .action-icon { margin-bottom: 14px; }
