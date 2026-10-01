@@ -39,3 +39,14 @@ jobs:
 
           ports="$(curl -fsS "${auth[@]}" "$NF_API/projects/$project_id/services/$service_id/ports")"
           printf '%s' "$ports" | jq -r '.data.ports[]? | "Port: \(.name) public=\(.public) dns=\(.dns // "pending")"'
+          dns="$(printf '%s' "$ports" | jq -r '.data.ports[]? | select(.name == "web") | .dns // empty' | head -n1)"
+          test -n "$dns"
+          origin="https://$dns"
+          for path in "/healthz/" "/dogs/?q=Branco+Custodi+Nos" "/statistics/"; do
+            status="$(curl --connect-timeout 8 --max-time 20 -sS -o /tmp/nf-body -w '%{http_code}' "$origin$path" || true)"
+            echo "Origin check: $path -> HTTP $status"
+            if [ "$status" != "200" ]; then
+              head -c 800 /tmp/nf-body 2>/dev/null || true
+              echo
+            fi
+          done
