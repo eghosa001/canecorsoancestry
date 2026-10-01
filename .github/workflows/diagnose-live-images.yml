@@ -30,19 +30,29 @@ jobs:
               url = base + "/dogs/?" + urllib.parse.urlencode({"q": query})
               status, final, headers, body = fetch(url)
               print(f"{label}: search status={status} final={final}")
-              links = re.findall(r'href="([^"]+)"', body)
-              dog_links = [html.unescape(x) for x in links if "/dogs/" in x and x != "/dogs/"]
+              dog_links = [
+                  html.unescape(x)
+                  for x in re.findall(
+                      r'<a[^>]+class="search-result-card"[^>]+href="([^"]+)"',
+                      body,
+                      re.I,
+                  )
+              ]
               if not dog_links:
                   print(f"{label}: no dog detail link found")
                   continue
               dog_url = urllib.parse.urljoin(base, dog_links[0])
               status, final, headers, detail = fetch(dog_url)
               print(f"{label}: detail status={status} url={dog_url}")
-              imgs = re.findall(r'<img[^>]+src="([^"]+)"', detail, re.I)
-              if not imgs:
-                  print(f"{label}: no img src found on detail")
+              hero = re.search(
+                  r'<div class="dog-profile-photo">.*?<img[^>]+src="([^"]+)"',
+                  detail,
+                  re.I | re.S,
+              )
+              if not hero:
+                  print(f"{label}: no dog-profile img src found on detail")
                   continue
-              image_url = urllib.parse.urljoin(base, html.unescape(imgs[0]))
+              image_url = urllib.parse.urljoin(base, html.unescape(hero.group(1)))
               print(f"{label}: image={image_url}")
               req = urllib.request.Request(image_url, headers={"User-Agent":"CCA-image-diagnostic/1.0"})
               try:
