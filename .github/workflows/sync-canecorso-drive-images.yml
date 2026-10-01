@@ -138,7 +138,7 @@ jobs:
           item = DogImage.objects.filter(caption__startswith='Archived source photo').order_by('-pk').first()
           assert item is not None
           print(item.image.url)
-          ")"
+          " | tail -n 1)"
           echo "Testing canary managed media path: $media_path"
           status="$(curl -L --connect-timeout 10 --max-time 30 -sS \
             -D /tmp/media-canary-headers.txt -o /tmp/media-canary.bin \
@@ -177,7 +177,7 @@ jobs:
           item = DogImage.objects.filter(caption__startswith='Archived source photo').order_by('pk').first()
           assert item is not None
           print(item.image.url)
-          ")"
+          " | tail -n 1)"
           echo "Testing managed media path: $media_path"
           status="$(curl -L --connect-timeout 10 --max-time 30 -sS             -D /tmp/media-headers.txt -o /tmp/media-probe.bin             -w '%{http_code}' "$PUBLIC_SITE$media_path" || true)"
           echo "Managed media GET -> HTTP $status"
