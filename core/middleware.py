@@ -37,12 +37,12 @@ class RequestSecurityMiddleware:
 
     def __call__(self, request):
         host = request.get_host().split(":", 1)[0].lower()
-        is_direct_render_request = (
-            host.endswith(".onrender.com")
+        is_direct_origin_request = (
+            (host.endswith(".onrender.com") or host.endswith(".code.run"))
             and request.headers.get("X-CCA-Edge") != "1"
             and request.path != "/healthz/"
         )
-        if is_direct_render_request:
+        if is_direct_origin_request:
             target = f"{settings.SITE_URL}{request.get_full_path()}"
             response = HttpResponse(status=308)
             response["Location"] = target

@@ -8,4 +8,4 @@ workers_dev = true
 enabled = true
 
 [vars]
-ORIGIN_URL = "https://canecorsoancestry.onrender.com"
+ORIGIN_URL = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
