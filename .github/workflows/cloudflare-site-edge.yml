@@ -128,6 +128,23 @@ jobs:
 
           echo "Site edge, auth-first login UI, and readiness checks are healthy."
 
+          custom="https://canecorsoancestry.com"
+          custom_status=""
+          for attempt in $(seq 1 20); do
+            custom_status="$(curl --connect-timeout 6 --max-time 12 -sS -D /tmp/custom-headers.txt -H 'Accept: text/html' -o /tmp/custom-page.html -w '%{http_code}' "$custom/" || true)"
+            if [ "$custom_status" = "200" ] && grep -qi 'Cane Corso Ancestry' /tmp/custom-page.html; then
+              break
+            fi
+            if [ "$attempt" = "20" ]; then
+              echo "::error::Custom domain is not serving the site; HTTP $custom_status"
+              cat /tmp/custom-headers.txt 2>/dev/null || true
+              cat /tmp/custom-page.html 2>/dev/null || true
+              exit 1
+            fi
+            sleep 3
+          done
+          echo "Custom domain is resolving and serving the live site."
+
       - name: Clean temporary files
         if: always()
-        run: rm -f /tmp/edge-health.json /tmp/edge-page.html /tmp/auth-headers.txt /tmp/auth-page.html /tmp/auth-ready.json
+        run: rm -f /tmp/edge-health.json /tmp/edge-page.html /tmp/auth-headers.txt /tmp/auth-page.html /tmp/auth-ready.json /tmp/custom-headers.txt /tmp/custom-page.html
