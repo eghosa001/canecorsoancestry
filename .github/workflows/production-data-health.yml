@@ -84,14 +84,41 @@ jobs:
           test "$final_status" = "200"
           test -s /tmp/media-probe.bin
           grep -qi '^content-type: image/' /tmp/media-final.headers
-      - name: Verify homepage renders stored dog images
+      - name: Verify rendered dog images end to end
         shell: bash
         run: |
           set -euo pipefail
-          curl --connect-timeout 10 --max-time 30 -sS "$PUBLIC_SITE/" -o /tmp/home.html
-          count="$(grep -o '/media/[^" ]*' /tmp/home.html | wc -l | tr -d ' ')"
-          echo "Homepage managed image references: $count"
-          test "$count" -ge 1
+          python - <<'PY'
+          import os, re, subprocess, urllib.parse, urllib.request
+
+          base = os.environ["PUBLIC_SITE"].rstrip("/")
+          pages = ["/", "/dogs/"]
+          checked = 0
+          failures = []
+
+          for page in pages:
+              with urllib.request.urlopen(base + page, timeout=30) as response:
+                  html = response.read().decode("utf-8", "replace")
+              sources = re.findall(r'<img[^>]+src="([^"]+)"', html, flags=re.I)
+              managed = [src for src in sources if src.startswith("/media/")]
+              print(f"{page} managed image references: {len(managed)}")
+              for src in managed:
+                  target = base + src
+                  proc = subprocess.run(
+                      ["curl", "-L", "--connect-timeout", "10", "--max-time", "30",
+                       "-sS", "-o", "/dev/null", "-w", "%{http_code}|%{content_type}", target],
+                      capture_output=True, text=True,
+                  )
+                  checked += 1
+                  status, _, content_type = proc.stdout.partition("|")
+                  print(f"{src} -> HTTP {status} {content_type}")
+                  if status != "200" or not content_type.lower().startswith("image/"):
+                      failures.append((src, status, content_type, proc.stderr.strip()))
+
+          assert checked >= 1, "No managed dog image URLs were rendered"
+          assert not failures, f"Broken rendered dog images: {failures}"
+          print(f"Verified {checked} rendered managed dog images end to end")
+          PY
       - name: Verify public production routes
         shell: bash
         run: |
