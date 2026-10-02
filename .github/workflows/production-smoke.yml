@@ -1,0 +1,47 @@
+name: Production smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "accounts/**"
+      - "registry/**"
+      - "pedigrees/**"
+      - "core/**"
+      - "templates/**"
+      - "config/**"
+      - "Dockerfile"
+      - "src/site-edge.js"
+      - "scripts/production_smoke.py"
+      - ".github/workflows/production-smoke.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-smoke
+  cancel-in-progress: true
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      PRODUCTION_BASE_URL: https://canecorsoancestry.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt playwright
+      - run: python -m playwright install --with-deps chromium
+      - name: Verify live production UI and concurrency
+        run: python scripts/production_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-smoke
+          path: artifacts/production-smoke
+          if-no-files-found: warn
