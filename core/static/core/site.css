@@ -3292,3 +3292,13 @@ html[data-theme="dark"] .mobile-nav-panel {
   .action-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .action-card { min-height: 148px; padding: 18px; }
 }
+
+
+/* Mobile home link polish v19 */
+@media (max-width: 760px) {
+  .section-heading > .text-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    align-self: end;
+  }
+}
