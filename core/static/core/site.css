@@ -2975,3 +2975,60 @@ html[data-theme="dark"] .hero-mark {
     border-radius: 0 !important;
   }
 }
+
+
+/* Final clean logo presentation v17 */
+.brand-mark {
+  width: 56px !important;
+  height: 56px !important;
+  flex: 0 0 56px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  background: transparent !important;
+  image-rendering: auto;
+}
+.hero-mark {
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+.hero-mark::before,
+.hero-mark::after,
+.hero-brand-plaque {
+  display: none !important;
+}
+.hero-logo-art {
+  position: relative !important;
+  inset: auto !important;
+  width: min(100%, 360px) !important;
+  height: auto !important;
+  max-width: 360px !important;
+  margin: 0 auto !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+  image-rendering: auto;
+}
+@media (max-width: 760px) {
+  .brand-mark {
+    width: 48px !important;
+    height: 48px !important;
+    flex-basis: 48px !important;
+  }
+  .hero-logo-art {
+    width: min(88vw, 320px) !important;
+    max-width: 320px !important;
+  }
+}
