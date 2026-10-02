@@ -14,18 +14,7 @@
   <meta property="og:description" content="{% block og_description %}Pedigree, bloodline, kennel and provenance research for the Cane Corso community.{% endblock %}">
   <meta name="twitter:card" content="summary_large_image">
   <title>{% block title %}Cane Corso Ancestry{% endblock %}</title>
-  <script>
-    (function () {
-      try {
-        var saved = localStorage.getItem("cca-theme");
-        var theme = saved || (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-        document.documentElement.dataset.theme = theme;
-      } catch (e) {
-        document.documentElement.dataset.theme = "dark";
-      }
-    })();
-  </script>
-  <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261002-cleanlogo-v17">
+  <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261002-bellissimo-gold-v18">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -38,7 +27,6 @@
       </nav>
       <div class="header-actions">
         <form class="header-search" action="{% url 'registry:dog-search' %}" method="get"><label class="sr-only" for="header-q">Search dogs</label><input id="header-q" name="q" data-dog-autocomplete placeholder="Search dog, kennel, registration" autocomplete="off"></form>
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Change colour theme">Theme</button>
         {% if user.is_authenticated %}{% if user.is_staff %}<a class="account-link" href="{% url 'accounts:moderation' %}">Moderation</a>{% endif %}<a class="account-link" href="{% url 'dashboard' %}">{{ account_name }}</a>{% else %}<a class="account-link" href="{% url 'login' %}">Sign in</a><a class="account-link" href="{% url 'accounts:signup' %}">Join</a>{% endif %}
       </div>
       <details class="mobile-nav">
@@ -57,7 +45,6 @@
             <a href="{% url 'pedigrees:virtual-mating' %}">Virtual mating</a>
             <a href="{% url 'registry:statistics' %}">Statistics</a>
           </nav>
-          <button class="theme-toggle mobile-theme-toggle" type="button" data-theme-toggle aria-label="Change colour theme">Theme</button>
           <div class="mobile-account-actions">
             {% if user.is_authenticated %}
               {% if user.is_staff %}<a href="{% url 'accounts:moderation' %}">Moderation</a>{% endif %}
@@ -80,27 +67,6 @@
     <div class="footer-links"><a href="{% url 'registry:dog-search' %}">Dogs</a><a href="{% url 'registry:kennel-list' %}">Kennels</a><a href="{% url 'pedigrees:index' %}">Pedigrees</a></div>
   </footer>
   <script>
-    (function () {
-      var root = document.documentElement;
-      var buttons = document.querySelectorAll("[data-theme-toggle]");
-      function refresh() {
-        var dark = root.dataset.theme !== "light";
-        buttons.forEach(function (button) {
-          button.textContent = dark ? "Light mode" : "Dark mode";
-          button.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
-        });
-      }
-      buttons.forEach(function (button) {
-        button.addEventListener("click", function () {
-          var next = root.dataset.theme === "light" ? "dark" : "light";
-          root.dataset.theme = next;
-          try { localStorage.setItem("cca-theme", next); } catch (e) {}
-          refresh();
-        });
-      });
-      refresh();
-    })();
-
     (function () {
       var openSuggestions = [];
 
