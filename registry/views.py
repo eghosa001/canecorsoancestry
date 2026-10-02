@@ -253,7 +253,7 @@ def dog_detail(request, slug):
         "@context": "https://schema.org",
         "@type": "Thing",
         "name": dog.name,
-        "url": f"{settings.SITE_URL}{request.path}",
+        "url": request.build_absolute_uri(request.path),
         "description": dog.bio or f"Cane Corso pedigree and ancestry record for {dog.name}.",
         "identifier": [registration.number for registration in dog.display_registrations],
         "additionalProperty": [
@@ -271,7 +271,7 @@ def dog_detail(request, slug):
         structured_data["isPartOf"] = {
             "@type": "Organization",
             "name": dog.kennel.name,
-            "url": f"{settings.SITE_URL}" + reverse("registry:kennel-detail", args=[dog.kennel.slug]),
+            "url": request.build_absolute_uri(reverse("registry:kennel-detail", args=[dog.kennel.slug])),
         }
 
     siblings = sibling_relationships(dog)
