@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.db import connection
 from django.db.models import Prefetch, Q
 from django.http import HttpResponse, JsonResponse
@@ -101,11 +102,22 @@ def home(request):
         for dog in image_candidates
         if dog.display_images or dog.source_image_url
     ][:4]
+    public_stats = cache.get("cca:home:public-stats:v1")
+    if public_stats is None:
+        public_stats = {
+            "dog_count": Dog.objects.filter(is_public=True).count(),
+            "kennel_count": Kennel.objects.count(),
+            "litter_count": Litter.objects.filter(is_public=True).count(),
+            "country_count": Dog.objects.filter(is_public=True)
+            .exclude(country="")
+            .values("country")
+            .distinct()
+            .count(),
+        }
+        cache.set("cca:home:public-stats:v1", public_stats, 300)
+
     context = {
-        "dog_count": Dog.objects.filter(is_public=True).count(),
-        "kennel_count": Kennel.objects.count(),
-        "litter_count": Litter.objects.filter(is_public=True).count(),
-        "country_count": Dog.objects.filter(is_public=True).exclude(country="").values("country").distinct().count(),
+        **public_stats,
         "featured_dogs": featured_dogs,
         "structured_data": json_ld({
             "@context": "https://schema.org",
