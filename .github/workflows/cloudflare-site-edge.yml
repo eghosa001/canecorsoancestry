@@ -78,6 +78,25 @@ jobs:
       - name: Deploy site edge
         run: npx --yes wrangler@4 deploy --config wrangler.site.toml
 
+      - name: Diagnose custom-domain DNS
+        shell: bash
+        run: |
+          set +e
+          zone_json="$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" "https://api.cloudflare.com/client/v4/zones?name=canecorsoancestry.com")"
+          zone_id="$(printf '%s' "$zone_json" | jq -r '.result[0].id // empty' 2>/dev/null)"
+          zone_status="$(printf '%s' "$zone_json" | jq -r '.result[0].status // empty' 2>/dev/null)"
+          nameservers="$(printf '%s' "$zone_json" | jq -r '.result[0].name_servers // [] | join(",")' 2>/dev/null)"
+          if [ -z "$zone_id" ]; then
+            echo "::warning::Cloudflare token cannot see an active zone for canecorsoancestry.com. Custom-domain DNS cannot resolve until the domain is attached to this Cloudflare account and its authoritative nameservers are active."
+          else
+            echo "Cloudflare zone status: $zone_status"
+            echo "Cloudflare nameservers: $nameservers"
+            dns_json="$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?name=canecorsoancestry.com")"
+            dns_count="$(printf '%s' "$dns_json" | jq -r '.result | length' 2>/dev/null)"
+            echo "Apex DNS record count visible to token: ${dns_count:-unknown}"
+          fi
+          exit 0
+
       - name: Verify edge and fast warm-up response
         shell: bash
         run: |
