@@ -5,6 +5,7 @@ import uuid
 
 from django.conf import settings
 from django.core.cache import cache
+from django.db import connection
 from django.http import HttpResponse, JsonResponse
 from django.utils.cache import patch_cache_control
 
@@ -53,7 +54,20 @@ class RequestSecurityMiddleware:
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
         request.request_id = request_id
         started = time.perf_counter()
-        response = self.get_response(request)
+        db_metrics = {"count": 0, "duration_ms": 0.0}
+
+        def track_database(execute, sql, params, many, context):
+            query_started = time.perf_counter()
+            try:
+                return execute(sql, params, many, context)
+            finally:
+                db_metrics["count"] += 1
+                db_metrics["duration_ms"] += (
+                    time.perf_counter() - query_started
+                ) * 1000
+
+        with connection.execute_wrapper(track_database):
+            response = self.get_response(request)
         elapsed_ms = (time.perf_counter() - started) * 1000
         response.setdefault("X-Request-ID", request_id)
         response.setdefault(
@@ -63,14 +77,26 @@ class RequestSecurityMiddleware:
         response.setdefault("X-Permitted-Cross-Domain-Policies", "none")
         response.setdefault("Content-Security-Policy", CSP)
         response.setdefault("Cross-Origin-Resource-Policy", "same-site")
-        response.setdefault("Server-Timing", f"app;dur={elapsed_ms:.1f}")
+        response.setdefault(
+            "Server-Timing",
+            (
+                f'app;dur={elapsed_ms:.1f}, '
+                f'db;dur={db_metrics["duration_ms"]:.1f};'
+                f'desc="{db_metrics["count"]} queries"'
+            ),
+        )
         if elapsed_ms >= 1000:
             logger.warning(
-                "slow_request path=%s method=%s status=%s duration_ms=%.1f request_id=%s",
+                (
+                    "slow_request path=%s method=%s status=%s duration_ms=%.1f "
+                    "db_ms=%.1f db_queries=%s request_id=%s"
+                ),
                 request.path,
                 request.method,
                 response.status_code,
                 elapsed_ms,
+                db_metrics["duration_ms"],
+                db_metrics["count"],
                 request_id,
             )
         if request.path.startswith(PRIVATE_PREFIXES):
