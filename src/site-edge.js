@@ -123,6 +123,7 @@ function originUrlFor(request, env, pathOverride = null) {
 }
 
 function originRequest(request, env, pathOverride = null) {
+  const incoming = new URL(request.url);
   const target = originUrlFor(request, env, pathOverride);
   const headers = new Headers(request.headers);
   headers.delete("host");
