@@ -84,6 +84,14 @@ jobs:
           test "$final_status" = "200"
           test -s /tmp/media-probe.bin
           grep -qi '^content-type: image/' /tmp/media-final.headers
+      - name: Verify homepage renders stored dog images
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --connect-timeout 10 --max-time 30 -sS "$PUBLIC_SITE/" -o /tmp/home.html
+          count="$(grep -o '/media/[^" ]*' /tmp/home.html | wc -l | tr -d ' ')"
+          echo "Homepage managed image references: $count"
+          test "$count" -ge 1
       - name: Verify public production routes
         shell: bash
         run: |
