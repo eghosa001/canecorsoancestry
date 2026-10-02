@@ -71,7 +71,7 @@ jobs:
           value = DogImage.objects.filter(dog__is_public=True).order_by('pk').values_list('image', flat=True).first()
           assert value, 'No public DogImage rows found'
           print('/media/' + str(value).lstrip('/'))
-          ")"
+          " | tail -n 1)"
           echo "Testing $media_path"
           first_status="$(curl --connect-timeout 10 --max-time 30 -sS -D /tmp/media-first.headers -o /dev/null -w '%{http_code}' "$PUBLIC_SITE$media_path" || true)"
           location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' /tmp/media-first.headers)"
