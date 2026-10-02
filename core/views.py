@@ -116,6 +116,7 @@ def home(request):
         }
         cache.set("cca:home:public-stats:v1", public_stats, 300)
 
+    public_root = request.build_absolute_uri("/").rstrip("/")
     context = {
         **public_stats,
         "featured_dogs": featured_dogs,
@@ -123,11 +124,11 @@ def home(request):
             "@context": "https://schema.org",
             "@type": "WebSite",
             "name": settings.SITE_NAME,
-            "url": settings.SITE_URL + "/",
+            "url": public_root + "/",
             "description": "Cane Corso pedigree, bloodline, kennel and provenance research.",
             "potentialAction": {
                 "@type": "SearchAction",
-                "target": {"@type": "EntryPoint", "urlTemplate": settings.SITE_URL + "/dogs/?q={search_term_string}"},
+                "target": {"@type": "EntryPoint", "urlTemplate": public_root + "/dogs/?q={search_term_string}"},
                 "query-input": "required name=search_term_string",
             },
         }),
