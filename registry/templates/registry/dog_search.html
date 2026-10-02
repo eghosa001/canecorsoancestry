@@ -55,7 +55,7 @@
     {% for dog in dogs %}
       <a class="search-result-card" href="{% url 'registry:dog-detail' dog.slug %}?source=search">
         <div class="search-result-media">
-          {% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}">{% elif dog.source_image_url %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% else %}<div class="media-placeholder">CCA</div>{% endif %}
+          {% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}">{% elif dog.source_image_url %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% else %}<div class="media-placeholder">CCA</div>{% endif %}
         </div>
         <div class="search-result-main">
           <div class="result-title-row">
