@@ -215,10 +215,12 @@ def main():
                 gold = page.evaluate(
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()"
                 )
-                if gold.lower() != "#d2ad57":
+                if gold.lower() != "#c7a85b":
                     raise AssertionError(f"Unexpected production theme accent: {gold}")
                 if page.locator("[data-theme-toggle]").count():
                     raise AssertionError("Production still exposes the removed theme toggle")
+                if page.locator(".hero-mark").evaluate("(el) => getComputedStyle(el).display") != "none":
+                    raise AssertionError("Original production hero should not show the later decorative logo panel")
                 canonical = page.locator('link[rel="canonical"]').get_attribute("href")
                 if canonical != BASE_URL + "/":
                     raise AssertionError(f"Production canonical host is wrong: {canonical}")
