@@ -155,22 +155,36 @@ def main():
         dog_links = detail_page.locator(".search-result-card")
         if not dog_links.count():
             raise AssertionError("Production dog search returned no result for Branco")
-        dog_links.first.click()
-        detail_page.wait_for_load_state("networkidle")
+        dog_href = dog_links.first.get_attribute("href")
+        if not dog_href:
+            raise AssertionError("Production dog search result has no link")
+        dog_response, dog_elapsed = wait_for_real_app(detail_page, dog_href)
         assert_page(detail_page, "dog-profile-desktop")
         detail_page.screenshot(path=OUT / "dog-profile-desktop.png", full_page=True)
-        report["details"].append({"dog_profile": detail_page.url})
+        report["details"].append({
+            "dog_profile": detail_page.url,
+            "seconds": round(dog_elapsed, 3),
+            "server_timing": dog_response.headers.get("server-timing") if dog_response else None,
+            "edge_cache": dog_response.headers.get("x-cca-edge-cache") if dog_response else None,
+        })
         detail_page.close()
 
         pedigree_page = browser.new_page(viewport={"width": 1440, "height": 1000})
         wait_for_real_app(pedigree_page, "/pedigrees/")
         pedigree_links = pedigree_page.locator(".pedigree-index-card")
         if pedigree_links.count():
-            pedigree_links.first.click()
-            pedigree_page.wait_for_load_state("networkidle")
+            pedigree_href = pedigree_links.first.get_attribute("href")
+            if not pedigree_href:
+                raise AssertionError("Production pedigree result has no link")
+            pedigree_response, pedigree_elapsed = wait_for_real_app(pedigree_page, pedigree_href)
             assert_page(pedigree_page, "pedigree-detail-desktop")
             pedigree_page.screenshot(path=OUT / "pedigree-detail-desktop.png", full_page=True)
-            report["details"].append({"pedigree_detail": pedigree_page.url})
+            report["details"].append({
+                "pedigree_detail": pedigree_page.url,
+                "seconds": round(pedigree_elapsed, 3),
+                "server_timing": pedigree_response.headers.get("server-timing") if pedigree_response else None,
+                "edge_cache": pedigree_response.headers.get("x-cca-edge-cache") if pedigree_response else None,
+            })
         pedigree_page.close()
 
         for path, label in (
