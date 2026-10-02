@@ -13,3 +13,12 @@ ORIGIN_URL = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
 
 [triggers]
 crons = ["*/4 * * * *"]
+
+
+[[routes]]
+pattern = "canecorsoancestry.com"
+custom_domain = true
+
+[[routes]]
+pattern = "www.canecorsoancestry.com"
+custom_domain = true
