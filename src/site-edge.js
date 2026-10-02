@@ -1,5 +1,5 @@
 const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
-// Bump this whenever public HTML/static layout assets must invalidate edge cache.
+// Bump this whenever public HTML/static layout assets must invalidate edge cache. Image refresh 2026-10-02.
 const EDGE_CACHE_VERSION = "image-refresh-v13";
 const CACHE_FRESH_SECONDS = 300;
 const CACHE_RETENTION_SECONDS = 604800;
