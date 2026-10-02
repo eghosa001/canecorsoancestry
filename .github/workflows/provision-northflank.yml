@@ -1,5 +1,5 @@
 name: Provision Northflank origin
-# Redeploy marker: logo-v27
+# Redeploy marker: logo-v28
 
 on:
   push:
