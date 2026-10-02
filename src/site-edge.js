@@ -127,6 +127,7 @@ function originRequest(request, env, pathOverride = null) {
   const headers = new Headers(request.headers);
   headers.delete("host");
   headers.set("x-forwarded-proto", "https");
+  headers.set("x-forwarded-host", incoming.host);
   const clientIp = request.headers.get("cf-connecting-ip");
   if (clientIp) headers.set("x-forwarded-for", clientIp);
   headers.set("x-cca-edge", "1");
