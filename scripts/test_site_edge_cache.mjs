@@ -40,7 +40,7 @@ const suggestionsRequest = new Request(suggestionsUrl, {
 assert.equal(isCacheablePublicPath(suggestionsUrl, suggestionsRequest), true);
 assert.equal(
   cacheKey(trackedRequest).url,
-  "https://example.test/dogs/example-dog/?__cca_edge_v=premium-theme-v12",
+  "https://example.test/dogs/example-dog/?__cca_edge_v=image-refresh-v13",
 );
 
 console.log("site-edge cache policy tests passed");
