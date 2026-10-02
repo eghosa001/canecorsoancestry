@@ -62,6 +62,28 @@ jobs:
           "
       - name: Audit pedigree integrity
         run: python manage.py audit_pedigree_data --fail-on-critical
+      - name: Verify one production dog image end to end
+        shell: bash
+        run: |
+          set -euo pipefail
+          media_path="$(python manage.py shell -c "
+          from registry.models import DogImage
+          value = DogImage.objects.filter(dog__is_public=True).order_by('pk').values_list('image', flat=True).first()
+          assert value, 'No public DogImage rows found'
+          print('/media/' + str(value).lstrip('/'))
+          ")"
+          echo "Testing $media_path"
+          first_status="$(curl --connect-timeout 10 --max-time 30 -sS -D /tmp/media-first.headers -o /dev/null -w '%{http_code}' "$PUBLIC_SITE$media_path" || true)"
+          location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' /tmp/media-first.headers)"
+          echo "Public media entry -> HTTP $first_status"
+          echo "Redirect target host: $(printf '%s' "$location" | sed -E 's#https?://([^/]+).*#\\1#')"
+          test "$first_status" = "302"
+          test -n "$location"
+          final_status="$(curl -L --connect-timeout 10 --max-time 30 -sS -D /tmp/media-final.headers -o /tmp/media-probe.bin -w '%{http_code}' "$PUBLIC_SITE$media_path" || true)"
+          echo "Public media final -> HTTP $final_status"
+          test "$final_status" = "200"
+          test -s /tmp/media-probe.bin
+          grep -qi '^content-type: image/' /tmp/media-final.headers
       - name: Verify public production routes
         shell: bash
         run: |
