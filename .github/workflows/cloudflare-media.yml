@@ -89,8 +89,7 @@ jobs:
           empty_digest="$(printf '' | sha256sum | awk '{print $1}')"
           for key in "dogs/bellissimo/karma-custodi-nos.webp" "dogs/archive/111/111524.jpg" "dogs/archive/026/26098.jpg" "dogs/archive/014/14125.jpg"; do
             timestamp="$(date +%s)"
-            signature="$(python -c 'import hashlib,hmac,os; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["DJANGO_SECRET_KEY"].encode(), f"HEAD\\n{k}\\n{t}\\n{d}".encode(), hashlib.sha256).hexdigest())' \
-              R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$empty_digest")"
+            signature="$(R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$empty_digest" python -c 'import hashlib,hmac,os; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["DJANGO_SECRET_KEY"].encode(), f"HEAD\\n{k}\\n{t}\\n{d}".encode(), hashlib.sha256).hexdigest())')"
             status="$(curl --connect-timeout 8 --max-time 20 -sS -o /dev/null -w '%{http_code}' -X HEAD \
               -H "x-r2-timestamp: $timestamp" \
               -H "x-r2-content-sha256: $empty_digest" \
