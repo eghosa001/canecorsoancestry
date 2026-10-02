@@ -13,6 +13,8 @@ on:
       - "config/**"
       - "Dockerfile"
       - "src/site-edge.js"
+      - "wrangler.site.toml"
+      - ".github/workflows/provision-northflank.yml"
       - "scripts/production_smoke.py"
       - ".github/workflows/production-smoke.yml"
 
