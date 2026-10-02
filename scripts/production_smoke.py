@@ -285,6 +285,14 @@ def main():
                 page.wait_for_timeout(150)
                 if page.locator(".mobile-nav").get_attribute("open") is not None:
                     raise AssertionError("Production mobile menu stays open after scroll")
+                skip_link = page.locator(".skip-link")
+                skip_top = skip_link.evaluate("(el) => el.getBoundingClientRect().top")
+                if skip_top >= 0:
+                    raise AssertionError("Production skip-link should remain hidden after pointer/scroll interactions")
+                skip_link.focus()
+                if skip_link.evaluate("(el) => el.getBoundingClientRect().top") < 0:
+                    raise AssertionError("Production skip-link is not available for keyboard focus")
+                page.locator("main").focus()
                 verify_featured_images(page, "home-mobile")
             if label == "dogs":
                 search = page.locator("#q")
