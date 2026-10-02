@@ -9,7 +9,7 @@ import requests
 from playwright.sync_api import sync_playwright
 
 
-BASE_URL = os.getenv("PRODUCTION_BASE_URL", "https://canecorsoancestry.com").rstrip("/")
+BASE_URL = os.getenv("PRODUCTION_BASE_URL", "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev").rstrip("/")
 OUT = Path(os.getenv("PRODUCTION_SMOKE_DIR", "artifacts/production-smoke"))
 OUT.mkdir(parents=True, exist_ok=True)
 
