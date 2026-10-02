@@ -158,7 +158,8 @@ def main():
         dog_href = dog_links.first.get_attribute("href")
         if not dog_href:
             raise AssertionError("Production dog search result has no link")
-        dog_response, dog_elapsed = wait_for_real_app(detail_page, dog_href)
+        dog_path = dog_href.split("?", 1)[0] + "?smoke=1"
+        dog_response, dog_elapsed = wait_for_real_app(detail_page, dog_path)
         assert_page(detail_page, "dog-profile-desktop")
         detail_page.screenshot(path=OUT / "dog-profile-desktop.png", full_page=True)
         report["details"].append({
@@ -176,7 +177,8 @@ def main():
             pedigree_href = pedigree_links.first.get_attribute("href")
             if not pedigree_href:
                 raise AssertionError("Production pedigree result has no link")
-            pedigree_response, pedigree_elapsed = wait_for_real_app(pedigree_page, pedigree_href)
+            pedigree_path = pedigree_href.split("?", 1)[0] + "?smoke=1"
+            pedigree_response, pedigree_elapsed = wait_for_real_app(pedigree_page, pedigree_path)
             assert_page(pedigree_page, "pedigree-detail-desktop")
             pedigree_page.screenshot(path=OUT / "pedigree-detail-desktop.png", full_page=True)
             report["details"].append({
