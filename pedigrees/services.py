@@ -250,11 +250,17 @@ def offspring_for(dog, public_only=True):
     return queryset.select_related("kennel", "sire", "dam").distinct().order_by("name")
 
 
-def mate_relationships(dog, public_only=True, preview_limit=5):
+def mate_relationships(dog, public_only=True, preview_limit=5, children=None):
     """Group mating partners while retaining only a small offspring preview per mate."""
     groups = {}
-    children = offspring_for(dog, public_only=public_only)
-    for child in children.iterator(chunk_size=500):
+    if children is None:
+        children = offspring_for(dog, public_only=public_only)
+    child_rows = (
+        children.iterator(chunk_size=500)
+        if hasattr(children, "iterator")
+        else children
+    )
+    for child in child_rows:
         if child.sire_id == dog.pk:
             mate = child.dam
         else:
@@ -323,7 +329,12 @@ def descendant_generations(
     return layers
 
 
-def direct_relative_health(dog, public_only=True):
+def direct_relative_health(
+    dog,
+    public_only=True,
+    sibling_rows=None,
+    children=None,
+):
     """Summarize published health records for parents, siblings and offspring."""
     relatives = {}
 
@@ -339,11 +350,16 @@ def direct_relative_health(dog, public_only=True):
 
     add(dog.sire, "Sire")
     add(dog.dam, "Dam")
-    for item in sibling_relationships(
-        dog, public_only=public_only, limit=200
-    ):
+    if sibling_rows is None:
+        sibling_rows = sibling_relationships(
+            dog, public_only=public_only, limit=200
+        )
+    for item in list(sibling_rows)[:200]:
         add(item["dog"], item["relation"])
-    for child in offspring_for(dog, public_only=public_only)[:200]:
+
+    if children is None:
+        children = list(offspring_for(dog, public_only=public_only)[:200])
+    for child in list(children)[:200]:
         add(child, "Offspring")
 
     if not relatives:
