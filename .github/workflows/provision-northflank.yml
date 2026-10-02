@@ -25,7 +25,7 @@ jobs:
       NF_API: https://api.northflank.com/v1
       NF_PROJECT_NAME: CaneCorsoAncestry
       NF_SERVICE_NAME: canecorsoancestry
-      PUBLIC_SITE: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
+      PUBLIC_SITE: https://canecorsoancestry.com
       MEDIA_EDGE: https://canecorsoancestry-edge.aighewieghosa111.workers.dev
 
     steps:
@@ -141,8 +141,8 @@ jobs:
                 DJANGO_DB_SSLMODE:"require",
                 DJANGO_DB_EXTRA_SCHEMAS:"extensions,public",
                 DJANGO_DB_CONN_MAX_AGE:"300",
-                DJANGO_ALLOWED_HOSTS:".code.run,127.0.0.1,localhost",
-                DJANGO_CSRF_TRUSTED_ORIGINS:"https://*.code.run,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",
+                DJANGO_ALLOWED_HOSTS:"canecorsoancestry.com,www.canecorsoancestry.com,.code.run,127.0.0.1,localhost",
+                DJANGO_CSRF_TRUSTED_ORIGINS:"https://*.code.run,https://canecorsoancestry.com,https://www.canecorsoancestry.com,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",
                 SITE_URL:$site,
                 R2_GATEWAY_URL:$media,
                 MEDIA_EDGE_BASE_URL:$media,
