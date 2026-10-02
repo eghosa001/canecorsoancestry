@@ -72,7 +72,8 @@ button, select { cursor: pointer; }
   color: var(--gold-soft);
   font-weight: 800;
 }
-.skip-link:focus { transform: translateY(0); }
+.skip-link:focus-visible { transform: translateY(0); }
+.skip-link:focus:not(:focus-visible) { transform: translateY(-180%); }
 main:focus { outline: none; }
 
 .site-header {
