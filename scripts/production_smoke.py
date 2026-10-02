@@ -289,10 +289,13 @@ def main():
                 skip_top = skip_link.evaluate("(el) => el.getBoundingClientRect().top")
                 if skip_top >= 0:
                     raise AssertionError("Production skip-link should remain hidden after pointer/scroll interactions")
-                skip_link.focus()
+                page.evaluate("document.activeElement && document.activeElement.blur()")
+                page.keyboard.press("Tab")
+                if not skip_link.evaluate("(el) => document.activeElement === el"):
+                    raise AssertionError("Production skip-link is not first in keyboard navigation")
                 if skip_link.evaluate("(el) => el.getBoundingClientRect().top") < 0:
-                    raise AssertionError("Production skip-link is not available for keyboard focus")
-                page.locator("main").focus()
+                    raise AssertionError("Production skip-link is not visible for keyboard focus")
+                page.keyboard.press("Tab")
                 verify_featured_images(page, "home-mobile")
             if label == "dogs":
                 search = page.locator("#q")
