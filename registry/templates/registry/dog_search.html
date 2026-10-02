@@ -66,7 +66,6 @@
           <p>{{ dog.colour|default:"Colour not recorded" }}{% if dog.date_of_birth %} · Born {{ dog.date_of_birth }}{% endif %}</p>
           {% if dog.kennel %}<p class="muted">{{ dog.kennel.name }}</p>{% endif %}
         </div>
-        <span class="verification-pill">{{ dog.get_verification_state_display }}</span>
       </a>
     {% empty %}
       <div class="empty-state">
