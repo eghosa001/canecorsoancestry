@@ -186,7 +186,11 @@ def dog_search(request):
 
 
 def dog_detail(request, slug):
-    dogs = _dog_cards(Dog.objects.filter(is_public=True), include_parents=True).prefetch_related(
+    dogs = _dog_cards(
+        Dog.objects.filter(is_public=True),
+        include_parents=True,
+        include_sources=False,
+    ).prefetch_related(
         Prefetch(
             "health_records",
             queryset=HealthRecord.objects.order_by("test_type", "-tested_on"),
@@ -210,6 +214,10 @@ def dog_detail(request, slug):
             return redirect("registry:dog-detail", slug=old.dog.slug, permanent=True)
         return get_object_or_404(dogs, slug=slug)
 
+    if not dog.display_images:
+        dog.display_source_media = list(
+            DogSource.objects.filter(dog=dog).order_by("-verified_at", "-created_at")
+        )
     _attach_source_image_urls([dog])
 
     try:
@@ -252,15 +260,24 @@ def dog_detail(request, slug):
             "url": f"{settings.SITE_URL}" + reverse("registry:kennel-detail", args=[dog.kennel.slug]),
         }
 
+    siblings = sibling_relationships(dog)
+    offspring = list(offspring_for(dog))
+    mates = mate_relationships(dog, children=offspring)
+    relative_health = direct_relative_health(
+        dog,
+        sibling_rows=siblings,
+        children=offspring,
+    )
+
     return render(
         request,
         "registry/dog_detail.html",
         {
             "dog": dog,
-            "siblings": sibling_relationships(dog),
-            "offspring": offspring_for(dog),
-            "mates": mate_relationships(dog),
-            "relative_health": direct_relative_health(dog),
+            "siblings": siblings,
+            "offspring": offspring,
+            "mates": mates,
+            "relative_health": relative_health,
             "coi_percent": coi_percent,
             "coi_error": coi_error,
             "can_contribute": can_contribute_to_dog(request.user, dog),
