@@ -3,6 +3,7 @@ import {
   cacheKey,
   hasPrivateCookie,
   isCacheablePublicPath,
+  originRequest,
 } from "../src/site-edge.js";
 
 const publicUrl = new URL("https://example.test/dogs/example-dog/");
@@ -44,3 +45,11 @@ assert.equal(
 );
 
 console.log("site-edge cache policy tests passed");
+
+const proxied = originRequest(
+  new Request("https://example.test/media/dogs/example.jpg"),
+  { ORIGIN_URL: "https://origin.example" },
+);
+assert.equal(new URL(proxied.url).host, "origin.example");
+assert.equal(proxied.headers.get("x-forwarded-host"), "example.test");
+assert.equal(proxied.headers.get("x-cca-edge"), "1");
