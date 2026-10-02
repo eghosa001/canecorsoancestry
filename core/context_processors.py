@@ -20,10 +20,11 @@ def site_metadata(request):
                 membership.kennel.name if membership else request.user.get_username()
             )
 
+    public_root = request.build_absolute_uri("/").rstrip("/")
     return {
         "site_name": settings.SITE_NAME,
-        "site_url": settings.SITE_URL,
-        "canonical_url": f"{settings.SITE_URL}{request.path}",
+        "site_url": public_root,
+        "canonical_url": request.build_absolute_uri(request.path),
         "page_noindex": request.path.startswith(PRIVATE_PREFIXES),
         "account_email_enabled": getattr(settings, "ACCOUNT_EMAIL_ENABLED", False),
         "account_name": account_name,
