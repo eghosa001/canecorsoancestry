@@ -131,8 +131,53 @@ def concurrent_health_probe(total=16, workers=8):
     return result
 
 
+def concurrent_profile_probe(path, total=8, workers=4):
+    def one(index):
+        separator = "&" if "?" in path else "?"
+        url = f"{BASE_URL}{path}{separator}smoke=concurrency-{index}"
+        started = time.perf_counter()
+        response = requests.get(
+            url,
+            headers={"Accept": "text/html", "User-Agent": "CCA-Production-Smoke/1.0"},
+            timeout=20,
+        )
+        elapsed = time.perf_counter() - started
+        warming = response.headers.get("x-cca-edge-warming")
+        is_profile = "BRANCO" in response.text.upper()
+        return response.status_code, warming, is_profile, elapsed
+
+    timings = []
+    failures = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(one, i) for i in range(total)]
+        for future in as_completed(futures):
+            status, warming, is_profile, elapsed = future.result()
+            timings.append(elapsed)
+            if status != 200 or warming or not is_profile:
+                failures.append(
+                    {"status": status, "warming": warming, "is_profile": is_profile}
+                )
+
+    if failures:
+        raise AssertionError(f"Concurrent dog-profile probe failures: {failures}")
+
+    ordered = sorted(timings)
+    p95_index = max(0, min(len(ordered) - 1, int(len(ordered) * 0.95) - 1))
+    result = {
+        "requests": total,
+        "concurrency": workers,
+        "median_seconds": round(statistics.median(timings), 3),
+        "p95_seconds": round(ordered[p95_index], 3),
+        "max_seconds": round(max(timings), 3),
+    }
+    if result["p95_seconds"] > 5:
+        raise AssertionError(f"Concurrent dog-profile probe is too slow: {result}")
+    return result
+
+
 def main():
     report = {"base_url": BASE_URL, "desktop": [], "mobile": [], "details": []}
+    dog_load_path = None
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -158,7 +203,8 @@ def main():
         dog_href = dog_links.first.get_attribute("href")
         if not dog_href:
             raise AssertionError("Production dog search result has no link")
-        dog_path = dog_href.split("?", 1)[0] + "?smoke=1"
+        dog_load_path = dog_href.split("?", 1)[0]
+        dog_path = dog_load_path + "?smoke=1"
         dog_response, dog_elapsed = wait_for_real_app(detail_page, dog_path)
         assert_page(detail_page, "dog-profile-desktop")
         detail_page.screenshot(path=OUT / "dog-profile-desktop.png", full_page=True)
@@ -216,7 +262,10 @@ def main():
 
         browser.close()
 
-    report["concurrency"] = concurrent_health_probe()
+    report["concurrency"] = {
+        "health": concurrent_health_probe(),
+        "dog_profile": concurrent_profile_probe(dog_load_path),
+    }
     (OUT / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
 
