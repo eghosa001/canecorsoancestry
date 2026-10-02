@@ -1,9 +1,9 @@
 const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
 // Bump this whenever public HTML/static layout assets must invalidate edge cache. Image refresh 2026-10-02. Clean square logo v16.
 const EDGE_CACHE_VERSION = "bellissimo-gold-v18"; // Restore original dark gold theme; cache test synced
-const CACHE_FRESH_SECONDS = 300;
+const CACHE_FRESH_SECONDS = 900;
 const CACHE_RETENTION_SECONDS = 604800;
-const ORIGIN_GRACE_MS = 2500;
+const ORIGIN_GRACE_MS = 3500;
 const AUTH_GRACE_MS = 450;
 const READY_TIMEOUT_MS = 3500;
 const AUTH_READY_TIMEOUT_MS = 4500;
@@ -491,11 +491,10 @@ async function handleRequest(request, env, ctx) {
         ctx.waitUntil(refreshCachedPage(request, env, cache, key));
         return cachedForVisitor(cached, "STALE", request);
       }
-      if (isSearchTrackingUrl(url)) {
-        ctx.waitUntil(fetchOrigin(request, env).catch(() => undefined));
-      } else {
-        ctx.waitUntil(wakeCriticalOrigin(env));
-      }
+      // Fresh cache hits must not amplify traffic to Django. The scheduled
+      // Worker trigger keeps the origin/auth path warm every four minutes.
+      // Search popularity is intentionally approximate on cached hits rather
+      // than recomputing an expensive dog profile only to increment a counter.
       return cachedForVisitor(cached, "HIT", request);
     }
   }
