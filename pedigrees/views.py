@@ -6,6 +6,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 
 from registry.models import Dog
+from registry.querysets import public_dog_match_filter
 
 from .services import (
     common_ancestors,
@@ -20,7 +21,7 @@ ALLOWED_GENERATIONS = {4, 6, 8, 10}
 
 
 def _public_dogs():
-    return Dog.objects.filter(is_public=True).select_related("kennel", "sire", "dam")
+    return Dog.objects.filter(is_public=True).select_related("kennel")
 
 
 def _requested_generations(request):
@@ -63,13 +64,7 @@ def pedigree_index(request):
     query = request.GET.get("q", "").strip()
     dogs = _public_dogs()
     if query:
-        dogs = dogs.filter(
-            Q(name__icontains=query)
-            | Q(bloodline__icontains=query)
-            | Q(aliases__name__icontains=query)
-            | Q(kennel__name__icontains=query)
-            | Q(registrations__number__icontains=query)
-        ).distinct()
+        dogs = dogs.filter(public_dog_match_filter(query))
     else:
         dogs = dogs.order_by("name")[:24]
     return render(request, "pedigrees/index.html", {"dogs": dogs, "query": query})
