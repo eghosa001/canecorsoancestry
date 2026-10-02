@@ -2932,3 +2932,46 @@ html[data-theme="dark"] .hero-mark {
     border-radius: 22px;
   }
 }
+
+
+/* Clean logo presentation v16 */
+.brand-mark {
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  object-fit: contain;
+  object-position: center;
+  border: 0;
+  border-radius: 0 !important;
+  box-shadow: none;
+  background: transparent;
+}
+.hero-logo-art {
+  position: relative;
+  z-index: 2;
+  width: min(92%, 430px);
+  height: auto;
+  object-fit: contain;
+  border: 0;
+  border-radius: 0 !important;
+  box-shadow: none;
+  filter: none;
+}
+.hero-mark {
+  border-radius: 0 !important;
+}
+.hero-brand-plaque {
+  display: none !important;
+}
+@media (max-width: 760px) {
+  .brand-mark {
+    width: 48px;
+    height: 48px;
+    flex-basis: 48px;
+    border-radius: 0 !important;
+  }
+  .hero-logo-art {
+    width: min(94%, 360px);
+    border-radius: 0 !important;
+  }
+}
