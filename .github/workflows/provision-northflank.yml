@@ -141,7 +141,7 @@ jobs:
                 DJANGO_DB_SSLMODE:"require",
                 DJANGO_DB_EXTRA_SCHEMAS:"extensions,public",
                 DJANGO_DB_CONN_MAX_AGE:"300",
-                DJANGO_ALLOWED_HOSTS:"canecorsoancestry.com,www.canecorsoancestry.com,.code.run,127.0.0.1,localhost",
+                DJANGO_ALLOWED_HOSTS:"canecorsoancestry.com,www.canecorsoancestry.com,canecorsoancestry-site-edge.aighewieghosa111.workers.dev,.code.run,127.0.0.1,localhost",
                 DJANGO_CSRF_TRUSTED_ORIGINS:"https://*.code.run,https://canecorsoancestry.com,https://www.canecorsoancestry.com,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",
                 SITE_URL:$site,
                 R2_GATEWAY_URL:$media,
