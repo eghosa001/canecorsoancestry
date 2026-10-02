@@ -153,8 +153,11 @@ jobs:
                 DJANGO_LOG_LEVEL:"INFO",
                 ANCESTRY_EMAIL_NOTIFICATIONS:"0",
                 GUNICORN_WORKERS:"1",
-                GUNICORN_THREADS:"2",
-                GUNICORN_TIMEOUT:"60"
+                GUNICORN_THREADS:"4",
+                GUNICORN_TIMEOUT:"60",
+                GUNICORN_KEEPALIVE:"5",
+                GUNICORN_MAX_REQUESTS:"1000",
+                GUNICORN_MAX_REQUESTS_JITTER:"100"
               },
               healthChecks:[{
                 protocol:"HTTP",

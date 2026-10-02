@@ -118,6 +118,79 @@ class MemberSignUpForm(UserCreationForm):
         return user
 
 
+def _configure_parent_autocomplete(form, related_dogs, *, initial_sire=None, initial_dam=None):
+    """Keep parent IDs server-validated without rendering tens of thousands of <option>s."""
+    base_order = list(form.fields)
+    initial_by_role = {"sire": initial_sire, "dam": initial_dam}
+    sex_by_role = {"sire": Dog.Sex.MALE, "dam": Dog.Sex.FEMALE}
+
+    for role in ("sire", "dam"):
+        form.fields[role].queryset = related_dogs
+        form.fields[role].widget = forms.HiddenInput()
+        query_name = f"{role}_q"
+        form.fields[query_name] = forms.CharField(
+            required=False,
+            label=role.title(),
+            help_text="Type at least 2 characters and choose a matching dog. Exact unique names or registrations also work.",
+            widget=forms.TextInput(
+                attrs={
+                    "data-dog-autocomplete": "",
+                    "data-dog-autocomplete-mode": "fill",
+                    "data-dog-autocomplete-target": f"id_{role}",
+                    "data-dog-sex": sex_by_role[role],
+                    "autocomplete": "off",
+                    "placeholder": f"Search {role} by name or registration",
+                }
+            ),
+        )
+        if not form.is_bound and initial_by_role[role]:
+            form.initial[query_name] = initial_by_role[role].name
+
+    ordered = []
+    for name in base_order:
+        ordered.append(name)
+        if name in {"sire", "dam"}:
+            ordered.append(f"{name}_q")
+    form.order_fields(ordered)
+
+
+def _resolve_parent_autocomplete(form, cleaned, role, expected_sex):
+    selected = cleaned.get(role)
+    query = (cleaned.get(f"{role}_q") or "").strip()
+
+    if selected is None and query:
+        matches = list(
+            form.fields[role]
+            .queryset.filter(
+                Q(name__iexact=query)
+                | Q(registrations__number__iexact=query)
+            )
+            .distinct()
+            .order_by("name")[:2]
+        )
+        if len(matches) == 1:
+            selected = matches[0]
+        elif len(matches) > 1:
+            form.add_error(
+                f"{role}_q",
+                "More than one dog matches that value. Choose a suggestion so the exact dog ID is used.",
+            )
+        else:
+            form.add_error(
+                f"{role}_q",
+                "No matching dog was found. Type at least 2 characters and choose a suggestion.",
+            )
+
+    if selected and selected.sex not in {expected_sex, Dog.Sex.UNKNOWN}:
+        form.add_error(
+            f"{role}_q",
+            f"The selected {role} is recorded as {selected.get_sex_display().lower()}.",
+        )
+
+    cleaned[role] = selected
+    return selected
+
+
 class DogSubmissionForm(forms.Form):
     name = forms.CharField(max_length=220)
     sex = forms.ChoiceField(choices=Dog.Sex.choices)
@@ -141,21 +214,16 @@ class DogSubmissionForm(forms.Form):
         self.fields["kennel"].queryset = Kennel.objects.filter(pk__in=kennel_ids)
         related_dogs = Dog.objects.filter(
             Q(is_public=True) | Q(kennel_id__in=kennel_ids)
-        ).distinct().order_by("name")
-        self.fields["sire"].queryset = related_dogs
-        self.fields["dam"].queryset = related_dogs
+        )
+        _configure_parent_autocomplete(self, related_dogs)
         self.fields["litter"].queryset = Litter.objects.filter(
             kennel_id__in=kennel_ids
         ).order_by("-date_of_birth", "code")
 
     def clean(self):
         cleaned = super().clean()
-        sire = cleaned.get("sire")
-        dam = cleaned.get("dam")
-        if sire and sire.sex == Dog.Sex.FEMALE:
-            self.add_error("sire", "The selected sire is recorded as female.")
-        if dam and dam.sex == Dog.Sex.MALE:
-            self.add_error("dam", "The selected dam is recorded as male.")
+        sire = _resolve_parent_autocomplete(self, cleaned, "sire", Dog.Sex.MALE)
+        dam = _resolve_parent_autocomplete(self, cleaned, "dam", Dog.Sex.FEMALE)
 
         registration = (cleaned.get("registration") or "").strip()
         if registration and DogRegistration.objects.filter(
@@ -216,9 +284,15 @@ class DogCorrectionForm(forms.ModelForm):
             kennel_ids = user.kennel_memberships.values_list("kennel_id", flat=True)
         related_dogs = Dog.objects.filter(
             Q(is_public=True) | Q(kennel_id__in=kennel_ids)
-        ).distinct().order_by("name")
-        self.fields["sire"].queryset = related_dogs
-        self.fields["dam"].queryset = related_dogs
+        )
+        parent_ids = [pk for pk in (self.instance.sire_id, self.instance.dam_id) if pk]
+        parents = Dog.objects.only("id", "name").in_bulk(parent_ids)
+        _configure_parent_autocomplete(
+            self,
+            related_dogs,
+            initial_sire=parents.get(self.instance.sire_id),
+            initial_dam=parents.get(self.instance.dam_id),
+        )
         self.fields["litter"].queryset = Litter.objects.filter(
             kennel_id__in=kennel_ids
         ).order_by("-date_of_birth", "code")
@@ -226,10 +300,12 @@ class DogCorrectionForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         dog = self.instance
-        if cleaned.get("sire") == dog:
-            self.add_error("sire", "A dog cannot be its own sire.")
-        if cleaned.get("dam") == dog:
-            self.add_error("dam", "A dog cannot be its own dam.")
+        sire = _resolve_parent_autocomplete(self, cleaned, "sire", Dog.Sex.MALE)
+        dam = _resolve_parent_autocomplete(self, cleaned, "dam", Dog.Sex.FEMALE)
+        if sire == dog:
+            self.add_error("sire_q", "A dog cannot be its own sire.")
+        if dam == dog:
+            self.add_error("dam_q", "A dog cannot be its own dam.")
         return cleaned
 
 
@@ -447,9 +523,15 @@ class LitterSubmissionForm(forms.Form):
 
         related_dogs = Dog.objects.filter(
             Q(is_public=True) | Q(kennel_id__in=kennel_ids)
-        ).distinct().order_by("name")
-        self.fields["sire"].queryset = related_dogs
-        self.fields["dam"].queryset = related_dogs
+        )
+        initial_sire = litter.sire if litter and litter.sire_id else None
+        initial_dam = litter.dam if litter and litter.dam_id else None
+        _configure_parent_autocomplete(
+            self,
+            related_dogs,
+            initial_sire=initial_sire,
+            initial_dam=initial_dam,
+        )
 
         if kennel:
             self.fields["kennel"].initial = kennel
@@ -471,14 +553,10 @@ class LitterSubmissionForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
-        sire = cleaned.get("sire")
-        dam = cleaned.get("dam")
+        sire = _resolve_parent_autocomplete(self, cleaned, "sire", Dog.Sex.MALE)
+        dam = _resolve_parent_autocomplete(self, cleaned, "dam", Dog.Sex.FEMALE)
         if sire and dam and sire == dam:
-            self.add_error("dam", "Sire and dam must be different dogs.")
-        if sire and sire.sex == Dog.Sex.FEMALE:
-            self.add_error("sire", "The selected sire is recorded as female.")
-        if dam and dam.sex == Dog.Sex.MALE:
-            self.add_error("dam", "The selected dam is recorded as male.")
+            self.add_error("dam_q", "Sire and dam must be different dogs.")
         return cleaned
 
 
