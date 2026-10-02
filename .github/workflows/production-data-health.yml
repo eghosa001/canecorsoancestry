@@ -84,6 +84,25 @@ jobs:
           test "$final_status" = "200"
           test -s /tmp/media-probe.bin
           grep -qi '^content-type: image/' /tmp/media-final.headers
+      - name: Verify critical static assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          browser_ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36'
+          for asset in             "/static/core/cane-corso-premium-logo.webp"             "/static/core/cane-corso-header-mark.webp"             "/static/core/site.css"; do
+            result="$(curl -L --connect-timeout 10 --max-time 30 -sS -A "$browser_ua" -o /tmp/static-probe -w '%{http_code}|%{content_type}|%{size_download}' "$PUBLIC_SITE$asset" || true)"
+            echo "$asset -> $result"
+            status="${result%%|*}"
+            rest="${result#*|}"
+            content_type="${rest%%|*}"
+            size="${rest##*|}"
+            test "$status" = "200"
+            test "$size" -gt 100
+            case "$asset" in
+              *.webp) [[ "$content_type" == image/* ]] ;;
+              *.css) [[ "$content_type" == text/css* ]] ;;
+            esac
+          done
       - name: Verify rendered dog images end to end
         shell: bash
         run: |
