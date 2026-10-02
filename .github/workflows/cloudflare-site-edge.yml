@@ -5,12 +5,14 @@ on:
     paths:
       - "src/site-edge.js"
       - "wrangler.site.toml"
+      - "scripts/test_site_edge_cache.mjs"
       - ".github/workflows/cloudflare-site-edge.yml"
   push:
     branches: [main]
     paths:
       - "src/site-edge.js"
       - "wrangler.site.toml"
+      - "scripts/test_site_edge_cache.mjs"
       - ".github/workflows/cloudflare-site-edge.yml"
   workflow_dispatch:
 
