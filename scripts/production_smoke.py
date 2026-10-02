@@ -81,6 +81,24 @@ def assert_page(page, label, *, mobile=False):
             raise AssertionError(f"{label} mobile header is incorrect: {state}")
 
 
+def verify_featured_images(page, label):
+    images = page.locator(".featured-dog-grid img")
+    if not images.count():
+        return
+    images.first.scroll_into_view_if_needed()
+    page.wait_for_timeout(250)
+    for index in range(min(images.count(), 4)):
+        image = images.nth(index)
+        image.scroll_into_view_if_needed()
+        image.wait_for(state="visible", timeout=10_000)
+        page.wait_for_function(
+            "(img) => img.complete && img.naturalWidth > 0",
+            arg=image.element_handle(),
+            timeout=10_000,
+        )
+    page.screenshot(path=OUT / f"{label}-featured.png", full_page=True)
+
+
 def visit(page, path, label, *, mobile=False):
     console_errors = []
     page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
@@ -136,7 +154,7 @@ def concurrent_health_probe(total=16, workers=8):
     return result
 
 
-def concurrent_profile_probe(path, total=8, workers=4):
+def concurrent_profile_probe(path, total=12, workers=8):
     def one(index):
         separator = "&" if "?" in path else "?"
         url = f"{BASE_URL}{path}{separator}smoke=concurrency-{index}"
@@ -202,6 +220,7 @@ def main():
                 canonical = page.locator('link[rel="canonical"]').get_attribute("href")
                 if canonical != BASE_URL + "/":
                     raise AssertionError(f"Production canonical host is wrong: {canonical}")
+                verify_featured_images(page, "home-desktop")
             page.close()
 
         detail_page = browser.new_page(viewport={"width": 1440, "height": 1000})
@@ -266,6 +285,7 @@ def main():
                 page.wait_for_timeout(150)
                 if page.locator(".mobile-nav").get_attribute("open") is not None:
                     raise AssertionError("Production mobile menu stays open after scroll")
+                verify_featured_images(page, "home-mobile")
             if label == "dogs":
                 search = page.locator("#q")
                 search.fill("Bran")
