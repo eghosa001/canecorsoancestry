@@ -537,7 +537,7 @@ async function handleRequest(request, env, ctx) {
   return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
 
-export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, cacheKey };
+export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, cacheKey, originRequest };
 
 export default {
   fetch(request, env, ctx) {
