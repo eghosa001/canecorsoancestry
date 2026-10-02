@@ -2,6 +2,7 @@ from collections import Counter, defaultdict
 from hashlib import sha256
 
 from django.core.cache import cache
+from django.db import connection
 from django.db.models import Q
 
 from registry.models import Dog, HealthRecord
@@ -397,35 +398,77 @@ def common_ancestors(dog_a, dog_b, generations=10, public_only=False):
     )
 
 
-def _pedigree_order(*dogs, public_only=False):
-    """Load all reachable ancestors in breadth-first batches, then topologically order them."""
-    nodes = {}
-    frontier = []
-    for dog in dogs:
-        if dog is None or (public_only and not dog.is_public):
-            continue
-        nodes[dog.pk] = dog
-        frontier.append(dog)
+def _postgres_reachable_ancestor_ids(dogs, public_only=False):
+    """Return unique reachable ancestor IDs in one PostgreSQL recursive query."""
+    if connection.vendor != "postgresql":
+        return None
 
-    while frontier:
-        parent_ids = {
-            parent_id
-            for current in frontier
-            for parent_id in (current.sire_id, current.dam_id)
-            if parent_id and parent_id not in nodes
-        }
-        if not parent_ids:
-            break
-        parents = Dog.objects.in_bulk(parent_ids)
-        if public_only:
-            parents = {
-                pk: parent for pk, parent in parents.items() if parent.is_public
-            }
+    root_ids = [
+        dog.pk
+        for dog in dogs
+        if dog is not None and not (public_only and not dog.is_public)
+    ]
+    if not root_ids:
+        return set()
+
+    table = connection.ops.quote_name(Dog._meta.db_table)
+    placeholders = ", ".join(["%s"] * len(root_ids))
+    public_filter = "WHERE p.is_public" if public_only else ""
+    sql = f"""
+        WITH RECURSIVE ancestry(id, sire_id, dam_id) AS (
+            SELECT id, sire_id, dam_id
+            FROM {table}
+            WHERE id IN ({placeholders})
+          UNION
+            SELECT p.id, p.sire_id, p.dam_id
+            FROM {table} p
+            JOIN ancestry a
+              ON p.id = a.sire_id OR p.id = a.dam_id
+            {public_filter}
+        )
+        SELECT id FROM ancestry
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql, root_ids)
+        return {row[0] for row in cursor.fetchall()}
+
+
+def _pedigree_order(*dogs, public_only=False):
+    """Load all reachable ancestors efficiently, then topologically order them."""
+    reachable_ids = _postgres_reachable_ancestor_ids(
+        dogs, public_only=public_only
+    )
+
+    if reachable_ids is not None:
+        nodes = Dog.objects.in_bulk(reachable_ids)
+    else:
+        nodes = {}
         frontier = []
-        for parent in parents.values():
-            if parent.pk not in nodes:
-                nodes[parent.pk] = parent
-                frontier.append(parent)
+        for dog in dogs:
+            if dog is None or (public_only and not dog.is_public):
+                continue
+            nodes[dog.pk] = dog
+            frontier.append(dog)
+
+        while frontier:
+            parent_ids = {
+                parent_id
+                for current in frontier
+                for parent_id in (current.sire_id, current.dam_id)
+                if parent_id and parent_id not in nodes
+            }
+            if not parent_ids:
+                break
+            parents = Dog.objects.in_bulk(parent_ids)
+            if public_only:
+                parents = {
+                    pk: parent for pk, parent in parents.items() if parent.is_public
+                }
+            frontier = []
+            for parent in parents.values():
+                if parent.pk not in nodes:
+                    nodes[parent.pk] = parent
+                    frontier.append(parent)
 
     visited = set()
     visiting = set()
