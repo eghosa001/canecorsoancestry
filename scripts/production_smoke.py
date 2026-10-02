@@ -178,6 +178,7 @@ def concurrent_profile_probe(path, total=8, workers=4):
 def main():
     report = {"base_url": BASE_URL, "desktop": [], "mobile": [], "details": []}
     dog_load_path = None
+    pedigree_load_path = None
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -193,6 +194,9 @@ def main():
                     raise AssertionError(f"Unexpected production theme accent: {gold}")
                 if page.locator("[data-theme-toggle]").count():
                     raise AssertionError("Production still exposes the removed theme toggle")
+                canonical = page.locator('link[rel="canonical"]').get_attribute("href")
+                if canonical != BASE_URL + "/":
+                    raise AssertionError(f"Production canonical host is wrong: {canonical}")
             page.close()
 
         detail_page = browser.new_page(viewport={"width": 1440, "height": 1000})
@@ -223,7 +227,8 @@ def main():
             pedigree_href = pedigree_links.first.get_attribute("href")
             if not pedigree_href:
                 raise AssertionError("Production pedigree result has no link")
-            pedigree_path = pedigree_href.split("?", 1)[0] + "?smoke=1"
+            pedigree_load_path = pedigree_href.split("?", 1)[0]
+            pedigree_path = pedigree_load_path + "?smoke=1"
             pedigree_response, pedigree_elapsed = wait_for_real_app(pedigree_page, pedigree_path)
             assert_page(pedigree_page, "pedigree-detail-desktop")
             pedigree_page.screenshot(path=OUT / "pedigree-detail-desktop.png", full_page=True)
@@ -252,7 +257,45 @@ def main():
                 if not page.locator(".mobile-nav-panel").is_visible():
                     raise AssertionError("Production mobile menu did not open")
                 page.screenshot(path=OUT / "home-mobile-menu.png", full_page=True)
+                page.evaluate("window.scrollTo(0, 320)")
+                page.wait_for_timeout(150)
+                if page.locator(".mobile-nav").get_attribute("open") is not None:
+                    raise AssertionError("Production mobile menu stays open after scroll")
+            if label == "dogs":
+                search = page.locator("#q")
+                search.fill("Bran")
+                page.locator(".dog-suggestion").first.wait_for(state="visible", timeout=10_000)
+                if "BRAN" not in page.locator(".dog-suggestion").first.inner_text().upper():
+                    raise AssertionError("Production dog autocomplete returned an unexpected suggestion")
             page.close()
+
+        if dog_load_path:
+            dog_mobile = browser.new_page(viewport={"width": 390, "height": 844})
+            dog_response, dog_elapsed = wait_for_real_app(
+                dog_mobile, dog_load_path + "?smoke=mobile"
+            )
+            assert_page(dog_mobile, "dog-profile-mobile", mobile=True)
+            dog_mobile.screenshot(path=OUT / "dog-profile-mobile.png", full_page=True)
+            report["details"].append({
+                "dog_profile_mobile": dog_mobile.url,
+                "seconds": round(dog_elapsed, 3),
+                "server_timing": dog_response.headers.get("server-timing") if dog_response else None,
+            })
+            dog_mobile.close()
+
+        if pedigree_load_path:
+            pedigree_mobile = browser.new_page(viewport={"width": 390, "height": 844})
+            pedigree_response, pedigree_elapsed = wait_for_real_app(
+                pedigree_mobile, pedigree_load_path + "?smoke=mobile"
+            )
+            assert_page(pedigree_mobile, "pedigree-detail-mobile", mobile=True)
+            pedigree_mobile.screenshot(path=OUT / "pedigree-detail-mobile.png", full_page=True)
+            report["details"].append({
+                "pedigree_detail_mobile": pedigree_mobile.url,
+                "seconds": round(pedigree_elapsed, 3),
+                "server_timing": pedigree_response.headers.get("server-timing") if pedigree_response else None,
+            })
+            pedigree_mobile.close()
 
         private = browser.new_page(viewport={"width": 390, "height": 844})
         response = private.goto(f"{BASE_URL}/dashboard/", wait_until="domcontentloaded")
