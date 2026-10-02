@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Count, F, Prefetch, Q
 from django.http import JsonResponse
@@ -152,19 +153,32 @@ def dog_search(request):
 
     dogs = dogs.order_by("name") if query else dogs.order_by("-search_count", "-updated_at", "name")
     paginator = Paginator(dogs, 24)
+    if not query and not sex and not country and not kennel_slug:
+        cached_count = cache.get("cca:dog-search:default-count:v1")
+        if cached_count is None:
+            cached_count = paginator.count
+            cache.set("cca:dog-search:default-count:v1", cached_count, 900)
+        paginator.__dict__["count"] = cached_count
     page_obj = paginator.get_page(request.GET.get("page"))
     _attach_source_image_urls(page_obj.object_list)
     query_params = request.GET.copy()
     query_params.pop("page", None)
 
-    countries = (
-        Dog.objects.filter(is_public=True)
-        .exclude(country="")
-        .values_list("country", flat=True)
-        .distinct()
-        .order_by("country")
-    )
-    kennels = Kennel.objects.order_by("name")
+    countries = cache.get("cca:dog-search:countries:v1")
+    if countries is None:
+        countries = list(
+            Dog.objects.filter(is_public=True)
+            .exclude(country="")
+            .values_list("country", flat=True)
+            .distinct()
+            .order_by("country")
+        )
+        cache.set("cca:dog-search:countries:v1", countries, 900)
+
+    kennels = cache.get("cca:dog-search:kennels:v1")
+    if kennels is None:
+        kennels = list(Kennel.objects.order_by("name").values("name", "slug"))
+        cache.set("cca:dog-search:kennels:v1", kennels, 900)
 
     return render(
         request,
