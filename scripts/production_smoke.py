@@ -210,6 +210,8 @@ def main():
             page = browser.new_page(viewport={"width": 1440, "height": 1000})
             report["desktop"].append(visit(page, path, f"{label}-desktop"))
             if label == "home":
+                if page.locator(".dog-card .verification-pill").count():
+                    raise AssertionError("Homepage still shows dog verification badges")
                 gold = page.evaluate(
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()"
                 )
@@ -235,6 +237,8 @@ def main():
         dog_path = dog_load_path + "?smoke=1"
         dog_response, dog_elapsed = wait_for_real_app(detail_page, dog_path)
         assert_page(detail_page, "dog-profile-desktop")
+        if detail_page.locator(".profile-title-row .verification-pill").count():
+            raise AssertionError("Dog profile still shows the verification badge beside the name")
         detail_page.screenshot(path=OUT / "dog-profile-desktop.png", full_page=True)
         report["details"].append({
             "dog_profile": detail_page.url,
@@ -298,6 +302,8 @@ def main():
                     raise AssertionError("Production skip-link should remain hidden after pointer/scroll interactions")
                 verify_featured_images(page, "home-mobile")
             if label == "dogs":
+                if page.locator(".search-result-card .verification-pill").count():
+                    raise AssertionError("Dog search still shows verification badges")
                 search = page.locator("#q")
                 search.fill("Bran")
                 page.locator(".dog-suggestion").first.wait_for(state="visible", timeout=10_000)
