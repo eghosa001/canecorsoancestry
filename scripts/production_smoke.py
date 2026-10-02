@@ -277,6 +277,14 @@ def main():
             page = browser.new_page(viewport={"width": 390, "height": 844})
             report["mobile"].append(visit(page, path, f"{label}-mobile", mobile=True))
             if label == "home":
+                skip_link = page.locator(".skip-link")
+                page.evaluate("window.scrollTo(0, 0)")
+                page.keyboard.press("Tab")
+                if not skip_link.evaluate("(el) => document.activeElement === el"):
+                    raise AssertionError("Production skip-link is not first in keyboard navigation")
+                if skip_link.evaluate("(el) => el.getBoundingClientRect().top") < 0:
+                    raise AssertionError("Production skip-link is not visible for keyboard focus")
+                page.keyboard.press("Tab")
                 page.locator(".mobile-nav > summary").click()
                 if not page.locator(".mobile-nav-panel").is_visible():
                     raise AssertionError("Production mobile menu did not open")
@@ -285,17 +293,9 @@ def main():
                 page.wait_for_timeout(150)
                 if page.locator(".mobile-nav").get_attribute("open") is not None:
                     raise AssertionError("Production mobile menu stays open after scroll")
-                skip_link = page.locator(".skip-link")
                 skip_top = skip_link.evaluate("(el) => el.getBoundingClientRect().top")
                 if skip_top >= 0:
                     raise AssertionError("Production skip-link should remain hidden after pointer/scroll interactions")
-                page.evaluate("document.activeElement && document.activeElement.blur()")
-                page.keyboard.press("Tab")
-                if not skip_link.evaluate("(el) => document.activeElement === el"):
-                    raise AssertionError("Production skip-link is not first in keyboard navigation")
-                if skip_link.evaluate("(el) => el.getBoundingClientRect().top") < 0:
-                    raise AssertionError("Production skip-link is not visible for keyboard focus")
-                page.keyboard.press("Tab")
                 verify_featured_images(page, "home-mobile")
             if label == "dogs":
                 search = page.locator("#q")
