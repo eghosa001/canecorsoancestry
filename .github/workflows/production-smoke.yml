@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      PRODUCTION_BASE_URL: https://canecorsoancestry.com
+      PRODUCTION_BASE_URL: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
