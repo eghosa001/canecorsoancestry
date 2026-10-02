@@ -24,7 +24,7 @@
     </div>
   </div>
   <div class="hero-mark" aria-hidden="true">
-    <img src="{% static 'core/cane-corso-premium-logo.webp' %}" alt="" width="560" height="560">
+    <img src="{% static 'core/cane-corso-premium-logo.webp' %}?v=20261002-2" alt="" width="560" height="560">
     <div class="hero-brand-plaque">
       <small>CANECORSOANCESTRY.COM</small>
       <span>Pedigree intelligence</span>
@@ -69,7 +69,7 @@
       <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
         <div class="dog-card-media">
           {% if dog.display_images %}
-            <img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}">
+            <img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}">
           {% elif dog.source_image_url %}
             <img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">
           {% else %}
