@@ -81,6 +81,29 @@ jobs:
 
           echo "R2 media gateway is healthy and private."
 
+      - name: Verify representative R2 dog images
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
+          empty_digest="$(printf '' | sha256sum | awk '{print $1}')"
+          for key in             "dogs/bellissimo/karma-custodi-nos.webp"             "dogs/archive/111/111524.jpg"             "dogs/archive/026/26098.jpg"             "dogs/archive/014/14125.jpg"; do
+            timestamp="$(date +%s)"
+            signature="$(python - "$DJANGO_SECRET_KEY" "$key" "$timestamp" "$empty_digest" <<'PY'
+import hashlib, hmac, sys
+secret, key, timestamp, digest = sys.argv[1:]
+message = f"HEAD\n{key}\n{timestamp}\n{digest}".encode()
+print(hmac.new(secret.encode(), message, hashlib.sha256).hexdigest())
+PY
+)"
+            status="$(curl --connect-timeout 8 --max-time 20 -sS -o /dev/null -w '%{http_code}' -X HEAD               -H "x-r2-timestamp: $timestamp"               -H "x-r2-content-sha256: $empty_digest"               -H "x-r2-signature: $signature"               "$base/_r2/$key" || true)"
+            echo "$key -> HTTP $status"
+            if [ "$status" != "200" ]; then
+              echo "::error::Representative R2 object is unavailable: $key (HTTP $status)"
+              exit 1
+            fi
+          done
+
       - name: Clean temporary files
         if: always()
         run: rm -f /tmp/r2-secrets.json /tmp/r2-health.json /tmp/r2-denied.txt
