@@ -49,7 +49,12 @@ def assert_page(page, label, *, mobile=False):
 
     broken = page.evaluate(
         """() => [...document.images]
-          .filter((img) => img.complete && img.naturalWidth === 0)
+          .filter((img) => {
+            if (!img.complete || img.naturalWidth !== 0) return false;
+            if (img.loading !== "lazy") return true;
+            const rect = img.getBoundingClientRect();
+            return rect.top < window.innerHeight + 300 && rect.bottom > -300;
+          })
           .map((img) => img.currentSrc || img.src)"""
     )
     if broken:
