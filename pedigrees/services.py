@@ -2,6 +2,7 @@ from collections import Counter, defaultdict
 from hashlib import sha256
 
 from django.core.cache import cache
+from django.db import connection
 from django.db.models import Q
 
 from registry.models import Dog, HealthRecord
@@ -397,36 +398,75 @@ def common_ancestors(dog_a, dog_b, generations=10, public_only=False):
     )
 
 
-def _pedigree_order(*dogs, public_only=False):
-    """Load all reachable ancestors in breadth-first batches, then topologically order them."""
-    nodes = {}
-    frontier = []
-    for dog in dogs:
-        if dog is None or (public_only and not dog.is_public):
-            continue
-        nodes[dog.pk] = dog
-        frontier.append(dog)
+def _pedigree_links(*dogs, public_only=False):
+    """Return all reachable parent links, using one recursive query on PostgreSQL."""
+    roots = [
+        dog
+        for dog in dogs
+        if dog is not None and (not public_only or dog.is_public)
+    ]
+    if not roots:
+        return {}
 
+    if connection.vendor == "postgresql":
+        table = connection.ops.quote_name(Dog._meta.db_table)
+        placeholders = ", ".join(["%s"] * len(roots))
+        public_root = " AND is_public" if public_only else ""
+        public_parent = "WHERE parent.is_public" if public_only else ""
+        sql = f"""
+            WITH RECURSIVE pedigree AS (
+                SELECT id, sire_id, dam_id, is_public
+                FROM {table}
+                WHERE id IN ({placeholders}){public_root}
+                UNION
+                SELECT parent.id, parent.sire_id, parent.dam_id, parent.is_public
+                FROM {table} parent
+                JOIN pedigree child
+                  ON parent.id = child.sire_id OR parent.id = child.dam_id
+                {public_parent}
+            )
+            SELECT id, sire_id, dam_id
+            FROM pedigree
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql, [dog.pk for dog in roots])
+            return {
+                dog_id: (sire_id, dam_id)
+                for dog_id, sire_id, dam_id in cursor.fetchall()
+            }
+
+    links = {
+        dog.pk: (dog.sire_id, dog.dam_id)
+        for dog in roots
+    }
+    frontier = list(roots)
     while frontier:
         parent_ids = {
             parent_id
             for current in frontier
             for parent_id in (current.sire_id, current.dam_id)
-            if parent_id and parent_id not in nodes
+            if parent_id and parent_id not in links
         }
         if not parent_ids:
             break
-        parents = Dog.objects.in_bulk(parent_ids)
+        parents = Dog.objects.only(
+            "id", "sire_id", "dam_id", "is_public"
+        ).in_bulk(parent_ids)
         if public_only:
             parents = {
-                pk: parent for pk, parent in parents.items() if parent.is_public
+                pk: parent
+                for pk, parent in parents.items()
+                if parent.is_public
             }
-        frontier = []
-        for parent in parents.values():
-            if parent.pk not in nodes:
-                nodes[parent.pk] = parent
-                frontier.append(parent)
+        frontier = list(parents.values())
+        for parent in frontier:
+            links[parent.pk] = (parent.sire_id, parent.dam_id)
+    return links
 
+
+def _pedigree_order(*dogs, public_only=False):
+    """Topologically order all reachable pedigree IDs after one ancestry load."""
+    links = _pedigree_links(*dogs, public_only=public_only)
     visited = set()
     visiting = set()
     ordered = []
@@ -436,33 +476,33 @@ def _pedigree_order(*dogs, public_only=False):
             return
         if dog_id in visiting:
             raise PedigreeCycleError("Pedigree contains a parent cycle.")
-        current = nodes.get(dog_id)
-        if current is None:
+        if dog_id not in links:
             return
 
         visiting.add(dog_id)
-        for parent_id in (current.sire_id, current.dam_id):
-            if parent_id in nodes:
+        for parent_id in links[dog_id]:
+            if parent_id in links:
                 visit(parent_id)
         visiting.remove(dog_id)
         visited.add(dog_id)
-        ordered.append(current)
+        ordered.append(dog_id)
 
     for dog in dogs:
-        if dog is not None and dog.pk in nodes:
+        if dog is not None and dog.pk in links:
             visit(dog.pk)
-    return ordered
+    return ordered, links
 
 
 def _relationship_matrix(*dogs, public_only=False):
-    ordered = _pedigree_order(*dogs, public_only=public_only)
-    index = {dog.pk: position for position, dog in enumerate(ordered)}
+    ordered, links = _pedigree_order(*dogs, public_only=public_only)
+    index = {dog_id: position for position, dog_id in enumerate(ordered)}
     size = len(ordered)
     matrix = [[0.0 for _ in range(size)] for _ in range(size)]
 
-    for i, dog in enumerate(ordered):
-        sire_index = index.get(dog.sire_id)
-        dam_index = index.get(dog.dam_id)
+    for i, dog_id in enumerate(ordered):
+        sire_id, dam_id = links[dog_id]
+        sire_index = index.get(sire_id)
+        dam_index = index.get(dam_id)
 
         for j in range(i):
             value = 0.0
