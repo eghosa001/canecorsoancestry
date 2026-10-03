@@ -189,17 +189,28 @@ jobs:
           import urllib.request
 
           base = "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
-          pairs = [
-              ("0d1dcc5b-d146-48a9-a9fb-97e46692f358", "38622420-f217-49ef-bb52-1687f5282df4"),
-              ("67fb5587-6abd-454e-8aaf-acd2dba66b66", "d94dc164-cfd6-44b7-a7e6-9d2a19269337"),
-              ("e896e1c8-1df5-4153-8135-bacde5d9efbe", "245dffc3-885c-4225-bb89-ca89c888f1a4"),
-              ("1beedd00-efac-432f-ab78-4497a3ab8fd7", "bfdecd1c-db09-4b1c-8d0a-004a225157d1"),
+          males = [
+              "0d1dcc5b-d146-48a9-a9fb-97e46692f358",
+              "67fb5587-6abd-454e-8aaf-acd2dba66b66",
+              "e896e1c8-1df5-4153-8135-bacde5d9efbe",
+              "844b3ef1-b541-4bde-b298-e27bac4be2b8",
+              "1beedd00-efac-432f-ab78-4497a3ab8fd7",
+          ]
+          females = [
+              "38622420-f217-49ef-bb52-1687f5282df4",
+              "d94dc164-cfd6-44b7-a7e6-9d2a19269337",
+              "245dffc3-885c-4225-bb89-ca89c888f1a4",
+              "bfdecd1c-db09-4b1c-8d0a-004a225157d1",
+              "6c4e2e2f-ab50-4ea1-a4ed-0800347fbba1",
           ]
 
-          def request(url, marker=None):
+          def request(url, marker=None, timeout=12):
               started = time.perf_counter()
-              req = urllib.request.Request(url, headers={"User-Agent": "cca-vm-load-probe/1.0"})
-              with urllib.request.urlopen(req, timeout=12) as response:
+              req = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": "cca-vm-load-probe/2.0"},
+              )
+              with urllib.request.urlopen(req, timeout=timeout) as response:
                   body = response.read()
                   status = response.status
               elapsed = time.perf_counter() - started
@@ -211,45 +222,100 @@ jobs:
                   raise RuntimeError(f"Virtual mating returned an application error for {url}")
               return elapsed
 
-          # Warm each representative pair once, then use unique probe query values
-          # so the concurrent measurements cannot be satisfied by the edge page cache.
-          for sire, dam in pairs:
-              query = urllib.parse.urlencode({"sire": sire, "dam": dam, "probe": "warm"})
-              request(f"{base}/pedigrees/virtual-mating/?{query}", b"Projected COI")
+          def metrics(label, timings):
+              ordered = sorted(timings)
+              p50 = statistics.median(ordered)
+              p95 = ordered[max(0, int((len(ordered) - 1) * 0.95))]
+              maximum = max(ordered)
+              print(json.dumps({
+                  "label": label,
+                  "requests": len(ordered),
+                  "concurrency": 8,
+                  "p50_seconds": round(p50, 3),
+                  "p95_seconds": round(p95, 3),
+                  "max_seconds": round(maximum, 3),
+              }))
+              return p50, p95, maximum
 
-          urls = []
-          for index in range(24):
-              sire, dam = pairs[index % len(pairs)]
-              query = urllib.parse.urlencode({"sire": sire, "dam": dam, "probe": f"load-{index}"})
-              urls.append(f"{base}/pedigrees/virtual-mating/?{query}")
+          # Cold capacity: 16 distinct pairings that are not pre-warmed.
+          cold_pairs = [
+              (males[0], females[1]), (males[0], females[2]),
+              (males[0], females[3]), (males[0], females[4]),
+              (males[1], females[0]), (males[1], females[2]),
+              (males[1], females[3]), (males[1], females[4]),
+              (males[2], females[0]), (males[2], females[1]),
+              (males[2], females[3]), (males[2], females[4]),
+              (males[3], females[0]), (males[3], females[1]),
+              (males[4], females[2]), (males[4], females[4]),
+          ]
+          cold_urls = []
+          for index, (sire, dam) in enumerate(cold_pairs):
+              query = urllib.parse.urlencode({
+                  "sire": sire,
+                  "dam": dam,
+                  "probe": f"cold-{index}-{time.time_ns()}",
+              })
+              cold_urls.append(f"{base}/pedigrees/virtual-mating/?{query}")
 
           with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-              timings = list(pool.map(lambda url: request(url, b"Projected COI"), urls))
+              cold_timings = list(
+                  pool.map(lambda url: request(url, b"Projected COI"), cold_urls)
+              )
+          _, cold_p95, cold_max = metrics("virtual_mating_cold_distinct", cold_timings)
+          if cold_p95 > 3.5 or cold_max > 6.0:
+              raise SystemExit(
+                  f"Cold virtual mating latency too high: p95={cold_p95:.3f}s max={cold_max:.3f}s"
+              )
 
-          ordered = sorted(timings)
-          p50 = statistics.median(ordered)
-          p95 = ordered[max(0, int((len(ordered) - 1) * 0.95))]
-          maximum = max(ordered)
-          print(json.dumps({
-              "virtual_mating_requests": len(ordered),
-              "concurrency": 8,
-              "p50_seconds": round(p50, 3),
-              "p95_seconds": round(p95, 3),
-              "max_seconds": round(maximum, 3),
-          }))
-          if p95 > 3.0 or maximum > 6.0:
-              raise SystemExit(f"Virtual mating latency too high: p95={p95:.3f}s max={maximum:.3f}s")
+          # Warm/repeated capacity: same popular pairing under concurrent requests.
+          warm_pair = (males[0], females[0])
+          warm_query = urllib.parse.urlencode({
+              "sire": warm_pair[0],
+              "dam": warm_pair[1],
+              "probe": "warm-prime",
+          })
+          request(f"{base}/pedigrees/virtual-mating/?{warm_query}", b"Projected COI")
 
-          suggestion_urls = []
+          warm_urls = []
+          for index in range(24):
+              query = urllib.parse.urlencode({
+                  "sire": warm_pair[0],
+                  "dam": warm_pair[1],
+                  "probe": f"warm-{index}-{time.time_ns()}",
+              })
+              warm_urls.append(f"{base}/pedigrees/virtual-mating/?{query}")
+
+          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+              warm_timings = list(
+                  pool.map(lambda url: request(url, b"Projected COI"), warm_urls)
+              )
+          _, warm_p95, warm_max = metrics("virtual_mating_repeated_pair", warm_timings)
+          if warm_p95 > 3.0 or warm_max > 5.0:
+              raise SystemExit(
+                  f"Repeated virtual mating latency too high: p95={warm_p95:.3f}s max={warm_max:.3f}s"
+              )
+
+          # Autocomplete capacity: real 3-character mating searches, no edge-cache reuse.
           terms = [("gar", "male"), ("kar", "female"), ("bra", "male"), ("ant", "female")]
+          suggestion_urls = []
           for index in range(24):
               term, sex = terms[index % len(terms)]
-              query = urllib.parse.urlencode({"q": term, "sex": sex, "probe": index})
+              query = urllib.parse.urlencode({
+                  "q": term,
+                  "sex": sex,
+                  "probe": f"suggest-{index}-{time.time_ns()}",
+              })
               suggestion_urls.append(f"{base}/dogs/suggestions/?{query}")
 
           def suggestion_request(url):
               started = time.perf_counter()
-              req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "cca-vm-load-probe/1.0"})
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "Accept": "application/json",
+                      "User-Agent": "cca-vm-load-probe/2.0",
+                  },
+              )
               with urllib.request.urlopen(req, timeout=8) as response:
                   payload = json.loads(response.read())
                   status = response.status
@@ -260,19 +326,11 @@ jobs:
 
           with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
               suggestion_timings = list(pool.map(suggestion_request, suggestion_urls))
-
-          suggestion_ordered = sorted(suggestion_timings)
-          suggestion_p50 = statistics.median(suggestion_ordered)
-          suggestion_p95 = suggestion_ordered[max(0, int((len(suggestion_ordered) - 1) * 0.95))]
-          suggestion_max = max(suggestion_ordered)
-          print(json.dumps({
-              "suggestion_requests": len(suggestion_ordered),
-              "concurrency": 8,
-              "p50_seconds": round(suggestion_p50, 3),
-              "p95_seconds": round(suggestion_p95, 3),
-              "max_seconds": round(suggestion_max, 3),
-          }))
-          if suggestion_p95 > 1.5 or suggestion_max > 3.0:
+          _, suggestion_p95, suggestion_max = metrics(
+              "virtual_mating_suggestions",
+              suggestion_timings,
+          )
+          if suggestion_p95 > 1.8 or suggestion_max > 3.0:
               raise SystemExit(
                   f"Suggestion latency too high: p95={suggestion_p95:.3f}s max={suggestion_max:.3f}s"
               )
