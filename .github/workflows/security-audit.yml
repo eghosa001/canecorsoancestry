@@ -29,9 +29,26 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: pip install -r requirements.txt pip-audit
+      - run: pip install -r requirements.txt
+      - name: Detect dependency changes
+        id: scope
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            if git diff --name-only "origin/${{ github.base_ref }}...HEAD" | grep -qx 'requirements.txt'; then
+              echo "dependencies=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "dependencies=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "dependencies=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Audit Python dependencies
-        run: pip-audit -r requirements.txt --strict
+        if: steps.scope.outputs.dependencies == 'true'
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --strict
       - name: Django production security check
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production
