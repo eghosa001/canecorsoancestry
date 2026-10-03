@@ -5908,3 +5908,48 @@ html[data-theme="light"] .hero-search input {
     }
   }
 }
+
+
+/* Final owner-requested mobile corrections v44 */
+@media (max-width: 760px) {
+  /* Remove the decorative vertical rule from the home hero. */
+  .hero::before {
+    content: none !important;
+    display: none !important;
+    border: 0 !important;
+    background: none !important;
+  }
+}
+
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 760px) {
+    /* Keep virtual-mating suggestions tappable and scrollable above the iOS keyboard. */
+    .mating-form {
+      overflow: visible !important;
+    }
+
+    .mating-select {
+      position: relative;
+      min-width: 0;
+    }
+
+    .mating-select:focus-within {
+      z-index: 500;
+    }
+
+    .mating-select .dog-suggestions {
+      z-index: 9999 !important;
+      max-height: min(280px, 36svh) !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+    }
+
+    .mating-select .dog-suggestion {
+      min-height: 58px;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+  }
+}

@@ -1,18 +1,18 @@
 {% load static %}
 <!doctype html>
-<html lang="en" data-theme="dark" data-ui-version="customer-v43">
+<html lang="en" data-theme="dark" data-ui-version="customer-v44">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#090a09">
-  <meta name="description" content="{% block meta_description %}Cane Corso pedigree, bloodline, kennel and provenance research.{% endblock %}">
+  <meta name="description" content="{% block meta_description %}Cane Corso pedigree, bloodline and kennel research.{% endblock %}">
   <meta name="robots" content="{% if page_noindex %}noindex,nofollow,noarchive{% else %}index,follow{% endif %}">
   <link rel="canonical" href="{{ canonical_url }}">
   <meta property="og:site_name" content="{{ site_name }}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{ canonical_url }}">
   <meta property="og:title" content="{% block og_title %}Cane Corso Ancestry{% endblock %}">
-  <meta property="og:description" content="{% block og_description %}Pedigree, bloodline, kennel and provenance research for the Cane Corso community.{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Pedigree, bloodline and kennel research for the Cane Corso community.{% endblock %}">
   <meta name="twitter:card" content="summary_large_image">
   <title>{% block title %}Cane Corso Ancestry{% endblock %}</title>
   <script>
@@ -27,15 +27,15 @@
       }
     })();
   </script>
-  <link rel="icon" href="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v43" type="image/svg+xml">
-  <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261003-customer-restoration-v43">
+  <link rel="icon" href="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v44" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261003-customer-restoration-v44">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="site-header">
     <div class="header-inner">
-      <a class="brand" href="{% url 'home' %}" aria-label="Cane Corso Ancestry home"><img class="brand-mark" src="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v43" alt="Cane Corso Ancestry logo" width="52" height="52"><span class="brand-copy"><span class="brand-small">Cane Corso</span><strong>Ancestry</strong></span></a>
+      <a class="brand" href="{% url 'home' %}" aria-label="Cane Corso Ancestry home"><img class="brand-mark" src="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v44" alt="Cane Corso Ancestry logo" width="52" height="52"><span class="brand-copy"><span class="brand-small">Cane Corso</span><strong>Ancestry</strong></span></a>
       <nav class="main-nav" aria-label="Main navigation">
         <a href="{% url 'home' %}">Home</a><a href="{% url 'registry:dog-search' %}">Dogs</a><a href="{% url 'registry:kennel-list' %}">Kennels</a><a href="{% url 'pedigrees:index' %}">Pedigrees</a><a href="{% url 'pedigrees:virtual-mating' %}">Virtual mating</a><a href="{% url 'registry:statistics' %}">Statistics</a>
       </nav>
@@ -80,7 +80,7 @@
   {% block content %}{% endblock %}
   </main>
   <footer class="site-footer">
-    <div><strong>Cane Corso Ancestry</strong><p>Pedigree, provenance and bloodline research. Not a registration authority.</p></div>
+    <div><strong>Cane Corso Ancestry</strong><p>Pedigree and bloodline research. Not a registration authority.</p></div>
     <div class="footer-links"><a href="{% url 'registry:dog-search' %}">Dogs</a><a href="{% url 'registry:kennel-list' %}">Kennels</a><a href="{% url 'pedigrees:index' %}">Pedigrees</a></div>
   </footer>
   <script>
@@ -170,6 +170,16 @@
         var timer = null;
         var requestSerial = 0;
 
+        if (input.dataset.dogAutocompleteMode === "fill") {
+          input.addEventListener("input", function () {
+            var targetId = input.dataset.dogAutocompleteTarget;
+            if (targetId) {
+              var target = document.getElementById(targetId);
+              if (target) target.value = "";
+            }
+          });
+        }
+
         function close() {
           panel.hidden = true;
           panel.replaceChildren();
@@ -187,7 +197,11 @@
             item.className = "dog-suggestion";
             if (mode === "fill") {
               item.type = "button";
-              item.addEventListener("click", function () {
+              function selectDog(event) {
+                if (event) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }
                 input.value = dog.name;
                 var targetId = input.dataset.dogAutocompleteTarget;
                 if (targetId) {
@@ -195,15 +209,9 @@
                   if (target) target.value = dog.id || "";
                 }
                 close();
-                input.focus();
-              });
-              input.addEventListener("input", function () {
-                var targetId = input.dataset.dogAutocompleteTarget;
-                if (targetId) {
-                  var target = document.getElementById(targetId);
-                  if (target) target.value = "";
-                }
-              }, { once: true });
+              }
+              item.addEventListener("pointerdown", selectDog);
+              item.addEventListener("click", selectDog);
             } else {
               item.href = "/dogs/" + encodeURIComponent(dog.slug) + "/?source=search";
             }
