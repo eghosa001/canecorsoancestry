@@ -28,4 +28,4 @@ class PublicThemeRegressionTests(TestCase):
 
         self.assertContains(response, "CANECORSOANCESTRY.COM")
         self.assertContains(response, "hero-mobile-break")
-        self.assertContains(response, "data-theme-toggle", count=2)
+        self.assertContains(response, '<button class="theme-toggle', count=2)
