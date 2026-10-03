@@ -103,7 +103,14 @@ jobs:
             cat /tmp/edge-page.html 2>/dev/null || true
             exit 1
           fi
-          grep -q 'data-ui-version="customer-v44"' /tmp/edge-page.html
+          grep -q 'data-ui-version="customer-v45"' /tmp/edge-page.html
+          grep -q 'cane-corso-head-logo-right.webp' /tmp/edge-page.html
+          grep -q '20261003-headlogo-v45' /tmp/edge-page.html
+          logo_status="$(curl --connect-timeout 4 --max-time 8 -sS -o /tmp/live-logo.webp -w '%{http_code}' "$base/static/core/cane-corso-head-logo-right.webp?v=20261003-headlogo-v45" || true)"
+          if [ "$logo_status" != "200" ] || [ ! -s /tmp/live-logo.webp ]; then
+            echo "::error::New live logo asset is not being served; HTTP $logo_status"
+            exit 1
+          fi
           grep -q 'Pedigree · Bloodline · Heritage' /tmp/edge-page.html
           if grep -Eqi 'canonical dog records|pedigree provenance|<h2>Record status</h2>|No canonical record|Published pedigree record' /tmp/edge-page.html; then
             echo "::error::Public source/record wording is still present on the live homepage"
@@ -139,4 +146,4 @@ jobs:
 
       - name: Clean temporary files
         if: always()
-        run: rm -f /tmp/edge-health.json /tmp/edge-page.html /tmp/auth-headers.txt /tmp/auth-page.html /tmp/auth-ready.json
+        run: rm -f /tmp/edge-health.json /tmp/edge-page.html /tmp/auth-headers.txt /tmp/auth-page.html /tmp/auth-ready.json /tmp/live-logo.webp
