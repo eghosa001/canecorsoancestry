@@ -204,6 +204,16 @@ def main():
             screenshot(mobile, "pedigree-detail-mobile", overflow=False)
 
         capture(mobile, "/pedigrees/virtual-mating/", "virtual-mating-mobile")
+        sire_search = mobile.locator("#sire_q")
+        sire_host = sire_search.locator("xpath=..")
+        sire_suggestions = sire_host.locator(".dog-suggestions")
+        sire_search.fill("Bran")
+        sire_suggestions.wait_for(state="visible")
+        if not sire_suggestions.locator(".dog-suggestion").count():
+            raise AssertionError("virtual mating autocomplete returned no sire suggestions")
+        sire_suggestions.locator(".dog-suggestion").first.click()
+        if not mobile.locator("#sire").input_value():
+            raise AssertionError("virtual mating autocomplete did not select a sire id")
         capture(mobile, "/statistics/", "statistics-mobile")
 
         login(mobile)
