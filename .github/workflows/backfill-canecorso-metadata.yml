@@ -46,3 +46,27 @@ jobs:
         run: python manage.py migrate --check
       - name: Preview source-backed metadata enrichment
         run: python manage.py backfill_canecorso_metadata --dry-run --min-kennel-dogs 12
+
+      - name: Apply source-backed metadata enrichment
+        run: python manage.py backfill_canecorso_metadata --min-kennel-dogs 12
+
+      - name: Verify production metadata
+        run: |
+          python manage.py shell -c "
+          from registry.models import Dog, Kennel
+          countries = list(
+              Dog.objects.exclude(country='')
+              .values_list('country', flat=True)
+              .distinct()
+              .order_by('country')
+          )
+          kennel_count = Kennel.objects.count()
+          linked = Dog.objects.exclude(kennel=None).count()
+          with_country = Dog.objects.exclude(country='').count()
+          assert len(countries) >= 10, countries
+          assert kennel_count >= 100, kennel_count
+          assert linked >= 5000, linked
+          assert with_country >= 15000, with_country
+          print(f'Countries ({len(countries)}): {countries}')
+          print(f'Kennels: {kennel_count}; linked dogs: {linked}; dogs with country: {with_country}')
+          "
