@@ -40,7 +40,7 @@ def _pedigree_registration_keys(value):
     """Split a source pedigree field into individual normalized registrations."""
     return {
         key
-        for part in re.split(r"[;,|]+", _text(value))
+        for part in re.split(r"[;,|]+|\\s+/\\s+", _text(value))
         if (key := _registration_key(part))
     }
 
@@ -451,7 +451,7 @@ class Command(BaseCommand):
                 f"{len(records)} records including {len(records)-len(recent_ids)} ancestors; "
                 f"{len(created_dogs)} created; {len(existing_keys)} already linked; "
                 f"{published_existing} existing source-created dogs published; "
-                f"{reused_by_registration} matched by exact registration; "
+                f"{reused_by_registration} matched by corroborated registration; "
                 f"{skipped_parent_links} unsafe parent links skipped; "
                 f"{preserved_parent_conflicts} existing parent links preserved."
             )
