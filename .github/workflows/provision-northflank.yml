@@ -11,11 +11,9 @@ on:
       - "core/**"
       - "templates/**"
       - "config/**"
-      - "scripts/**"
       - "requirements.txt"
       - "manage.py"
       - "Dockerfile"
-      - ".github/workflows/provision-northflank.yml"
   workflow_dispatch:
 
 permissions:
