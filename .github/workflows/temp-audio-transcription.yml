@@ -1,0 +1,77 @@
+name: Temporary audio transcription
+
+on:
+  push:
+    branches:
+      - temp-audio-transcription-20261003-v2
+    paths:
+      - "tmp_audio/**"
+      - ".github/workflows/temp-audio-transcription.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct private voice notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/cca-audio transcripts
+          cat tmp_audio/PTT-20261003-WA0000.part*.b64 | base64 -d > /tmp/cca-audio/PTT-20261003-WA0000.opus
+          cat tmp_audio/PTT-20261003-WA0001.part*.b64 | base64 -d > /tmp/cca-audio/PTT-20261003-WA0001.opus
+          base64 -d tmp_audio/PTT-20261003-WA0003.b64 > /tmp/cca-audio/PTT-20261003-WA0003.opus
+          cat tmp_audio/PTT-20261003-WA0013.part*.b64 | base64 -d > /tmp/cca-audio/PTT-20261003-WA0013.opus
+          ls -lh /tmp/cca-audio
+
+      - name: Install media tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg unzip
+
+      - name: Download Whisper runtime and model
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 4 --retry-delay 2             https://github.com/sjoerdteunisse/whisper.cpp/releases/download/v1.0.0/whisper-cpp-linux-x64-cpu.zip             -o /tmp/whisper.zip
+          mkdir -p /tmp/whisper
+          unzip -q /tmp/whisper.zip -d /tmp/whisper
+          find /tmp/whisper -type f -name 'whisper-cli' -exec chmod +x {} \;
+          curl -fL --retry 4 --retry-delay 2             https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin             -o /tmp/whisper-model.bin
+          test -s /tmp/whisper-model.bin
+          ls -lh /tmp/whisper-model.bin
+          find /tmp/whisper -maxdepth 3 -type f -name 'whisper-cli' -print
+
+      - name: Convert and transcribe
+        shell: bash
+        run: |
+          set -euo pipefail
+          WHISPER="$(find /tmp/whisper -type f -name 'whisper-cli' | head -n 1)"
+          test -n "$WHISPER"
+          PROMPT="Nigerian English and Nigerian Pidgin. Cane Corso Ancestry website. CCA. Cane Corso Italiano. pedigree, pedigree tree, sire, dam, father, mother, generation, bloodline, dog search, virtual mating, mobile, logo, light mode, dark mode, Sforza Ludovico, AMRA CORSO CAPTAIN HOOK, APRIORI BEST NIMFA, Branco."
+          for input in /tmp/cca-audio/*.opus; do
+            base="$(basename "$input" .opus)"
+            wav="/tmp/cca-audio/$base.wav"
+            ffmpeg -loglevel error -y -i "$input" -ar 16000 -ac 1 -c:a pcm_s16le "$wav"
+            "$WHISPER"               -m /tmp/whisper-model.bin               -f "$wav"               -l en               --prompt "$PROMPT"               -otxt               -of "transcripts/$base"
+          done
+          echo "===== COMBINED TRANSCRIPT =====" > transcripts/combined.txt
+          for f in transcripts/PTT-*.txt; do
+            echo >> transcripts/combined.txt
+            echo "===== $(basename "$f") =====" >> transcripts/combined.txt
+            cat "$f" >> transcripts/combined.txt
+          done
+          cat transcripts/combined.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: temporary-audio-transcripts
+          path: transcripts
+          if-no-files-found: error
