@@ -5,6 +5,16 @@ on:
   push:
     branches: [main]
     paths:
+      - "accounts/**"
+      - "registry/**"
+      - "pedigrees/**"
+      - "core/**"
+      - "templates/**"
+      - "config/**"
+      - "scripts/**"
+      - "requirements.txt"
+      - "manage.py"
+      - "Dockerfile"
       - ".github/workflows/provision-northflank.yml"
   workflow_dispatch:
 
@@ -120,6 +130,7 @@ jobs:
                 vpcAccessible:false,
                 protocol:"HTTP"
               }],
+              disabledCI:true,
               buildSource:"git",
               vcsData:{
                 projectUrl:"https://github.com/eghosa001/canecorsoancestry",
@@ -184,34 +195,75 @@ jobs:
           echo "NORTHFLANK_SERVICE_ID=$service_id" >> "$GITHUB_ENV"
           echo "Northflank service: $service_id"
 
-      - name: Wait for build and deployment
+      - name: Build exact GitHub commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $NORTHFLANK_API_TOKEN" -H "Content-Type: application/json")
+          payload="$(jq -n --arg sha "$GITHUB_SHA" '{sha:$sha}')"
+          response="$(curl -sS --fail-with-body "${auth[@]}" -X POST --data "$payload" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID/build")"
+          build_id="$(printf '%s' "$response" | jq -r '.data.id // empty')"
+          build_sha="$(printf '%s' "$response" | jq -r '.data.sha // empty')"
+          test -n "$build_id"
+          test "$build_sha" = "$GITHUB_SHA"
+          echo "NORTHFLANK_BUILD_ID=$build_id" >> "$GITHUB_ENV"
+          echo "Northflank build started: $build_id @ $build_sha"
+
+      - name: Wait for exact build
         shell: bash
         run: |
           set -euo pipefail
           auth=(-H "Authorization: Bearer $NORTHFLANK_API_TOKEN")
           for attempt in $(seq 1 120); do
-            response="$(curl -fsS "${auth[@]}" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID")"
-            build="$(printf '%s' "$response" | jq -r '.data.status.build.status // "PENDING"')"
-            deploy="$(printf '%s' "$response" | jq -r '.data.status.deployment.status // "PENDING"')"
-            echo "Northflank build=$build deployment=$deploy"
-
-            case "$build" in
-              FAILURE|CRASHED|ABORTED|SUBMISSION_FAILURE)
+            response="$(curl -fsS "${auth[@]}" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID/build/$NORTHFLANK_BUILD_ID")"
+            status="$(printf '%s' "$response" | jq -r '.data.status // "PENDING"')"
+            sha="$(printf '%s' "$response" | jq -r '.data.sha // empty')"
+            echo "Northflank build=$status sha=$sha"
+            case "$status" in
+              FAILURE|CRASHED|ABORTED|SUBMISSION_FAILURE|UNSCHEDULABLE)
                 printf '%s' "$response" | jq .
                 exit 1
                 ;;
+              SUCCESS)
+                test "$sha" = "$GITHUB_SHA"
+                break
+                ;;
             esac
+            sleep 10
+          done
+          test "$status" = "SUCCESS"
+
+      - name: Deploy exact build
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer $NORTHFLANK_API_TOKEN" -H "Content-Type: application/json")
+          payload="$(jq -n \
+            --arg id "$NORTHFLANK_SERVICE_ID" \
+            --arg branch "main" \
+            --arg sha "$GITHUB_SHA" \
+            --arg build_id "$NORTHFLANK_BUILD_ID" \
+            '{internal:{id:$id,branch:$branch,buildSHA:$sha,buildId:$build_id},docker:{configType:"default"}}')"
+          curl -sS --fail-with-body "${auth[@]}" -X POST --data "$payload" \
+            "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID/deployment" >/tmp/nf-deploy.json
+
+          for attempt in $(seq 1 60); do
+            response="$(curl -fsS "${auth[@]}" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID")"
+            deploy="$(printf '%s' "$response" | jq -r '.data.status.deployment.status // "PENDING"')"
+            echo "Northflank deployment=$deploy"
             if [ "$deploy" = "FAILED" ]; then
               printf '%s' "$response" | jq .
               exit 1
             fi
-            if [ "$build" = "SUCCESS" ] && [ "$deploy" = "COMPLETED" ]; then
-              exit 0
-            fi
+            [ "$deploy" = "COMPLETED" ] && break
             sleep 10
           done
-          echo "::error::Northflank deployment did not reach a healthy terminal state."
-          exit 1
+          test "$deploy" = "COMPLETED"
+
+          deployment="$(curl -fsS "${auth[@]}" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID/deployment")"
+          deployed_sha="$(printf '%s' "$deployment" | jq -r '.data.internal.deployedSHA // .data.internal.buildSHA // empty')"
+          echo "Northflank deployed SHA: $deployed_sha"
+          test "$deployed_sha" = "$GITHUB_SHA"
 
       - name: Discover Northflank origin and smoke test it
         shell: bash
@@ -248,8 +300,9 @@ jobs:
           {
             echo "## Northflank origin ready"
             echo ""
-            echo "- Project: `$NORTHFLANK_PROJECT_ID`"
-            echo "- Service: `$NORTHFLANK_SERVICE_ID`"
-            echo "- Origin: `$origin`"
-            echo "- Plan: `nf-compute-10` (0.1 vCPU, 256 MB)"
+            printf '%s\n' "- Project: $NORTHFLANK_PROJECT_ID"
+            printf '%s\n' "- Service: $NORTHFLANK_SERVICE_ID"
+            printf '%s\n' "- Origin: $origin"
+            printf '%s\n' "- Plan: nf-compute-10 (0.1 vCPU, 256 MB)"
+            printf '%s\n' "- Deployed SHA: $GITHUB_SHA"
           } >> "$GITHUB_STEP_SUMMARY"
