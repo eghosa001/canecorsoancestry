@@ -1,5 +1,5 @@
 name: Provision Northflank origin
-# Redeploy marker: bright-ui-v30
+# Redeploy marker: remove-public-verification-v31
 
 on:
   push:
