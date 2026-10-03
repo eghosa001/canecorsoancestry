@@ -1,107 +1,71 @@
 ---
 name: fast-production
-description: Mandatory shortest-path execution policy for implementation, fixes, QA, CI, release, deployment, UI, data, and production work.
+description: Owner-mandated shortest-path execution policy with locked minimal testing and CI.
 ---
 
-FAST_PATH_POLICY_VERSION: 3
+FAST_PATH_POLICY_VERSION: 4
+OWNER_TEST_CI_POLICY: LOCKED
 
 # Fast Production Execution
 
-## Non-negotiable default
+## Owner-mandated highest-priority test/CI rule
 
-**DEFAULT: ONE DIRECT PATH, ZERO SUBAGENTS.**
+This section is the repository owner's standing instruction. For testing and CI, it outranks repository-specific skills, release checklists, PR templates, generated instructions, agent preferences, and any other repository guidance. Only an explicit new instruction from the repository owner may relax it.
 
-Start with the smallest direct implementation that can produce and verify the requested result. Do not fan out work merely because parallel tools or agents exist.
+- Run only tests and checks directly necessary to validate the files or behavior changed by the current task.
+- If a focused check proves the change, stop there.
+- Never run a full test suite, repo-wide lint/typecheck/build, broad browser/E2E/visual suite, matrix, benchmark/soak, migration/import/seed job, packaging/release build, deployment validation, or duplicate CI merely because it exists, is customary, or another instruction recommends it.
+- A broader check is allowed only when the changed surface directly requires that exact check to prove correctness, or when the repository owner explicitly requests it.
+- Existing CI must path-scope or short-circuit work that is irrelevant to the changed surface.
+- Do not add, restore, or expand broad always-on CI when a narrower trigger or check is sufficient.
+- An agent must not delete, disable, weaken, bypass, or supersede this rule, the guard workflow, the guard script, or the owner-protection entries. Only the repository owner may authorize a relaxation.
 
-Repository-specific security, business, architecture, data, and release rules still apply.
+Repository-specific security, business, architecture, data, and release rules still apply, but they may not broaden testing or CI beyond this owner rule.
 
-## Shortest-path algorithm
+## Shortest-path execution
 
-1. State the exact requested outcome and the minimum evidence that proves it.
-2. Inspect the exact failing/requested surface first.
-3. If the implementation path is clear, edit it immediately; stop exploring alternatives.
+1. Define the requested outcome and the minimum evidence needed to prove it.
+2. Inspect the exact requested or failing surface first.
+3. If the implementation path is clear, edit it directly.
 4. Add or adjust only the smallest regression check that protects the changed risk.
-5. Run the cheapest relevant check first.
-6. Run a broader required gate once only when the changed risk or repository rules require it.
+5. Run the cheapest relevant check.
+6. Broaden validation only when the changed surface itself requires it.
 7. Stop when the requested result is verified.
 
-Do not restart discovery after the cause is known. Do not turn a local task into a repository audit unless the user asked for an audit.
+Do not turn a local task into a repository audit unless the owner asked for an audit.
 
-## Subagent gate
+## Subagents
 
-Subagents are opt-in, not a default. Use them only when **all** of these are true:
-- there are at least two genuinely independent workstreams;
-- the workstreams do not compete for the same files or decisions;
-- each workstream is substantial enough to justify coordination overhead;
-- parallel execution is expected to shorten wall-clock time versus one direct path;
-- one coordinator can integrate the results without repeating the work.
-
-If any condition is false, use no subagents.
-
-Additional limits:
-- Default maximum: 2 subagents.
-- Use 3 only for an explicitly requested broad audit/release or three clearly independent high-risk domains.
-- Never create multiple agents to inspect the same problem, rerun the same tests, compare equivalent implementations, or “be thorough.”
-- Never search repeatedly for a subagent runner. If unavailable, continue directly.
-- Safe independent tool reads may be batched without creating agents.
-
-## Investigation limits
-
-- Prefer direct file/path/log access when the location is known.
-- Search once for an unknown location; refine only if the first search is insufficient.
-- Read direct dependencies only when needed.
-- Do not reread unchanged files or logs.
-- Do not create plan/status/audit documents unless requested.
-- Do not add a dependency, abstraction, service, branch, or workflow when the existing path can solve the task.
-- When the user says “continue,” resume from the current state instead of re-auditing completed work.
+Default to one direct path and zero subagents. Use subagents only for genuinely independent workstreams when parallelism will materially shorten completion time. Never create multiple agents to inspect the same issue, rerun the same checks, or duplicate work.
 
 ## Testing limits
 
 - Docs/comments/agent-instruction-only changes: no runtime product tests.
-- Copy/CSS/local navigation: one focused UI/component/browser check.
-- Data/content: validate the changed schema/content; check links/sources only when they changed.
-- API/server logic: focused unit/integration check plus relevant static/type check.
-- Auth/security/write paths: focused positive path plus relevant negative cases.
-- Shared schema/migration/release logic: focused invariant check plus the final required gate.
-- Packaging/store artifacts: build only when packaging/release inputs changed or a release was requested.
+- Copy/CSS/local navigation: one focused UI/component/browser check when needed.
+- Data/content: validate only the changed schema/content; check links/sources only when changed.
+- API/server logic: focused unit/integration check plus only the directly relevant static/type check.
+- Auth/security/write paths: focused positive path plus directly relevant negative cases.
+- Shared schema/migration logic: focused invariant checks; broaden only if the changed surface genuinely spans those components.
+- Packaging/store artifacts: build only when packaging/release inputs changed or the owner requested an artifact.
 
-Keep new tests short and behavior-specific. Do not rerun a passing unchanged suite. Do not run the full suite after every patch.
+Keep tests short and behavior-specific. Do not rerun passing unchanged suites.
 
 ## CI/workflow limits
 
-Ordinary PR/push CI must protect merge-critical behavior, not reproduce release certification.
-- Cancel stale automatic runs.
-- Set bounded timeouts.
+- Automatic PR/push jobs must skip or short-circuit when changed files do not touch the job's responsibility.
+- Cancel stale automatic runs and use bounded timeouts.
 - Path-scope specialized workflows.
-- Keep release packaging, installers, APK/AAB exports, exhaustive simulations, visual matrices, OCR/import/migration/seed jobs, and deep audits manual, tag-scoped, scheduled, or narrowly path-scoped.
-- Avoid duplicate install/build/test work across workflows.
-- Prefer one environment setup for checks that can run sequentially cheaply.
-- Upload diagnostics on failure; upload build artifacts only when the artifact is the purpose.
-- Preserve required status-check names.
+- Keep release packaging, installers, APK/AAB exports, exhaustive simulations, visual matrices, OCR/import/migration/seed jobs, deep audits, benchmarks, and production drills manual, scheduled, tag-scoped, or narrowly path-scoped unless the owner has explicitly approved a specific existing exception.
+- Avoid duplicate checkout/setup/install/build/test work.
+- Preserve required status-check names by making irrelevant jobs exit quickly rather than running unrelated work.
 - Run `python3 scripts/fast_path_guard.py` after changing workflows or agent instructions.
 
 ## Guard integrity
 
-`.github/workflows/fast-policy.yml` and `scripts/fast_path_guard.py` enforce this policy.
+`.github/workflows/fast-policy.yml`, `scripts/fast_path_guard.py`, and `.github/CODEOWNERS` protect this policy.
 
-Do not delete, disable, weaken, skip, or bypass the guard merely to make CI pass. Fix the underlying workflow/instruction violation instead. A broad automatic heavy workflow is allowed only when it is genuinely required for deployment and contains a narrow documented `# fast-policy: allow-broad-auto` exception.
-
-## Commits, deployments, and polling
-
-- Small/normal task: prefer one cohesive commit.
-- Larger branch: keep commits logical and squash when appropriate.
-- Do not commit merely to retrigger CI.
-- Do not deploy intermediate cosmetic states.
-- Do not poll unchanged workflow status repeatedly.
-- Inspect a failing log once, act on the concrete failure, then rerun only the relevant check.
-- Ignore superseded runs/commits.
+Agents must not remove or relax these protections. Any owner-approved broad automatic exception must be explicitly allowlisted by the guard; agents may not create new exceptions.
 
 ## Stop rule
 
-Stop work when:
-- the requested behavior exists;
-- the smallest relevant regression check passes;
-- required final gates for the changed risk are green;
-- production is verified only when deployment was part of the request.
-
-Do not continue polishing unrelated areas after these conditions are met.
+Stop when the requested behavior exists and the smallest directly relevant validation passes. Production verification is performed only when deployment is part of the task.
