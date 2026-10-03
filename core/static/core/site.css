@@ -4800,3 +4800,136 @@ html[data-theme="dark"] .mobile-nav-panel {
     color: var(--danger);
   }
 }
+
+
+/* Final responsive polish v29 */
+.brand-mark {
+  width: 54px !important;
+  height: 54px !important;
+  flex: 0 0 54px !important;
+  object-fit: contain !important;
+  background: transparent !important;
+}
+.brand {
+  gap: 10px;
+}
+.brand-small {
+  letter-spacing: .16em;
+}
+.header-inner {
+  min-height: 78px;
+}
+.site-header {
+  min-height: 78px;
+}
+
+@media (max-width: 760px) {
+  .site-header,
+  .header-inner { min-height: 66px; }
+  .header-inner { padding: 7px 14px; }
+  .brand-mark {
+    width: 46px !important;
+    height: 46px !important;
+    flex-basis: 46px !important;
+  }
+  .brand-small { font-size: .5rem; }
+  .brand strong { font-size: .94rem; }
+
+  .pedigree-scroll {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 16px 14px;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .pedigree-board {
+    width: max-content;
+    min-width: max-content;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding: 2px 0 10px;
+  }
+  .pedigree-column {
+    width: 184px;
+    min-width: 184px;
+    flex: 0 0 184px;
+    display: flex;
+    flex-direction: column;
+    padding-left: 0;
+    border-left: 0;
+    scroll-snap-align: start;
+  }
+  .pedigree-column h2 {
+    position: sticky;
+    left: 0;
+    min-height: 28px;
+    margin: 0 0 8px;
+    padding: 0 2px;
+    color: var(--gold);
+    font-size: .66rem;
+  }
+  .pedigree-nodes,
+  .pedigree-column:first-child .pedigree-nodes {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    gap: 8px;
+  }
+  .pedigree-node {
+    min-height: 76px;
+    padding: 11px;
+  }
+  .pedigree-node strong {
+    font-size: .9rem;
+    line-height: 1.15;
+  }
+  .pedigree-node span,
+  .pedigree-node small {
+    font-size: .64rem;
+    line-height: 1.3;
+  }
+
+  .dashboard-sidebar {
+    display: block;
+    position: relative;
+    z-index: 2;
+  }
+  .dashboard-mobile-nav {
+    display: block !important;
+  }
+  .dashboard-main {
+    min-width: 0;
+  }
+  .dashboard-panel,
+  .dashboard-hero {
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero {
+    padding-top: 38px;
+  }
+  .hero h1 {
+    font-size: clamp(2.55rem, 13.5vw, 3.85rem);
+  }
+  .page-heading h1,
+  .dog-profile h1,
+  .pedigree-toolbar h1,
+  .kennel-hero h1,
+  .dashboard-hero h1,
+  .auth-card h1 {
+    font-size: clamp(2.05rem, 10vw, 3rem);
+  }
+  .section-heading h2,
+  .panel-heading h2 {
+    line-height: 1.08;
+  }
+  .footer-links {
+    flex-wrap: wrap;
+  }
+}
