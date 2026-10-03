@@ -15,15 +15,8 @@
       {% if claim_pending %}<span class="submission-state pending">Your ownership claim is pending</span>{% elif claim_in_review %}<span class="submission-state pending">Ownership review in progress</span>{% endif %}
     </div>
   </header>
-  {% if kennel.description %}
-    {% with description_lower=kennel.description|lower %}
-      {% if "source" not in description_lower and "metadata" not in description_lower and "imported" not in description_lower and "canecorsopedigree" not in description_lower and "provenance" not in description_lower %}
-        <p class="kennel-description">{{ kennel.description }}</p>
-      {% endif %}
-    {% endwith %}
-  {% endif %}
 
-  <div class="section-heading"><h2>Dogs</h2><span>{{ dog_total }} public dog{{ dog_total|pluralize }}</span></div>
+  <div class="section-heading"><h2>Dogs</h2><span>{{ dog_total }} dog{{ dog_total|pluralize }}</span></div>
   <div class="dog-card-grid">
     {% for dog in dogs %}
       <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">

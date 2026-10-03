@@ -5,7 +5,7 @@
   <header class="page-heading">
     <p class="eyebrow">Kennel directory</p>
     <h1>Explore kennels</h1>
-    <p>Browse Cane Corso kennels and explore their public dogs and litters.</p>
+    <p>Browse Cane Corso kennels and explore their dogs and litters.</p>
   </header>
   <div class="kennel-grid">
     {% for kennel in kennels %}
@@ -15,13 +15,6 @@
           {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% endif %}
         </div>
         <h2>{{ kennel.name }}</h2>
-        {% if kennel.description %}
-          {% with description_lower=kennel.description|lower %}
-            {% if "source" not in description_lower and "metadata" not in description_lower and "imported" not in description_lower and "canecorsopedigree" not in description_lower and "provenance" not in description_lower %}
-              <p>{{ kennel.description|truncatewords:24 }}</p>
-            {% endif %}
-          {% endwith %}
-        {% endif %}
         <div class="mini-stats"><span><strong>{{ kennel.public_dog_count }}</strong> dogs</span><span><strong>{{ kennel.public_litter_count }}</strong> litters</span></div>
       </a>
     {% empty %}
