@@ -1,5 +1,5 @@
 name: Provision Northflank origin
-# Redeploy marker: bright-ui-v29
+# Redeploy marker: bright-ui-v30
 
 on:
   push:
