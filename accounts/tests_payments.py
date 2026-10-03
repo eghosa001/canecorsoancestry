@@ -90,6 +90,7 @@ class PaidSubmissionTests(TestCase):
         )
 
         approve_submission(submission, self.reviewer)
+        submission.refresh_from_db()
         dog = Dog.objects.get(name="Verified Dog")
         self.assertTrue(dog.is_public)
         self.assertEqual(submission.status, Submission.Status.APPROVED)

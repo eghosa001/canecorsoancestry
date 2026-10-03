@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core import mail
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from registry.models import (
     Dog,
@@ -12,6 +13,8 @@ from registry.models import (
     Submission,
 )
 from registry.services import approve_submission
+
+from .models import PaymentSubmissionLink, SubmissionPayment
 
 
 class KennelClaimTests(TestCase):
@@ -127,7 +130,11 @@ class LitterWorkflowTests(TestCase):
         self.reviewer = get_user_model().objects.create_user(
             username="litter-reviewer", is_staff=True
         )
-        self.kennel = Kennel.objects.create(name="Litter Kennel", slug="litter-kennel")
+        self.kennel = Kennel.objects.create(
+            name="Litter Kennel",
+            slug="litter-kennel",
+            verified_at=timezone.now(),
+        )
         KennelMembership.objects.create(
             user=self.owner,
             kennel=self.kennel,
@@ -146,28 +153,42 @@ class LitterWorkflowTests(TestCase):
             kennel=self.kennel,
         )
 
-    def test_new_litter_is_moderated_and_starts_private(self):
-        self.client.force_login(self.owner)
-        response = self.client.post(
-            reverse("accounts:submit-litter"),
-            {
+    def test_paid_litter_is_published_only_after_admin_approval(self):
+        payment = SubmissionPayment.objects.create(
+            user=self.owner,
+            kennel=self.kennel,
+            package=SubmissionPayment.Package.LITTER,
+            dog_count=0,
+            amount_kobo=100000,
+            reference="CCA-litter-test",
+            status=SubmissionPayment.Status.PAID,
+            paid_at=timezone.now(),
+        )
+        submission = Submission.objects.create(
+            kind=Submission.Kind.LITTER_CREATE,
+            submitted_by=self.owner,
+            kennel=self.kennel,
+            payload={
+                "_paid_submission": True,
                 "code": "A-2026",
-                "kennel": str(self.kennel.pk),
-                "sire": str(self.sire.pk),
-                "dam": str(self.dam.pk),
+                "sire_id": str(self.sire.pk),
+                "dam_id": str(self.dam.pk),
                 "date_of_birth": "2026-09-01",
                 "notes": "First litter.",
-                "review_notes": "Please review pedigree.",
             },
+            notes="Please review pedigree.",
         )
-        self.assertEqual(response.status_code, 302)
-        self.assertFalse(Litter.objects.filter(code="A-2026").exists())
+        PaymentSubmissionLink.objects.create(
+            payment=payment,
+            submission=submission,
+            slot_kind=PaymentSubmissionLink.SlotKind.LITTER,
+        )
 
-        submission = Submission.objects.get(kind=Submission.Kind.LITTER_CREATE)
+        self.assertFalse(Litter.objects.filter(code="A-2026").exists())
         approve_submission(submission, self.reviewer)
 
         litter = Litter.objects.get(code="A-2026")
-        self.assertFalse(litter.is_public)
+        self.assertTrue(litter.is_public)
         self.assertEqual(litter.sire, self.sire)
         self.assertEqual(litter.dam, self.dam)
         submission.refresh_from_db()

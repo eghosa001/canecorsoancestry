@@ -1,8 +1,11 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
-from registry.models import Dog, DogImage, Kennel, Submission
+from registry.models import Dog, DogImage, Kennel, KennelMembership, Submission
+
+from .models import PaymentSubmissionLink, SubmissionPayment
 from registry.services import approve_submission
 
 
@@ -42,27 +45,56 @@ class MemberAccessFlowTests(TestCase):
         )
         self.assertRedirects(login_response, reverse("dashboard"))
 
-    def test_dog_is_private_until_admin_approval_then_member_can_view_pedigree(self):
+    def test_paid_dog_is_private_until_admin_approval_then_member_can_view_pedigree(self):
         member = get_user_model().objects.create_user(
-            username="dog-member", password="test-pass-123"
+            username="dog-member",
+            email="dog-member@example.com",
+            password="test-pass-123",
         )
-        self.client.force_login(member)
-
-        response = self.client.post(
-            reverse("accounts:submit-dog"),
-            {"name": "Member Dog", "sex": Dog.Sex.MALE},
+        kennel = Kennel.objects.create(
+            name="Verified Member Kennel",
+            slug="verified-member-kennel",
+            verified_at=timezone.now(),
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        payment = SubmissionPayment.objects.create(
+            user=member,
+            kennel=kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1,
+            amount_kobo=50000,
+            reference="CCA-member-access",
+            status=SubmissionPayment.Status.PAID,
+            paid_at=timezone.now(),
+        )
+        submission = Submission.objects.create(
+            kind=Submission.Kind.DOG,
+            submitted_by=member,
+            kennel=kennel,
+            payload={
+                "_paid_submission": True,
+                "name": "Member Dog",
+                "sex": Dog.Sex.MALE,
+            },
+        )
+        PaymentSubmissionLink.objects.create(
+            payment=payment,
+            submission=submission,
+            slot_kind=PaymentSubmissionLink.SlotKind.DOG,
         )
 
-        self.assertEqual(response.status_code, 302)
         self.assertFalse(Dog.objects.filter(name="Member Dog").exists())
-        submission = Submission.objects.get(
-            kind=Submission.Kind.DOG, submitted_by=member
-        )
         self.assertEqual(submission.status, Submission.Status.PENDING)
 
         approve_submission(submission, self.reviewer, "Facts checked.")
         submission.refresh_from_db()
         self.assertTrue(submission.dog.is_public)
+
+        self.client.force_login(member)
         pedigree = self.client.get(
             reverse("accounts:member-pedigree", args=[submission.dog.pk])
         )
