@@ -79,6 +79,7 @@ Current production workflows use:
 - `SUPABASE_DATABASE_URL`
 - `DJANGO_SECRET_KEY`
 - `CLOUDFLARE_API_TOKEN`
+- `PAYSTACK_SECRET_KEY` — required to enable live/test paid submissions; keep it server-side only
 
 ## Deployment flow
 

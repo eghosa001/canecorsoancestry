@@ -31,6 +31,12 @@ class SubmissionPaymentAdmin(admin.ModelAdmin):
     list_filter = ("package", "status", "currency", "created_at")
     search_fields = ("reference", "user__username", "user__email", "kennel__name")
     readonly_fields = (
+        "user",
+        "kennel",
+        "package",
+        "dog_count",
+        "amount_kobo",
+        "currency",
         "reference",
         "access_code",
         "authorization_url",
@@ -43,6 +49,12 @@ class SubmissionPaymentAdmin(admin.ModelAdmin):
     )
     inlines = (PaymentSubmissionInline,)
 
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(PaymentSubmissionLink)
 class PaymentSubmissionLinkAdmin(admin.ModelAdmin):
@@ -50,3 +62,9 @@ class PaymentSubmissionLinkAdmin(admin.ModelAdmin):
     list_filter = ("slot_kind", "created_at")
     search_fields = ("payment__reference", "submission__submitted_by__username")
     readonly_fields = ("payment", "submission", "slot_kind", "created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
