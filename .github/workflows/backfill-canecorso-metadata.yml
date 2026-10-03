@@ -1,0 +1,48 @@
+name: Backfill CaneCorso metadata
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/backfill-canecorso-metadata.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canecorso-metadata-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      DJANGO_DB_SCHEMA: django_app
+      DJANGO_DB_SSLMODE: require
+      DJANGO_DB_EXTRA_SCHEMAS: extensions,public
+      DJANGO_ALLOWED_HOSTS: .code.run,127.0.0.1,localhost
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://canecorsoancestry.com
+      DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Discover reachable Supabase session pooler
+        shell: bash
+        run: |
+          target_url="$(python scripts/discover_supabase_session_pooler.py)"
+          echo "::add-mask::$target_url"
+          echo "DATABASE_URL=$target_url" >> "$GITHUB_ENV"
+      - name: Verify migrations
+        run: python manage.py migrate --check
+      - name: Preview source-backed metadata enrichment
+        run: python manage.py backfill_canecorso_metadata --dry-run --min-kennel-dogs 8
