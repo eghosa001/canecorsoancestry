@@ -58,7 +58,7 @@ class BellissimoImportTests(TestCase):
 
 
 
-    def test_verified_name_override_preserves_source_payload(self):
+    def test_import_preserves_distinct_ludovico_ii_identity(self):
         payload = {
             "schemaVersion": 4,
             "dogs": [
@@ -86,7 +86,7 @@ class BellissimoImportTests(TestCase):
             source.unlink(missing_ok=True)
 
         dog = Dog.objects.get(slug="sforza-ludovico")
-        self.assertEqual(dog.name, "SFORZA LUDOVICO")
+        self.assertEqual(dog.name, "Sforza Ludovico II Imperatore")
         self.assertEqual(
             DogSource.objects.get(dog=dog).raw_payload["name"],
             "Sforza Ludovico II Imperatore",
