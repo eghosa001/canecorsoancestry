@@ -250,36 +250,31 @@ jobs:
           done
           test "$status" = "SUCCESS"
 
-      - name: Deploy exact build
+      - name: Wait for exact deployment
         shell: bash
         run: |
           set -euo pipefail
-          auth=(-H "Authorization: Bearer $NORTHFLANK_API_TOKEN" -H "Content-Type: application/json")
-          payload="$(jq -n \
-            --arg id "$NORTHFLANK_SERVICE_ID" \
-            --arg branch "main" \
-            --arg sha "$GITHUB_SHA" \
-            --arg build_id "$NORTHFLANK_BUILD_ID" \
-            '{internal:{id:$id,branch:$branch,buildSHA:$sha,buildId:$build_id},docker:{configType:"default"}}')"
-          curl -sS --fail-with-body "${auth[@]}" -X POST --data "$payload" \
-            "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID/deployment" >/tmp/nf-deploy.json
-
+          auth=(-H "Authorization: Bearer $NORTHFLANK_API_TOKEN")
+          deployed_sha=""
+          deploy=""
           for attempt in $(seq 1 60); do
-            response="$(curl -fsS "${auth[@]}" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID")"
-            deploy="$(printf '%s' "$response" | jq -r '.data.status.deployment.status // "PENDING"')"
-            echo "Northflank deployment=$deploy"
+            service="$(curl -fsS "${auth[@]}" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID")"
+            deploy="$(printf '%s' "$service" | jq -r '.data.status.deployment.status // "PENDING"')"
             if [ "$deploy" = "FAILED" ]; then
-              printf '%s' "$response" | jq .
+              printf '%s' "$service" | jq .
               exit 1
             fi
-            [ "$deploy" = "COMPLETED" ] && break
+
+            deployment="$(curl -fsS "${auth[@]}" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID/deployment")"
+            deployed_sha="$(printf '%s' "$deployment" | jq -r '.data.internal.deployedSHA // .data.internal.buildSHA // empty')"
+            echo "Northflank deployment=$deploy deployed_sha=$deployed_sha"
+
+            if [ "$deploy" = "COMPLETED" ] && [ "$deployed_sha" = "$GITHUB_SHA" ]; then
+              break
+            fi
             sleep 10
           done
           test "$deploy" = "COMPLETED"
-
-          deployment="$(curl -fsS "${auth[@]}" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID/deployment")"
-          deployed_sha="$(printf '%s' "$deployment" | jq -r '.data.internal.deployedSHA // .data.internal.buildSHA // empty')"
-          echo "Northflank deployed SHA: $deployed_sha"
           test "$deployed_sha" = "$GITHUB_SHA"
 
       - name: Discover Northflank origin and smoke test it
