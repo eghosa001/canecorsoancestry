@@ -228,7 +228,7 @@ def main():
                     raise AssertionError(f"Unexpected production background: {bg}")
                 brand = page.locator(".brand-mark")
                 brand_src = brand.get_attribute("src") or ""
-                if "cane-corso-head-logo" not in brand_src or brand_src.startswith("data:"):
+                if "cane-corso-head-logo-right" not in brand_src or brand_src.startswith("data:"):
                     raise AssertionError(f"Header is not using the cached Cane Corso head asset: {brand_src}")
                 if brand.evaluate("(el) => !el.complete || el.naturalWidth < 32 || el.naturalHeight < 32"):
                     raise AssertionError("Cane Corso head logo did not render correctly")
