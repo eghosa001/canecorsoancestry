@@ -106,17 +106,12 @@ jobs:
           grep -q 'data-ui-version="customer-v46"' /tmp/edge-page.html
           grep -q 'cane-corso-head-logo-right.webp' /tmp/edge-page.html
           grep -q '20261003-headlogo-v46' /tmp/edge-page.html
-          logo_status="$(curl --connect-timeout 4 --max-time 8 -sS -o /tmp/live-logo.webp /tmp/kennels-page.html -w '%{http_code}' "$base/static/core/cane-corso-head-logo-right.webp?v=20261003-headlogo-v46" || true)"
+          logo_status="$(curl --connect-timeout 4 --max-time 8 -sS -o /tmp/live-logo.webp -w '%{http_code}' "$base/static/core/cane-corso-head-logo-right.webp?v=20261003-headlogo-v46" || true)"
           if [ "$logo_status" != "200" ] || [ ! -s /tmp/live-logo.webp ]; then
             echo "::error::New live logo asset is not being served; HTTP $logo_status"
             exit 1
           fi
-          python - <<'PY'
-from pathlib import Path
-data = Path("/tmp/live-logo.webp").read_bytes()
-if len(data) < 5000 or data[:4] != b"RIFF" or data[8:12] != b"WEBP":
-    raise SystemExit("Live logo is not a valid non-empty WebP asset")
-PY
+          python -c 'from pathlib import Path; data=Path("/tmp/live-logo.webp").read_bytes(); assert len(data)>=5000 and data[:4]==b"RIFF" and data[8:12]==b"WEBP", "Live logo is not a valid non-empty WebP asset"'
           kennel_status="$(curl --connect-timeout 4 --max-time 12 -sS -o /tmp/kennels-page.html -w '%{http_code}' "$base/kennels/" || true)"
           if [ "$kennel_status" != "200" ]; then
             echo "::error::Live kennel page failed; HTTP $kennel_status"
@@ -166,4 +161,4 @@ PY
 
       - name: Clean temporary files
         if: always()
-        run: rm -f /tmp/edge-health.json /tmp/edge-page.html /tmp/auth-headers.txt /tmp/auth-page.html /tmp/auth-ready.json /tmp/live-logo.webp
+        run: rm -f /tmp/edge-health.json /tmp/edge-page.html /tmp/auth-headers.txt /tmp/auth-page.html /tmp/auth-ready.json /tmp/live-logo.webp /tmp/kennels-page.html
