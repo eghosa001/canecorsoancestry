@@ -7,25 +7,63 @@
     <h1>Explore kennels</h1>
     <p>Browse Cane Corso kennels and explore their dogs and litters.</p>
   </header>
+
+  <form class="filter-panel" method="get" role="search" aria-label="Search kennels">
+    <div class="filter-search">
+      <label for="kennel-q">Kennel search</label>
+      <input
+        id="kennel-q"
+        name="q"
+        type="search"
+        value="{{ query }}"
+        placeholder="Kennel name, city or country"
+        autocomplete="off"
+        enterkeyhint="search"
+      >
+    </div>
+    <button class="btn btn-gold" type="submit">Search kennels</button>
+    {% if query %}
+      <a class="btn btn-outline" href="{% url 'registry:kennel-list' %}">Clear</a>
+    {% endif %}
+  </form>
+
+  <div class="result-summary">
+    <strong>{{ result_count }} kennel{{ result_count|pluralize }}</strong>
+    {% if query %}<span>matching “{{ query }}”</span>{% else %}<span>in the directory</span>{% endif %}
+  </div>
+
   <div class="kennel-grid">
     {% for kennel in kennels %}
       <a class="kennel-card" href="{% url 'registry:kennel-detail' kennel.slug %}">
         <div class="kennel-card-top">
-          <span class="eyebrow">{{ kennel.country|default:"Country not recorded" }}</span>
+          <span class="eyebrow">
+            {% if kennel.city and kennel.country %}{{ kennel.city }}, {{ kennel.country }}{% elif kennel.country %}{{ kennel.country }}{% elif kennel.city %}{{ kennel.city }}{% else %}Location not recorded{% endif %}
+          </span>
           {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% endif %}
         </div>
         <h2>{{ kennel.name }}</h2>
-        <div class="mini-stats"><span><strong>{{ kennel.public_dog_count }}</strong> dogs</span><span><strong>{{ kennel.public_litter_count }}</strong> litters</span></div>
+        <div class="mini-stats">
+          <span><strong>{{ kennel.public_dog_count }}</strong> dogs</span>
+          <span><strong>{{ kennel.public_litter_count }}</strong> litters</span>
+        </div>
       </a>
     {% empty %}
-      <div class="empty-state"><p>No kennels have been published yet.</p></div>
+      <div class="empty-state">
+        <strong>No matching kennels.</strong>
+        <p>Try a shorter kennel name or search by city or country.</p>
+      </div>
     {% endfor %}
   </div>
+
   {% if page_obj.has_other_pages %}
     <nav class="button-row" aria-label="Kennel directory pages">
-      {% if page_obj.has_previous %}<a class="btn btn-outline" href="?page={{ page_obj.previous_page_number }}">← Previous</a>{% endif %}
+      {% if page_obj.has_previous %}
+        <a class="btn btn-outline" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.previous_page_number }}">← Previous</a>
+      {% endif %}
       <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-      {% if page_obj.has_next %}<a class="btn btn-outline" href="?page={{ page_obj.next_page_number }}">Next →</a>{% endif %}
+      {% if page_obj.has_next %}
+        <a class="btn btn-outline" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page_obj.next_page_number }}">Next →</a>
+      {% endif %}
     </nav>
   {% endif %}
 </section>
