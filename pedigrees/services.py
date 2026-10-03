@@ -414,15 +414,15 @@ def common_ancestors(dog_a, dog_b, generations=10, public_only=False):
     )
 
 
-def _pedigree_links(*dogs, public_only=False):
-    """Return all reachable parent links, using one recursive query on PostgreSQL."""
+def _pedigree_graph(*dogs, public_only=False):
+    """Return ancestry links and display-ready dogs from one recursive DB load."""
     roots = [
         dog
         for dog in dogs
         if dog is not None and (not public_only or dog.is_public)
     ]
     if not roots:
-        return {}
+        return {}, {}
 
     if connection.vendor == "postgresql":
         table = connection.ops.quote_name(Dog._meta.db_table)
@@ -431,30 +431,48 @@ def _pedigree_links(*dogs, public_only=False):
         public_parent = "WHERE parent.is_public" if public_only else ""
         sql = f"""
             WITH RECURSIVE pedigree AS (
-                SELECT id, sire_id, dam_id, is_public
+                SELECT id, sire_id, dam_id, is_public, name, slug
                 FROM {table}
                 WHERE id IN ({placeholders}){public_root}
                 UNION
-                SELECT parent.id, parent.sire_id, parent.dam_id, parent.is_public
+                SELECT
+                    parent.id,
+                    parent.sire_id,
+                    parent.dam_id,
+                    parent.is_public,
+                    parent.name,
+                    parent.slug
                 FROM {table} parent
                 JOIN pedigree child
                   ON parent.id = child.sire_id OR parent.id = child.dam_id
                 {public_parent}
             )
-            SELECT id, sire_id, dam_id
+            SELECT id, sire_id, dam_id, is_public, name, slug
             FROM pedigree
         """
         with connection.cursor() as cursor:
             cursor.execute(sql, [dog.pk for dog in roots])
-            return {
-                dog_id: (sire_id, dam_id)
-                for dog_id, sire_id, dam_id in cursor.fetchall()
-            }
+            rows = cursor.fetchall()
+
+        links = {}
+        nodes = {}
+        for dog_id, sire_id, dam_id, is_public, name, slug in rows:
+            links[dog_id] = (sire_id, dam_id)
+            nodes[dog_id] = Dog(
+                id=dog_id,
+                sire_id=sire_id,
+                dam_id=dam_id,
+                is_public=is_public,
+                name=name,
+                slug=slug,
+            )
+        return links, nodes
 
     links = {
         dog.pk: (dog.sire_id, dog.dam_id)
         for dog in roots
     }
+    nodes = {dog.pk: dog for dog in roots}
     frontier = list(roots)
     while frontier:
         parent_ids = {
@@ -466,7 +484,7 @@ def _pedigree_links(*dogs, public_only=False):
         if not parent_ids:
             break
         parents = Dog.objects.only(
-            "id", "sire_id", "dam_id", "is_public"
+            "id", "sire_id", "dam_id", "is_public", "name", "slug"
         ).in_bulk(parent_ids)
         if public_only:
             parents = {
@@ -475,14 +493,20 @@ def _pedigree_links(*dogs, public_only=False):
                 if parent.is_public
             }
         frontier = list(parents.values())
+        nodes.update(parents)
         for parent in frontier:
             links[parent.pk] = (parent.sire_id, parent.dam_id)
+    return links, nodes
+
+
+def _pedigree_links(*dogs, public_only=False):
+    """Return all reachable parent links."""
+    links, _ = _pedigree_graph(*dogs, public_only=public_only)
     return links
 
 
-def _pedigree_order(*dogs, public_only=False):
-    """Topologically order all reachable pedigree IDs after one ancestry load."""
-    links = _pedigree_links(*dogs, public_only=public_only)
+def _ordered_from_links(root_ids, links):
+    """Topologically order a preloaded pedigree graph and reject parent cycles."""
     visited = set()
     visiting = set()
     ordered = []
@@ -503,9 +527,19 @@ def _pedigree_order(*dogs, public_only=False):
         visited.add(dog_id)
         ordered.append(dog_id)
 
-    for dog in dogs:
-        if dog is not None and dog.pk in links:
-            visit(dog.pk)
+    for dog_id in root_ids:
+        if dog_id in links:
+            visit(dog_id)
+    return ordered
+
+
+def _pedigree_order(*dogs, public_only=False):
+    """Topologically order all reachable pedigree IDs after one ancestry load."""
+    links = _pedigree_links(*dogs, public_only=public_only)
+    ordered = _ordered_from_links(
+        [dog.pk for dog in dogs if dog is not None],
+        links,
+    )
     return ordered, links
 
 
@@ -644,7 +678,8 @@ def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
         raise ValueError("Sire and dam must be different dogs.")
 
     generations = _bounded_generations(generations)
-    ordered, links = _pedigree_order(sire, dam, public_only=public_only)
+    links, graph_dogs = _pedigree_graph(sire, dam, public_only=public_only)
+    ordered = _ordered_from_links((sire.pk, dam.pk), links)
     revision = _pedigree_links_revision(links)
     cache_key = (
         f"cca:virtual-mating:v1:{sire.pk}:{dam.pk}:{generations}:"
@@ -682,21 +717,20 @@ def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
         }
         cache.set(cache_key, payload, 5 * 60)
 
-    common_ids = [row["dog_id"] for row in payload["common"]]
-    dogs = {
+    graph_dogs_by_key = {
         str(dog_id): dog
-        for dog_id, dog in Dog.objects.select_related("kennel").in_bulk(common_ids).items()
+        for dog_id, dog in graph_dogs.items()
     }
     common = [
         {
-            "dog": dogs[row["dog_id"]],
+            "dog": graph_dogs_by_key[row["dog_id"]],
             "left_occurrences": row["left_occurrences"],
             "right_occurrences": row["right_occurrences"],
             "left_generation": row["left_generation"],
             "right_generation": row["right_generation"],
         }
         for row in payload["common"]
-        if row["dog_id"] in dogs
+        if row["dog_id"] in graph_dogs_by_key
     ]
     common.sort(
         key=lambda row: (
