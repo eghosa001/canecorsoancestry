@@ -357,6 +357,8 @@ def main():
                         secondY: stats[1]?.top,
                         thirdY: stats[2]?.top,
                         themeVisible: theme ? getComputedStyle(theme).display !== "none" : false,
+                        themeTop: theme ? theme.getBoundingClientRect().top : -1,
+                        menuTop: document.querySelector(".mobile-nav").getBoundingClientRect().top,
                         logoWidth: document.querySelector(".brand-mark").getBoundingClientRect().width,
                       };
                     }"""
@@ -369,6 +371,8 @@ def main():
                     raise AssertionError("Mobile light/dark control is not directly visible in the header")
                 if restored_mobile["logoWidth"] < 54:
                     raise AssertionError(f"Customer logo is still undersized on mobile: {restored_mobile}")
+                if abs(restored_mobile["themeTop"] - restored_mobile["menuTop"]) > 8:
+                    raise AssertionError(f"Mobile theme and menu controls are not on the same row: {restored_mobile}")
                 skip_link = page.locator(".skip-link")
                 page.evaluate("window.scrollTo(0, 0)")
                 page.keyboard.press("Tab")
