@@ -5034,7 +5034,7 @@ html[data-theme="dark"] .mobile-nav-panel {
   margin-top: 8px;
 }
 
-.hero-mobile-break { display: inline; }
+.hero-title-primary,\n.hero-title-secondary { display: block; }\n.hero-mobile-break { display: inline; }
 
 .hero-mark {
   position: relative;
