@@ -90,7 +90,6 @@
     <article class="panel">
       <div class="panel-heading"><h2>Record status</h2></div>
       <dl class="compact-facts">
-        <dt>Verification</dt><dd>{{ dog.get_verification_state_display }}</dd>
         <dt>Database ID</dt><dd>{{ dog.id }}</dd>
         <dt>Last updated</dt><dd>{{ dog.updated_at|date:"d M Y" }}</dd>
       </dl>
@@ -116,10 +115,10 @@
     <div class="panel-heading"><h2>Health & DNA records</h2></div>
     <div class="table-scroll">
       <table class="data-table">
-        <thead><tr><th>Test</th><th>Result</th><th>Verification</th><th>Date</th></tr></thead>
+        <thead><tr><th>Test</th><th>Result</th><th>Date</th></tr></thead>
         <tbody>
         {% for record in dog.display_health_records %}
-          <tr><td>{{ record.test_type }}</td><td>{{ record.result }}</td><td>{{ record.get_verification_state_display }}</td><td>{{ record.tested_on|default:"—" }}</td></tr>
+          <tr><td>{{ record.test_type }}</td><td>{{ record.result }}</td><td>{{ record.tested_on|default:"—" }}</td></tr>
         {% empty %}
           <tr><td colspan="4">No health or DNA records have been published for this dog.</td></tr>
         {% endfor %}
