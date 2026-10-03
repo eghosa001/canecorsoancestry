@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: canecorso-metadata-backfill
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   backfill:
@@ -54,7 +54,7 @@ jobs:
         run: python manage.py migrate --check
 
       - name: Backfill countries and explicit breeder kennels
-        run: python manage.py backfill_canecorso_metadata --limit 8000 --delay 0.1
+        run: python manage.py backfill_canecorso_metadata --limit 4000 --delay 0.1
 
       - name: Verify production metadata
         run: |

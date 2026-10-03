@@ -218,7 +218,7 @@ class Command(BaseCommand):
                 raw_payload__metadata_checked_at__isnull=True,
             )
             .select_related("dog")
-            .order_by("-dog__search_count", "id")
+            .order_by("id")
         )
         if limit:
             candidates = candidates[:limit]
