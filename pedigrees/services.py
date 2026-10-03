@@ -683,7 +683,10 @@ def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
         cache.set(cache_key, payload, 5 * 60)
 
     common_ids = [row["dog_id"] for row in payload["common"]]
-    dogs = Dog.objects.select_related("kennel").in_bulk(common_ids)
+    dogs = {
+        str(dog_id): dog
+        for dog_id, dog in Dog.objects.select_related("kennel").in_bulk(common_ids).items()
+    }
     common = [
         {
             "dog": dogs[row["dog_id"]],
