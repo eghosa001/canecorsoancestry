@@ -5622,3 +5622,39 @@ html[data-theme="light"] .hero-search input {
       linear-gradient(145deg, #151916, #090b0a) !important;
   }
 }
+
+
+/* Owner exact old-home correction v40 */
+.hero-mark {
+  border: 1px solid var(--line) !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(210, 173, 87, .18), transparent 42%),
+    linear-gradient(145deg, #151916, #090b0a) !important;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, .42) !important;
+}
+
+@media (max-width: 760px) {
+  .home-actions .action-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .home-actions .action-card {
+    min-height: 150px !important;
+    padding: 24px !important;
+  }
+
+  .home-actions .action-icon {
+    margin-bottom: 24px !important;
+    font-size: 1.45rem !important;
+  }
+
+  .home-actions .action-card strong {
+    font-size: 1.25rem !important;
+  }
+
+  .home-actions .action-card small {
+    display: block !important;
+    font-size: inherit !important;
+  }
+}
