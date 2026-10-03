@@ -191,12 +191,38 @@ def virtual_mating(request):
     sire_id = (request.GET.get("sire") or "").strip()
     dam_id = (request.GET.get("dam") or "").strip()
 
-    sire, sire_error = _resolve_mating_dog(
-        sire_query, Dog.Sex.MALE, selected_id=sire_id
-    )
-    dam, dam_error = _resolve_mating_dog(
-        dam_query, Dog.Sex.FEMALE, selected_id=dam_id
-    )
+    sire = dam = None
+    sire_error = dam_error = ""
+
+    try:
+        sire_uuid = UUID(sire_id) if sire_id else None
+    except (TypeError, ValueError):
+        sire_uuid = None
+    try:
+        dam_uuid = UUID(dam_id) if dam_id else None
+    except (TypeError, ValueError):
+        dam_uuid = None
+
+    if sire_uuid and dam_uuid:
+        selected = _public_dogs().filter(
+            pk__in=(sire_uuid, dam_uuid)
+        ).in_bulk()
+        candidate_sire = selected.get(sire_uuid)
+        candidate_dam = selected.get(dam_uuid)
+        if candidate_sire and candidate_sire.sex in {Dog.Sex.MALE, Dog.Sex.UNKNOWN}:
+            sire = candidate_sire
+        if candidate_dam and candidate_dam.sex in {Dog.Sex.FEMALE, Dog.Sex.UNKNOWN}:
+            dam = candidate_dam
+
+    if sire is None:
+        sire, sire_error = _resolve_mating_dog(
+            sire_query, Dog.Sex.MALE, selected_id=sire_id
+        )
+    if dam is None:
+        dam, dam_error = _resolve_mating_dog(
+            dam_query, Dog.Sex.FEMALE, selected_id=dam_id
+        )
+
     error = sire_error or dam_error
     projected_percent = None
     common = []

@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Count, F, Prefetch, Q
+from django.db.models import Count, Exists, F, OuterRef, Prefetch, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -20,6 +20,7 @@ from pedigrees.services import (
 
 from .models import (
     Dog,
+    DogAlias,
     DogDocument,
     DogImage,
     DogRedirect,
@@ -98,31 +99,63 @@ def dog_suggestions(request):
     browse = request.GET.get("browse") == "1"
 
     dogs = Dog.objects.filter(is_public=True)
-    if len(query) >= 2:
-        dogs = dogs.filter(public_dog_match_filter(query))
+
+    if len(query) >= 3:
+        alias_match = DogAlias.objects.filter(
+            dog_id=OuterRef("pk"),
+            name__icontains=query,
+        )
+        registration_match = DogRegistration.objects.filter(
+            dog_id=OuterRef("pk"),
+            number__icontains=query,
+        )
+        dogs = dogs.annotate(
+            _alias_match=Exists(alias_match),
+            _registration_match=Exists(registration_match),
+        ).filter(
+            Q(name__icontains=query)
+            | Q(bloodline__icontains=query)
+            | Q(kennel__name__icontains=query)
+            | Q(_alias_match=True)
+            | Q(_registration_match=True)
+        )
+    elif query:
+        dogs = dogs.filter(name__istartswith=query)
     elif not browse:
         return JsonResponse({"results": []})
+
     if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE}:
         dogs = dogs.filter(Q(sex=sex) | Q(sex=Dog.Sex.UNKNOWN))
 
-    dogs = (
-        dogs.select_related("kennel")
-        .prefetch_related("registrations")
+    registration_number = (
+        DogRegistration.objects.filter(dog_id=OuterRef("pk"))
+        .order_by("id")
+        .values("number")[:1]
+    )
+    rows = list(
+        dogs.annotate(_registration=Subquery(registration_number))
+        .values(
+            "id",
+            "name",
+            "slug",
+            "sex",
+            "kennel__name",
+            "_registration",
+        )
         .order_by("-search_count", "-updated_at", "name")[:8]
     )
-    results = []
-    for dog in dogs:
-        registration = next(iter(dog.registrations.all()), None)
-        results.append(
-            {
-                "id": str(dog.pk),
-                "name": dog.name,
-                "slug": dog.slug,
-                "sex": dog.get_sex_display(),
-                "kennel": dog.kennel.name if dog.kennel_id else "",
-                "registration": registration.number if registration else "",
-            }
-        )
+    sex_labels = dict(Dog.Sex.choices)
+    results = [
+        {
+            "id": str(row["id"]),
+            "name": row["name"],
+            "slug": row["slug"],
+            "sex": sex_labels.get(row["sex"], row["sex"]),
+            "kennel": row["kennel__name"] or "",
+            "registration": row["_registration"] or "",
+        }
+        for row in rows
+    ]
     response = JsonResponse({"results": results})
     response["Cache-Control"] = "public, max-age=30, stale-while-revalidate=120"
     return response

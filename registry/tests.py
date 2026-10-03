@@ -88,6 +88,50 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"][0]["name"], "Suggestion Champion")
 
+    def test_dog_suggestions_browse_returns_popular_sex_matches(self):
+        Dog.objects.create(
+            name="Browse Sire",
+            slug="browse-sire",
+            sex=Dog.Sex.MALE,
+            is_public=True,
+            search_count=20,
+        )
+        Dog.objects.create(
+            name="Browse Dam",
+            slug="browse-dam",
+            sex=Dog.Sex.FEMALE,
+            is_public=True,
+            search_count=30,
+        )
+
+        response = self.client.get(
+            reverse("registry:dog-suggestions"),
+            {"browse": "1", "sex": "male"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["name"], "Browse Sire")
+
+    def test_dog_suggestions_use_single_database_query(self):
+        kennel = Kennel.objects.create(name="Fast Kennel", slug="fast-kennel")
+        dog = Dog.objects.create(
+            name="Performance Champion",
+            slug="performance-champion",
+            kennel=kennel,
+            is_public=True,
+            search_count=15,
+        )
+        DogRegistration.objects.create(dog=dog, number="PERF-001")
+
+        with self.assertNumQueries(1):
+            response = self.client.get(
+                reverse("registry:dog-suggestions"),
+                {"q": "Performance"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["registration"], "PERF-001")
+
     def test_public_dog_profile_always_exposes_coi(self):
         common = Dog.objects.create(
             name="COI Common", slug="coi-common-profile", is_public=True

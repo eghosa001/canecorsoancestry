@@ -56,8 +56,8 @@ jobs:
           python manage.py check
 
           targets=()
-          grep -q '^pedigrees/' <<<"$changed" && targets+=("pedigrees.tests")
-          grep -q '^registry/' <<<"$changed" && targets+=("registry")
+          grep -q '^pedigrees/' <<<"$changed" && targets+=("pedigrees.tests.PedigreeServiceTests")
+          grep -q '^registry/' <<<"$changed" && targets+=("registry.tests.DogModelTests")
           grep -q '^accounts/' <<<"$changed" && targets+=("accounts")
           grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
 

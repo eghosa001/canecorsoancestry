@@ -1,6 +1,6 @@
 {% load static %}
 <!doctype html>
-<html lang="en" data-theme="dark" data-ui-version="customer-v47">
+<html lang="en" data-theme="dark" data-ui-version="customer-v48">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -204,7 +204,7 @@
         function requestSuggestions(value, browse) {
           clearTimeout(timer);
           var expected = (value || "").trim();
-          if (!browse && expected.length < 2) {
+          if (!browse && expected.length < 3) {
             close();
             return;
           }
