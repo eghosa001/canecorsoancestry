@@ -544,6 +544,37 @@ def inbreeding_coefficient(dog, public_only=False):
     return max(0.0, matrix[dog_index][dog_index] - 1.0)
 
 
+def _kinship_from_links(left_id, right_id, ordered, links):
+    """Return the kinship coefficient for two dogs without allocating an NxN matrix."""
+    order = {dog_id: position for position, dog_id in enumerate(ordered)}
+    memo = {}
+
+    def kinship(a_id, b_id):
+        if not a_id or not b_id or a_id not in links or b_id not in links:
+            return 0.0
+
+        if order[a_id] < order[b_id]:
+            a_id, b_id = b_id, a_id
+        key = (a_id, b_id)
+        if key in memo:
+            return memo[key]
+
+        if a_id == b_id:
+            sire_id, dam_id = links[a_id]
+            if sire_id in links and dam_id in links:
+                value = 0.5 * (1.0 + kinship(sire_id, dam_id))
+            else:
+                value = 0.5
+        else:
+            sire_id, dam_id = links[a_id]
+            value = 0.5 * kinship(sire_id, b_id) + 0.5 * kinship(dam_id, b_id)
+
+        memo[key] = value
+        return value
+
+    return kinship(left_id, right_id)
+
+
 def projected_inbreeding(sire, dam, public_only=False):
     """Return projected offspring COI for a sire/dam pairing as a 0..1 float."""
     if sire is None or dam is None:
@@ -551,10 +582,88 @@ def projected_inbreeding(sire, dam, public_only=False):
     if sire.pk == dam.pk:
         raise ValueError("Sire and dam must be different dogs.")
 
-    _, index, matrix = _relationship_matrix(
-        sire, dam, public_only=public_only
+    ordered, links = _pedigree_order(sire, dam, public_only=public_only)
+    return max(
+        0.0,
+        _kinship_from_links(sire.pk, dam.pk, ordered, links),
     )
-    return max(0.0, 0.5 * matrix[index[sire.pk]][index[dam.pk]])
+
+
+def _ancestor_occurrence_summary(root_id, links, generations=10):
+    """Count bounded ancestor positions from an already loaded pedigree graph."""
+    generations = _bounded_generations(generations)
+    counts = Counter()
+    nearest = {}
+    slots = [root_id]
+
+    for generation in range(1, generations + 1):
+        next_slots = []
+        for dog_id in slots:
+            parent_ids = links.get(dog_id)
+            if not parent_ids:
+                next_slots.extend((None, None))
+                continue
+            for parent_id in parent_ids:
+                if parent_id in links:
+                    counts[parent_id] += 1
+                    nearest[parent_id] = min(
+                        generation,
+                        nearest.get(parent_id, generation),
+                    )
+                    next_slots.append(parent_id)
+                else:
+                    next_slots.append(None)
+        if not any(next_slots):
+            break
+        slots = next_slots
+
+    return counts, nearest
+
+
+def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
+    """Calculate COI and common ancestors from one shared ancestry load."""
+    if sire is None or dam is None:
+        return {"projected_inbreeding": None, "common": [], "pedigree_nodes": 0}
+    if sire.pk == dam.pk:
+        raise ValueError("Sire and dam must be different dogs.")
+
+    ordered, links = _pedigree_order(sire, dam, public_only=public_only)
+    projected = max(
+        0.0,
+        _kinship_from_links(sire.pk, dam.pk, ordered, links),
+    )
+
+    left_counts, left_nearest = _ancestor_occurrence_summary(
+        sire.pk, links, generations=generations
+    )
+    right_counts, right_nearest = _ancestor_occurrence_summary(
+        dam.pk, links, generations=generations
+    )
+    common_ids = left_counts.keys() & right_counts.keys()
+    dogs = Dog.objects.select_related("kennel").in_bulk(common_ids)
+
+    common = [
+        {
+            "dog": dogs[dog_id],
+            "left_occurrences": left_counts[dog_id],
+            "right_occurrences": right_counts[dog_id],
+            "left_generation": left_nearest[dog_id],
+            "right_generation": right_nearest[dog_id],
+        }
+        for dog_id in common_ids
+        if dog_id in dogs
+    ]
+    common.sort(
+        key=lambda row: (
+            row["left_generation"] + row["right_generation"],
+            row["dog"].name,
+        )
+    )
+    return {
+        "projected_inbreeding": projected,
+        "common": common,
+        "pedigree_nodes": len(links),
+    }
 
 
 

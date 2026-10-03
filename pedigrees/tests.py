@@ -12,6 +12,7 @@ from .services import (
     pedigree_generations,
     projected_inbreeding,
     repeated_ancestors,
+    virtual_mating_analysis,
     sibling_relationships,
 )
 
@@ -63,6 +64,97 @@ class PedigreeServiceTests(TestCase):
         dam = Dog.objects.create(name="Female Half Sibling", slug="female-half", sire=common)
 
         self.assertAlmostEqual(projected_inbreeding(sire, dam), 0.125)
+
+    def test_projected_coi_for_unrelated_founders_is_zero(self):
+        sire = Dog.objects.create(name="Unrelated Sire", slug="unrelated-sire")
+        dam = Dog.objects.create(name="Unrelated Dam", slug="unrelated-dam")
+        self.assertAlmostEqual(projected_inbreeding(sire, dam), 0.0)
+
+    def test_projected_coi_for_parent_offspring_pair_is_25_percent(self):
+        founder_a = Dog.objects.create(name="Founder A", slug="parent-founder-a")
+        founder_b = Dog.objects.create(name="Founder B", slug="parent-founder-b")
+        daughter = Dog.objects.create(
+            name="Founder Daughter",
+            slug="founder-daughter",
+            sire=founder_a,
+            dam=founder_b,
+        )
+        self.assertAlmostEqual(projected_inbreeding(founder_a, daughter), 0.25)
+
+    def test_projected_coi_for_full_sibling_pair_is_25_percent(self):
+        father = Dog.objects.create(name="Full Father", slug="full-father")
+        mother = Dog.objects.create(name="Full Mother", slug="full-mother")
+        sire = Dog.objects.create(
+            name="Full Brother",
+            slug="full-brother",
+            sire=father,
+            dam=mother,
+        )
+        dam = Dog.objects.create(
+            name="Full Sister",
+            slug="full-sister",
+            sire=father,
+            dam=mother,
+        )
+        self.assertAlmostEqual(projected_inbreeding(sire, dam), 0.25)
+
+    def test_projected_coi_for_first_cousins_is_6_point_25_percent(self):
+        grandfather = Dog.objects.create(name="Cousin Grandfather", slug="cousin-grandfather")
+        grandmother = Dog.objects.create(name="Cousin Grandmother", slug="cousin-grandmother")
+        sibling_a = Dog.objects.create(
+            name="Cousin Parent A",
+            slug="cousin-parent-a",
+            sire=grandfather,
+            dam=grandmother,
+        )
+        sibling_b = Dog.objects.create(
+            name="Cousin Parent B",
+            slug="cousin-parent-b",
+            sire=grandfather,
+            dam=grandmother,
+        )
+        unrelated_a = Dog.objects.create(name="Cousin Other A", slug="cousin-other-a")
+        unrelated_b = Dog.objects.create(name="Cousin Other B", slug="cousin-other-b")
+        sire = Dog.objects.create(
+            name="First Cousin Male",
+            slug="first-cousin-male",
+            sire=sibling_a,
+            dam=unrelated_a,
+        )
+        dam = Dog.objects.create(
+            name="First Cousin Female",
+            slug="first-cousin-female",
+            sire=sibling_b,
+            dam=unrelated_b,
+        )
+        self.assertAlmostEqual(projected_inbreeding(sire, dam), 0.0625)
+
+    def test_virtual_mating_analysis_reuses_one_graph_and_reports_common_ancestor(self):
+        common = Dog.objects.create(
+            name="Shared Analysis Ancestor",
+            slug="shared-analysis-ancestor",
+            is_public=True,
+        )
+        sire = Dog.objects.create(
+            name="Analysis Sire",
+            slug="analysis-sire",
+            sex=Dog.Sex.MALE,
+            sire=common,
+            is_public=True,
+        )
+        dam = Dog.objects.create(
+            name="Analysis Dam",
+            slug="analysis-dam",
+            sex=Dog.Sex.FEMALE,
+            sire=common,
+            is_public=True,
+        )
+
+        analysis = virtual_mating_analysis(sire, dam, public_only=True)
+
+        self.assertAlmostEqual(analysis["projected_inbreeding"], 0.125)
+        self.assertEqual([row["dog"].pk for row in analysis["common"]], [common.pk])
+        self.assertEqual(analysis["pedigree_nodes"], 3)
 
     def test_virtual_mating_resolves_names_without_large_dropdowns(self):
         common = Dog.objects.create(

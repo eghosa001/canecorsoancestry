@@ -9,11 +9,10 @@ from registry.models import Dog
 from registry.querysets import public_dog_match_filter
 
 from .services import (
-    common_ancestors,
     descendant_generations,
     pedigree_analysis,
     pedigree_export_rows,
-    projected_inbreeding,
+    virtual_mating_analysis,
 )
 
 
@@ -204,12 +203,14 @@ def virtual_mating(request):
 
     if sire and dam and not error:
         try:
-            projected_percent = projected_inbreeding(
-                sire, dam, public_only=True
-            ) * 100
-            common = common_ancestors(
-                sire, dam, generations=10, public_only=True
+            analysis = virtual_mating_analysis(
+                sire,
+                dam,
+                generations=10,
+                public_only=True,
             )
+            projected_percent = analysis["projected_inbreeding"] * 100
+            common = analysis["common"]
         except ValueError as exc:
             error = str(exc)
 

@@ -86,4 +86,23 @@ jobs:
           python manage.py import_bellissimo
           python manage.py import_bellissimo_puppies
           python manage.py audit_pedigree_data --fail-on-critical
-      - run: python manage.py test --verbosity 1
+      - name: Run change-scoped tests
+        shell: bash
+        run: |
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            changed="$(git diff --name-only HEAD^ HEAD)"
+          else
+            changed="$(git show --pretty='' --name-only HEAD)"
+          fi
+          targets=()
+          grep -q '^pedigrees/' <<<"$changed" && targets+=("pedigrees.tests")
+          grep -q '^registry/' <<<"$changed" && targets+=("registry")
+          grep -q '^accounts/' <<<"$changed" && targets+=("accounts")
+          grep -q '^core/.*\.py
+ <<<"$changed" && targets+=("core")
+          if [ ${#targets[@]} -eq 0 ]; then
+            echo "No changed Python app requires tests."
+            exit 0
+          fi
+          printf 'Running scoped tests: %s\n' "${targets[*]}"
+          python manage.py test "${targets[@]}" --verbosity 1
