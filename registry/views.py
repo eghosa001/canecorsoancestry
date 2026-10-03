@@ -164,7 +164,7 @@ def dog_search(request):
     query_params = request.GET.copy()
     query_params.pop("page", None)
 
-    countries = cache.get("cca:dog-search:countries:v1")
+    countries = cache.get("cca:dog-search:countries:v2")
     if countries is None:
         countries = list(
             Dog.objects.filter(is_public=True)
@@ -173,12 +173,12 @@ def dog_search(request):
             .distinct()
             .order_by("country")
         )
-        cache.set("cca:dog-search:countries:v1", countries, 900)
+        cache.set("cca:dog-search:countries:v2", countries, 900)
 
-    kennels = cache.get("cca:dog-search:kennels:v1")
+    kennels = cache.get("cca:dog-search:kennels:v2")
     if kennels is None:
         kennels = list(Kennel.objects.order_by("name").values("name", "slug"))
-        cache.set("cca:dog-search:kennels:v1", kennels, 900)
+        cache.set("cca:dog-search:kennels:v2", kennels, 900)
 
     return render(
         request,
