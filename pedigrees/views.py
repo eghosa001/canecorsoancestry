@@ -24,12 +24,12 @@ def _public_dogs():
     return Dog.objects.filter(is_public=True).select_related("kennel")
 
 
-def _requested_generations(request):
+def _requested_generations(request, default=4):
     try:
-        requested = int(request.GET.get("generations", "4"))
+        requested = int(request.GET.get("generations", str(default)))
     except ValueError:
-        requested = 4
-    return requested if requested in ALLOWED_GENERATIONS else 4
+        requested = default
+    return requested if requested in ALLOWED_GENERATIONS else default
 
 
 def _csv_response(dog, generations, public_only=True):
@@ -187,7 +187,7 @@ def _resolve_mating_dog(raw_value, expected_sex, selected_id=""):
 
 
 def virtual_mating(request):
-    request_started = perf_counter()
+    generations = _requested_generations(request, default=8)
     sire_query = (request.GET.get("sire_q") or "").strip()
     dam_query = (request.GET.get("dam_q") or "").strip()
     sire_id = (request.GET.get("sire") or "").strip()
@@ -226,26 +226,31 @@ def virtual_mating(request):
         )
 
     error = sire_error or dam_error
-    resolve_ms = (perf_counter() - request_started) * 1000
+    analysis = None
     projected_percent = None
     common = []
-    analysis = None
 
     if sire and dam and not error:
         try:
             analysis = virtual_mating_analysis(
                 sire,
                 dam,
-                generations=10,
+                generations=generations,
                 public_only=True,
             )
             projected_percent = analysis["projected_inbreeding"] * 100
+            analysis["projected_percent"] = projected_percent
+            analysis["relationship_percent"] = analysis["relationship"] * 100
+            analysis["sire_inbreeding_percent"] = analysis["sire_inbreeding"] * 100
+            analysis["dam_inbreeding_percent"] = analysis["dam_inbreeding"] * 100
+            analysis["contribution_total_percent"] = (
+                analysis["contribution_total"] * 100
+            )
             common = analysis["common"]
         except ValueError as exc:
             error = str(exc)
 
-    render_started = perf_counter()
-    response = render(
+    return render(
         request,
         "pedigrees/virtual_mating.html",
         {
@@ -255,23 +260,9 @@ def virtual_mating(request):
             "dam_query": dam.name if dam else dam_query,
             "projected_percent": projected_percent,
             "common": common,
+            "analysis": analysis,
+            "generations": generations,
+            "generation_options": sorted(ALLOWED_GENERATIONS),
             "error": error,
         },
     )
-    if (request.GET.get("probe") or "").startswith("profile"):
-        render_ms = (perf_counter() - render_started) * 1000
-        timings = (analysis or {}).get("timings", {})
-        response["Server-Timing"] = ", ".join(
-            [
-                f"resolve;dur={resolve_ms:.1f}",
-                f"graph;dur={timings.get('graph_ms', 0):.1f}",
-                f"compute;dur={timings.get('compute_ms', 0):.1f}",
-                f"materialize;dur={timings.get('materialize_ms', 0):.1f}",
-                f"render;dur={render_ms:.1f}",
-                f"vm;dur={(perf_counter() - request_started) * 1000:.1f}",
-            ]
-        )
-        if analysis:
-            response["X-VM-Nodes"] = str(analysis.get("pedigree_nodes", 0))
-            response["X-VM-Cache"] = "HIT" if analysis.get("cache_hit") else "MISS"
-    return response
