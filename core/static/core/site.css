@@ -5034,7 +5034,9 @@ html[data-theme="dark"] .mobile-nav-panel {
   margin-top: 8px;
 }
 
-.hero-title-primary,\n.hero-title-secondary { display: block; }\n.hero-mobile-break { display: inline; }
+.hero-title-primary,
+.hero-title-secondary { display: block; }
+.hero-mobile-break { display: inline; }
 
 .hero-mark {
   position: relative;
@@ -5315,7 +5317,7 @@ html[data-theme="light"] .hero-search input {
 
 /* WhatsApp owner final visual alignment v34 */
 .hero-mark {
-  border-color: color-mix(in srgb, var(--gold) 58%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--gold) 58%, transparent) !important;
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--gold) 10%, transparent),
     0 22px 58px rgba(0,0,0,.18) !important;
