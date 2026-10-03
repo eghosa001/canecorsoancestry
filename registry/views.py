@@ -389,20 +389,36 @@ def pedigree_statistics(request):
 
 
 def kennel_list(request):
-    kennels = (
-        Kennel.objects.annotate(
-            public_dog_count=Count("dogs", filter=Q(dogs__is_public=True), distinct=True),
-            public_litter_count=Count(
-                "litters", filter=Q(litters__is_public=True), distinct=True
-            ),
-        )
-        .order_by("name")
+    query = request.GET.get("q", "").strip()
+    kennels = Kennel.objects.annotate(
+        public_dog_count=Count("dogs", filter=Q(dogs__is_public=True), distinct=True),
+        public_litter_count=Count(
+            "litters", filter=Q(litters__is_public=True), distinct=True
+        ),
     )
-    page_obj = Paginator(kennels, 30).get_page(request.GET.get("page"))
+    if query:
+        kennels = kennels.filter(
+            Q(name__icontains=query)
+            | Q(city__icontains=query)
+            | Q(country__icontains=query)
+        )
+    kennels = kennels.order_by("name")
+
+    paginator = Paginator(kennels, 60)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
+
     return render(
         request,
         "registry/kennel_list.html",
-        {"kennels": page_obj.object_list, "page_obj": page_obj},
+        {
+            "kennels": page_obj.object_list,
+            "page_obj": page_obj,
+            "query": query,
+            "querystring": query_params.urlencode(),
+            "result_count": paginator.count,
+        },
     )
 
 
