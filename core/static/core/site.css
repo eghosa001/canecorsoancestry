@@ -5241,3 +5241,73 @@ html[data-theme="light"] .hero-mark {
     padding-top: 64px;
   }
 }
+
+
+/* Customer visual QA v31.1 — match supplied search and pedigree references. */
+.hero-search input,
+html[data-theme="dark"] .hero-search input,
+html[data-theme="light"] .hero-search input {
+  background: #ffffff !important;
+  color: #141613 !important;
+  border-color: #ffffff !important;
+}
+.hero-search input::placeholder {
+  color: #8a8b88 !important;
+  opacity: 1;
+}
+
+.pedigree-board {
+  gap: 18px;
+}
+.pedigree-column:not(:first-child)::before {
+  display: none !important;
+}
+.pedigree-nodes,
+.pedigree-column:first-child .pedigree-nodes {
+  position: relative;
+}
+.pedigree-column:not(:first-child) .pedigree-nodes::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  width: 1px;
+  background: var(--line);
+  pointer-events: none;
+}
+.pedigree-column:nth-child(2) .pedigree-nodes::before {
+  top: 25%;
+  bottom: 25%;
+}
+.pedigree-column:nth-child(3) .pedigree-nodes::before {
+  top: 12.5%;
+  bottom: 12.5%;
+}
+.pedigree-column:nth-child(4) .pedigree-nodes::before {
+  top: 6.25%;
+  bottom: 6.25%;
+}
+.pedigree-column:nth-child(5) .pedigree-nodes::before {
+  top: 3.125%;
+  bottom: 3.125%;
+}
+.pedigree-column:nth-child(n+6) .pedigree-nodes::before {
+  top: 1.5%;
+  bottom: 1.5%;
+}
+.pedigree-column:not(:first-child) .pedigree-node::before {
+  left: -10px !important;
+  width: 10px !important;
+}
+.pedigree-column:not(:last-child) .pedigree-node {
+  position: relative;
+}
+.pedigree-column:not(:last-child) .pedigree-node::after {
+  content: "";
+  position: absolute;
+  right: -9px;
+  top: 50%;
+  width: 9px;
+  height: 1px;
+  background: var(--line);
+  pointer-events: none;
+}
