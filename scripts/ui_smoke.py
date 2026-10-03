@@ -98,6 +98,13 @@ def main():
 
         desktop = browser.new_page(viewport={"width": 1440, "height": 1000})
         capture(desktop, "/", "home-desktop")
+        desktop.locator("[data-theme-toggle]").first.click()
+        if desktop.locator("html").get_attribute("data-theme") != "light":
+            raise AssertionError("desktop theme toggle did not switch to light mode")
+        screenshot(desktop, "home-desktop-light")
+        desktop.locator("[data-theme-toggle]").first.click()
+        if desktop.locator("html").get_attribute("data-theme") != "dark":
+            raise AssertionError("desktop theme toggle did not switch back to dark mode")
         capture(desktop, "/dogs/?q=", "dogs-desktop")
         capture(desktop, "/accounts/password_reset/", "password-reset-desktop")
 
@@ -143,6 +150,13 @@ def main():
         capture(mobile, "/", "home-mobile")
         mobile.locator(".mobile-nav > summary").click()
         mobile_panel = mobile.locator(".mobile-nav-panel")
+        mobile_panel.locator("[data-theme-toggle]").click()
+        if mobile.locator("html").get_attribute("data-theme") != "light":
+            raise AssertionError("mobile theme toggle did not switch to light mode")
+        screenshot(mobile, "home-mobile-light-menu")
+        mobile_panel.locator("[data-theme-toggle]").click()
+        if mobile.locator("html").get_attribute("data-theme") != "dark":
+            raise AssertionError("mobile theme toggle did not switch back to dark mode")
         if not mobile_panel.get_by_role("link", name="Sign in", exact=True).is_visible():
             raise AssertionError("home-mobile-menu does not expose Sign in")
         if not mobile_panel.get_by_role("link", name="Join", exact=True).is_visible():
