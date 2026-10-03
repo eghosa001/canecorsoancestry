@@ -562,7 +562,7 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"{mode}: {len(records)} missing source records fetched; "
                 f"{stats['created']} dogs created; "
-                f"{stats['registration_matches']} exact registration matches; "
+                f"{stats['registration_matches']} corroborated registration matches; "
                 f"{stats['skipped_parent_links']} unsafe parent links skipped; "
                 f"{stats['preserved_parent_conflicts']} existing parent links preserved; "
                 f"{image_stats['checked']} existing records checked for images; "

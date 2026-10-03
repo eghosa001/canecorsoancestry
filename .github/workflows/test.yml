@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -46,7 +46,12 @@ jobs:
       - name: Run change-scoped checks
         shell: bash
         run: |
-          changed="$(git diff --name-only HEAD^ HEAD)"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+          else
+            changed="$(git diff --name-only HEAD^ HEAD)"
+          fi
           echo "$changed"
 
           if grep -Eq '(^|/)(models\.py|migrations/)' <<<"$changed"; then
@@ -57,7 +62,11 @@ jobs:
 
           targets=()
           grep -q '^pedigrees/' <<<"$changed" && targets+=("pedigrees.tests.PedigreeServiceTests")
-          grep -q '^registry/' <<<"$changed" && targets+=("registry.tests.DogModelTests")
+          if grep -Eq '^registry/(management/commands/(import_canecorso_archive|refresh_canecorso_latest)\.py|tests_canecorso_(import|latest)\.py)$' <<<"$changed"; then
+            targets+=("registry.tests_canecorso_import" "registry.tests_canecorso_latest")
+          elif grep -q '^registry/' <<<"$changed"; then
+            targets+=("registry.tests.DogModelTests")
+          fi
           grep -q '^accounts/' <<<"$changed" && targets+=("accounts")
           grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
 

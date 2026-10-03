@@ -235,6 +235,41 @@ class CaneCorsoLatestExistingParentTests(TestCase):
             ).exists()
         )
 
+    def test_spaced_slash_registration_fragment_reuses_same_named_dog(self):
+        existing = Dog.objects.create(
+            name="Igon Del Dyrium",
+            slug="igon-del-dyrium",
+            sex=Dog.Sex.MALE,
+            is_public=True,
+        )
+        DogRegistration.objects.create(
+            dog=existing,
+            authority=None,
+            number="ISBR 15211",
+        )
+        records = {
+            "42796": latest.parse_profile(
+                "42796",
+                profile(
+                    "IGON DEL DYRIUM",
+                    gender="male",
+                    dob="2014/07/24",
+                    pedigree="LO14141958 / ISBR 15211",
+                ),
+            )
+        }
+
+        latest.import_records(records, publish=True)
+
+        self.assertEqual(Dog.objects.count(), 1)
+        self.assertTrue(
+            DogExternalKey.objects.filter(
+                namespace="canecorsopedigree.com",
+                key="42796",
+                dog=existing,
+            ).exists()
+        )
+
     def test_registration_fragment_does_not_merge_different_named_dog(self):
         existing = Dog.objects.create(
             name="Tyson",
