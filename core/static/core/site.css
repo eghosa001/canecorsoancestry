@@ -5786,3 +5786,125 @@ html[data-theme="light"] .hero-search input {
     font-size: 1.12rem !important;
   }
 }
+
+
+/* ==========================================================================
+   iPhone / iOS Safari compatibility v43
+   Keep Android/mobile layout unchanged; compensate only for WebKit/iOS.
+   ========================================================================== */
+@supports (-webkit-touch-callout: none) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    min-width: 0 !important;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .site-header {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .header-inner {
+    padding-left: max(16px, env(safe-area-inset-left)) !important;
+    padding-right: max(16px, env(safe-area-inset-right)) !important;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .auth-shell,
+  .dashboard-shell {
+    min-height: calc(100svh - 76px);
+  }
+
+  @media (max-width: 760px) {
+    .hero,
+    .page-shell,
+    .site-footer {
+      width: 100%;
+      max-width: 100%;
+      padding-left: max(16px, env(safe-area-inset-left)) !important;
+      padding-right: max(16px, env(safe-area-inset-right)) !important;
+    }
+
+    .mobile-nav-panel {
+      max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right));
+    }
+
+    .hero-mark {
+      width: 100% !important;
+      max-width: 100% !important;
+      grid-template-columns: minmax(96px, .85fr) minmax(0, 1.15fr) !important;
+      column-gap: 14px !important;
+      padding-left: 18px !important;
+      padding-right: 18px !important;
+      overflow: hidden !important;
+    }
+
+    .hero-mark span {
+      min-width: 0 !important;
+      font-size: clamp(4.3rem, 21vw, 6.1rem) !important;
+    }
+
+    .hero-mark small {
+      min-width: 0 !important;
+      max-width: 100% !important;
+      font-size: clamp(.40rem, 1.75vw, .50rem) !important;
+      letter-spacing: .11em !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: clip !important;
+    }
+
+    .home-actions .action-grid {
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+
+    .home-actions .action-card {
+      min-width: 0 !important;
+      overflow: hidden !important;
+    }
+
+    .home-actions .action-card strong {
+      overflow-wrap: anywhere;
+    }
+
+    .hero-search,
+    .filter-panel,
+    .mating-form {
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+
+    .hero-search input,
+    .hero-search button,
+    .filter-panel input,
+    .filter-panel select,
+    .mating-form input,
+    .mating-form select {
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
+
+    .pedigree-scroll,
+    .profile-tabs,
+    .table-scroll {
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .site-footer {
+      padding-bottom: max(40px, env(safe-area-inset-bottom)) !important;
+    }
+  }
+}
