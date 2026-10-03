@@ -1,6 +1,7 @@
 import csv
 import re
 import sys
+from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from registry.models import (
     DogTitle,
     HealthRecord,
     VerificationState,
+    normalize_identity_name,
 )
 
 
@@ -27,6 +29,59 @@ UNKNOWN_VALUES = {"", "unknown", "nan", "none", "null", "yyyy/mm/dd"}
 def _text(value):
     value = str(value or "").strip()
     return "" if value.casefold() in UNKNOWN_VALUES else value
+
+
+def _registration_key(value):
+    """Normalize a registration fragment for cross-source identity matching."""
+    return re.sub(r"[^a-z0-9]+", "", _text(value).casefold())
+
+
+def _pedigree_registration_keys(value):
+    """Split a source pedigree field into individual normalized registrations."""
+    return {
+        key
+        for part in re.split(r"[;,|]+", _text(value))
+        if (key := _registration_key(part))
+    }
+
+
+def _registration_match_index():
+    """Index known canonical registrations once, tolerating punctuation/case differences."""
+    matches = defaultdict(set)
+    for number, dog_id in DogRegistration.objects.values_list("number", "dog_id"):
+        key = _registration_key(number)
+        if key:
+            matches[key].add(dog_id)
+    return matches
+
+
+def _matching_registered_dog(record, registration_matches):
+    """Return one corroborated canonical dog or None.
+
+    A source registration is only identity evidence when all matched fragments point
+    to one dog and name/sex also agree. This prevents a bad pedigree field from
+    merging an unrelated dog that happens to share one registration token.
+    """
+    matched_ids = set()
+    for key in _pedigree_registration_keys(record.get("pedigree_number")):
+        matched_ids.update(registration_matches.get(key, set()))
+    if len(matched_ids) != 1:
+        return None
+
+    dog = Dog.objects.filter(pk=next(iter(matched_ids))).first()
+    if dog is None:
+        return None
+    if dog.normalized_name != normalize_identity_name(_text(record.get("name"))):
+        return None
+
+    source_sex = _sex(record.get("gender"))
+    if (
+        source_sex != Dog.Sex.UNKNOWN
+        and dog.sex != Dog.Sex.UNKNOWN
+        and source_sex != dog.sex
+    ):
+        return None
+    return dog
 
 
 def _source_id(value):
@@ -224,17 +279,7 @@ class Command(BaseCommand):
         source_to_dog = {key: external.dog for key, external in existing_keys.items()}
 
         missing_ids = selected_ids - set(existing_keys)
-        registrations = {
-            _text(records[source_id].get("pedigree_number"))
-            for source_id in missing_ids
-            if _text(records[source_id].get("pedigree_number"))
-        }
-        registration_matches = {}
-        if registrations:
-            for number, dog_id in DogRegistration.objects.filter(
-                number__in=registrations
-            ).values_list("number", "dog_id"):
-                registration_matches.setdefault(number, set()).add(dog_id)
+        registration_matches = _registration_match_index()
 
         created_dogs = []
         newly_attached_ids = []
@@ -245,10 +290,8 @@ class Command(BaseCommand):
 
         for source_id in sorted(missing_ids, key=int):
             record = records[source_id]
-            pedigree_number = _text(record.get("pedigree_number"))
-            matched_ids = registration_matches.get(pedigree_number, set())
-            if len(matched_ids) == 1:
-                dog = Dog.objects.get(pk=next(iter(matched_ids)))
+            dog = _matching_registered_dog(record, registration_matches)
+            if dog is not None:
                 source_to_dog[source_id] = dog
                 newly_attached_ids.append(source_id)
                 reused_by_registration += 1

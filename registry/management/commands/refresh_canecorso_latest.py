@@ -14,6 +14,8 @@ from registry.management.commands.import_canecorso_archive import (
     _date,
     _health,
     _raw_payload,
+    _registration_match_index,
+    _matching_registered_dog,
     _sex,
     _text,
     _titles,
@@ -379,17 +381,7 @@ def import_records(records, publish=True, dry_run=False):
     }
     missing_ids = record_ids - set(external_keys)
 
-    registrations = {
-        _text(records[source_id].get("pedigree_number"))
-        for source_id in missing_ids
-        if _text(records[source_id].get("pedigree_number"))
-    }
-    registration_matches = {}
-    if registrations:
-        for number, dog_id in DogRegistration.objects.filter(
-            number__in=registrations
-        ).values_list("number", "dog_id"):
-            registration_matches.setdefault(number, set()).add(dog_id)
+    registration_matches = _registration_match_index()
 
     created_ids = []
     attached_ids = []
@@ -398,10 +390,8 @@ def import_records(records, publish=True, dry_run=False):
     with transaction.atomic():
         for source_id in sorted(missing_ids, key=int):
             record = records[source_id]
-            registration = _text(record.get("pedigree_number"))
-            matched_ids = registration_matches.get(registration, set())
-            if len(matched_ids) == 1:
-                dog = Dog.objects.get(pk=next(iter(matched_ids)))
+            dog = _matching_registered_dog(record, registration_matches)
+            if dog is not None:
                 reused_by_registration += 1
             else:
                 dog = Dog.objects.create(
