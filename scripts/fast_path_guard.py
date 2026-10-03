@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICY_VERSION = "FAST_PATH_POLICY_VERSION: 3"
+POLICY_VERSION = "FAST_PATH_POLICY_VERSION: 4"
+OWNER_LOCK = "OWNER_TEST_CI_POLICY: LOCKED"
 CANONICAL_SKILL = ROOT / ".agents/skills/fast-production/SKILL.md"
 REQUIRED_ADAPTERS = (
     ROOT / "AGENTS.md",
@@ -13,10 +15,24 @@ REQUIRED_ADAPTERS = (
     ROOT / "GEMINI.md",
     ROOT / ".github/copilot-instructions.md",
 )
+OWNER = "@eghosa001"
+CODEOWNERS = ROOT / ".github/CODEOWNERS"
+PROTECTED_CODEOWNER_PATTERNS = (
+    "/.agents/**",
+    "/AGENTS.md",
+    "/CLAUDE.md",
+    "/GEMINI.md",
+    "/.github/copilot-instructions.md",
+    "/.github/workflows/**",
+    "/scripts/fast_path_guard.py",
+    "/.github/CODEOWNERS",
+)
 FORBIDDEN_INSTRUCTION_PATTERNS = (
     r"dispatch\s+2\s*[-–]\s*4\s+.*immediately",
     r"use\s+subagents\s+when\s+available",
     r"split\s+independent\s+tasks\s+immediately",
+    r"run\s+the\s+full\s+required\s+gate",
+    r"run\s+full\s+required\s+gate",
 )
 HEAVY_HINTS = (
     "android", "release", "export", "visual", "screenshot", "deep",
@@ -24,6 +40,9 @@ HEAVY_HINTS = (
     "benchmark", "soak", "installer", "production-build",
 )
 ALLOW_BROAD = "# fast-policy: allow-broad-auto"
+OWNER_APPROVED_BROAD = {
+    ("eghosa001/Games", ".github/workflows/web-export.yml"),
+}
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
@@ -81,70 +100,79 @@ def inspect_instructions(errors: list[str]) -> None:
         return
     skill = read(CANONICAL_SKILL)
     if POLICY_VERSION not in skill:
-        errors.append("Canonical fast-production skill is not policy version 3.")
-    if "DEFAULT: ONE DIRECT PATH, ZERO SUBAGENTS" not in skill:
-        errors.append("Canonical skill must keep the single-path/zero-subagent default.")
-    instruction_files = [CANONICAL_SKILL, *REQUIRED_ADAPTERS]
-    root_skill = ROOT / "SKILL.md"
-    if root_skill.exists():
-        instruction_files.append(root_skill)
-    for path in instruction_files:
+        errors.append("Canonical fast-production skill is not policy version 4.")
+    if OWNER_LOCK not in skill:
+        errors.append("Canonical skill is missing the locked owner test/CI policy.")
+    for path in REQUIRED_ADAPTERS:
         if not path.exists():
             errors.append(f"Missing agent instruction adapter: {path.relative_to(ROOT)}")
             continue
         text = read(path)
+        if ".agents/skills/fast-production/SKILL.md" not in text:
+            errors.append(f"{path.relative_to(ROOT)} must point to the canonical fast-production skill.")
         for pattern in FORBIDDEN_INSTRUCTION_PATTERNS:
             if re.search(pattern, text, flags=re.I):
-                errors.append(f"{path.relative_to(ROOT)} reintroduces fan-out behavior: {pattern}")
-    for path in REQUIRED_ADAPTERS:
-        if path.exists() and ".agents/skills/fast-production/SKILL.md" not in read(path):
-            errors.append(f"{path.relative_to(ROOT)} must point to the canonical fast-production skill.")
+                errors.append(f"{path.relative_to(ROOT)} conflicts with the locked fast-path policy: {pattern}")
+
+def inspect_codeowners(errors: list[str]) -> None:
+    if not CODEOWNERS.exists():
+        errors.append("Missing .github/CODEOWNERS owner protection.")
+        return
+    text = read(CODEOWNERS)
+    for pattern in PROTECTED_CODEOWNER_PATTERNS:
+        wanted = f"{pattern} {OWNER}"
+        if wanted not in text:
+            errors.append(f"CODEOWNERS must protect {pattern} with {OWNER}.")
 
 def inspect_workflows(errors: list[str]) -> None:
     workflow_dir = ROOT / ".github/workflows"
     if not workflow_dir.exists():
         return
     broad_auto = 0
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
     for path in sorted((*workflow_dir.glob("*.yml"), *workflow_dir.glob("*.yaml"))):
         text = read(path)
+        rel = path.relative_to(ROOT).as_posix()
         block = trigger_block(text)
         if not block:
             continue
         broad = broad_pull(block) or broad_main_push(block)
+        approved = (repository, rel) in OWNER_APPROVED_BROAD
+        if ALLOW_BROAD in text and not approved:
+            errors.append(f"{rel} adds an unapproved broad-CI exception. Only the owner may allowlist one in the guard.")
         if broad:
             broad_auto += 1
             if "cancel-in-progress: true" not in text:
-                errors.append(f"{path.relative_to(ROOT)} is broad automatic CI without stale-run cancellation.")
+                errors.append(f"{rel} is broad automatic CI without stale-run cancellation.")
             if "timeout-minutes:" not in text:
-                errors.append(f"{path.relative_to(ROOT)} is broad automatic CI without a bounded timeout.")
-        if broad and is_heavy(path, text) and ALLOW_BROAD not in text:
-            errors.append(
-                f"{path.relative_to(ROOT)} is a heavy workflow running broadly. "
-                f"Make it manual/path/tag scoped, or document the deployment exception with '{ALLOW_BROAD}'."
-            )
-        if broad and "matrix:" in text and ALLOW_BROAD not in text:
-            errors.append(
-                f"{path.relative_to(ROOT)} uses a broad automatic matrix. "
-                "Use targeted jobs or document the rare exception."
-            )
+                errors.append(f"{rel} is broad automatic CI without a bounded timeout.")
+        if broad and is_heavy(path, text) and not approved:
+            errors.append(f"{rel} is a heavy workflow running broadly; path/tag/manual scope it.")
+        if broad and "matrix:" in text and not approved:
+            errors.append(f"{rel} uses a broad automatic matrix; target it to the changed surface.")
     if broad_auto > 3:
-        errors.append(f"Repository has {broad_auto} broad automatic workflows; keep at most 3.")
+        errors.append(f"Repository has {broad_auto} broad automatic workflows; narrow irrelevant workflows.")
     guard_workflow = workflow_dir / "fast-policy.yml"
     if not guard_workflow.exists():
         errors.append("Missing .github/workflows/fast-policy.yml.")
-    elif "scripts/fast_path_guard.py" not in read(guard_workflow):
-        errors.append("Fast Policy Guard no longer runs scripts/fast_path_guard.py.")
+    else:
+        guard_text = read(guard_workflow)
+        if "scripts/fast_path_guard.py" not in guard_text:
+            errors.append("Fast Policy Guard no longer runs scripts/fast_path_guard.py.")
+        if ".github/CODEOWNERS" not in guard_text:
+            errors.append("Fast Policy Guard must watch .github/CODEOWNERS.")
 
 def main() -> int:
     errors: list[str] = []
     inspect_instructions(errors)
+    inspect_codeowners(errors)
     inspect_workflows(errors)
     if errors:
         print("Fast-path policy violations:")
         for item in errors:
             print(f" - {item}")
         return 1
-    print("Fast-path policy OK: shortest path first; zero subagents by default; heavy CI constrained.")
+    print("Fast-path policy OK: owner-locked minimal tests/CI; shortest relevant validation only.")
     return 0
 
 if __name__ == "__main__":
