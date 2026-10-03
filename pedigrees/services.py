@@ -579,8 +579,8 @@ def inbreeding_coefficient(dog, public_only=False):
     return max(0.0, matrix[dog_index][dog_index] - 1.0)
 
 
-def _kinship_from_links(left_id, right_id, ordered, links):
-    """Return the kinship coefficient for two dogs without allocating an NxN matrix."""
+def _kinship_calculator(ordered, links):
+    """Return a memoized kinship calculator for an already ordered pedigree graph."""
     order = {dog_id: position for position, dog_id in enumerate(ordered)}
     memo = {}
 
@@ -607,7 +607,12 @@ def _kinship_from_links(left_id, right_id, ordered, links):
         memo[key] = value
         return value
 
-    return kinship(left_id, right_id)
+    return kinship
+
+
+def _kinship_from_links(left_id, right_id, ordered, links):
+    """Return the kinship coefficient for two dogs without allocating an NxN matrix."""
+    return _kinship_calculator(ordered, links)(left_id, right_id)
 
 
 def projected_inbreeding(sire, dam, public_only=False):
@@ -624,35 +629,156 @@ def projected_inbreeding(sire, dam, public_only=False):
     )
 
 
-def _ancestor_occurrence_summary(root_id, links, generations=10):
-    """Count bounded ancestor positions from an already loaded pedigree graph."""
+def _ancestry_occurrence_paths(root_id, links, generations=10):
+    """Return every bounded ancestry path, including the selected dog at generation 0."""
     generations = _bounded_generations(generations)
-    counts = Counter()
-    nearest = {}
-    slots = [root_id]
+    occurrences = defaultdict(list)
+    if root_id not in links:
+        return occurrences
+
+    occurrences[root_id].append(
+        {
+            "generation": 0,
+            "directions": (),
+            "dog_ids": (root_id,),
+        }
+    )
+    frontier = [(root_id, (), (root_id,))]
 
     for generation in range(1, generations + 1):
-        next_slots = []
-        for dog_id in slots:
+        next_frontier = []
+        for dog_id, directions, dog_ids in frontier:
             parent_ids = links.get(dog_id)
             if not parent_ids:
+                continue
+            for relation, parent_id in zip(("sire", "dam"), parent_ids):
+                if parent_id not in links:
+                    continue
+                path = directions + (relation,)
+                route = dog_ids + (parent_id,)
+                occurrences[parent_id].append(
+                    {
+                        "generation": generation,
+                        "directions": path,
+                        "dog_ids": route,
+                    }
+                )
+                next_frontier.append((parent_id, path, route))
+        if not next_frontier:
+            break
+        frontier = next_frontier
+
+    return occurrences
+
+
+def _projected_pedigree_layers(
+    sire_id,
+    dam_id,
+    links,
+    graph_dogs,
+    generations=4,
+    common_keys=None,
+):
+    """Build hypothetical offspring ancestry layers and pedigree completeness metrics."""
+    generations = _bounded_generations(generations)
+    common_keys = common_keys or set()
+    raw_layers = []
+    slots = [sire_id, dam_id]
+
+    for _generation in range(1, generations + 1):
+        visible_slots = [
+            dog_id if dog_id in links else None
+            for dog_id in slots
+        ]
+        raw_layers.append(visible_slots)
+
+        next_slots = []
+        for dog_id in visible_slots:
+            if dog_id is None:
                 next_slots.extend((None, None))
                 continue
-            for parent_id in parent_ids:
-                if parent_id in links:
-                    counts[parent_id] += 1
-                    nearest[parent_id] = min(
-                        generation,
-                        nearest.get(parent_id, generation),
-                    )
-                    next_slots.append(parent_id)
-                else:
-                    next_slots.append(None)
-        if not any(next_slots):
-            break
+            sire_parent_id, dam_parent_id = links.get(dog_id, (None, None))
+            next_slots.extend(
+                (
+                    sire_parent_id if sire_parent_id in links else None,
+                    dam_parent_id if dam_parent_id in links else None,
+                )
+            )
         slots = next_slots
 
-    return counts, nearest
+    all_known = [
+        dog_id
+        for layer in raw_layers
+        for dog_id in layer
+        if dog_id is not None
+    ]
+    counts = Counter(all_known)
+    layers = []
+    generation_coverage = []
+
+    labels = {
+        1: "Parents",
+        2: "Grandparents",
+        3: "Great-grandparents",
+    }
+    for generation, layer in enumerate(raw_layers, start=1):
+        nodes = []
+        known = 0
+        for index, dog_id in enumerate(layer):
+            dog = graph_dogs.get(dog_id) if dog_id else None
+            if dog is not None:
+                known += 1
+            nodes.append(
+                {
+                    "dog": dog,
+                    "relationship": _path_label(_slot_path(generation, index)),
+                    "repeated": bool(dog_id and counts[dog_id] > 1),
+                    "common": bool(dog_id and str(dog_id) in common_keys),
+                }
+            )
+        layers.append(
+            {
+                "number": generation,
+                "label": labels.get(generation, f"Generation {generation}"),
+                "nodes": nodes,
+            }
+        )
+        generation_coverage.append(
+            {
+                "generation": generation,
+                "known": known,
+                "total": 2 ** generation,
+            }
+        )
+
+    known_slots = len(all_known)
+    total_slots = sum(2 ** generation for generation in range(1, generations + 1))
+    unique_ids = set(all_known)
+    deepest_known = max(
+        (
+            generation
+            for generation, layer in enumerate(raw_layers, start=1)
+            if any(dog_id is not None for dog_id in layer)
+        ),
+        default=0,
+    )
+
+    return layers, {
+        "known_slots": known_slots,
+        "total_slots": total_slots,
+        "coverage_percent": (known_slots / total_slots * 100) if total_slots else 0.0,
+        "unique_ancestor_count": len(unique_ids),
+        "deepest_known_generation": deepest_known,
+        "generation_coverage": generation_coverage,
+    }
+
+
+def _independent_path_pair(left_path, right_path):
+    """Wright path pairs may only meet at their nominated common ancestor."""
+    return not (
+        set(left_path["dog_ids"][:-1])
+        & set(right_path["dog_ids"][:-1])
+    )
 
 
 def _pedigree_links_revision(links):
@@ -666,75 +792,143 @@ def _pedigree_links_revision(links):
     return sha256("|".join(material).encode("utf-8")).hexdigest()[:20]
 
 
-def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
-    """Calculate COI/common ancestors from one graph with revision-safe caching."""
+def virtual_mating_analysis(sire, dam, generations=8, public_only=True):
+    """Return a complete, bounded analysis for a hypothetical sire/dam pairing."""
     if sire is None or dam is None:
         return {
             "projected_inbreeding": None,
+            "relationship": None,
+            "sire_inbreeding": None,
+            "dam_inbreeding": None,
             "common": [],
+            "contributions": [],
             "pedigree_nodes": 0,
+            "completeness": {
+                "known_slots": 0,
+                "total_slots": 0,
+                "coverage_percent": 0.0,
+                "unique_ancestor_count": 0,
+                "deepest_known_generation": 0,
+                "generation_coverage": [],
+            },
+            "projected_layers": [],
+            "generations": _bounded_generations(generations),
             "cache_hit": False,
         }
     if sire.pk == dam.pk:
         raise ValueError("Sire and dam must be different dogs.")
 
     generations = _bounded_generations(generations)
-    analysis_started = perf_counter()
-    graph_started = perf_counter()
     links, graph_dogs = _pedigree_graph(sire, dam, public_only=public_only)
-    graph_ms = (perf_counter() - graph_started) * 1000
     ordered = _ordered_from_links((sire.pk, dam.pk), links)
     revision = _pedigree_links_revision(links)
     cache_key = (
-        f"cca:virtual-mating:v1:{sire.pk}:{dam.pk}:{generations}:"
+        f"cca:virtual-mating:v2:{sire.pk}:{dam.pk}:{generations}:"
         f"{int(public_only)}:{revision}"
     )
     payload = cache.get(cache_key)
     cache_hit = payload is not None
 
-    compute_started = perf_counter()
     if payload is None:
-        projected = max(
-            0.0,
-            _kinship_from_links(sire.pk, dam.pk, ordered, links),
+        kinship = _kinship_calculator(ordered, links)
+        projected = max(0.0, kinship(sire.pk, dam.pk))
+        sire_inbreeding = max(0.0, (2.0 * kinship(sire.pk, sire.pk)) - 1.0)
+        dam_inbreeding = max(0.0, (2.0 * kinship(dam.pk, dam.pk)) - 1.0)
+
+        left_paths = _ancestry_occurrence_paths(
+            sire.pk,
+            links,
+            generations=generations,
         )
-        left_counts, left_nearest = _ancestor_occurrence_summary(
-            sire.pk, links, generations=generations
+        right_paths = _ancestry_occurrence_paths(
+            dam.pk,
+            links,
+            generations=generations,
         )
-        right_counts, right_nearest = _ancestor_occurrence_summary(
-            dam.pk, links, generations=generations
+        common_ids = left_paths.keys() & right_paths.keys()
+        common_rows = []
+
+        for dog_id in common_ids:
+            ancestor_inbreeding = max(
+                0.0,
+                (2.0 * kinship(dog_id, dog_id)) - 1.0,
+            )
+            contribution = 0.0
+            valid_path_pairs = 0
+            for left_path in left_paths[dog_id]:
+                for right_path in right_paths[dog_id]:
+                    if not _independent_path_pair(left_path, right_path):
+                        continue
+                    contribution += (
+                        0.5
+                        ** (
+                            left_path["generation"]
+                            + right_path["generation"]
+                            + 1
+                        )
+                    ) * (1.0 + ancestor_inbreeding)
+                    valid_path_pairs += 1
+
+            left_labels = [
+                "Selected sire"
+                if path["generation"] == 0
+                else _path_label(path["directions"])
+                for path in left_paths[dog_id]
+            ]
+            right_labels = [
+                "Selected dam"
+                if path["generation"] == 0
+                else _path_label(path["directions"])
+                for path in right_paths[dog_id]
+            ]
+            common_rows.append(
+                {
+                    "dog_id": str(dog_id),
+                    "left_occurrences": len(left_paths[dog_id]),
+                    "right_occurrences": len(right_paths[dog_id]),
+                    "left_generation": min(
+                        path["generation"] for path in left_paths[dog_id]
+                    ),
+                    "right_generation": min(
+                        path["generation"] for path in right_paths[dog_id]
+                    ),
+                    "left_paths": left_labels[:6],
+                    "right_paths": right_labels[:6],
+                    "contribution": contribution,
+                    "valid_path_pairs": valid_path_pairs,
+                    "ancestor_inbreeding": ancestor_inbreeding,
+                }
+            )
+
+        _unused_layers, completeness = _projected_pedigree_layers(
+            sire.pk,
+            dam.pk,
+            links,
+            graph_dogs,
+            generations=generations,
+            common_keys={row["dog_id"] for row in common_rows},
         )
-        common_ids = left_counts.keys() & right_counts.keys()
-        common_rows = [
-            {
-                "dog_id": str(dog_id),
-                "left_occurrences": left_counts[dog_id],
-                "right_occurrences": right_counts[dog_id],
-                "left_generation": left_nearest[dog_id],
-                "right_generation": right_nearest[dog_id],
-            }
-            for dog_id in common_ids
-        ]
         payload = {
             "projected_inbreeding": projected,
+            "relationship": projected * 2.0,
+            "sire_inbreeding": sire_inbreeding,
+            "dam_inbreeding": dam_inbreeding,
             "common": common_rows,
             "pedigree_nodes": len(links),
+            "completeness": completeness,
         }
         cache.set(cache_key, payload, 5 * 60)
 
-    compute_ms = (perf_counter() - compute_started) * 1000
-    materialize_started = perf_counter()
     graph_dogs_by_key = {
         str(dog_id): dog
         for dog_id, dog in graph_dogs.items()
     }
     common = [
         {
+            **row,
             "dog": graph_dogs_by_key[row["dog_id"]],
-            "left_occurrences": row["left_occurrences"],
-            "right_occurrences": row["right_occurrences"],
-            "left_generation": row["left_generation"],
-            "right_generation": row["right_generation"],
+            "contribution_percent": row["contribution"] * 100.0,
+            "ancestor_inbreeding_percent": row["ancestor_inbreeding"] * 100.0,
         }
         for row in payload["common"]
         if row["dog_id"] in graph_dogs_by_key
@@ -742,23 +936,43 @@ def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
     common.sort(
         key=lambda row: (
             row["left_generation"] + row["right_generation"],
+            -row["contribution"],
             row["dog"].name,
         )
     )
-    materialize_ms = (perf_counter() - materialize_started) * 1000
+    contributions = sorted(
+        common,
+        key=lambda row: (
+            -row["contribution"],
+            row["left_generation"] + row["right_generation"],
+            row["dog"].name,
+        ),
+    )
+
+    common_keys = {row["dog_id"] for row in common}
+    projected_layers, _projected_summary = _projected_pedigree_layers(
+        sire.pk,
+        dam.pk,
+        links,
+        graph_dogs,
+        generations=min(4, generations),
+        common_keys=common_keys,
+    )
+
     return {
         "projected_inbreeding": payload["projected_inbreeding"],
+        "relationship": payload["relationship"],
+        "sire_inbreeding": payload["sire_inbreeding"],
+        "dam_inbreeding": payload["dam_inbreeding"],
         "common": common,
+        "contributions": contributions,
+        "contribution_total": sum(row["contribution"] for row in common),
         "pedigree_nodes": payload["pedigree_nodes"],
+        "completeness": payload["completeness"],
+        "projected_layers": projected_layers,
+        "generations": generations,
         "cache_hit": cache_hit,
-        "timings": {
-            "graph_ms": graph_ms,
-            "compute_ms": compute_ms,
-            "materialize_ms": materialize_ms,
-            "total_ms": (perf_counter() - analysis_started) * 1000,
-        },
     }
-
 
 
 def _analysis_payload(snapshot):

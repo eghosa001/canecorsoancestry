@@ -154,8 +154,40 @@ class PedigreeServiceTests(TestCase):
         analysis = virtual_mating_analysis(sire, dam, public_only=True)
 
         self.assertAlmostEqual(analysis["projected_inbreeding"], 0.125)
+        self.assertAlmostEqual(analysis["relationship"], 0.25)
+        self.assertAlmostEqual(analysis["common"][0]["contribution"], 0.125)
         self.assertEqual([row["dog"].pk for row in analysis["common"]], [common.pk])
         self.assertEqual(analysis["pedigree_nodes"], 3)
+
+    def test_virtual_mating_parent_offspring_includes_selected_parent_as_common_ancestor(self):
+        founder = Dog.objects.create(
+            name="Selected Parent",
+            slug="selected-parent",
+            sex=Dog.Sex.MALE,
+            is_public=True,
+        )
+        unrelated = Dog.objects.create(
+            name="Unrelated Parent",
+            slug="unrelated-parent",
+            is_public=True,
+        )
+        daughter = Dog.objects.create(
+            name="Selected Daughter",
+            slug="selected-daughter",
+            sex=Dog.Sex.FEMALE,
+            sire=founder,
+            dam=unrelated,
+            is_public=True,
+        )
+
+        analysis = virtual_mating_analysis(
+            founder, daughter, generations=4, public_only=True
+        )
+
+        self.assertAlmostEqual(analysis["projected_inbreeding"], 0.25)
+        row = next(item for item in analysis["common"] if item["dog"] == founder)
+        self.assertEqual((row["left_generation"], row["right_generation"]), (0, 1))
+        self.assertAlmostEqual(row["contribution"], 0.25)
 
     def test_virtual_mating_analysis_cache_is_revision_safe(self):
         cache.clear()
@@ -225,6 +257,8 @@ class PedigreeServiceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "12.50%")
         self.assertContains(response, common.name)
+        self.assertContains(response, "Pedigree completeness")
+        self.assertContains(response, "HYPOTHETICAL PEDIGREE")
 
     def test_virtual_mating_selected_ids_avoid_duplicate_name_ambiguity(self):
         sire = Dog.objects.create(
