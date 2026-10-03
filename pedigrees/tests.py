@@ -157,6 +157,47 @@ class PedigreeServiceTests(TestCase):
         self.assertEqual([row["dog"].pk for row in analysis["common"]], [common.pk])
         self.assertEqual(analysis["pedigree_nodes"], 3)
 
+    def test_virtual_mating_analysis_cache_is_revision_safe(self):
+        cache.clear()
+        common = Dog.objects.create(
+            name="Cached Common",
+            slug="cached-common",
+            is_public=True,
+        )
+        sire = Dog.objects.create(
+            name="Cached Sire",
+            slug="cached-sire",
+            sex=Dog.Sex.MALE,
+            sire=common,
+            is_public=True,
+        )
+        dam = Dog.objects.create(
+            name="Cached Dam",
+            slug="cached-dam",
+            sex=Dog.Sex.FEMALE,
+            sire=common,
+            is_public=True,
+        )
+
+        first = virtual_mating_analysis(sire, dam, public_only=True)
+        second = virtual_mating_analysis(sire, dam, public_only=True)
+
+        self.assertFalse(first["cache_hit"])
+        self.assertTrue(second["cache_hit"])
+        self.assertAlmostEqual(second["projected_inbreeding"], 0.125)
+
+        replacement = Dog.objects.create(
+            name="Cached Replacement",
+            slug="cached-replacement",
+            is_public=True,
+        )
+        sire.sire = replacement
+        sire.save(update_fields=("sire",))
+        third = virtual_mating_analysis(sire, dam, public_only=True)
+
+        self.assertFalse(third["cache_hit"])
+        self.assertAlmostEqual(third["projected_inbreeding"], 0.0)
+
     def test_virtual_mating_resolves_names_without_large_dropdowns(self):
         common = Dog.objects.create(
             name="Public Common", slug="public-common", is_public=True

@@ -620,38 +620,80 @@ def _ancestor_occurrence_summary(root_id, links, generations=10):
     return counts, nearest
 
 
+def _pedigree_links_revision(links):
+    material = [
+        f"{dog_id}:{sire_id or ''}:{dam_id or ''}"
+        for dog_id, (sire_id, dam_id) in sorted(
+            links.items(),
+            key=lambda item: str(item[0]),
+        )
+    ]
+    return sha256("|".join(material).encode("utf-8")).hexdigest()[:20]
+
+
 def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
-    """Calculate COI and common ancestors from one shared ancestry load."""
+    """Calculate COI/common ancestors from one graph with revision-safe caching."""
     if sire is None or dam is None:
-        return {"projected_inbreeding": None, "common": [], "pedigree_nodes": 0}
+        return {
+            "projected_inbreeding": None,
+            "common": [],
+            "pedigree_nodes": 0,
+            "cache_hit": False,
+        }
     if sire.pk == dam.pk:
         raise ValueError("Sire and dam must be different dogs.")
 
+    generations = _bounded_generations(generations)
     ordered, links = _pedigree_order(sire, dam, public_only=public_only)
-    projected = max(
-        0.0,
-        _kinship_from_links(sire.pk, dam.pk, ordered, links),
+    revision = _pedigree_links_revision(links)
+    cache_key = (
+        f"cca:virtual-mating:v1:{sire.pk}:{dam.pk}:{generations}:"
+        f"{int(public_only)}:{revision}"
     )
+    payload = cache.get(cache_key)
+    cache_hit = payload is not None
 
-    left_counts, left_nearest = _ancestor_occurrence_summary(
-        sire.pk, links, generations=generations
-    )
-    right_counts, right_nearest = _ancestor_occurrence_summary(
-        dam.pk, links, generations=generations
-    )
-    common_ids = left_counts.keys() & right_counts.keys()
+    if payload is None:
+        projected = max(
+            0.0,
+            _kinship_from_links(sire.pk, dam.pk, ordered, links),
+        )
+        left_counts, left_nearest = _ancestor_occurrence_summary(
+            sire.pk, links, generations=generations
+        )
+        right_counts, right_nearest = _ancestor_occurrence_summary(
+            dam.pk, links, generations=generations
+        )
+        common_ids = left_counts.keys() & right_counts.keys()
+        common_rows = [
+            {
+                "dog_id": str(dog_id),
+                "left_occurrences": left_counts[dog_id],
+                "right_occurrences": right_counts[dog_id],
+                "left_generation": left_nearest[dog_id],
+                "right_generation": right_nearest[dog_id],
+            }
+            for dog_id in common_ids
+        ]
+        payload = {
+            "projected_inbreeding": projected,
+            "common": common_rows,
+            "pedigree_nodes": len(links),
+        }
+        cache.set(cache_key, payload, 5 * 60)
+
+    common_ids = [row["dog_id"] for row in payload["common"]]
     dogs = Dog.objects.select_related("kennel").in_bulk(common_ids)
-
     common = [
         {
-            "dog": dogs[dog_id],
-            "left_occurrences": left_counts[dog_id],
-            "right_occurrences": right_counts[dog_id],
-            "left_generation": left_nearest[dog_id],
-            "right_generation": right_nearest[dog_id],
+            "dog": dogs[row["dog_id"]],
+            "left_occurrences": row["left_occurrences"],
+            "right_occurrences": row["right_occurrences"],
+            "left_generation": row["left_generation"],
+            "right_generation": row["right_generation"],
         }
-        for dog_id in common_ids
-        if dog_id in dogs
+        for row in payload["common"]
+        if row["dog_id"] in dogs
     ]
     common.sort(
         key=lambda row: (
@@ -660,9 +702,10 @@ def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
         )
     )
     return {
-        "projected_inbreeding": projected,
+        "projected_inbreeding": payload["projected_inbreeding"],
         "common": common,
-        "pedigree_nodes": len(links),
+        "pedigree_nodes": payload["pedigree_nodes"],
+        "cache_hit": cache_hit,
     }
 
 
