@@ -5311,3 +5311,47 @@ html[data-theme="light"] .hero-search input {
   background: var(--line);
   pointer-events: none;
 }
+
+
+/* WhatsApp owner final visual alignment v34 */
+.hero-mark {
+  border-color: color-mix(in srgb, var(--gold) 58%, transparent) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--gold) 10%, transparent),
+    0 22px 58px rgba(0,0,0,.18) !important;
+}
+.hero-mark small {
+  max-width: 100% !important;
+  overflow-wrap: anywhere;
+}
+
+/* Make the pedigree read unmistakably as connected boxes, not a list. */
+.pedigree-column:not(:first-child) .pedigree-nodes::before,
+.pedigree-column:not(:first-child) .pedigree-node::before,
+.pedigree-column:not(:last-child) .pedigree-node::after {
+  background: color-mix(in srgb, var(--gold) 62%, transparent) !important;
+}
+.pedigree-column:not(:first-child) .pedigree-nodes::before {
+  width: 2px !important;
+}
+.pedigree-column:not(:first-child) .pedigree-node::before,
+.pedigree-column:not(:last-child) .pedigree-node::after {
+  height: 2px !important;
+}
+
+@media (max-width: 760px) {
+  .hero {
+    padding-top: 82px;
+  }
+  .hero-mark {
+    width: min(100%, 360px);
+    justify-self: center;
+    border-width: 1px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero {
+    padding-top: 78px;
+  }
+}
