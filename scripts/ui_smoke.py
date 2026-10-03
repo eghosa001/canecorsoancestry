@@ -98,6 +98,13 @@ def main():
 
         desktop = browser.new_page(viewport={"width": 1440, "height": 1000})
         capture(desktop, "/", "home-desktop")
+        logo_src = desktop.locator(".brand-mark").get_attribute("src")
+        logo_svg = desktop.evaluate("(src) => fetch(src).then((r) => r.text())", logo_src)
+        if 'translate(128 0) scale(-1 1)' not in logo_svg:
+            raise AssertionError("customer Cane Corso logo is not flipped to face right")
+        plaque = desktop.locator(".hero-mark")
+        if plaque.evaluate("(el) => getComputedStyle(el).borderTopWidth") != "1px":
+            raise AssertionError("CCA plaque is not visibly boxed")
         desktop.locator("[data-theme-toggle]").first.click()
         if desktop.locator("html").get_attribute("data-theme") != "light":
             raise AssertionError("desktop theme toggle did not switch to light mode")
