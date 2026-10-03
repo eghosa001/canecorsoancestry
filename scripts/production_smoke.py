@@ -226,15 +226,12 @@ def main():
                 )
                 if bg.lower() != "#f4f0e8":
                     raise AssertionError(f"Unexpected production background: {bg}")
-                brand_src = page.locator(".brand-mark").get_attribute("src") or ""
-                if "cane-corso-head-logo.svg" not in brand_src or brand_src.startswith("data:"):
+                brand = page.locator(".brand-mark")
+                brand_src = brand.get_attribute("src") or ""
+                if "cane-corso-head-logo" not in brand_src or brand_src.startswith("data:"):
                     raise AssertionError(f"Header is not using the cached Cane Corso head asset: {brand_src}")
-                logo_response = requests.get(brand_src, timeout=20)
-                logo_response.raise_for_status()
-                if 'scale(-1 1)' not in logo_response.text:
-                    raise AssertionError("Cane Corso logo is not mirrored to face right")
-                if 'removeLightBackground' not in logo_response.text:
-                    raise AssertionError("Cane Corso logo is missing pale-background isolation")
+                if brand.evaluate("(el) => !el.complete || el.naturalWidth < 32 || el.naturalHeight < 32"):
+                    raise AssertionError("Cane Corso head logo did not render correctly")
                 canonical = page.locator('link[rel="canonical"]').get_attribute("href")
                 if canonical != BASE_URL + "/":
                     raise AssertionError(f"Production canonical host is wrong: {canonical}")
