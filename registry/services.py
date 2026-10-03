@@ -119,6 +119,55 @@ def _notify_submission(submission):
         )
 
 
+def _require_paid_submission(submission):
+    payload = submission.payload or {}
+    if not payload.get("_paid_submission"):
+        return None
+
+    from accounts.models import PaymentSubmissionLink, SubmissionPayment
+
+    try:
+        link = PaymentSubmissionLink.objects.select_related(
+            "payment", "payment__kennel"
+        ).get(submission=submission)
+    except PaymentSubmissionLink.DoesNotExist as exc:
+        raise ValueError(
+            "This submission requires a paid Paystack package before approval."
+        ) from exc
+
+    payment = link.payment
+    if payment.status != SubmissionPayment.Status.PAID:
+        raise ValueError("This submission's Paystack payment is not confirmed.")
+    if payment.user_id != submission.submitted_by_id:
+        raise ValueError("The payment belongs to a different member.")
+    if payment.kennel_id != submission.kennel_id:
+        raise ValueError("The payment belongs to a different kennel.")
+    if submission.kennel is None or not submission.kennel.verified_at:
+        raise ValueError("The kennel must be administrator-verified before publication.")
+    if not KennelMembership.objects.filter(
+        kennel=submission.kennel,
+        user=submission.submitted_by,
+        role__in=[KennelMembership.Role.OWNER, KennelMembership.Role.EDITOR],
+    ).exists():
+        raise ValueError(
+            "The submitting kennel owner/editor must be verified before publication."
+        )
+
+    if submission.kind == Submission.Kind.DOG:
+        if payload.get("litter_submission_id"):
+            if link.slot_kind != PaymentSubmissionLink.SlotKind.PUPPY:
+                raise ValueError("This puppy is not linked to a litter payment package.")
+        elif link.slot_kind != PaymentSubmissionLink.SlotKind.DOG:
+            raise ValueError("This dog is not linked to a dog payment slot.")
+    elif (
+        submission.kind == Submission.Kind.LITTER_CREATE
+        and link.slot_kind != PaymentSubmissionLink.SlotKind.LITTER
+    ):
+        raise ValueError("This litter is not linked to a litter payment package.")
+
+    return link
+
+
 @transaction.atomic
 def approve_submission(submission, reviewer, resolution_notes=""):
     submission = Submission.objects.select_for_update().select_related(
@@ -130,22 +179,64 @@ def approve_submission(submission, reviewer, resolution_notes=""):
     payload = submission.payload or {}
     review_diff = submission_diff(submission)
 
+    paid_link = _require_paid_submission(submission)
+
     if submission.kind == Submission.Kind.DOG:
         kennel = submission.kennel
+        sire = _resolve_dog(payload.get("sire_id"))
+        dam = _resolve_dog(payload.get("dam_id"))
+        litter = _resolve_litter(payload.get("litter_id"))
+        date_of_birth = _date_from_payload(payload.get("date_of_birth"))
+
+        litter_submission_id = payload.get("litter_submission_id")
+        if litter_submission_id:
+            from accounts.models import PaymentSubmissionLink
+
+            litter_submission = Submission.objects.select_related(
+                "litter", "kennel"
+            ).filter(
+                pk=litter_submission_id,
+                kind=Submission.Kind.LITTER_CREATE,
+                status=Submission.Status.APPROVED,
+            ).first()
+            if litter_submission is None or litter_submission.litter is None:
+                raise ValueError(
+                    "Approve the litter record before approving puppies from that litter."
+                )
+            litter_payment_link = PaymentSubmissionLink.objects.filter(
+                submission=litter_submission
+            ).first()
+            if (
+                paid_link is None
+                or litter_payment_link is None
+                or litter_payment_link.payment_id != paid_link.payment_id
+            ):
+                raise ValueError("The puppy and litter must use the same paid litter package.")
+            litter = litter_submission.litter
+            kennel = litter.kennel
+            sire = litter.sire
+            dam = litter.dam
+            date_of_birth = litter.date_of_birth
+
+        verification_state = (
+            VerificationState.PEDIGREE_REVIEWED
+            if sire or dam
+            else VerificationState.IDENTITY_REVIEWED
+        )
         dog = Dog(
             name=payload["name"].strip(),
             slug=unique_dog_slug(payload["name"]),
             sex=payload.get("sex") or Dog.Sex.UNKNOWN,
-            date_of_birth=_date_from_payload(payload.get("date_of_birth")),
+            date_of_birth=date_of_birth,
             colour=payload.get("colour", "").strip(),
             country=payload.get("country", "").strip(),
             bloodline=payload.get("bloodline", "").strip(),
             kennel=kennel,
-            sire=_resolve_dog(payload.get("sire_id")),
-            dam=_resolve_dog(payload.get("dam_id")),
-            litter=_resolve_litter(payload.get("litter_id")),
+            sire=sire,
+            dam=dam,
+            litter=litter,
             bio=payload.get("bio", "").strip(),
-            verification_state=VerificationState.COMMUNITY,
+            verification_state=verification_state,
             is_public=True,
         )
         dog.full_clean()
@@ -153,9 +244,9 @@ def approve_submission(submission, reviewer, resolution_notes=""):
         submission.dog = dog
         VerificationEvent.objects.create(
             dog=dog,
-            state=VerificationState.COMMUNITY,
+            state=verification_state,
             reviewer=reviewer,
-            note="Created and published after moderator approval of the member submission.",
+            note="Created and published after administrator verification of the submitted record.",
         )
 
         registration = payload.get("registration", "").strip()
@@ -251,6 +342,7 @@ def approve_submission(submission, reviewer, resolution_notes=""):
                     city=str(payload.get("city") or "").strip(),
                     description=str(payload.get("description") or "").strip(),
                     website=str(payload.get("website") or "").strip(),
+                    verified_at=timezone.now(),
                 )
         except IntegrityError as exc:
             raise ValueError(
@@ -270,6 +362,7 @@ def approve_submission(submission, reviewer, resolution_notes=""):
         for field in ("name", "country", "city", "description", "website"):
             if field in payload:
                 setattr(kennel, field, payload[field])
+        kennel.verified_at = timezone.now()
         kennel.save()
 
     elif submission.kind == Submission.Kind.KENNEL_CLAIM:
@@ -287,6 +380,9 @@ def approve_submission(submission, reviewer, resolution_notes=""):
             user=submission.submitted_by,
             defaults={"role": KennelMembership.Role.OWNER},
         )
+        if not kennel.verified_at:
+            kennel.verified_at = timezone.now()
+            kennel.save(update_fields=("verified_at", "updated_at"))
 
     elif submission.kind == Submission.Kind.LITTER_CREATE:
         kennel = submission.kennel
@@ -304,7 +400,7 @@ def approve_submission(submission, reviewer, resolution_notes=""):
             dam=_resolve_dog(payload.get("dam_id")),
             date_of_birth=_date_from_payload(payload.get("date_of_birth")),
             notes=str(payload.get("notes") or "").strip(),
-            is_public=False,
+            is_public=True,
         )
         litter.full_clean()
         litter.save()

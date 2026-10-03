@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Submission package · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Submission package</p>
+    <h1>{{ payment.get_package_display }}</h1>
+    <p>{{ payment.kennel.name }} · ₦{{ payment.amount_naira }} · {{ payment.get_status_display }}</p>
+  </header>
+
+  <div class="panel">
+    <p><strong>Reference:</strong> {{ payment.reference }}</p>
+    <p><strong>Important:</strong> payment does not publish records. Every submitted record remains pending until an administrator verifies and approves it.</p>
+    {% if payment.status == "pending" and payment.authorization_url %}
+      <div class="button-row"><a class="btn btn-gold" href="{{ payment.authorization_url }}">Continue payment on Paystack</a></div>
+    {% endif %}
+  </div>
+
+  {% if payment.status == "paid" %}
+    <div class="button-row section-spacer-tight">
+      {% if can_submit_dog %}
+        <a class="btn btn-gold" href="{% url 'accounts:payment-submit-dog' payment.pk %}">Submit dog</a>
+      {% endif %}
+      {% if can_submit_litter %}
+        <a class="btn btn-gold" href="{% url 'accounts:payment-submit-litter' payment.pk %}">Submit litter</a>
+      {% endif %}
+      {% if can_submit_puppy %}
+        <a class="btn btn-gold" href="{% url 'accounts:payment-submit-puppy' payment.pk %}">Add puppy from this litter</a>
+      {% endif %}
+      <a class="btn btn-outline" href="{% url 'accounts:new-payment' %}">Buy another package</a>
+    </div>
+  {% endif %}
+
+  {% if payment.package == "multi_dog" %}
+    <p class="muted">{{ dog_used }} of {{ payment.dog_count }} dog slots used.</p>
+  {% elif payment.package == "single_dog" %}
+    <p class="muted">{{ dog_used }} of 1 dog slot used.</p>
+  {% elif payment.package == "litter" %}
+    <p class="muted">{% if litter_submission %}Litter submitted. You can add puppies belonging to this same litter.{% else %}Submit the litter first, then add its puppies.{% endif %}</p>
+  {% endif %}
+
+  <div class="section-heading section-spacer">
+    <div><p class="eyebrow">Admin review</p><h2>Records in this package</h2></div>
+  </div>
+  <div class="submission-list">
+    {% for link in links %}
+      <article class="submission-card">
+        <div>
+          <span class="eyebrow">{{ link.get_slot_kind_display }}</span>
+          <h2>{{ link.submission.get_kind_display }}</h2>
+          <p>{{ link.submission.created_at|date:"d M Y, H:i" }}</p>
+        </div>
+        <div class="submission-state {{ link.submission.status }}">{{ link.submission.get_status_display }}</div>
+      </article>
+    {% empty %}
+      <div class="empty-state"><strong>No records submitted yet.</strong><p>Your paid package is ready to use.</p></div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

@@ -24,25 +24,20 @@ class MemberSubmissionTests(TestCase):
             role=KennelMembership.Role.CONTRIBUTOR,
         )
 
-    def test_member_can_submit_dog_to_linked_kennel(self):
+    def test_new_dog_submission_starts_with_paid_package(self):
         self.client.force_login(self.user)
 
-        response = self.client.post(
-            reverse("accounts:submit-dog"),
-            {
-                "name": "Submitted Dog",
-                "sex": Dog.Sex.MALE,
-                "kennel": str(self.kennel.pk),
-            },
-        )
+        response = self.client.get(reverse("accounts:submit-dog"))
 
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(
+        self.assertRedirects(
+            response,
+            f"{reverse('accounts:new-payment')}?package=single_dog",
+            fetch_redirect_response=False,
+        )
+        self.assertFalse(
             Submission.objects.filter(
                 submitted_by=self.user,
-                kennel=self.kennel,
                 kind=Submission.Kind.DOG,
-                status=Submission.Status.PENDING,
             ).exists()
         )
 

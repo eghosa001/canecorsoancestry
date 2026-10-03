@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Paid submissions · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell member-form-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Verified submissions</p>
+    <h1>Choose a submission package</h1>
+    <p>Payment opens a submission slot only. Every kennel, owner, dog and litter record is still reviewed by an administrator before publication.</p>
+  </header>
+
+  <div class="feature-grid section-spacer-tight">
+    <article class="panel">
+      <p class="eyebrow">Single dog</p>
+      <h2>₦500</h2>
+      <p>Submit one dog for admin verification.</p>
+    </article>
+    <article class="panel">
+      <p class="eyebrow">Dog batch</p>
+      <h2>₦1,000</h2>
+      <p>Submit 2–6 dogs from the same verified kennel.</p>
+    </article>
+    <article class="panel">
+      <p class="eyebrow">Litter batch</p>
+      <h2>₦1,000</h2>
+      <p>Submit one litter and the puppies belonging to that litter.</p>
+    </article>
+  </div>
+
+  {% if not paystack_configured %}
+    <div class="notice error">Paystack is not configured on the server yet. An administrator must add the Paystack secret key before live payment can start.</div>
+  {% endif %}
+
+  {% if not has_verified_kennel %}
+    <div class="notice">Your kennel and ownership must be approved by an administrator before you can buy a submission package.</div>
+  {% else %}
+    <form class="member-form" method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="notice error">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="form-grid">
+        {% for field in form %}
+          <div class="form-field">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+            {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="button-row">
+        <button class="btn btn-gold" type="submit" {% if not paystack_configured %}disabled{% endif %}>Continue to Paystack</button>
+        <a class="btn btn-outline" href="{% url 'accounts:submissions' %}">Back to submissions</a>
+      </div>
+    </form>
+  {% endif %}
+
+  {% if recent_payments %}
+    <div class="section-heading section-spacer">
+      <div><p class="eyebrow">Payments</p><h2>Recent packages</h2></div>
+    </div>
+    <div class="submission-list">
+      {% for payment in recent_payments %}
+        <article class="submission-card">
+          <div>
+            <span class="eyebrow">{{ payment.get_package_display }}</span>
+            <h2>₦{{ payment.amount_naira }}</h2>
+            <p>{{ payment.kennel.name }} · {{ payment.created_at|date:"d M Y, H:i" }}</p>
+          </div>
+          <div class="submission-state {{ payment.status }}">{{ payment.get_status_display }}</div>
+          <a class="text-link" href="{% url 'accounts:payment-detail' payment.pk %}">Open package →</a>
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

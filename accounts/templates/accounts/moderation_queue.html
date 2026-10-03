@@ -214,6 +214,8 @@
             <div class="queue-badges">
               <span class="priority-pill priority-{{ item.priority }}">{{ item.get_priority_display }}</span>
               {% if item.assigned_to %}<span class="assignment-pill">{{ item.assigned_to }}</span>{% else %}<span class="assignment-pill unassigned">Unassigned</span>{% endif %}
+              {% if item.payment_link %}<span class="assignment-pill">Paystack · {{ item.payment_link.payment.get_status_display }} · ₦{{ item.payment_link.payment.amount_naira }}</span>{% endif %}
+              {% if item.kennel and item.kennel.verified_at %}<span class="assignment-pill">Kennel verified</span>{% endif %}
             </div>
           </div>
 

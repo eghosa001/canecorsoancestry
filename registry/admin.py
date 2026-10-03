@@ -87,6 +87,7 @@ class SubmissionAdmin(admin.ModelAdmin):
         "litter",
         "document",
         "kennel",
+        "payment_state",
         "status",
         "priority",
         "assigned_to",
@@ -100,7 +101,25 @@ class SubmissionAdmin(admin.ModelAdmin):
         "kennel__name",
         "submitted_by__username",
     )
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = (
+        "status",
+        "reviewed_by",
+        "reviewed_at",
+        "resolution_notes",
+        "created_at",
+        "updated_at",
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("payment_link__payment")
+
+    @admin.display(description="Payment")
+    def payment_state(self, obj):
+        try:
+            payment = obj.payment_link.payment
+        except Exception:
+            return "Not required"
+        return f"{payment.get_status_display()} · ₦{payment.amount_naira}"
 
 
 @admin.register(VerificationEvent)
@@ -125,7 +144,13 @@ class MergeHistoryAdmin(admin.ModelAdmin):
     )
 
 
-admin.site.register(KennelMembership)
+@admin.register(KennelMembership)
+class KennelMembershipAdmin(admin.ModelAdmin):
+    list_display = ("kennel", "user", "role", "created_at")
+    list_filter = ("role", "created_at")
+    search_fields = ("kennel__name", "user__username", "user__email")
+    autocomplete_fields = ("kennel", "user")
+
 admin.site.register(RegistrationAuthority)
 admin.site.register(DogImage)
 admin.site.register(DogDocument)
