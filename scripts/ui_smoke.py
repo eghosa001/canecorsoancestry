@@ -194,7 +194,12 @@ def main():
 
         login(mobile)
         screenshot(mobile, "dashboard-mobile")
-        mobile.locator(".dashboard-mobile-nav > summary").click()
+        if mobile.locator(".dashboard-panel .verification-pill").count():
+            raise AssertionError("dashboard dog cards still show verification badges")
+        dashboard_menu = mobile.locator(".dashboard-mobile-nav > summary")
+        if not dashboard_menu.is_visible():
+            raise AssertionError("dashboard mobile navigation is not visible")
+        dashboard_menu.click()
         screenshot(mobile, "dashboard-mobile-menu")
         capture(mobile, "/member/pedigrees/", "my-pedigrees-mobile")
         member_mobile = mobile.locator(".pedigree-workspace-card .btn-gold")
