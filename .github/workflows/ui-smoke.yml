@@ -2,35 +2,6 @@ name: UI smoke screenshots
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "templates/**"
-      - "core/templates/**"
-      - "core/static/**"
-      - "registry/templates/**"
-      - "pedigrees/templates/**"
-      - "accounts/templates/**"
-      - "accounts/views.py"
-      - "accounts/urls.py"
-      - "registry/views.py"
-      - "config/urls.py"
-      - "scripts/ui_smoke.py"
-      - ".github/workflows/ui-smoke.yml"
-  push:
-    branches: [main]
-    paths:
-      - "templates/**"
-      - "core/templates/**"
-      - "core/static/**"
-      - "registry/templates/**"
-      - "pedigrees/templates/**"
-      - "accounts/templates/**"
-      - "accounts/views.py"
-      - "accounts/urls.py"
-      - "registry/views.py"
-      - "config/urls.py"
-      - "scripts/ui_smoke.py"
-      - ".github/workflows/ui-smoke.yml"
 
 jobs:
   screenshots:

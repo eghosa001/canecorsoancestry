@@ -2,21 +2,6 @@ name: Production smoke
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "accounts/**"
-      - "registry/**"
-      - "pedigrees/**"
-      - "core/**"
-      - "templates/**"
-      - "config/**"
-      - "Dockerfile"
-      - "src/site-edge.js"
-      - "wrangler.site.toml"
-      - ".github/workflows/provision-northflank.yml"
-      - "scripts/production_smoke.py"
-      - ".github/workflows/production-smoke.yml"
 
 permissions:
   contents: read

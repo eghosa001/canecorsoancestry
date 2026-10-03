@@ -3,7 +3,25 @@ name: Django tests
 on:
   push:
     branches: [main]
+    paths:
+      - "accounts/**/*.py"
+      - "registry/**/*.py"
+      - "pedigrees/**/*.py"
+      - "core/**/*.py"
+      - "config/**/*.py"
+      - "manage.py"
+      - "requirements.txt"
+      - "Dockerfile"
   pull_request:
+    paths:
+      - "accounts/**/*.py"
+      - "registry/**/*.py"
+      - "pedigrees/**/*.py"
+      - "core/**/*.py"
+      - "config/**/*.py"
+      - "manage.py"
+      - "requirements.txt"
+      - "Dockerfile"
 
 permissions:
   contents: read
