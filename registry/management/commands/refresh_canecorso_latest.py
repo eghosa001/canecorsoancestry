@@ -39,6 +39,8 @@ USER_AGENT = (
 )
 LABELS = {
     "Name",
+    "Owner",
+    "Breeder",
     "Gender",
     "Father",
     "Mother",
@@ -149,6 +151,26 @@ def _parent_id_after_label(soup, label):
     return ""
 
 
+def _owner_id_after_label(soup, label):
+    node = soup.find(string=lambda x: _clean(x).rstrip(":") == label if x else False)
+    if node is None:
+        return ""
+    for element in node.next_elements:
+        if element is node:
+            continue
+        if isinstance(element, str):
+            text = _clean(element).rstrip(":")
+            if text and text not in {label, "Image"} and text in LABELS:
+                break
+            continue
+        if getattr(element, "name", None) == "a":
+            href = element.get("href") or ""
+            match = re.search(r"view_owner\?ownerid=(\d+)", href)
+            if match:
+                return match.group(1)
+    return ""
+
+
 def discover_image(soup):
     node = soup.find(string=lambda x: _clean(x).rstrip(":") == "Picture" if x else False)
     if node:
@@ -196,6 +218,10 @@ def parse_profile(source_id, html):
     record = {
         "id": str(source_id),
         "name": name,
+        "owner": _label_value(soup, "Owner"),
+        "owner_id": _owner_id_after_label(soup, "Owner"),
+        "breeder": _label_value(soup, "Breeder"),
+        "breeder_id": _owner_id_after_label(soup, "Breeder"),
         "gender": _label_value(soup, "Gender").lower(),
         "father_id": _parent_id_after_label(soup, "Father"),
         "mother_id": _parent_id_after_label(soup, "Mother"),
