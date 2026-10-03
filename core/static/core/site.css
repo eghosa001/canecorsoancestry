@@ -5109,6 +5109,16 @@ html[data-theme="light"] .hero-mark {
   background: var(--line);
   pointer-events: none;
 }
+.pedigree-column:not(:last-child) .pedigree-node::after {
+  content: "";
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  width: 10px;
+  height: 1px;
+  background: var(--line);
+  pointer-events: none;
+}
 
 @media (max-width: 760px) {
   .hero {
