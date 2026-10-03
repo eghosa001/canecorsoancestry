@@ -1,55 +1,299 @@
 {% extends "base.html" %}
 {% block title %}Virtual mating · Cane Corso Ancestry{% endblock %}
 {% block content %}
-<section class="page-shell">
+<section class="page-shell virtual-mating-page">
   <header class="page-heading">
     <p class="eyebrow">Pedigree analysis</p>
     <h1>Virtual mating</h1>
-    <p>Compare a public sire and dam using the ancestry already connected in the database. This does not create a litter or registration.</p>
+    <p>Compare a public sire and dam using the ancestry already connected in the database. This is a hypothetical pedigree analysis only and does not create a litter or registration.</p>
   </header>
 
-  <form class="mating-form" method="get">
+  <form class="mating-form mating-form-expanded" method="get">
     <div class="mating-select">
       <label for="sire_q">Sire</label>
       <input type="hidden" id="sire" name="sire" value="{% if sire %}{{ sire.pk }}{% endif %}">
       <input type="search" id="sire_q" name="sire_q" value="{{ sire_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-autocomplete-target="sire" data-dog-sex="male" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Search sire name or registration" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="search" enterkeyhint="search" required>
     </div>
-    <span class="mating-plus">+</span>
+
+    <span class="mating-plus" aria-hidden="true">×</span>
+
     <div class="mating-select">
       <label for="dam_q">Dam</label>
       <input type="hidden" id="dam" name="dam" value="{% if dam %}{{ dam.pk }}{% endif %}">
       <input type="search" id="dam_q" name="dam_q" value="{{ dam_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-autocomplete-target="dam" data-dog-sex="female" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Search dam name or registration" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="search" enterkeyhint="search" required>
     </div>
+
+    <div class="mating-depth">
+      <label for="generations">Analysis depth</label>
+      <select id="generations" name="generations">
+        {% for option in generation_options %}
+          <option value="{{ option }}" {% if generations == option %}selected{% endif %}>{{ option }} generations</option>
+        {% endfor %}
+      </select>
+    </div>
+
     <button class="btn btn-gold" type="submit">Analyse pairing</button>
   </form>
+
   <p class="mating-help muted">Search is resolved on the server, so this works across the full dog database without loading thousands of dogs into the page. Exact registration numbers are best when names are duplicated.</p>
 
-  {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+  {% if error %}
+    <div class="notice error">{{ error }}</div>
+  {% endif %}
 
-  {% if sire and dam and not error %}
-    <section class="mating-results">
-      <div class="pairing-summary">
-        <article><span>Sire</span><strong>{{ sire.name }}</strong></article>
-        <span class="mating-plus">×</span>
-        <article><span>Dam</span><strong>{{ dam.name }}</strong></article>
-      </div>
-      <div class="analysis-grid">
-        <article class="analysis-card"><p class="eyebrow">Projected COI</p><strong class="analysis-number">{{ projected_percent|floatformat:2 }}%</strong><span>Based on connected ancestry</span></article>
-        <article class="analysis-card"><p class="eyebrow">Common ancestors</p><strong class="analysis-number">{{ common|length }}</strong><span>Distinct shared ancestors</span></article>
-      </div>
-      <div class="panel">
-        <div class="panel-heading"><h2>Common ancestors</h2></div>
-        <div class="repeated-list">
-          {% for item in common %}
-            <a href="{% url 'registry:dog-detail' item.dog.slug %}">
-              <strong>{{ item.dog.name }}</strong>
-              <span>Sire side gen {{ item.left_generation }} · dam side gen {{ item.right_generation }}</span>
-            </a>
-          {% empty %}
-            <p class="muted">No common ancestors were found in the connected pedigree depth.</p>
-          {% endfor %}
+  {% if sire and dam and analysis and not error %}
+    <section class="mating-results" aria-labelledby="mating-result-title">
+      <div class="analysis-heading-row mating-result-heading">
+        <div>
+          <p class="eyebrow">Virtual mating result</p>
+          <h2 id="mating-result-title">{{ sire.name }} × {{ dam.name }}</h2>
+          <p class="muted">{{ generations }}-generation analysis of the pedigree currently recorded in Cane Corso Ancestry.</p>
         </div>
       </div>
+
+      <div class="pairing-summary">
+        <article>
+          <span>Sire</span>
+          <strong><a href="{% url 'registry:dog-detail' sire.slug %}">{{ sire.name }}</a></strong>
+        </article>
+        <span class="mating-plus" aria-hidden="true">×</span>
+        <article>
+          <span>Dam</span>
+          <strong><a href="{% url 'registry:dog-detail' dam.slug %}">{{ dam.name }}</a></strong>
+        </article>
+      </div>
+
+      <div class="analysis-grid mating-metrics">
+        <article class="analysis-card">
+          <p class="eyebrow">Projected offspring COI</p>
+          <strong class="analysis-number">{{ analysis.projected_percent|floatformat:2 }}%</strong>
+          <span>Wright-style coefficient from connected ancestry</span>
+        </article>
+        <article class="analysis-card">
+          <p class="eyebrow">Sire ↔ dam relationship</p>
+          <strong class="analysis-number">{{ analysis.relationship_percent|floatformat:2 }}%</strong>
+          <span>Twice the parental kinship coefficient</span>
+        </article>
+        <article class="analysis-card">
+          <p class="eyebrow">Sire COI</p>
+          <strong class="analysis-number">{{ analysis.sire_inbreeding_percent|floatformat:2 }}%</strong>
+          <span>{{ sire.name }}</span>
+        </article>
+        <article class="analysis-card">
+          <p class="eyebrow">Dam COI</p>
+          <strong class="analysis-number">{{ analysis.dam_inbreeding_percent|floatformat:2 }}%</strong>
+          <span>{{ dam.name }}</span>
+        </article>
+      </div>
+
+      <section class="panel mating-section">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Shared ancestry</p>
+            <h2>Common ancestors</h2>
+          </div>
+          <span>{{ common|length }} distinct shared ancestor{{ common|length|pluralize }}</span>
+        </div>
+
+        <div class="common-ancestor-list">
+          {% for item in common %}
+            <a class="common-ancestor-row" href="{% url 'registry:dog-detail' item.dog.slug %}">
+              <div>
+                <strong>{{ item.dog.name }}</strong>
+                <span>{{ item.left_occurrences }} sire-side path{{ item.left_occurrences|pluralize }} · {{ item.right_occurrences }} dam-side path{{ item.right_occurrences|pluralize }}</span>
+              </div>
+              <div class="common-generation-pair">
+                <span>Sire side {% if item.left_generation == 0 %}selected sire{% else %}G{{ item.left_generation }}{% endif %}</span>
+                <span>Dam side {% if item.right_generation == 0 %}selected dam{% else %}G{{ item.right_generation }}{% endif %}</span>
+              </div>
+            </a>
+          {% empty %}
+            <p class="empty-state">No common ancestors were found within the selected {{ generations }}-generation depth.</p>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="panel mating-section">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">COI contribution</p>
+            <h2>Where the projected inbreeding comes from</h2>
+          </div>
+          <span>Independent Wright path pairs through each shared ancestor.</span>
+        </div>
+
+        {% if analysis.contributions %}
+          <div class="table-scroll">
+            <table class="data-table mating-contribution-table">
+              <thead>
+                <tr>
+                  <th>Common ancestor</th>
+                  <th>Nearest sire path</th>
+                  <th>Nearest dam path</th>
+                  <th>Valid path pairs</th>
+                  <th>COI contribution</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in analysis.contributions %}
+                  <tr>
+                    <td><a href="{% url 'registry:dog-detail' item.dog.slug %}"><strong>{{ item.dog.name }}</strong></a></td>
+                    <td>{% if item.left_generation == 0 %}Selected sire{% else %}Generation {{ item.left_generation }}{% endif %}</td>
+                    <td>{% if item.right_generation == 0 %}Selected dam{% else %}Generation {{ item.right_generation }}{% endif %}</td>
+                    <td>{{ item.valid_path_pairs }}</td>
+                    <td><strong>{{ item.contribution_percent|floatformat:3 }}%</strong></td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <p class="mating-method-note muted">Path contributions describe the independent ancestry routes that feed the projected COI. The headline COI remains the exact kinship calculation for the connected pedigree graph.</p>
+        {% else %}
+          <p class="empty-state">There are no shared ancestors within this pedigree depth, so no common-ancestor contribution is shown.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel mating-section pedigree-overlap-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Pedigree overlap</p>
+            <h2>Sire ancestry ↔ dam ancestry</h2>
+          </div>
+          <span>Tap a highlighted ancestor to open its canonical dog record.</span>
+        </div>
+
+        {% if common %}
+          <div class="overlap-map">
+            {% for item in common %}
+              <article class="overlap-row">
+                <div class="overlap-side overlap-side-left">
+                  <strong>{{ sire.name }}</strong>
+                  {% for path in item.left_paths|slice:":3" %}<span>{{ path }}</span>{% endfor %}
+                </div>
+                <a class="overlap-ancestor" href="{% url 'registry:dog-detail' item.dog.slug %}">
+                  <small>Shared ancestor</small>
+                  <strong>{{ item.dog.name }}</strong>
+                  <span>{{ item.contribution_percent|floatformat:3 }}% COI contribution</span>
+                </a>
+                <div class="overlap-side overlap-side-right">
+                  <strong>{{ dam.name }}</strong>
+                  {% for path in item.right_paths|slice:":3" %}<span>{{ path }}</span>{% endfor %}
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="empty-state">No pedigree overlap was found within the selected analysis depth.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel mating-section">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Pedigree completeness</p>
+            <h2>How much ancestry supports this calculation</h2>
+          </div>
+          <span>{{ generations }} generations requested</span>
+        </div>
+
+        <div class="analysis-grid mating-completeness-grid">
+          <article class="analysis-card">
+            <p class="eyebrow">Coverage</p>
+            <strong class="analysis-number">{{ analysis.completeness.coverage_percent|floatformat:1 }}%</strong>
+            <span>{{ analysis.completeness.known_slots }} of {{ analysis.completeness.total_slots }} pedigree positions known</span>
+          </article>
+          <article class="analysis-card">
+            <p class="eyebrow">Unique dogs</p>
+            <strong class="analysis-number">{{ analysis.completeness.unique_ancestor_count }}</strong>
+            <span>Distinct dogs across known hypothetical-offspring pedigree positions</span>
+          </article>
+          <article class="analysis-card">
+            <p class="eyebrow">Deepest known</p>
+            <strong class="analysis-number">G{{ analysis.completeness.deepest_known_generation }}</strong>
+            <span>Deepest generation with at least one known ancestor</span>
+          </article>
+        </div>
+
+        <div class="generation-coverage-strip mating-coverage-strip">
+          {% for row in analysis.completeness.generation_coverage %}
+            <div>
+              <strong>G{{ row.generation }}</strong>
+              <span>{{ row.known }}/{{ row.total }} known</span>
+            </div>
+          {% endfor %}
+        </div>
+
+        {% if analysis.completeness.coverage_percent < 100 %}
+          <div class="notice mating-coverage-warning">
+            <strong>Coverage matters.</strong>
+            <span>This result uses only ancestry currently connected in Cane Corso Ancestry. Missing ancestors can make the calculated COI lower than the value from a more complete pedigree.</span>
+          </div>
+        {% endif %}
+      </section>
+
+      <details class="panel mating-section projected-pedigree">
+        <summary>
+          <span>
+            <small class="eyebrow">Hypothetical pedigree</small>
+            <strong>View projected 4-generation pedigree</strong>
+          </span>
+          <span aria-hidden="true">＋</span>
+        </summary>
+
+        <div class="hypothetical-label">HYPOTHETICAL PEDIGREE — NOT A REGISTERED LITTER</div>
+
+        <div class="pedigree-scroll projected-pedigree-scroll" aria-label="Projected four generation pedigree for hypothetical offspring of {{ sire.name }} and {{ dam.name }}">
+          <div class="pedigree-board projected-pedigree-board">
+            <section class="pedigree-column">
+              <h2>Hypothetical</h2>
+              <div class="pedigree-nodes">
+                <div class="pedigree-node hypothetical-node">
+                  <small class="pedigree-relationship">Proposed offspring</small>
+                  <strong>{{ sire.name }} × {{ dam.name }}</strong>
+                  <span>Not a registered dog or litter</span>
+                </div>
+              </div>
+            </section>
+
+            {% for layer in analysis.projected_layers %}
+              <section class="pedigree-column">
+                <h2>{{ layer.label }}</h2>
+                <div class="pedigree-nodes">
+                  {% for node in layer.nodes %}
+                    {% if node.dog %}
+                      <a class="pedigree-node{% if node.repeated %} repeated{% endif %}{% if node.common %} common-ancestor-node{% endif %}" href="{% url 'registry:dog-detail' node.dog.slug %}">
+                        <small class="pedigree-relationship">{{ node.relationship }}</small>
+                        <strong>{{ node.dog.name }}</strong>
+                        {% if node.common %}<small>Shared ancestor</small>{% elif node.repeated %}<small>Repeated ancestor</small>{% endif %}
+                      </a>
+                    {% else %}
+                      <div class="pedigree-node missing">
+                        <small class="pedigree-relationship">{{ node.relationship }}</small>
+                        <strong>Unknown</strong>
+                        <span>Unknown ancestor</span>
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              </section>
+            {% endfor %}
+          </div>
+        </div>
+      </details>
+
+      <section class="panel mating-section compare-pairing-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Compare another pairing</p>
+            <h2>Keep one parent or start again</h2>
+          </div>
+        </div>
+        <div class="button-row">
+          <a class="btn btn-outline" href="{% url 'pedigrees:virtual-mating' %}?sire={{ sire.pk }}&sire_q={{ sire.name|urlencode }}&generations={{ generations }}">Keep sire · choose another dam</a>
+          <a class="btn btn-outline" href="{% url 'pedigrees:virtual-mating' %}?dam={{ dam.pk }}&dam_q={{ dam.name|urlencode }}&generations={{ generations }}">Keep dam · choose another sire</a>
+          <a class="btn btn-gold" href="{% url 'pedigrees:virtual-mating' %}?generations={{ generations }}">Start new pairing</a>
+        </div>
+      </section>
     </section>
   {% endif %}
 </section>
