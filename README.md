@@ -52,6 +52,16 @@ No custom domain is configured or assumed.
 
 External registration numbers may be stored and displayed with their issuing body, but Cane Corso Ancestry does not present itself as the issuing registry.
 
+## Paid submissions
+
+New pedigree records use Paystack-backed submission packages:
+
+- **₦500** — one dog;
+- **₦1,000** — 2–6 dogs;
+- **₦1,000** — one litter plus the puppies belonging to that litter.
+
+Payment never publishes a record. The kennel/owner must already be approved, and every submitted dog or litter remains in the admin moderation queue until an administrator verifies and approves it.
+
 ## Documentation
 
 - `PROJECT_PLAN.md` — product plan

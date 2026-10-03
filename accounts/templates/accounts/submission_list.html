@@ -8,7 +8,8 @@
     <p>Track new dog records, corrections, photos, documents and kennel changes sent for review.</p>
   </header>
   <div class="button-row section-spacer-tight">
-    <a class="btn btn-gold" href="{% url 'accounts:submit-dog' %}">Submit a dog</a>
+    <a class="btn btn-gold" href="{% url 'accounts:new-payment' %}">Buy submission package</a>
+    <a class="btn btn-outline" href="{% url 'accounts:submit-kennel' %}">Submit kennel</a>
     <a class="btn btn-outline" href="{% url 'dashboard' %}">Back to dashboard</a>
   </div>
   <div class="submission-list">
@@ -20,6 +21,9 @@
           <p>{{ item.created_at|date:"d M Y, H:i" }}{% if item.notes %} · {{ item.notes|truncatewords:16 }}{% endif %}</p>
         </div>
         <div class="submission-state {{ item.status }}">{{ item.get_status_display }}</div>
+        {% if item.payment_link %}
+          <p class="muted">Paystack: {{ item.payment_link.payment.get_status_display }} · ₦{{ item.payment_link.payment.amount_naira }}</p>
+        {% endif %}
         {% if item.resolution_notes %}<p class="resolution-note">{{ item.resolution_notes }}</p>{% endif %}
       </article>
     {% empty %}

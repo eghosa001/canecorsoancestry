@@ -1,5 +1,7 @@
 import csv
+import json
 import logging
+import uuid
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
@@ -19,6 +21,8 @@ from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.text import slugify
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 from registry.data_quality import quick_quality_report
 from registry.models import (
@@ -53,7 +57,7 @@ from pedigrees.services import pedigree_analysis, pedigree_export_rows
 logger = logging.getLogger(__name__)
 
 
-from .models import Profile
+from .models import PaymentSubmissionLink, Profile, SubmissionPayment
 
 from .forms import (
     BulkModerationForm,
@@ -67,12 +71,22 @@ from .forms import (
     KennelClaimForm,
     KennelCreateForm,
     KennelEditForm,
+    LitterPuppySubmissionForm,
     LitterSubmissionForm,
     MemberSignUpForm,
+    PaymentPackageForm,
     MergeDogsForm,
     ReviewSubmissionForm,
     VerificationEventForm,
     VerificationResendForm,
+)
+
+from .payments import (
+    PaystackError,
+    initialize_transaction,
+    record_successful_payment,
+    verify_transaction,
+    webhook_signature_valid,
 )
 
 
@@ -243,7 +257,7 @@ def resend_verification(request):
 @login_required
 def submission_list(request):
     submissions = request.user.ancestry_submissions.select_related(
-        "dog", "kennel", "litter", "document", "reviewed_by"
+        "dog", "kennel", "litter", "document", "reviewed_by", "payment_link__payment"
     )
     return render(
         request,
@@ -254,54 +268,387 @@ def submission_list(request):
 
 @login_required
 def submit_dog(request):
-    form = DogSubmissionForm(request.POST or None, user=request.user)
-    if request.method == "POST" and form.is_valid():
-        kennel = form.cleaned_data["kennel"]
-        if kennel and not can_contribute_to_kennel(request.user, kennel):
-            raise PermissionDenied
+    return redirect(f"{reverse('accounts:new-payment')}?package={SubmissionPayment.Package.SINGLE_DOG}")
 
-        submission = Submission.objects.create(
-            kind=Submission.Kind.DOG,
-            submitted_by=request.user,
-            kennel=kennel,
-            payload={
-                "name": form.cleaned_data["name"],
-                "sex": form.cleaned_data["sex"],
-                "date_of_birth": _date_value(form.cleaned_data["date_of_birth"]),
-                "colour": form.cleaned_data["colour"],
-                "country": form.cleaned_data["country"],
-                "bloodline": form.cleaned_data["bloodline"],
-                "sire_id": str(form.cleaned_data["sire"].pk)
-                if form.cleaned_data["sire"]
-                else None,
-                "dam_id": str(form.cleaned_data["dam"].pk)
-                if form.cleaned_data["dam"]
-                else None,
-                "registration": form.cleaned_data["registration"],
-                "litter_id": str(form.cleaned_data["litter"].pk)
-                if form.cleaned_data["litter"]
-                else None,
-                "bio": form.cleaned_data["bio"],
-            },
-            notes=form.cleaned_data["notes"],
-        )
+
+@login_required
+def new_payment(request):
+    initial = {}
+    requested_package = request.GET.get("package", "").strip()
+    if requested_package in dict(SubmissionPayment.Package.choices):
+        initial["package"] = requested_package
+
+    form = PaymentPackageForm(
+        request.POST or None,
+        user=request.user,
+        initial=initial,
+    )
+    verified_kennels = form.fields["kennel"].queryset
+    recent_payments = request.user.ancestry_submission_payments.select_related(
+        "kennel"
+    )[:8]
+
+    if request.method == "POST" and form.is_valid():
+        if not settings.PAYSTACK_SECRET_KEY:
+            form.add_error(None, "Paystack is not configured on the server yet.")
+        elif not request.user.email:
+            form.add_error(None, "Add an email address to your account before paying.")
+        else:
+            payment = SubmissionPayment(
+                user=request.user,
+                kennel=form.cleaned_data["kennel"],
+                package=form.cleaned_data["package"],
+                dog_count=form.cleaned_data["dog_count"],
+                amount_kobo=form.cleaned_data["amount_kobo"],
+                reference=f"CCA{uuid.uuid4().hex}",
+            )
+            payment.full_clean()
+            payment.save()
+            callback_url = f"{settings.SITE_URL}{reverse('accounts:paystack-callback')}"
+            try:
+                data = initialize_transaction(payment, callback_url)
+            except PaystackError as exc:
+                payment.status = SubmissionPayment.Status.FAILED
+                payment.save(update_fields=("status", "updated_at"))
+                form.add_error(None, str(exc))
+            else:
+                payment.status = SubmissionPayment.Status.PENDING
+                payment.access_code = data["access_code"]
+                payment.authorization_url = data["authorization_url"]
+                payment.save(
+                    update_fields=(
+                        "status",
+                        "access_code",
+                        "authorization_url",
+                        "updated_at",
+                    )
+                )
+                return redirect(payment.authorization_url)
+
+    return render(
+        request,
+        "accounts/payment_start.html",
+        {
+            "form": form,
+            "recent_payments": recent_payments,
+            "has_verified_kennel": verified_kennels.exists(),
+            "paystack_configured": bool(settings.PAYSTACK_SECRET_KEY),
+        },
+    )
+
+
+def _payment_for_member(request, pk):
+    payment = get_object_or_404(
+        SubmissionPayment.objects.select_related("kennel", "user"),
+        pk=pk,
+        user=request.user,
+    )
+    membership = request.user.kennel_memberships.filter(
+        kennel=payment.kennel,
+        role__in=["owner", "editor"],
+    ).exists()
+    if not membership or not payment.kennel.verified_at:
+        raise PermissionDenied
+    return payment
+
+
+@login_required
+def payment_detail(request, pk):
+    payment = _payment_for_member(request, pk)
+    links = list(
+        payment.submission_links.select_related("submission").order_by("created_at")
+    )
+    dog_used = sum(
+        1 for link in links if link.slot_kind == PaymentSubmissionLink.SlotKind.DOG
+    )
+    litter_link = next(
+        (
+            link
+            for link in links
+            if link.slot_kind == PaymentSubmissionLink.SlotKind.LITTER
+        ),
+        None,
+    )
+    paid = payment.status == SubmissionPayment.Status.PAID
+    dog_limit = 1 if payment.package == SubmissionPayment.Package.SINGLE_DOG else payment.dog_count
+    can_submit_dog = (
+        paid
+        and payment.package
+        in {SubmissionPayment.Package.SINGLE_DOG, SubmissionPayment.Package.MULTI_DOG}
+        and dog_used < dog_limit
+    )
+    can_submit_litter = (
+        paid
+        and payment.package == SubmissionPayment.Package.LITTER
+        and litter_link is None
+    )
+    can_submit_puppy = (
+        paid
+        and payment.package == SubmissionPayment.Package.LITTER
+        and litter_link is not None
+        and litter_link.submission.status != Submission.Status.REJECTED
+    )
+    return render(
+        request,
+        "accounts/payment_detail.html",
+        {
+            "payment": payment,
+            "links": links,
+            "dog_used": dog_used,
+            "litter_submission": litter_link.submission if litter_link else None,
+            "can_submit_dog": can_submit_dog,
+            "can_submit_litter": can_submit_litter,
+            "can_submit_puppy": can_submit_puppy,
+        },
+    )
+
+
+@login_required
+def payment_submit_dog(request, pk):
+    payment = _payment_for_member(request, pk)
+    if payment.status != SubmissionPayment.Status.PAID:
+        messages.error(request, "Complete the Paystack payment before submitting dogs.")
+        return redirect("accounts:payment-detail", pk=payment.pk)
+    if payment.package not in {
+        SubmissionPayment.Package.SINGLE_DOG,
+        SubmissionPayment.Package.MULTI_DOG,
+    }:
+        raise PermissionDenied
+
+    form = DogSubmissionForm(
+        request.POST or None,
+        user=request.user,
+        kennel=payment.kennel,
+    )
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            locked = SubmissionPayment.objects.select_for_update().get(pk=payment.pk)
+            used = locked.submission_links.filter(
+                slot_kind=PaymentSubmissionLink.SlotKind.DOG
+            ).count()
+            limit = 1 if locked.package == SubmissionPayment.Package.SINGLE_DOG else locked.dog_count
+            if used >= limit:
+                messages.error(request, "All dog slots in this payment package have been used.")
+                return redirect("accounts:payment-detail", pk=payment.pk)
+
+            cleaned = form.cleaned_data
+            submission = Submission.objects.create(
+                kind=Submission.Kind.DOG,
+                submitted_by=request.user,
+                kennel=payment.kennel,
+                payload={
+                    "_paid_submission": True,
+                    "name": cleaned["name"],
+                    "sex": cleaned["sex"],
+                    "date_of_birth": _date_value(cleaned["date_of_birth"]),
+                    "colour": cleaned["colour"],
+                    "country": cleaned["country"],
+                    "bloodline": cleaned["bloodline"],
+                    "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
+                    "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
+                    "registration": cleaned["registration"],
+                    "litter_id": str(cleaned["litter"].pk) if cleaned["litter"] else None,
+                    "bio": cleaned["bio"],
+                },
+                notes=cleaned["notes"],
+            )
+            PaymentSubmissionLink.objects.create(
+                payment=locked,
+                submission=submission,
+                slot_kind=PaymentSubmissionLink.SlotKind.DOG,
+            )
         messages.success(
             request,
-            "Dog submission received. It will not appear publicly unless an admin reviews and approves it.",
+            "Dog submitted. It remains private until an administrator verifies and approves it.",
         )
-        return redirect("accounts:submissions")
+        return redirect("accounts:payment-detail", pk=payment.pk)
 
     return render(
         request,
         "accounts/submission_form.html",
         {
             "form": form,
-            "eyebrow": "Pedigree contribution",
-            "title": "Submit a dog",
-            "intro": "Submit a new canonical dog record for moderator review. This does not register the dog.",
-            "button_label": "Submit for review",
+            "eyebrow": "Paid dog submission",
+            "title": f"Submit a dog · {payment.kennel.name}",
+            "intro": "This paid slot sends the dog to admin verification. Payment never publishes a record automatically.",
+            "button_label": "Submit for admin verification",
         },
     )
+
+
+@login_required
+def payment_submit_litter(request, pk):
+    payment = _payment_for_member(request, pk)
+    if (
+        payment.status != SubmissionPayment.Status.PAID
+        or payment.package != SubmissionPayment.Package.LITTER
+    ):
+        raise PermissionDenied
+    if payment.submission_links.filter(
+        slot_kind=PaymentSubmissionLink.SlotKind.LITTER
+    ).exists():
+        messages.info(request, "This package already has a litter submission.")
+        return redirect("accounts:payment-detail", pk=payment.pk)
+
+    form = LitterSubmissionForm(
+        request.POST or None,
+        user=request.user,
+        kennel=payment.kennel,
+    )
+    if request.method == "POST" and form.is_valid():
+        if form.cleaned_data["kennel"] != payment.kennel:
+            form.add_error("kennel", "This payment belongs to a different kennel.")
+        else:
+            with transaction.atomic():
+                locked = SubmissionPayment.objects.select_for_update().get(pk=payment.pk)
+                if locked.submission_links.filter(
+                    slot_kind=PaymentSubmissionLink.SlotKind.LITTER
+                ).exists():
+                    messages.info(request, "This package already has a litter submission.")
+                    return redirect("accounts:payment-detail", pk=payment.pk)
+                cleaned = form.cleaned_data
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.LITTER_CREATE,
+                    submitted_by=request.user,
+                    kennel=payment.kennel,
+                    payload={
+                        "_paid_submission": True,
+                        "code": cleaned["code"],
+                        "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
+                        "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
+                        "date_of_birth": _date_value(cleaned["date_of_birth"]),
+                        "notes": cleaned["notes"],
+                    },
+                    notes=cleaned["review_notes"],
+                )
+                PaymentSubmissionLink.objects.create(
+                    payment=locked,
+                    submission=submission,
+                    slot_kind=PaymentSubmissionLink.SlotKind.LITTER,
+                )
+            messages.success(
+                request,
+                "Litter submitted for admin verification. You can now add puppies from this same litter.",
+            )
+            return redirect("accounts:payment-detail", pk=payment.pk)
+
+    return render(
+        request,
+        "accounts/submission_form.html",
+        {
+            "form": form,
+            "eyebrow": "Paid litter submission",
+            "title": f"Submit a litter · {payment.kennel.name}",
+            "intro": "The litter and its puppies remain private until an administrator verifies and approves the records.",
+            "button_label": "Submit litter for admin verification",
+        },
+    )
+
+
+@login_required
+def payment_submit_puppy(request, pk):
+    payment = _payment_for_member(request, pk)
+    if (
+        payment.status != SubmissionPayment.Status.PAID
+        or payment.package != SubmissionPayment.Package.LITTER
+    ):
+        raise PermissionDenied
+    litter_link = payment.submission_links.select_related("submission").filter(
+        slot_kind=PaymentSubmissionLink.SlotKind.LITTER
+    ).first()
+    if litter_link is None or litter_link.submission.status == Submission.Status.REJECTED:
+        messages.error(request, "Submit a valid litter first.")
+        return redirect("accounts:payment-detail", pk=payment.pk)
+
+    form = LitterPuppySubmissionForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        cleaned = form.cleaned_data
+        submission = Submission.objects.create(
+            kind=Submission.Kind.DOG,
+            submitted_by=request.user,
+            kennel=payment.kennel,
+            payload={
+                "_paid_submission": True,
+                "litter_submission_id": str(litter_link.submission_id),
+                "name": cleaned["name"],
+                "sex": cleaned["sex"],
+                "colour": cleaned["colour"],
+                "country": cleaned["country"],
+                "bloodline": cleaned["bloodline"],
+                "registration": cleaned["registration"],
+                "bio": cleaned["bio"],
+            },
+            notes=cleaned["notes"],
+        )
+        PaymentSubmissionLink.objects.create(
+            payment=payment,
+            submission=submission,
+            slot_kind=PaymentSubmissionLink.SlotKind.PUPPY,
+        )
+        messages.success(
+            request,
+            "Puppy submitted for admin verification under this litter package.",
+        )
+        return redirect("accounts:payment-detail", pk=payment.pk)
+
+    return render(
+        request,
+        "accounts/submission_form.html",
+        {
+            "form": form,
+            "eyebrow": "Litter puppy",
+            "title": "Add a puppy from this litter",
+            "intro": "Parentage, kennel and litter date are inherited from the litter record during admin approval.",
+            "button_label": "Submit puppy for admin verification",
+        },
+    )
+
+
+def paystack_callback(request):
+    reference = (request.GET.get("reference") or request.GET.get("trxref") or "").strip()
+    if not reference:
+        return HttpResponse("Missing payment reference.", status=400)
+    payment = SubmissionPayment.objects.filter(reference=reference).first()
+    if payment is None:
+        return HttpResponse("Unknown payment reference.", status=404)
+    try:
+        data = verify_transaction(reference)
+        payment = record_successful_payment(reference, data)
+    except PaystackError as exc:
+        logger.warning("paystack_callback_failed reference=%s error=%s", reference, exc)
+        if request.user.is_authenticated and request.user.pk == payment.user_id:
+            messages.error(request, str(exc))
+            return redirect("accounts:payment-detail", pk=payment.pk)
+        return HttpResponse("Payment could not be verified.", status=400)
+
+    if request.user.is_authenticated and request.user.pk == payment.user_id:
+        messages.success(request, "Payment confirmed. Your submission package is ready.")
+        return redirect("accounts:payment-detail", pk=payment.pk)
+    next_url = reverse("accounts:payment-detail", kwargs={"pk": payment.pk})
+    return redirect(f"{settings.LOGIN_URL}?next={next_url}")
+
+
+@csrf_exempt
+@require_POST
+def paystack_webhook(request):
+    signature = request.headers.get("x-paystack-signature", "")
+    if not webhook_signature_valid(request.body, signature):
+        return HttpResponse(status=400)
+    try:
+        event = json.loads(request.body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return HttpResponse(status=400)
+
+    if event.get("event") == "charge.success":
+        data = event.get("data") or {}
+        reference = str(data.get("reference") or "")
+        if reference and SubmissionPayment.objects.filter(reference=reference).exists():
+            try:
+                record_successful_payment(reference, data)
+            except PaystackError:
+                logger.exception("paystack_webhook_validation_failed reference=%s", reference)
+                return HttpResponse(status=400)
+    return HttpResponse(status=200)
 
 
 @login_required
@@ -577,6 +924,7 @@ def moderation_queue(request):
         "litter",
         "document",
         "assigned_to",
+        "payment_link__payment",
     )
 
     query = request.GET.get("q", "").strip()
@@ -876,39 +1224,7 @@ def my_litters(request):
 
 @login_required
 def submit_litter(request):
-    form = LitterSubmissionForm(request.POST or None, user=request.user)
-    if request.method == "POST" and form.is_valid():
-        kennel = form.cleaned_data["kennel"]
-        if not can_edit_kennel(request.user, kennel):
-            raise PermissionDenied
-        cleaned = form.cleaned_data
-        Submission.objects.create(
-            kind=Submission.Kind.LITTER_CREATE,
-            submitted_by=request.user,
-            kennel=kennel,
-            payload={
-                "code": cleaned["code"],
-                "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
-                "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
-                "date_of_birth": _date_value(cleaned["date_of_birth"]),
-                "notes": cleaned["notes"],
-            },
-            notes=cleaned["review_notes"],
-        )
-        messages.success(request, "Litter submitted for moderator review.")
-        return redirect("accounts:submissions")
-
-    return render(
-        request,
-        "accounts/submission_form.html",
-        {
-            "form": form,
-            "eyebrow": "Litter management",
-            "title": "Submit a litter",
-            "intro": "New litters are reviewed before they become canonical records and start private.",
-            "button_label": "Submit litter",
-        },
-    )
+    return redirect(f"{reverse('accounts:new-payment')}?package={SubmissionPayment.Package.LITTER}")
 
 
 @login_required

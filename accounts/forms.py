@@ -7,7 +7,9 @@ from django.db.models import Q
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
 
-from registry.models import DisputeCase, Dog, DogDocument, DogRegistration, DogSource, Kennel, Litter, Submission, VerificationState
+from registry.models import DisputeCase, Dog, DogDocument, DogRegistration, DogSource, Kennel, KennelMembership, Litter, Submission, VerificationState
+
+from .models import SubmissionPayment
 
 
 IMAGE_MAX_BYTES = 10 * 1024 * 1024
@@ -206,12 +208,17 @@ class DogSubmissionForm(forms.Form):
     bio = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 4}))
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
 
-    def __init__(self, *args, user=None, **kwargs):
+    def __init__(self, *args, user=None, kennel=None, **kwargs):
         super().__init__(*args, **kwargs)
         kennel_ids = []
         if user and user.is_authenticated:
             kennel_ids = user.kennel_memberships.values_list("kennel_id", flat=True)
         self.fields["kennel"].queryset = Kennel.objects.filter(pk__in=kennel_ids)
+        if kennel is not None:
+            self.fields["kennel"].queryset = Kennel.objects.filter(pk=kennel.pk)
+            self.fields["kennel"].initial = kennel
+            self.fields["kennel"].required = True
+            self.fields["kennel"].disabled = True
         related_dogs = Dog.objects.filter(
             Q(is_public=True) | Q(kennel_id__in=kennel_ids)
         )
@@ -249,6 +256,74 @@ class DogSubmissionForm(forms.Form):
                     f"A likely matching dog already exists: {likely.name}. Use the existing record or submit a correction.",
                 )
         return cleaned
+
+
+class PaymentPackageForm(forms.Form):
+    kennel = forms.ModelChoiceField(
+        queryset=Kennel.objects.none(),
+        help_text="Only administrator-verified kennels that you own or edit can be used.",
+    )
+    package = forms.ChoiceField(choices=SubmissionPayment.Package.choices)
+    dog_count = forms.IntegerField(
+        required=False,
+        min_value=2,
+        max_value=6,
+        label="Number of dogs",
+        help_text="Choose 2–6 only for the ₦1,000 multi-dog package.",
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user and user.is_authenticated:
+            kennel_ids = user.kennel_memberships.filter(
+                role__in=[KennelMembership.Role.OWNER, KennelMembership.Role.EDITOR],
+                kennel__verified_at__isnull=False,
+            ).values_list("kennel_id", flat=True)
+        else:
+            kennel_ids = []
+        self.fields["kennel"].queryset = Kennel.objects.filter(pk__in=kennel_ids).order_by("name")
+
+    def clean(self):
+        cleaned = super().clean()
+        package = cleaned.get("package")
+        dog_count = cleaned.get("dog_count")
+        if package == SubmissionPayment.Package.SINGLE_DOG:
+            dog_count = 1
+        elif package == SubmissionPayment.Package.MULTI_DOG:
+            if dog_count is None or not 2 <= dog_count <= 6:
+                self.add_error("dog_count", "Choose between 2 and 6 dogs.")
+        elif package == SubmissionPayment.Package.LITTER:
+            dog_count = 0
+        if package and not self.errors:
+            cleaned["dog_count"] = dog_count
+            cleaned["amount_kobo"] = SubmissionPayment.price_for(package, dog_count)
+        return cleaned
+
+
+class LitterPuppySubmissionForm(forms.Form):
+    name = forms.CharField(max_length=220)
+    sex = forms.ChoiceField(choices=Dog.Sex.choices)
+    colour = forms.CharField(max_length=100, required=False)
+    country = forms.CharField(max_length=80, required=False)
+    bloodline = forms.CharField(max_length=220, required=False)
+    registration = forms.CharField(max_length=120, required=False)
+    bio = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 4}))
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="Optional note for the administrator verifying this puppy.",
+    )
+
+    def clean_registration(self):
+        registration = (self.cleaned_data.get("registration") or "").strip()
+        if registration and DogRegistration.objects.filter(
+            authority__isnull=True,
+            number__iexact=registration,
+        ).exists():
+            raise forms.ValidationError(
+                "This registration number is already attached to a dog."
+            )
+        return registration
 
 
 class DogCorrectionForm(forms.ModelForm):

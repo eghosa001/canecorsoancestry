@@ -125,7 +125,13 @@ class MergeHistoryAdmin(admin.ModelAdmin):
     )
 
 
-admin.site.register(KennelMembership)
+@admin.register(KennelMembership)
+class KennelMembershipAdmin(admin.ModelAdmin):
+    list_display = ("kennel", "user", "role", "created_at")
+    list_filter = ("role", "created_at")
+    search_fields = ("kennel__name", "user__username", "user__email")
+    autocomplete_fields = ("kennel", "user")
+
 admin.site.register(RegistrationAuthority)
 admin.site.register(DogImage)
 admin.site.register(DogDocument)
