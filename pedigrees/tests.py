@@ -17,7 +17,8 @@ from .services import (
 )
 
 
-# Virtual mating accuracy/performance coverage.\nclass PedigreeServiceTests(TestCase):
+# Virtual mating accuracy/performance coverage.
+class PedigreeServiceTests(TestCase):
     def test_repeated_ancestor_uses_one_canonical_dog_record(self):
         common = Dog.objects.create(name="Common Ancestor", slug="common", sex=Dog.Sex.MALE)
         sire = Dog.objects.create(name="Sire", slug="sire", sire=common)
