@@ -68,6 +68,20 @@ class CaneCorsoLatestParsingTests(SimpleTestCase):
         self.assertEqual(parsed["titles"], "CH.TEST")
         self.assertEqual(parsed["hd"], "HD A")
 
+    def test_profile_parser_preserves_owner_and_breeder_evidence(self):
+        html = """
+        <div>Name</div><div><a href="/view_pedigree?id=9">TEST DOG</a></div>
+        <div>Owner</div><div><a href="/view_owner?ownerid=120">Owner Name</a></div>
+        <div>Breeder</div><div><a href="/view_owner?ownerid=4858">Breeder Name</a></div>
+        <div>Gender</div><div>male</div>
+        <div>Ped#</div><div>LO12345</div>
+        """
+        parsed = latest.parse_profile("9", html)
+        self.assertEqual(
+            (parsed["owner"], parsed["owner_id"], parsed["breeder"], parsed["breeder_id"]),
+            ("Owner Name", "120", "Breeder Name", "4858"),
+        )
+
     def test_crawler_fetches_only_missing_latest_and_ancestors(self):
         pages = {
             latest.LATEST_URL: (
