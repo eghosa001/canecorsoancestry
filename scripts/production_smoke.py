@@ -218,17 +218,36 @@ def main():
                 gold = page.evaluate(
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()"
                 )
-                if gold.lower() != "#8b6a2f":
-                    raise AssertionError(f"Unexpected production theme accent: {gold}")
-                if page.locator("[data-theme-toggle]").count():
-                    raise AssertionError("Production still exposes the removed theme toggle")
-                if page.locator(".hero-mark").evaluate("(el) => getComputedStyle(el).display") != "none":
-                    raise AssertionError("Production hero unexpectedly exposes the decorative logo panel")
+                if gold.lower() != "#c7a25d":
+                    raise AssertionError(f"Unexpected dark-theme accent: {gold}")
+                if page.locator("[data-theme-toggle]").count() != 2:
+                    raise AssertionError("Production does not expose both desktop and mobile theme controls")
+                if page.locator(".hero-mark").evaluate("(el) => getComputedStyle(el).display") == "none":
+                    raise AssertionError("Production CCA hero plaque is hidden")
+                if page.locator(".hero-mark small").inner_text().strip() != "CANECORSOANCESTRY.COM":
+                    raise AssertionError("Production CCA domain label is missing or misplaced")
+                search_bg = page.locator(".hero-search input").evaluate(
+                    "(el) => getComputedStyle(el).backgroundColor"
+                )
+                if search_bg != "rgb(255, 255, 255)":
+                    raise AssertionError(f"Hero search field is not white: {search_bg}")
                 bg = page.evaluate(
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()"
                 )
-                if bg.lower() != "#f4f0e8":
-                    raise AssertionError(f"Unexpected production background: {bg}")
+                if bg.lower() != "#101110":
+                    raise AssertionError(f"Unexpected dark-theme background: {bg}")
+
+                page.locator("[data-theme-toggle]").first.click()
+                if page.locator("html").get_attribute("data-theme") != "light":
+                    raise AssertionError("Production theme toggle did not switch to light mode")
+                light_bg = page.evaluate(
+                    "() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()"
+                )
+                if light_bg.lower() != "#f4f0e8":
+                    raise AssertionError(f"Unexpected light-theme background: {light_bg}")
+                page.locator("[data-theme-toggle]").first.click()
+                if page.locator("html").get_attribute("data-theme") != "dark":
+                    raise AssertionError("Production theme toggle did not restore dark mode")
                 brand = page.locator(".brand-mark")
                 brand_src = brand.get_attribute("src") or ""
                 if "cane-corso-head-logo-right" not in brand_src or brand_src.startswith("data:"):
@@ -310,6 +329,14 @@ def main():
                 page.locator(".mobile-nav > summary").click()
                 if not page.locator(".mobile-nav-panel").is_visible():
                     raise AssertionError("Production mobile menu did not open")
+                mobile_theme = page.locator(".mobile-nav-panel [data-theme-toggle]")
+                mobile_theme.click()
+                if page.locator("html").get_attribute("data-theme") != "light":
+                    raise AssertionError("Production mobile theme toggle did not switch to light mode")
+                page.screenshot(path=OUT / "home-mobile-light-menu.png", full_page=True)
+                mobile_theme.click()
+                if page.locator("html").get_attribute("data-theme") != "dark":
+                    raise AssertionError("Production mobile theme toggle did not restore dark mode")
                 page.screenshot(path=OUT / "home-mobile-menu.png", full_page=True)
                 page.evaluate("window.scrollTo(0, 320)")
                 page.wait_for_timeout(150)
@@ -349,6 +376,17 @@ def main():
                 pedigree_mobile, pedigree_load_path + "?smoke=mobile"
             )
             assert_page(pedigree_mobile, "pedigree-detail-mobile", mobile=True)
+            pedigree_columns = pedigree_mobile.locator(".pedigree-column")
+            if pedigree_columns.count() > 1:
+                first_box = pedigree_columns.nth(0).bounding_box()
+                second_box = pedigree_columns.nth(1).bounding_box()
+                if not first_box or not second_box or second_box["x"] <= first_box["x"] + first_box["width"]:
+                    raise AssertionError("Mobile pedigree generations are stacked instead of horizontal boxes")
+                overflow_x = pedigree_mobile.locator(".pedigree-scroll").evaluate(
+                    "(el) => getComputedStyle(el).overflowX"
+                )
+                if overflow_x not in ("auto", "scroll"):
+                    raise AssertionError(f"Mobile pedigree tree is not horizontally scrollable: {overflow_x}")
             pedigree_mobile.screenshot(path=OUT / "pedigree-detail-mobile.png", full_page=True)
             report["details"].append({
                 "pedigree_detail_mobile": pedigree_mobile.url,
