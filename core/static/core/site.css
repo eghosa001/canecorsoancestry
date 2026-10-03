@@ -5525,3 +5525,100 @@ html[data-theme="light"] .hero-search input {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
+
+
+/* ==========================================================================
+   Owner home restoration v39 — restore original Explore cards + CCA backdrop
+   ========================================================================== */
+
+/* Original CCA plaque treatment: deep charcoal gradient with a warm gold halo. */
+.hero-mark {
+  border-radius: 0 !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(210, 173, 87, .18), transparent 42%),
+    linear-gradient(145deg, #151916, #090b0a) !important;
+  box-shadow: 0 26px 70px rgba(0, 0, 0, .42) !important;
+}
+.hero-mark span {
+  color: rgba(239, 213, 141, .20) !important;
+}
+.hero-mark small {
+  color: #d2ad57 !important;
+}
+
+/* Restore Trace the bloodline to the compact boxed arrangement. */
+.home-actions .action-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+.home-actions .action-card {
+  min-height: 150px !important;
+  padding: 24px !important;
+  border: 1px solid var(--line-soft) !important;
+  border-radius: 0 !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-end !important;
+}
+.home-actions .action-icon {
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  margin-bottom: 24px !important;
+  font-size: 1.45rem !important;
+}
+.home-actions .action-card strong {
+  font-family: var(--serif) !important;
+  font-size: 1.25rem !important;
+  font-weight: 500 !important;
+}
+.home-actions .action-card small {
+  display: block !important;
+  margin-top: 3px !important;
+  color: var(--muted) !important;
+}
+
+@media (max-width: 1080px) {
+  .home-actions .action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .home-actions {
+    padding-top: 38px !important;
+  }
+  .home-actions .section-heading {
+    margin-bottom: 18px !important;
+  }
+  .home-actions .action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+  .home-actions .action-card {
+    min-height: 132px !important;
+    padding: 16px !important;
+  }
+  .home-actions .action-icon {
+    margin-bottom: 18px !important;
+    font-size: 1.25rem !important;
+  }
+  .home-actions .action-card strong {
+    font-size: 1.02rem !important;
+    line-height: 1.18 !important;
+  }
+  .home-actions .action-card small {
+    font-size: .68rem !important;
+  }
+  .hero-mark {
+    min-height: 210px !important;
+    background:
+      radial-gradient(circle at 50% 42%, rgba(210, 173, 87, .20), transparent 44%),
+      linear-gradient(145deg, #151916, #090b0a) !important;
+  }
+}
