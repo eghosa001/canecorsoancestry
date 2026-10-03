@@ -10,12 +10,14 @@ from django.utils.text import slugify
 
 from registry.models import (
     Dog,
+    DogAlias,
     DogExternalKey,
     DogRegistration,
     DogSource,
     DogTitle,
     HealthRecord,
     VerificationState,
+    normalize_identity_name,
 )
 
 
@@ -232,9 +234,24 @@ class Command(BaseCommand):
             ).values_list("number", "dog_id"):
                 registration_matches.setdefault(number, set()).add(dog_id)
 
+        registration_dog_ids = {
+            dog_id for dog_ids in registration_matches.values() for dog_id in dog_ids
+        }
+        registration_identity_names = {}
+        if registration_dog_ids:
+            for dog in Dog.objects.filter(pk__in=registration_dog_ids).prefetch_related("aliases"):
+                registration_identity_names[dog.pk] = {
+                    normalize_identity_name(dog.name),
+                    *(
+                        normalize_identity_name(alias.name)
+                        for alias in dog.aliases.all()
+                    ),
+                }
+
         created_dogs = []
         newly_attached_ids = []
         reused_by_registration = 0
+        registration_identity_conflicts = 0
         existing_slugs = set(
             Dog.objects.filter(slug__startswith="ccp-").values_list("slug", flat=True)
         )
@@ -244,11 +261,16 @@ class Command(BaseCommand):
             pedigree_number = _text(record.get("pedigree_number"))
             matched_ids = registration_matches.get(pedigree_number, set())
             if len(matched_ids) == 1:
-                dog = Dog.objects.get(pk=next(iter(matched_ids)))
-                source_to_dog[source_id] = dog
-                newly_attached_ids.append(source_id)
-                reused_by_registration += 1
-                continue
+                matched_id = next(iter(matched_ids))
+                source_identity = normalize_identity_name(record["name"])
+                known_identities = registration_identity_names.get(matched_id, set())
+                if source_identity in known_identities:
+                    dog = Dog.objects.get(pk=matched_id)
+                    source_to_dog[source_id] = dog
+                    newly_attached_ids.append(source_id)
+                    reused_by_registration += 1
+                    continue
+                registration_identity_conflicts += 1
 
             base = slugify(f"ccp-{source_id}-{record['name']}")[:225] or f"ccp-{source_id}"
             slug = base
@@ -404,7 +426,8 @@ class Command(BaseCommand):
                 f"{len(records)} records including {len(records)-len(recent_ids)} ancestors; "
                 f"{len(created_dogs)} created; {len(existing_keys)} already linked; "
                 f"{published_existing} existing source-created dogs published; "
-                f"{reused_by_registration} matched by exact registration; "
+                f"{reused_by_registration} matched by exact registration and identity; "
+                f"{registration_identity_conflicts} registration identity conflicts kept separate; "
                 f"{skipped_parent_links} unsafe parent links skipped; "
                 f"{preserved_parent_conflicts} existing parent links preserved."
             )
