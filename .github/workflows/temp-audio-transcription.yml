@@ -42,18 +42,22 @@ jobs:
           curl -fL --retry 4 --retry-delay 2             https://github.com/sjoerdteunisse/whisper.cpp/releases/download/v1.0.0/whisper-cpp-linux-x64-cpu.zip             -o /tmp/whisper.zip
           mkdir -p /tmp/whisper
           unzip -q /tmp/whisper.zip -d /tmp/whisper
-          find /tmp/whisper -type f -name 'whisper-cli' -exec chmod +x {} \;
+          find /tmp/whisper -maxdepth 4 -type f -print
           curl -fL --retry 4 --retry-delay 2             https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en-q5_1.bin             -o /tmp/whisper-model.bin
           test -s /tmp/whisper-model.bin
           ls -lh /tmp/whisper-model.bin
-          find /tmp/whisper -maxdepth 3 -type f -name 'whisper-cli' -print
+          file /tmp/whisper/* 2>/dev/null || true
 
       - name: Convert and transcribe
         shell: bash
         run: |
           set -euo pipefail
-          WHISPER="$(find /tmp/whisper -type f -name 'whisper-cli' | head -n 1)"
+          WHISPER="$(find /tmp/whisper -type f -print0 | xargs -0 file | awk -F: '/ELF 64-bit.*executable/{print $1; exit}')"
           test -n "$WHISPER"
+          chmod +x "$WHISPER"
+          echo "Using Whisper executable: $WHISPER"
+          "$WHISPER" --help >/tmp/whisper-help.txt 2>&1 || true
+          head -n 25 /tmp/whisper-help.txt
           PROMPT="Nigerian English and Nigerian Pidgin. Cane Corso Ancestry website. CCA. Cane Corso Italiano. pedigree, pedigree tree, sire, dam, father, mother, generation, bloodline, dog search, virtual mating, mobile, logo, light mode, dark mode, Sforza Ludovico, AMRA CORSO CAPTAIN HOOK, APRIORI BEST NIMFA, Branco."
           for input in /tmp/cca-audio/*.opus; do
             base="$(basename "$input" .opus)"
