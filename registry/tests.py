@@ -172,3 +172,22 @@ class DogModelTests(TestCase):
         response = self.client.get(reverse("registry:dog-search"), {"q": "710606"})
 
         self.assertContains(response, "Branco")
+
+    def test_kennel_directory_searches_name_city_and_country(self):
+        Kennel.objects.create(name="Sforza", slug="sforza", city="Rome", country="Italy")
+        Kennel.objects.create(name="Custodi Nos", slug="custodi-nos", country="Serbia")
+
+        response = self.client.get(reverse("registry:kennel-list"), {"q": "Rome"})
+
+        self.assertContains(response, "Sforza")
+        self.assertNotContains(response, "Custodi Nos")
+
+    def test_kennel_directory_shows_sixty_names_per_page(self):
+        for index in range(61):
+            Kennel.objects.create(name=f"Kennel {index:02d}", slug=f"kennel-{index:02d}")
+
+        response = self.client.get(reverse("registry:kennel-list"))
+
+        self.assertEqual(len(response.context["kennels"]), 60)
+        self.assertTrue(response.context["page_obj"].has_next())
+
