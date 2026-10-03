@@ -41,7 +41,7 @@ const suggestionsRequest = new Request(suggestionsUrl, {
 assert.equal(isCacheablePublicPath(suggestionsUrl, suggestionsRequest), true);
 assert.equal(
   cacheKey(trackedRequest).url,
-  "https://example.test/dogs/example-dog/?__cca_edge_v=metadata-v51",
+  "https://example.test/dogs/example-dog/?__cca_edge_v=metadata-v52",
 );
 
 console.log("site-edge cache policy tests passed");
