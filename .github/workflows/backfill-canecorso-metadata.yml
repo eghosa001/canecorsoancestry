@@ -45,4 +45,4 @@ jobs:
       - name: Verify migrations
         run: python manage.py migrate --check
       - name: Preview source-backed metadata enrichment
-        run: python manage.py backfill_canecorso_metadata --dry-run --min-kennel-dogs 8
+        run: python manage.py backfill_canecorso_metadata --dry-run --min-kennel-dogs 12
