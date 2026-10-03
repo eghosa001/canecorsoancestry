@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/**'
+      - '.github/CODEOWNERS'
       - '.agents/**'
       - 'AGENTS.md'
       - 'SKILL.md'
@@ -15,6 +16,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/**'
+      - '.github/CODEOWNERS'
       - '.agents/**'
       - 'AGENTS.md'
       - 'SKILL.md'
