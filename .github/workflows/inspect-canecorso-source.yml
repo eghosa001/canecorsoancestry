@@ -35,7 +35,7 @@ jobs:
           import requests
           from bs4 import BeautifulSoup
           from urllib.parse import urljoin
-          for dog_id in ("121431","121427","121426","121423"):
+          for dog_id in ("32854","23100","44695","121431"):
               u=f"https://www.canecorsopedigree.com/view_dog?id={dog_id}"
               r=requests.get(u,timeout=20,headers={"User-Agent":"CaneCorsoAncestryResearch/1.0"})
               print("DOG",dog_id,"HTTP",r.status_code)
