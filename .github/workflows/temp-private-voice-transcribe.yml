@@ -1,0 +1,128 @@
+name: Temporary private voice transcription
+
+on:
+  push:
+    branches: [temp-private-audio-transcribe-20261003-v2]
+    paths:
+      - ".github/workflows/temp-private-voice-transcribe.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temp-private-voice-transcribe
+  cancel-in-progress: true
+
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      HF_HUB_DISABLE_XET: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Verify private database secret
+        shell: bash
+        run: |
+          test -n "$SUPABASE_DATABASE_URL" || { echo "::error::SUPABASE_DATABASE_URL is missing"; exit 1; }
+      - name: Install transcription runtime
+        run: pip install "psycopg[binary]>=3.2,<4" "faster-whisper>=1.2,<2"
+      - name: Discover reachable Supabase session pooler
+        shell: bash
+        run: |
+          target_url="$(python scripts/discover_supabase_session_pooler.py)"
+          echo "::add-mask::$target_url"
+          echo "DATABASE_URL=$target_url" >> "$GITHUB_ENV"
+      - name: Transcribe private customer voice notes
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          import psycopg
+          from faster_whisper import WhisperModel
+
+          out = Path("/tmp/cca-voice")
+          out.mkdir(parents=True, exist_ok=True)
+
+          prompt = (
+              "Cane Corso Ancestry website customer feedback. Terms may include Cane Corso, "
+              "CCA, Canecorsoancestry.com, pedigree, sire, dam, Sforza Ludovico, logo, "
+              "search button, light mode, dark mode, boxes, virtual mating, autocomplete."
+          )
+
+          with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+              with conn.cursor() as cur:
+                  cur.execute(
+                      """
+                      select distinct note_name
+                      from django_app.voice_transcription_tmp
+                      where chunk_no >= 0
+                      order by note_name
+                      """
+                  )
+                  notes = [row[0] for row in cur.fetchall()]
+
+                  for note in notes:
+                      cur.execute(
+                          """
+                          select data_b64
+                          from django_app.voice_transcription_tmp
+                          where note_name = %s and chunk_no >= 0
+                          order by chunk_no
+                          """,
+                          (note,),
+                      )
+                      encoded = "".join(row[0] or "" for row in cur.fetchall())
+                      if not encoded:
+                          raise RuntimeError(f"No audio payload for {note}")
+                      (out / f"{note}.opus").write_bytes(base64.b64decode(encoded))
+
+          model = WhisperModel("small.en", device="cpu", compute_type="int8")
+
+          with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+              with conn.cursor() as cur:
+                  for note in notes:
+                      path = out / f"{note}.opus"
+                      segments, info = model.transcribe(
+                          str(path),
+                          language="en",
+                          beam_size=5,
+                          best_of=5,
+                          vad_filter=True,
+                          condition_on_previous_text=True,
+                          initial_prompt=prompt,
+                      )
+                      lines = []
+                      count = 0
+                      for segment in segments:
+                          text = segment.text.strip()
+                          if not text:
+                              continue
+                          count += 1
+                          lines.append(
+                              f"[{segment.start:07.2f} -> {segment.end:07.2f}] {text}"
+                          )
+                      transcript = "\n".join(lines).strip()
+                      if not transcript:
+                          raise RuntimeError(f"Whisper returned no transcript for {note}")
+                      cur.execute(
+                          """
+                          insert into django_app.voice_transcription_tmp
+                              (note_name, chunk_no, data_b64, transcript)
+                          values (%s, -1, null, %s)
+                          on conflict (note_name, chunk_no)
+                          do update set data_b64 = null, transcript = excluded.transcript
+                          """,
+                          (note, transcript),
+                      )
+                      conn.commit()
+                      print(f"{note}: transcript stored privately ({count} segments)")
+          PY
