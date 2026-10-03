@@ -249,7 +249,7 @@ Later, Bellissimo may consume a stable public ancestry API from Cane Corso Ances
 - backups
 - performance/caching
 - SEO/structured data
-- deployment and custom domain
+- deployment and production hardening
 
 ## First-release exclusions
 

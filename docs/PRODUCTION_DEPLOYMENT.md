@@ -2,59 +2,60 @@
 
 ## Active architecture
 
-Only these services are part of the live application:
+The live application currently uses:
 
-1. **Render** — Django web application and static files
-2. **Aiven PostgreSQL** — production relational database
-3. **Cloudflare R2** — durable uploaded media
+1. **Cloudflare Workers site edge** — public website endpoint and cache/warm-up layer
+2. **Northflank** — Django application origin
+3. **Supabase PostgreSQL** — canonical relational database
+4. **Cloudflare R2** — durable media storage through the R2 media Worker
 
-Current app URL:
+Public site:
 
-`https://canecorsoancestry.onrender.com`
+`https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev`
 
-Current R2 media gateway:
+Northflank origin:
+
+`https://web--canecorsoancestry--4w9gl8jxj4yr.code.run`
+
+R2 media gateway:
 
 `https://canecorsoancestry-edge.aighewieghosa111.workers.dev`
 
-No custom domain is required to run or review the application.
+No custom domain is configured.
 
-## Render
+## Northflank
 
-The Render service is defined by `render.yaml`.
+The application runs with:
 
-Required private environment values already configured on Render:
+`DJANGO_SETTINGS_MODULE=config.settings.northflank`
 
-- `DATABASE_URL` — Aiven PostgreSQL service URI
-- `DJANGO_SECRET_KEY` — Django secret key
+The current deployment workflow is:
 
-Repository-managed settings include:
+`.github/workflows/provision-northflank.yml`
 
-- `DJANGO_SETTINGS_MODULE=config.settings.render`
-- `DJANGO_DB_SCHEMA=django_app`
-- `DJANGO_DB_SSLMODE=require`
-- `DJANGO_DB_EXTRA_SCHEMAS=public`
-- `DJANGO_ALLOWED_HOSTS=.onrender.com`
-- `DJANGO_CSRF_TRUSTED_ORIGINS=https://canecorsoancestry.onrender.com`
-- `SITE_URL=https://canecorsoancestry.onrender.com`
-- R2 gateway URL and media TTL
-- Python 3.13.15
+It builds the exact GitHub commit, deploys it to the Northflank service and verifies the origin health/application endpoints.
 
-Render runs migrations before Gunicorn starts and uses `/healthz/` as the health check.
+## Supabase PostgreSQL
 
-## Aiven
+GitHub Actions use the `SUPABASE_DATABASE_URL` secret and derive a reachable session-pooler URL with:
 
-Aiven service: `pg-e8bf844`.
+`scripts/discover_supabase_session_pooler.py`
 
-The completed migration has already been verified. Aiven is the production source of truth.
+Django uses:
 
-The application uses:
+- schema `django_app`;
+- TLS;
+- extra schemas `extensions,public`.
 
-- schema `django_app`
-- TLS
-- search path `django_app,public`
-- `pg_trgm`
+## Cloudflare site edge
 
-Do not reintroduce a Supabase migration workflow unless a new migration is explicitly required.
+Configuration:
+
+- `src/site-edge.js`
+- `wrangler.site.toml`
+- `.github/workflows/cloudflare-site-edge.yml`
+
+The edge proxies to Northflank, caches eligible public GET responses, keeps private/authenticated routes uncached and handles origin warm-up/readiness.
 
 ## Cloudflare R2
 
@@ -62,52 +63,40 @@ R2 bucket:
 
 `canecorsoancestry-media`
 
-The R2 Worker is intentionally media-only. It does not proxy Render or own an application domain.
+Configuration:
 
-Required GitHub Actions secrets:
+- `src/r2-media.js`
+- `wrangler.r2.toml`
+- `.github/workflows/cloudflare-media.yml`
 
-- `CLOUDFLARE_API_TOKEN`
+The media Worker handles authenticated backend R2 operations and signed media delivery.
+
+## Required GitHub secrets
+
+Current production workflows use:
+
+- `NORTHFLANK_API_TOKEN`
+- `SUPABASE_DATABASE_URL`
 - `DJANGO_SECRET_KEY`
+- `CLOUDFLARE_API_TOKEN`
 
-The workflow `.github/workflows/cloudflare-media.yml`:
-
-- verifies/creates the R2 bucket;
-- deploys `src/r2-media.js` using `wrangler.r2.toml`;
-- verifies the media gateway health endpoint;
-- verifies unsigned private R2 requests are rejected.
-
-## Normal deployment flow
+## Deployment flow
 
 For ordinary application changes:
 
-1. push/merge to `main`;
-2. GitHub CI runs;
-3. Render deploys after checks pass.
+1. merge/push to `main`;
+2. focused CI runs only for the changed surface;
+3. relevant Django changes trigger `provision-northflank.yml`;
+4. Northflank builds and deploys the exact commit.
 
-For R2 gateway changes, the dedicated Cloudflare R2 workflow also runs.
+For site-edge changes, `cloudflare-site-edge.yml` deploys the public Worker.
 
-There is no need to run a database migration-copy workflow, Render API bootstrap workflow, GitHub Pages deployment, Cloudflare zone workflow or custom-domain cutover workflow.
+For R2 Worker/config changes, `cloudflare-media.yml` deploys the media Worker.
 
-## Manual data workflows
+Data import/seed/media-sync workflows remain explicit maintenance operations.
 
-Two manual workflows remain because they are useful current-stack maintenance tools:
+## Expected health endpoints
 
-- **Seed production Bellissimo data** — writes verified seed data to Aiven.
-- **Sync Bellissimo media to R2** — uploads verified media to R2 and attaches the corresponding Aiven metadata.
-
-They should be run only intentionally.
-
-## Custom domain later
-
-A custom domain is optional and intentionally outside the current runtime.
-
-When a domain is purchased, connect it directly to Render first. Do not reintroduce a Cloudflare application proxy unless there is a concrete need for it.
-
-## Health checks
-
-Expected:
-
-- `https://canecorsoancestry.onrender.com/` → 200
-- `https://canecorsoancestry.onrender.com/healthz/` → 200
-- `https://canecorsoancestry-edge.aighewieghosa111.workers.dev/healthz/` → 200
-- unsigned `/_r2/*` requests → 403
+- public edge: `/__edge/health`
+- Northflank Django: `/healthz/`
+- R2 media Worker: `/healthz/`

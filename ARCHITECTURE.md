@@ -2,63 +2,87 @@
 
 ## Active production stack
 
-Cane Corso Ancestry is a server-rendered Django application with exactly three infrastructure responsibilities:
+Cane Corso Ancestry is a server-rendered Django application with one public Cloudflare edge and one Django origin:
 
 ```
 Browser
   |
   v
-Render (Django + Gunicorn + WhiteNoise)
+Cloudflare Workers site edge
+canecorsoancestry-site-edge.aighewieghosa111.workers.dev
   |
-  +----> Aiven PostgreSQL
+  v
+Northflank Django + Gunicorn + WhiteNoise
+web--canecorsoancestry--4w9gl8jxj4yr.code.run
   |
-  +----> private Cloudflare R2 media gateway ----> R2 bucket
+  +----> Supabase PostgreSQL
+  |
+  +----> Cloudflare R2 media gateway ----> R2 bucket
 ```
 
-### Render
+No custom domain is currently configured.
 
-Render runs Django and serves static files directly.
+## Cloudflare site edge
 
-- Python 3.13
-- Django 5.2
-- Gunicorn: one worker, two threads
-- WhiteNoise for `/static/`
-- public URL: `https://canecorsoancestry.onrender.com`
-- `/healthz/` for service health checks
+`src/site-edge.js` and `wrangler.site.toml` provide the public website endpoint.
 
-There is no Cloudflare application proxy or Render-origin gate.
+The site edge:
 
-### Aiven PostgreSQL
+- proxies requests to the Northflank Django origin;
+- caches eligible public GET pages and static assets;
+- keeps private/member/admin/media paths uncached;
+- warms the origin and provides readiness endpoints for cold-start handling;
+- rewrites origin redirects back to the public Workers hostname.
 
-Aiven is the only production relational database.
+Public URL:
 
-Django uses the private application schema:
+`https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev`
+
+## Northflank
+
+Northflank runs Django and serves static files with WhiteNoise.
+
+Current origin:
+
+`https://web--canecorsoancestry--4w9gl8jxj4yr.code.run`
+
+Production settings:
+
+`config.settings.northflank`
+
+The origin is intended to sit behind the Cloudflare site edge for normal public use.
+
+## Supabase PostgreSQL
+
+Supabase PostgreSQL is the canonical relational database.
+
+GitHub and Northflank use the Supabase session-pooler connection derived from `SUPABASE_DATABASE_URL`.
+
+Django uses schema:
 
 `django_app`
 
-Production search path:
+Production search path includes:
 
-`django_app,public`
+`django_app,extensions,public`
 
-`pg_trgm` supports scalable fuzzy/duplicate matching.
+Django authentication, sessions, moderation and application data live in this database.
 
-Django authentication, sessions, moderation and application data all live in this database.
+## Cloudflare R2
 
-### Cloudflare R2
+R2 is the durable object store for uploaded media and evidence.
 
-R2 is the only durable object store for uploaded media/evidence.
+Media Worker:
 
-The Worker at `canecorsoancestry-edge.aighewieghosa111.workers.dev` is intentionally narrow: it is an authenticated R2 media gateway only. It does not proxy Django, host the site, serve static assets, manage a custom domain or route application traffic.
+`https://canecorsoancestry-edge.aighewieghosa111.workers.dev`
 
-Supported Worker routes:
+Supported media routes include:
 
 - `/healthz/` — gateway health
-- `/_r2/*` — HMAC-authenticated backend R2 operations
-- `/_media/*` — short-lived signed media delivery
+- `/_r2/*` — authenticated backend R2 operations
+- `/_media/*` — signed media delivery
 
-All other Worker paths return 404.
-
-Django authorizes media access before redirecting the browser to a short-lived R2 media URL.
+Django authorizes media access before returning signed delivery URLs.
 
 ## Django applications
 
@@ -74,51 +98,28 @@ Canonical dog, kennel, litter, image, health, source and external-registration r
 ### `pedigrees`
 Pedigree traversal, repeated-ancestor analysis, common-ancestor analysis, COI calculations and virtual mating.
 
-## Deployment
+## Active deployment files
 
-The active deployment files are:
-
-- `render.yaml`
+- `Dockerfile`
+- `config/settings/northflank.py`
+- `src/site-edge.js`
+- `src/r2-media.js`
+- `wrangler.site.toml`
 - `wrangler.r2.toml`
-- `.github/workflows/test.yml`
-- `.github/workflows/render-r2-build.yml`
+- `.github/workflows/provision-northflank.yml`
+- `.github/workflows/cloudflare-site-edge.yml`
 - `.github/workflows/cloudflare-media.yml`
-- `.github/workflows/ui-smoke.yml`
-- `.github/workflows/production-seed.yml`
-- `.github/workflows/sync-bellissimo-media.yml`
+- `.github/workflows/production-smoke.yml`
 
-Normal code pushes deploy Render after checks pass. The R2 gateway deploys only when its Worker/configuration changes.
-
-## Media storage
-
-Render's filesystem is ephemeral, so user media never depends on local disk.
-
-`core.r2_gateway_storage.CloudflareR2GatewayStorage` signs storage operations using `DJANGO_SECRET_KEY` and sends them to the private R2 gateway.
-
-`core.media_views.media_file` applies Django authorization and then returns a short-lived signed R2 delivery URL.
-
-## Removed legacy paths
-
-The repository no longer contains runtime/deployment paths for:
-
-- Supabase
-- Google Cloud Run
-- Railway
-- GitHub Pages frontend preview
-- Cloudflare application proxy/custom-domain routing
-- generic S3 provider configuration
-- Sentry integration
-- completed one-time database/media migration endpoints
+Maintenance data workflows connect to the same Supabase database and R2 storage.
 
 ## Scalability
 
-For a catalog approaching 100,000 dogs, concentrate on:
+For a growing pedigree catalog, concentrate on:
 
-- Aiven database/storage limits;
-- indexes and query plans;
+- PostgreSQL indexes and query plans;
 - bounded pedigree traversal;
 - pagination and selective search;
-- low database connection counts;
+- conservative database connection counts;
+- public edge caching;
 - R2 object growth.
-
-The app remains portable because Django uses standard PostgreSQL and stores media keys independently from the object provider.

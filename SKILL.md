@@ -18,7 +18,7 @@ Use this file for future implementation work in this repository.
 ## UI rules
 
 - Follow the supplied dark charcoal/gold/ivory design language.
-- Keep the pages data-rich but readable.
+- Keep pages data-rich but readable.
 - Mobile pedigree layouts must restructure or scroll intentionally; do not merely shrink desktop trees.
 - Dog images must remain clear and naturally framed.
 - Normal users get a custom member dashboard; Django Admin is for internal moderation.
@@ -26,10 +26,16 @@ Use this file for future implementation work in this repository.
 
 ## Infrastructure rule
 
-- Production infrastructure is **Render + Aiven PostgreSQL + Cloudflare R2 only**.
-- Cloudflare is used for the R2 media gateway and, by explicit owner request, the public site-edge warm-up/cache proxy. Keep private/authenticated routes uncached.
-- Do not reintroduce Supabase, Railway, Google Cloud Run, GitHub Pages preview, generic S3-provider branches, or migration-only infrastructure without an explicit new request.
-- Prefer direct Render deployment and the existing Aiven/R2 connections over adding another service.
+The current production stack is:
+
+- Cloudflare Workers public site edge: `canecorsoancestry-site-edge.aighewieghosa111.workers.dev`
+- Northflank Django origin
+- Supabase PostgreSQL
+- Cloudflare R2 media gateway/storage
+
+No custom domain is currently configured. Do not add a custom domain or another hosting/database provider unless the owner explicitly requests it.
+
+Keep private/authenticated routes uncached at the Cloudflare site edge.
 
 ## Engineering rules
 
@@ -38,7 +44,7 @@ Use this file for future implementation work in this repository.
 - Use the smallest sensible commit set.
 - Do not refactor unrelated areas during a narrow fix.
 - Preserve backward-compatible URLs/data where practical.
-- Run `python manage.py makemigrations --check --dry-run`, `python manage.py check`, and targeted tests before release.
+- Run only the checks directly required by the changed surface.
 
 ## Data-change rule
 

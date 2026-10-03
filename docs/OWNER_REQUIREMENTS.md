@@ -4,9 +4,10 @@ This file records the requirements that must survive future implementation and r
 
 ## Confirmed project identity
 
-- Public project name/domain: **Cane Corso Ancestry / canecorsoancestry.com**.
+- Public project name: **Cane Corso Ancestry**.
 - This is a **pedigree and ancestry website, not a dog registry**.
 - Python/Django is the preferred backend technology.
+- No custom domain has been purchased or configured; use the current Cloudflare `workers.dev` public endpoint unless the owner explicitly changes this.
 - The two supplied design mockups in `docs/design-reference/` are the owner-approved visual baseline and must remain in the repository.
 
 ## Terminology rules
