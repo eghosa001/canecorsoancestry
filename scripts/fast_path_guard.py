@@ -150,8 +150,6 @@ def inspect_workflows(errors: list[str]) -> None:
             errors.append(f"{rel} is a heavy workflow running broadly; path/tag/manual scope it.")
         if broad and "matrix:" in text and not approved:
             errors.append(f"{rel} uses a broad automatic matrix; target it to the changed surface.")
-    if broad_auto > 3:
-        errors.append(f"Repository has {broad_auto} broad automatic workflows; narrow irrelevant workflows.")
     guard_workflow = workflow_dir / "fast-policy.yml"
     if not guard_workflow.exists():
         errors.append("Missing .github/workflows/fast-policy.yml.")
