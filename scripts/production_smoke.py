@@ -220,8 +220,8 @@ def main():
                 )
                 if gold.lower() != "#c7a25d":
                     raise AssertionError(f"Unexpected dark-theme accent: {gold}")
-                if page.locator("[data-theme-toggle]").count() != 2:
-                    raise AssertionError("Production does not expose both desktop and mobile theme controls")
+                if page.locator("[data-theme-toggle]").count() != 3:
+                    raise AssertionError("Production does not expose desktop, header-mobile, and menu-mobile theme controls")
                 if page.locator(".hero-mark").evaluate("(el) => getComputedStyle(el).display") == "none":
                     raise AssertionError("Production CCA hero plaque is hidden")
                 if page.locator(".hero-mark small").inner_text().strip() != "CANECORSOANCESTRY.COM":
