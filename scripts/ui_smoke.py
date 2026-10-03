@@ -148,6 +148,25 @@ def main():
 
         mobile = browser.new_page(viewport={"width": 390, "height": 844})
         capture(mobile, "/", "home-mobile")
+        if mobile.locator(".hero h1 br").count():
+            raise AssertionError("mobile hero title still contains a literal line break")
+        title_stack = mobile.evaluate(
+            """() => {
+              const primary = document.querySelector(".hero-title-primary");
+              const corso = document.querySelector(".hero-mobile-break");
+              const secondary = document.querySelector(".hero-title-secondary");
+              const primaryBox = primary.getBoundingClientRect();
+              const secondaryBox = secondary.getBoundingClientRect();
+              return {
+                corsoDisplay: getComputedStyle(corso).display,
+                gap: secondaryBox.top - primaryBox.bottom,
+              };
+            }"""
+        )
+        if title_stack["corsoDisplay"] != "block":
+            raise AssertionError(f"mobile CORSO line is not stacked: {title_stack}")
+        if title_stack["gap"] > 8:
+            raise AssertionError(f"mobile hero title has an oversized line gap: {title_stack}")
         mobile.locator(".mobile-nav > summary").click()
         mobile_panel = mobile.locator(".mobile-nav-panel")
         mobile_panel.locator("[data-theme-toggle]").click()

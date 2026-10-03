@@ -318,6 +318,25 @@ def main():
             page = browser.new_page(viewport={"width": 390, "height": 844})
             report["mobile"].append(visit(page, path, f"{label}-mobile", mobile=True))
             if label == "home":
+                if page.locator(".hero h1 br").count():
+                    raise AssertionError("Production mobile hero title still contains a literal line break")
+                title_stack = page.evaluate(
+                    """() => {
+                      const primary = document.querySelector(".hero-title-primary");
+                      const corso = document.querySelector(".hero-mobile-break");
+                      const secondary = document.querySelector(".hero-title-secondary");
+                      const primaryBox = primary.getBoundingClientRect();
+                      const secondaryBox = secondary.getBoundingClientRect();
+                      return {
+                        corsoDisplay: getComputedStyle(corso).display,
+                        gap: secondaryBox.top - primaryBox.bottom,
+                      };
+                    }"""
+                )
+                if title_stack["corsoDisplay"] != "block":
+                    raise AssertionError(f"Production CORSO line is not stacked: {title_stack}")
+                if title_stack["gap"] > 8:
+                    raise AssertionError(f"Production mobile hero title has an oversized line gap: {title_stack}")
                 skip_link = page.locator(".skip-link")
                 page.evaluate("window.scrollTo(0, 0)")
                 page.keyboard.press("Tab")
