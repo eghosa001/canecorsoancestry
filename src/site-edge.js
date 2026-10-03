@@ -1,13 +1,14 @@
 const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
 // Bump this whenever public HTML/static layout assets must invalidate edge cache. Image refresh 2026-10-02. Clean square logo v16.
-const EDGE_CACHE_VERSION = "metadata-v38"; // Customer dark/light restoration + right-facing logo + pedigree/hero fixes
+const EDGE_CACHE_VERSION = "metadata-v39"; // Customer dark/light restoration + right-facing logo + pedigree/hero fixes
 const CACHE_FRESH_SECONDS = 900;
 const CACHE_RETENTION_SECONDS = 604800;
 const ORIGIN_GRACE_MS = 3500;
 const AUTH_GRACE_MS = 450;
 const READY_TIMEOUT_MS = 3500;
 const AUTH_READY_TIMEOUT_MS = 4500;
-const STATIC_CACHE_SECONDS = 31536000;
+const STATIC_EDGE_CACHE_SECONDS = 31536000;
+const STATIC_BROWSER_CACHE_SECONDS = 300;
 const SEARCH_CACHE_SECONDS = 60;
 const CSRF_COOKIE_AGE = 31449600;
 const CSRF_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -184,7 +185,7 @@ function cacheableOriginResponse(response) {
 
 function edgeRetentionSeconds(request) {
   const url = new URL(request.url);
-  if (url.pathname.startsWith("/static/")) return STATIC_CACHE_SECONDS;
+  if (url.pathname.startsWith("/static/")) return STATIC_EDGE_CACHE_SECONDS;
   if (url.search) return SEARCH_CACHE_SECONDS;
   return CACHE_RETENTION_SECONDS;
 }
@@ -210,7 +211,7 @@ function cachedForVisitor(cached, freshness, request) {
   const headers = new Headers(cached.headers);
   const url = new URL(request.url);
   if (url.pathname.startsWith("/static/")) {
-    headers.set("cache-control", `public, max-age=${STATIC_CACHE_SECONDS}, immutable`);
+    headers.set("cache-control", `public, max-age=${STATIC_BROWSER_CACHE_SECONDS}, stale-while-revalidate=3600`);
   } else if (url.search) {
     headers.set("cache-control", "public, max-age=15, stale-while-revalidate=60");
   } else {
