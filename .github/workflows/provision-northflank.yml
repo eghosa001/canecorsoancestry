@@ -187,13 +187,13 @@ jobs:
           if [ -z "$service_id" ]; then
             response="$(curl -sS --fail-with-body "${auth[@]}" -X POST --data "$payload" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/combined")"
             service_id="$(printf '%s' "$response" | jq -r '.data.id')"
+            echo "Created Northflank service: $service_id"
           else
-            curl -fsS "${auth[@]}" -X PATCH --data "$payload" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/combined/$service_id" >/tmp/nf-service.json
+            echo "Reusing existing Northflank service without patching it: $service_id"
           fi
 
           test -n "$service_id"
           echo "NORTHFLANK_SERVICE_ID=$service_id" >> "$GITHUB_ENV"
-          echo "Northflank service: $service_id"
 
       - name: Build exact GitHub commit
         shell: bash
@@ -201,7 +201,24 @@ jobs:
           set -euo pipefail
           auth=(-H "Authorization: Bearer $NORTHFLANK_API_TOKEN" -H "Content-Type: application/json")
           payload="$(jq -n --arg sha "$GITHUB_SHA" '{sha:$sha}')"
-          response="$(curl -sS --fail-with-body "${auth[@]}" -X POST --data "$payload" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID/build")"
+          response=""
+          http_code=""
+          for attempt in $(seq 1 36); do
+            http_code="$(curl -sS -o /tmp/nf-build-start.json -w '%{http_code}' "${auth[@]}" -X POST --data "$payload" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID/build")"
+            if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
+              response="$(cat /tmp/nf-build-start.json)"
+              break
+            fi
+            if [ "$http_code" = "409" ]; then
+              echo "Northflank already has a build in progress; retrying exact SHA in 5s."
+              sleep 5
+              continue
+            fi
+            echo "::error::Northflank build start failed with HTTP $http_code"
+            cat /tmp/nf-build-start.json
+            exit 1
+          done
+          test -n "$response"
           build_id="$(printf '%s' "$response" | jq -r '.data.id // empty')"
           build_sha="$(printf '%s' "$response" | jq -r '.data.sha // empty')"
           test -n "$build_id"
