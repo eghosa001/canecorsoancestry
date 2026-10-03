@@ -95,19 +95,20 @@ def _public_dogs_with_images():
 def dog_suggestions(request):
     query = request.GET.get("q", "").strip()
     sex = request.GET.get("sex", "").strip()
-    if len(query) < 2:
-        return JsonResponse({"results": []})
+    browse = request.GET.get("browse") == "1"
 
-    dogs = Dog.objects.filter(is_public=True).filter(
-        public_dog_match_filter(query)
-    )
+    dogs = Dog.objects.filter(is_public=True)
+    if len(query) >= 2:
+        dogs = dogs.filter(public_dog_match_filter(query))
+    elif not browse:
+        return JsonResponse({"results": []})
     if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE}:
         dogs = dogs.filter(Q(sex=sex) | Q(sex=Dog.Sex.UNKNOWN))
 
     dogs = (
         dogs.select_related("kennel")
         .prefetch_related("registrations")
-        .order_by("-search_count", "name")[:8]
+        .order_by("-search_count", "-updated_at", "name")[:8]
     )
     results = []
     for dog in dogs:

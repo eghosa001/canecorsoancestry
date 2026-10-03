@@ -12,13 +12,13 @@
     <div class="mating-select">
       <label for="sire_q">Sire</label>
       <input type="hidden" id="sire" name="sire" value="{% if sire %}{{ sire.pk }}{% endif %}">
-      <input id="sire_q" name="sire_q" value="{{ sire_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-autocomplete-target="sire" data-dog-sex="male" placeholder="Dog name or registration" autocomplete="off" required>
+      <input type="search" id="sire_q" name="sire_q" value="{{ sire_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-autocomplete-target="sire" data-dog-sex="male" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Search sire name or registration" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="search" enterkeyhint="search" required>
     </div>
     <span class="mating-plus">+</span>
     <div class="mating-select">
       <label for="dam_q">Dam</label>
       <input type="hidden" id="dam" name="dam" value="{% if dam %}{{ dam.pk }}{% endif %}">
-      <input id="dam_q" name="dam_q" value="{{ dam_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-autocomplete-target="dam" data-dog-sex="female" placeholder="Dog name or registration" autocomplete="off" required>
+      <input type="search" id="dam_q" name="dam_q" value="{{ dam_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-autocomplete-target="dam" data-dog-sex="female" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Search dam name or registration" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="search" enterkeyhint="search" required>
     </div>
     <button class="btn btn-gold" type="submit">Analyse pairing</button>
   </form>

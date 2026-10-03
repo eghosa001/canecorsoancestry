@@ -1,6 +1,6 @@
 {% load static %}
 <!doctype html>
-<html lang="en" data-theme="dark" data-ui-version="customer-v46">
+<html lang="en" data-theme="dark" data-ui-version="customer-v47">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -131,6 +131,12 @@
 
       window.addEventListener("scroll", function () {
         closeMobileMenus();
+        // iOS Safari moves the visual viewport when its keyboard opens.
+        // Do not blur an active virtual-mating combobox during that automatic scroll.
+        var active = document.activeElement;
+        if (active && active.matches && active.matches(".mating-select [data-dog-autocomplete]")) {
+          return;
+        }
         dismissSearchUI();
       }, { passive: true });
 
@@ -186,6 +192,38 @@
         var timer = null;
         var requestSerial = 0;
 
+        function suggestionUrl(value, browse) {
+          var url = "/dogs/suggestions/?q=" + encodeURIComponent(value || "");
+          if (browse) url += "&browse=1";
+          if (input.dataset.dogSex) {
+            url += "&sex=" + encodeURIComponent(input.dataset.dogSex);
+          }
+          return url;
+        }
+
+        function requestSuggestions(value, browse) {
+          clearTimeout(timer);
+          var expected = (value || "").trim();
+          if (!browse && expected.length < 2) {
+            close();
+            return;
+          }
+          timer = setTimeout(function () {
+            var serial = ++requestSerial;
+            fetch(suggestionUrl(expected, browse), {
+              headers: { "Accept": "application/json" },
+              credentials: "same-origin"
+            })
+              .then(function (response) { return response.ok ? response.json() : { results: [] }; })
+              .then(function (data) {
+                if (serial !== requestSerial) return;
+                if (!browse && input.value.trim() !== expected) return;
+                render(data.results || []);
+              })
+              .catch(close);
+          }, browse ? 0 : 100);
+        }
+
         function close() {
           panel.hidden = true;
           panel.replaceChildren();
@@ -225,6 +263,11 @@
                   selectDog(event);
                 }
               });
+              item.addEventListener("pointerup", function (event) {
+                if (event.pointerType === "touch" || event.pointerType === "pen") {
+                  selectDog(event);
+                }
+              });
               item.addEventListener("click", selectDog);
             } else {
               item.href = "/dogs/" + encodeURIComponent(dog.slug) + "/?source=search";
@@ -240,28 +283,22 @@
           panel.hidden = false;
         }
 
-        input.addEventListener("input", function () {
-          clearTimeout(timer);
-          var value = input.value.trim();
-          if (value.length < 2) {
-            close();
-            return;
+        function refreshFromInput() {
+          requestSuggestions(input.value.trim(), false);
+        }
+
+        input.addEventListener("input", refreshFromInput);
+        input.addEventListener("search", refreshFromInput);
+        input.addEventListener("compositionend", refreshFromInput);
+
+        // On virtual mating, make the picker useful immediately on iPhone.
+        input.addEventListener("focus", function () {
+          if ((input.dataset.dogAutocompleteMode || "navigate") !== "fill") return;
+          if (!input.value.trim()) {
+            requestSuggestions("", true);
+          } else {
+            requestSuggestions(input.value.trim(), false);
           }
-          timer = setTimeout(function () {
-            var serial = ++requestSerial;
-            var url = "/dogs/suggestions/?q=" + encodeURIComponent(value);
-            if (input.dataset.dogSex) {
-              url += "&sex=" + encodeURIComponent(input.dataset.dogSex);
-            }
-            fetch(url, { headers: { "Accept": "application/json" } })
-              .then(function (response) { return response.ok ? response.json() : { results: [] }; })
-              .then(function (data) {
-                if (serial === requestSerial && input.value.trim() === value) {
-                  render(data.results || []);
-                }
-              })
-              .catch(close);
-          }, 120);
         });
 
         input.addEventListener("keydown", function (event) {
