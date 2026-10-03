@@ -255,6 +255,8 @@ def main():
         assert_page(detail_page, "dog-profile-desktop")
         if detail_page.locator(".profile-title-row .verification-pill").count():
             raise AssertionError("Dog profile still shows the verification badge beside the name")
+        if "SOURCE ATTACHED" in detail_page.locator("body").inner_text().upper():
+            raise AssertionError("Dog profile still exposes the Source attached verification label")
         detail_page.screenshot(path=OUT / "dog-profile-desktop.png", full_page=True)
         report["details"].append({
             "dog_profile": detail_page.url,
