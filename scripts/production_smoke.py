@@ -345,6 +345,30 @@ def main():
                     raise AssertionError(f"Production CORSO line is not stacked: {title_stack}")
                 if title_stack["gap"] > 8:
                     raise AssertionError(f"Production mobile hero title has an oversized line gap: {title_stack}")
+                restored_mobile = page.evaluate(
+                    """() => {
+                      const header = document.querySelector(".site-header").getBoundingClientRect();
+                      const title = document.querySelector(".hero h1").getBoundingClientRect();
+                      const stats = [...document.querySelectorAll(".hero-stats article")].map((el) => el.getBoundingClientRect());
+                      const theme = document.querySelector(".mobile-header-theme");
+                      return {
+                        heroOffset: title.top - header.bottom,
+                        firstY: stats[0]?.top,
+                        secondY: stats[1]?.top,
+                        thirdY: stats[2]?.top,
+                        themeVisible: theme ? getComputedStyle(theme).display !== "none" : false,
+                        logoWidth: document.querySelector(".brand-mark").getBoundingClientRect().width,
+                      };
+                    }"""
+                )
+                if restored_mobile["heroOffset"] < 90:
+                    raise AssertionError(f"Customer mobile hero is still too high: {restored_mobile}")
+                if abs(restored_mobile["firstY"] - restored_mobile["secondY"]) > 3 or restored_mobile["thirdY"] <= restored_mobile["firstY"]:
+                    raise AssertionError(f"Customer mobile stats are not restored to a 2x2 grid: {restored_mobile}")
+                if not restored_mobile["themeVisible"]:
+                    raise AssertionError("Mobile light/dark control is not directly visible in the header")
+                if restored_mobile["logoWidth"] < 54:
+                    raise AssertionError(f"Customer logo is still undersized on mobile: {restored_mobile}")
                 skip_link = page.locator(".skip-link")
                 page.evaluate("window.scrollTo(0, 0)")
                 page.keyboard.press("Tab")
@@ -414,6 +438,26 @@ def main():
                 )
                 if overflow_x not in ("auto", "scroll"):
                     raise AssertionError(f"Mobile pedigree tree is not horizontally scrollable: {overflow_x}")
+                compact_tree = pedigree_mobile.evaluate(
+                    """() => {
+                      const board = document.querySelector(".pedigree-board").getBoundingClientRect();
+                      const columns = [...document.querySelectorAll(".pedigree-column")]
+                        .filter((el) => getComputedStyle(el).display !== "none");
+                      const nodes = [...document.querySelectorAll(".pedigree-node")]
+                        .filter((el) => getComputedStyle(el).display !== "none");
+                      return {
+                        boardHeight: board.height,
+                        visibleColumns: columns.length,
+                        maxNodeHeight: Math.max(...nodes.map((el) => el.getBoundingClientRect().height)),
+                      };
+                    }"""
+                )
+                if compact_tree["boardHeight"] > 820:
+                    raise AssertionError(f"Mobile pedigree is still vertically stretched: {compact_tree}")
+                if compact_tree["visibleColumns"] > 5:
+                    raise AssertionError(f"Mobile pedigree exposes too many deep columns at once: {compact_tree}")
+                if compact_tree["maxNodeHeight"] > 50:
+                    raise AssertionError(f"Mobile pedigree boxes are not compact: {compact_tree}")
             pedigree_mobile.screenshot(path=OUT / "pedigree-detail-mobile.png", full_page=True)
             report["details"].append({
                 "pedigree_detail_mobile": pedigree_mobile.url,

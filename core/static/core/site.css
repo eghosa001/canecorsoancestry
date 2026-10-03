@@ -5357,3 +5357,171 @@ html[data-theme="light"] .hero-search input {
     padding-top: 78px;
   }
 }
+
+
+/* ==========================================================================
+   Customer restoration v36 — visible mobile restoration from supplied refs
+   ========================================================================== */
+
+.mobile-header-theme {
+  display: none;
+}
+
+@media (max-width: 980px) {
+  .header-inner {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .header-inner {
+    grid-template-columns: minmax(0, 1fr) auto auto !important;
+    gap: 8px !important;
+  }
+
+  .brand-mark {
+    width: 58px !important;
+    height: 58px !important;
+    flex-basis: 58px !important;
+  }
+
+  .mobile-header-theme {
+    display: inline-flex;
+    min-width: 58px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    margin: 0;
+    border-radius: 8px;
+    font-size: .72rem;
+  }
+
+  .hero {
+    padding-top: 126px !important;
+    gap: 38px !important;
+  }
+
+  .hero-stats,
+  .hero-stats.three {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0 !important;
+    border: 1px solid var(--line-soft) !important;
+    background: var(--surface) !important;
+  }
+
+  .hero-stats article {
+    min-height: 88px;
+    border-right: 1px solid var(--line-soft) !important;
+    border-bottom: 1px solid var(--line-soft) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+
+  .hero-stats article:nth-child(2n) {
+    border-right: 0 !important;
+  }
+
+  .hero-stats article:nth-last-child(-n + 2) {
+    border-bottom: 0 !important;
+  }
+
+  /*
+   * Keep the mobile pedigree as a real left-to-right family tree.
+   * The first four ancestor generations remain visible as connected boxes;
+   * deeper analysis still uses the selected generation depth below the chart.
+   */
+  .pedigree-scroll {
+    width: calc(100% + 32px) !important;
+    margin-inline: -16px !important;
+    padding: 0 16px 14px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  .pedigree-board {
+    height: 780px !important;
+    min-height: 780px !important;
+    width: max-content !important;
+    min-width: max-content !important;
+    align-items: stretch !important;
+    gap: 18px !important;
+    padding: 4px 0 10px !important;
+  }
+
+  .pedigree-column {
+    width: 166px !important;
+    min-width: 166px !important;
+    flex: 0 0 166px !important;
+    height: 100% !important;
+  }
+
+  .pedigree-column:nth-child(n + 6) {
+    display: none !important;
+  }
+
+  .pedigree-column h2 {
+    min-height: 34px !important;
+    height: 34px !important;
+    margin: 0 !important;
+    padding: 0 4px 7px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pedigree-nodes,
+  .pedigree-column:first-child .pedigree-nodes {
+    min-height: 0 !important;
+    height: calc(100% - 34px) !important;
+    flex: 1 1 auto !important;
+    justify-content: space-around !important;
+    gap: 0 !important;
+  }
+
+  .pedigree-node {
+    min-height: 0 !important;
+    height: 44px !important;
+    max-height: 44px !important;
+    padding: 4px 7px !important;
+    overflow: hidden !important;
+    justify-content: center !important;
+  }
+
+  .pedigree-node strong {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: .69rem !important;
+    line-height: 1.08 !important;
+  }
+
+  .pedigree-node > span {
+    display: none !important;
+  }
+
+  .pedigree-node small {
+    margin: 0 0 2px !important;
+    font-size: .48rem !important;
+    line-height: 1 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pedigree-node small:not(.pedigree-relationship) {
+    display: none !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero {
+    padding-top: 118px !important;
+  }
+
+  .hero-stats,
+  .hero-stats.three {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}

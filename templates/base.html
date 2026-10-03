@@ -1,6 +1,6 @@
 {% load static %}
 <!doctype html>
-<html lang="en" data-theme="dark" data-ui-version="customer-v35">
+<html lang="en" data-theme="dark" data-ui-version="customer-v36">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -27,15 +27,15 @@
       }
     })();
   </script>
-  <link rel="icon" href="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v35" type="image/svg+xml">
-  <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261003-customer-restoration-v35">
+  <link rel="icon" href="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v36" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261003-customer-restoration-v36">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
   <header class="site-header">
     <div class="header-inner">
-      <a class="brand" href="{% url 'home' %}" aria-label="Cane Corso Ancestry home"><img class="brand-mark" src="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v35" alt="Cane Corso Ancestry logo" width="52" height="52"><span class="brand-copy"><span class="brand-small">Cane Corso</span><strong>Ancestry</strong></span></a>
+      <a class="brand" href="{% url 'home' %}" aria-label="Cane Corso Ancestry home"><img class="brand-mark" src="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v36" alt="Cane Corso Ancestry logo" width="52" height="52"><span class="brand-copy"><span class="brand-small">Cane Corso</span><strong>Ancestry</strong></span></a>
       <nav class="main-nav" aria-label="Main navigation">
         <a href="{% url 'home' %}">Home</a><a href="{% url 'registry:dog-search' %}">Dogs</a><a href="{% url 'registry:kennel-list' %}">Kennels</a><a href="{% url 'pedigrees:index' %}">Pedigrees</a><a href="{% url 'pedigrees:virtual-mating' %}">Virtual mating</a><a href="{% url 'registry:statistics' %}">Statistics</a>
       </nav>
@@ -44,7 +44,7 @@
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode">Light mode</button>
         {% if user.is_authenticated %}{% if user.is_staff %}<a class="account-link" href="{% url 'accounts:moderation' %}">Moderation</a>{% endif %}<a class="account-link" href="{% url 'dashboard' %}">{{ account_name }}</a>{% else %}<a class="account-link" href="{% url 'login' %}">Sign in</a><a class="account-link" href="{% url 'accounts:signup' %}">Join</a>{% endif %}
       </div>
-      <details class="mobile-nav">
+      <button class="theme-toggle mobile-header-theme" type="button" data-theme-toggle aria-label="Switch to light mode">Light</button>\n      <details class="mobile-nav">
         <summary aria-label="Open site navigation"><span>Menu</span><span aria-hidden="true">☰</span></summary>
         <div class="mobile-nav-panel">
           <form class="mobile-nav-search" action="{% url 'registry:dog-search' %}" method="get">
@@ -92,7 +92,7 @@
         var isLight = root.dataset.theme === "light";
         if (meta) meta.setAttribute("content", isLight ? "#f4f0e8" : "#090a09");
         buttons.forEach(function (button) {
-          button.textContent = isLight ? "Dark mode" : "Light mode";
+          button.textContent = button.classList.contains("mobile-header-theme") ? (isLight ? "Dark" : "Light") : (isLight ? "Dark mode" : "Light mode");
           button.setAttribute("aria-label", isLight ? "Switch to dark mode" : "Switch to light mode");
         });
       }
