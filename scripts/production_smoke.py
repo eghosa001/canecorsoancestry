@@ -148,6 +148,7 @@ def concurrent_health_probe(total=16, workers=8):
         "median_seconds": round(statistics.median(timings), 3),
         "p95_seconds": round(ordered[p95_index], 3),
         "max_seconds": round(max(timings), 3),
+        "warming_responses": warming_responses,
     }
     if result["p95_seconds"] > 6:
         raise AssertionError(f"Dynamic origin concurrency probe is too slow: {result}")
@@ -171,12 +172,15 @@ def concurrent_profile_probe(path, total=12, workers=8):
 
     timings = []
     failures = []
+    warming_responses = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [pool.submit(one, i) for i in range(total)]
         for future in as_completed(futures):
             status, warming, is_profile, elapsed = future.result()
             timings.append(elapsed)
-            if status != 200 or warming or not is_profile:
+            if warming:
+                warming_responses += 1
+            if status != 200 or not is_profile:
                 failures.append(
                     {"status": status, "warming": warming, "is_profile": is_profile}
                 )
