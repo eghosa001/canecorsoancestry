@@ -4723,3 +4723,80 @@ html[data-theme="dark"] .mobile-nav-panel {
     background: var(--surface);
   }
 }
+
+
+/* Mobile dashboard navigation fix v27 */
+@media (max-width: 760px) {
+  .dashboard-shell {
+    display: block;
+    min-height: 0;
+  }
+  .dashboard-sidebar {
+    display: block;
+    padding: 12px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+    background: color-mix(in srgb, var(--surface) 94%, var(--surface-2));
+  }
+  .dashboard-sidebar-intro {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .dashboard-sidebar-intro .eyebrow { margin: 0; }
+  .sidebar-name {
+    margin: 0;
+    max-width: 54vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: .78rem;
+  }
+  .dashboard-desktop-nav { display: none !important; }
+  .dashboard-mobile-nav {
+    display: block;
+    margin-top: 8px;
+  }
+  .dashboard-mobile-nav > summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 9px !important;
+    background: var(--surface);
+    color: var(--text);
+    font-size: .78rem;
+    font-weight: 800;
+    list-style: none;
+    cursor: pointer;
+  }
+  .dashboard-mobile-nav > summary::-webkit-details-marker { display: none; }
+  .dashboard-mobile-nav nav {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 6px;
+    padding-top: 7px;
+  }
+  .dashboard-sidebar .dashboard-mobile-nav nav > a,
+  .dashboard-sidebar .dashboard-mobile-nav .sidebar-logout {
+    min-height: 44px;
+    padding: 9px 10px;
+    border: 1px solid var(--line-soft);
+    border-left: 1px solid var(--line-soft);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+  }
+  .dashboard-sidebar .dashboard-mobile-nav form { margin: 0; }
+  .dashboard-sidebar .dashboard-mobile-nav .sidebar-logout {
+    margin: 0;
+    color: var(--danger);
+  }
+}
