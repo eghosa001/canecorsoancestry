@@ -148,7 +148,6 @@ def concurrent_health_probe(total=16, workers=8):
         "median_seconds": round(statistics.median(timings), 3),
         "p95_seconds": round(ordered[p95_index], 3),
         "max_seconds": round(max(timings), 3),
-        "warming_responses": warming_responses,
     }
     if result["p95_seconds"] > 6:
         raise AssertionError(f"Dynamic origin concurrency probe is too slow: {result}")
