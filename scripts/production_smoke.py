@@ -215,12 +215,26 @@ def main():
                 gold = page.evaluate(
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()"
                 )
-                if gold.lower() != "#c7a85b":
+                if gold.lower() != "#8b6a2f":
                     raise AssertionError(f"Unexpected production theme accent: {gold}")
                 if page.locator("[data-theme-toggle]").count():
                     raise AssertionError("Production still exposes the removed theme toggle")
                 if page.locator(".hero-mark").evaluate("(el) => getComputedStyle(el).display") != "none":
-                    raise AssertionError("Original production hero should not show the later decorative logo panel")
+                    raise AssertionError("Production hero unexpectedly exposes the decorative logo panel")
+                bg = page.evaluate(
+                    "() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()"
+                )
+                if bg.lower() != "#f4f0e8":
+                    raise AssertionError(f"Unexpected production background: {bg}")
+                brand_src = page.locator(".brand-mark").get_attribute("src") or ""
+                if "cane-corso-head-logo.svg" not in brand_src or brand_src.startswith("data:"):
+                    raise AssertionError(f"Header is not using the cached Cane Corso head asset: {brand_src}")
+                logo_response = requests.get(brand_src, timeout=20)
+                logo_response.raise_for_status()
+                if 'scale(-1 1)' not in logo_response.text:
+                    raise AssertionError("Cane Corso logo is not mirrored to face right")
+                if 'removeLightBackground' not in logo_response.text:
+                    raise AssertionError("Cane Corso logo is missing pale-background isolation")
                 canonical = page.locator('link[rel="canonical"]').get_attribute("href")
                 if canonical != BASE_URL + "/":
                     raise AssertionError(f"Production canonical host is wrong: {canonical}")
