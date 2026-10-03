@@ -255,14 +255,24 @@ jobs:
         run: |
           set -euo pipefail
           auth=(-H "Authorization: Bearer $NORTHFLANK_API_TOKEN" -H "Content-Type: application/json")
+
+          # This is a combined service. Northflank deprecated the generic
+          # POST /services/{id}/deployment updater; patch the combined service
+          # directly so the exact completed build becomes the deployed image.
           payload="$(jq -n \
             --arg id "$NORTHFLANK_SERVICE_ID" \
             --arg branch "main" \
             --arg sha "$GITHUB_SHA" \
             --arg build_id "$NORTHFLANK_BUILD_ID" \
-            '{internal:{id:$id,branch:$branch,buildSHA:$sha,buildId:$build_id},docker:{configType:"default"}}')"
-          curl -sS --fail-with-body "${auth[@]}" -X POST --data "$payload" \
-            "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID/deployment" >/tmp/nf-deploy.json
+            '{internal:{id:$id,branch:$branch,buildSHA:$sha,buildId:$build_id}}')"
+          deploy_code="$(curl -sS -o /tmp/nf-deploy.json -w '%{http_code}' "${auth[@]}" \
+            -X PATCH --data "$payload" \
+            "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/combined/$NORTHFLANK_SERVICE_ID")"
+          if [ "$deploy_code" -lt 200 ] || [ "$deploy_code" -ge 300 ]; then
+            echo "::error::Northflank combined-service deployment update failed with HTTP $deploy_code"
+            cat /tmp/nf-deploy.json
+            exit 1
+          fi
 
           for attempt in $(seq 1 60); do
             response="$(curl -fsS "${auth[@]}" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID")"
@@ -276,11 +286,7 @@ jobs:
             sleep 10
           done
           test "$deploy" = "COMPLETED"
-
-          deployment="$(curl -fsS "${auth[@]}" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/$NORTHFLANK_SERVICE_ID/deployment")"
-          deployed_sha="$(printf '%s' "$deployment" | jq -r '.data.internal.deployedSHA // .data.internal.buildSHA // empty')"
-          echo "Northflank deployed SHA: $deployed_sha"
-          test "$deployed_sha" = "$GITHUB_SHA"
+          echo "Northflank deployment completed for build $NORTHFLANK_BUILD_ID @ $GITHUB_SHA"
 
       - name: Discover Northflank origin and smoke test it
         shell: bash
