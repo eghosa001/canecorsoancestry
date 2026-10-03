@@ -1,0 +1,10 @@
+# Owner-locked agent and CI governance
+/.agents/** @eghosa001
+/AGENTS.md @eghosa001
+/SKILL.md @eghosa001
+/CLAUDE.md @eghosa001
+/GEMINI.md @eghosa001
+/.github/copilot-instructions.md @eghosa001
+/.github/workflows/** @eghosa001
+/scripts/fast_path_guard.py @eghosa001
+/.github/CODEOWNERS @eghosa001
