@@ -58,6 +58,41 @@ class BellissimoImportTests(TestCase):
 
 
 
+    def test_verified_name_override_preserves_source_payload(self):
+        payload = {
+            "schemaVersion": 4,
+            "dogs": [
+                {
+                    "id": "sforza-ludovico",
+                    "name": "Sforza Ludovico II Imperatore",
+                    "sex": "Male",
+                    "group": "ancestor",
+                    "registration": "JR 80580 Cc",
+                }
+            ],
+        }
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".json",
+            encoding="utf-8",
+            delete=False,
+        ) as handle:
+            json.dump(payload, handle)
+            source = Path(handle.name)
+
+        try:
+            call_command("import_bellissimo", source, stdout=StringIO())
+        finally:
+            source.unlink(missing_ok=True)
+
+        dog = Dog.objects.get(slug="sforza-ludovico")
+        self.assertEqual(dog.name, "SFORZA LUDOVICO")
+        self.assertEqual(
+            DogSource.objects.get(dog=dog).raw_payload["name"],
+            "Sforza Ludovico II Imperatore",
+        )
+
+
 class BellissimoPuppyImportTests(TestCase):
     def test_verified_puppy_import_is_idempotent_and_links_parents(self):
         kennel = Kennel.objects.create(

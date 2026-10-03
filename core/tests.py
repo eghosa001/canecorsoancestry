@@ -19,3 +19,13 @@ class DashboardTests(TestCase):
         response = self.client.get(reverse("dashboard"))
 
         self.assertContains(response, "Custodi Nos")
+
+
+
+class PublicThemeRegressionTests(TestCase):
+    def test_home_restores_cca_plaque_and_theme_controls(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(response, "CANECORSOANCESTRY.COM")
+        self.assertContains(response, "hero-mobile-break")
+        self.assertContains(response, '<button class="theme-toggle', count=2)
