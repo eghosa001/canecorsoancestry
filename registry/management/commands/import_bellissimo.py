@@ -25,13 +25,6 @@ DEFAULT_SOURCE_URL = (
     "blob/main/data/dogs.json"
 )
 
-# Canonical display corrections confirmed against the attached source evidence.
-# Keep the source payload untouched in DogSource for provenance.
-CANONICAL_NAME_OVERRIDES = {
-    "sforza-ludovico": "SFORZA LUDOVICO",
-}
-
-
 def _parse_date(value):
     if not value:
         return None
@@ -127,7 +120,7 @@ class Command(BaseCommand):
                     else None
                 )
                 values = {
-                    "name": CANONICAL_NAME_OVERRIDES.get(source_id, str(record["name"]).strip()),
+                    "name": str(record["name"]).strip(),
                     "sex": _sex(record.get("sex")),
                     "date_of_birth": _parse_date(record.get("dateOfBirth")),
                     "colour": str(record.get("colour") or "").strip(),

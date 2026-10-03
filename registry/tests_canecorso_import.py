@@ -6,7 +6,7 @@ from pathlib import Path
 from django.core.management import call_command
 from django.test import TestCase
 
-from .models import Dog, DogExternalKey, DogSource
+from .models import Dog, DogExternalKey, DogRegistration, DogSource
 
 
 FIELDS = [
@@ -67,3 +67,63 @@ class CaneCorsoArchiveImportTests(TestCase):
             DogExternalKey.objects.filter(namespace="canecorsopedigree.com").count(), 3
         )
         self.assertEqual(DogSource.objects.count(), 3)
+
+
+    def test_registration_match_does_not_merge_different_dog_identity(self):
+        existing = Dog.objects.create(
+            name="Sforza Ludovico II Imperatore",
+            slug="sforza-ludovico-ii-imperatore",
+            sex=Dog.Sex.MALE,
+            is_public=True,
+        )
+        DogRegistration.objects.create(
+            dog=existing,
+            authority=None,
+            number="JR 80580 Cc",
+        )
+
+        rows = [
+            {
+                "id": "26289",
+                "name": "SFORZA LUDOVICO",
+                "gender": "male",
+                "dob": "2009/07/21",
+                "pedigree_number": "JR 80580 Cc",
+            },
+            {
+                "id": "99999",
+                "name": "Recent Child",
+                "gender": "female",
+                "dob": "2025/02/03",
+                "father_id": "26289",
+            },
+        ]
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", encoding="utf-8", newline="", delete=False
+        ) as handle:
+            writer = csv.DictWriter(handle, fieldnames=FIELDS)
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+            source = Path(handle.name)
+
+        try:
+            call_command(
+                "import_canecorso_archive",
+                source,
+                start_year=2020,
+                end_year=2026,
+                publish=True,
+                stdout=StringIO(),
+            )
+        finally:
+            source.unlink(missing_ok=True)
+
+        ludovico = DogExternalKey.objects.get(
+            namespace="canecorsopedigree.com",
+            key="26289",
+        ).dog
+        self.assertNotEqual(ludovico.pk, existing.pk)
+        self.assertEqual(ludovico.name, "SFORZA LUDOVICO")
+        self.assertEqual(Dog.objects.get(name="Recent Child").sire, ludovico)
+        self.assertEqual(existing.name, "Sforza Ludovico II Imperatore")
