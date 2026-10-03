@@ -40,7 +40,7 @@ def _pedigree_registration_keys(value):
     """Split a source pedigree field into individual normalized registrations."""
     return {
         key
-        for part in re.split(r"[;,|]+|\\s+/\\s+", _text(value))
+        for part in re.split(r"[;,|]+|\s+/\s+", _text(value))
         if (key := _registration_key(part))
     }
 
