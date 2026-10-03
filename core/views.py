@@ -102,7 +102,7 @@ def home(request):
         for dog in image_candidates
         if dog.display_images or dog.source_image_url
     ][:4]
-    public_stats = cache.get("cca:home:public-stats:v2")
+    public_stats = cache.get("cca:home:public-stats:v3")
     if public_stats is None:
         public_stats = {
             "dog_count": Dog.objects.filter(is_public=True).count(),
