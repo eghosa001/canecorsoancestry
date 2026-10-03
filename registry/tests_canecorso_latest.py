@@ -200,6 +200,75 @@ class CaneCorsoLatestExistingParentTests(TestCase):
         self.assertEqual(summary["created"], 2)
         self.assertEqual(DogSource.objects.filter(dog=dog).count(), 1)
 
+    def test_composite_registration_fragment_reuses_same_named_dog(self):
+        existing = Dog.objects.create(
+            name="Composite Canonical",
+            slug="composite-canonical",
+            sex=Dog.Sex.MALE,
+            is_public=True,
+        )
+        DogRegistration.objects.create(
+            dog=existing,
+            authority=None,
+            number="JR 700381 Cc",
+        )
+        records = {
+            "75282": latest.parse_profile(
+                "75282",
+                profile(
+                    "COMPOSITE CANONICAL",
+                    gender="male",
+                    dob="2016/09/23",
+                    pedigree="LO16196852 ; jr-700381 cc",
+                ),
+            )
+        }
+
+        latest.import_records(records, publish=True)
+
+        self.assertEqual(Dog.objects.count(), 1)
+        self.assertTrue(
+            DogExternalKey.objects.filter(
+                namespace="canecorsopedigree.com",
+                key="75282",
+                dog=existing,
+            ).exists()
+        )
+
+    def test_registration_fragment_does_not_merge_different_named_dog(self):
+        existing = Dog.objects.create(
+            name="Tyson",
+            slug="tyson-canonical",
+            sex=Dog.Sex.MALE,
+            is_public=True,
+        )
+        DogRegistration.objects.create(
+            dog=existing,
+            authority=None,
+            number="JR 70447 Cc",
+        )
+        records = {
+            "18924": latest.parse_profile(
+                "18924",
+                profile(
+                    "ZAHUR CUSTODI NOS",
+                    gender="male",
+                    dob="2008/01/01",
+                    pedigree="JR 70447 Cc ; JR 80112 Cc",
+                ),
+            )
+        }
+
+        latest.import_records(records, publish=True)
+
+        self.assertEqual(Dog.objects.count(), 2)
+        imported = Dog.objects.get(
+            external_keys__namespace="canecorsopedigree.com",
+            external_keys__key="18924",
+        )
+        self.assertEqual(imported.name, "ZAHUR CUSTODI NOS")
+        self.assertNotEqual(imported.pk, existing.pk)
+
     def test_source_pedigree_number_is_not_created_without_authority(self):
         records = {
             "90": latest.parse_profile(
