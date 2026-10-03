@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Cane Corso Ancestry · Pedigree & Bloodline Research{% endblock %}
-{% block meta_description %}Search Cane Corso pedigrees, trace ancestors and offspring, explore kennels, compare bloodlines and inspect pedigree provenance.{% endblock %}
+{% block meta_description %}Search Cane Corso pedigrees, trace ancestors and offspring, explore kennels and compare bloodlines.{% endblock %}
 {% block og_title %}Cane Corso Ancestry · Pedigree & Bloodline Research{% endblock %}
 {% block extra_head %}<script type="application/ld+json">{{ structured_data }}</script>{% endblock %}
 {% block content %}
 <section class="hero">
   <div class="hero-copy">
-    <p class="eyebrow">Pedigree · Bloodline · Provenance</p>
+    <p class="eyebrow">Pedigree · Bloodline · Heritage</p>
     <h1><span class="hero-title-primary">CANE <span class="hero-mobile-break">CORSO</span></span><span class="hero-title-secondary">ITALIANO</span></h1>
-    <p>Discover the ancestry behind the breed. Search canonical dog records, follow generations, compare bloodlines and inspect the evidence behind each pedigree.</p>
+    <p>Discover the ancestry behind the breed. Search dogs, follow generations, compare bloodlines and explore each pedigree.</p>
     <form class="hero-search" action="{% url 'registry:dog-search' %}" method="get">
       <label class="sr-only" for="dog-search">Search dogs</label>
       <input id="dog-search" name="q" data-dog-autocomplete placeholder="Search by dog name, kennel, registration number…" autocomplete="off">
@@ -57,7 +57,7 @@
   <div class="section-heading">
     <div>
       <p class="eyebrow">Most searched</p>
-      <h2>Popular dog records</h2>
+      <h2>Popular dogs</h2>
     </div>
     <a class="text-link" href="{% url 'registry:dog-search' %}">View all dogs →</a>
   </div>

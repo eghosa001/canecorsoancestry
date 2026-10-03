@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ dog.name }} · Cane Corso Ancestry{% endblock %}
-{% block meta_description %}Pedigree, ancestry, offspring, siblings, health information and provenance for Cane Corso {{ dog.name }}.{% endblock %}
+{% block meta_description %}Pedigree, ancestry, offspring, siblings and health information for Cane Corso {{ dog.name }}.{% endblock %}
 {% block og_title %}{{ dog.name }} · Cane Corso Pedigree{% endblock %}
-{% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and verified provenance.{% endblock %}
+{% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and health information.{% endblock %}
 {% block extra_head %}
   {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}?v=20261002-2">{% elif dog.source_image_url %}<meta property="og:image" content="{{ dog.source_image_url }}">{% endif %}
   <script type="application/ld+json">{{ structured_data }}</script>
@@ -53,7 +53,7 @@
           <a class="btn btn-outline" href="{% url 'accounts:submit-document' dog.pk %}">Submit document</a>
         {% endif %}
         {% if user.is_authenticated %}
-          <a class="btn btn-outline" href="{% url 'accounts:open-dispute' dog.pk %}">Request record review</a>
+          <a class="btn btn-outline" href="{% url 'accounts:open-dispute' dog.pk %}">Request profile review</a>
         {% endif %}
       </div>
     </div>
@@ -87,13 +87,6 @@
       </div>
     </article>
 
-    <article class="panel">
-      <div class="panel-heading"><h2>Record status</h2></div>
-      <dl class="compact-facts">
-        <dt>Database ID</dt><dd>{{ dog.id }}</dd>
-        <dt>Last updated</dt><dd>{{ dog.updated_at|date:"d M Y" }}</dd>
-      </dl>
-    </article>
   </div>
 
   {% if dog.bio or dog.display_titles %}
@@ -112,7 +105,7 @@
   {% endif %}
 
   <article class="panel" id="health">
-    <div class="panel-heading"><h2>Health & DNA records</h2></div>
+    <div class="panel-heading"><h2>Health & DNA</h2></div>
     <div class="table-scroll">
       <table class="data-table">
         <thead><tr><th>Test</th><th>Result</th><th>Date</th></tr></thead>
@@ -120,7 +113,7 @@
         {% for record in dog.display_health_records %}
           <tr><td>{{ record.test_type }}</td><td>{{ record.result }}</td><td>{{ record.tested_on|default:"—" }}</td></tr>
         {% empty %}
-          <tr><td colspan="4">No health or DNA records have been published for this dog.</td></tr>
+          <tr><td colspan="4">No health or DNA information has been published for this dog.</td></tr>
         {% endfor %}
         </tbody>
       </table>
@@ -166,7 +159,7 @@
           <span>{{ item.offspring_count }} offspring: {% for child in item.offspring|slice:":5" %}{{ child.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if item.offspring_count > 5 %}…{% endif %}</span>
         </div>
       {% empty %}
-        <p class="muted">No mating relationships are currently derivable from public offspring records.</p>
+        <p class="muted">No mating relationships are currently available from public offspring.</p>
       {% endfor %}
     </div>
   </article>
@@ -182,7 +175,7 @@
           <tr>
             <td><a class="text-link" href="{% url 'registry:dog-detail' item.dog.slug %}">{{ item.dog.name }}</a></td>
             <td>{{ item.relations|join:", " }}</td>
-            <td>{% for record in item.records %}{{ record.test_type }}: {{ record.result }}{% if not forloop.last %}; {% endif %}{% empty %}<span class="muted">No published health records</span>{% endfor %}</td>
+            <td>{% for record in item.records %}{{ record.test_type }}: {{ record.result }}{% if not forloop.last %}; {% endif %}{% empty %}<span class="muted">No published health information</span>{% endfor %}</td>
           </tr>
         {% endfor %}
         </tbody>
