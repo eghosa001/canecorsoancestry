@@ -5658,3 +5658,131 @@ html[data-theme="light"] .hero-search input {
     font-size: inherit !important;
   }
 }
+
+
+/* ==========================================================================
+   Screenshot-matched mobile home restoration v41
+   ========================================================================== */
+@media (max-width: 760px) {
+  /* CCA exactly as the supplied old screenshot: mark left, domain right. */
+  .hero-mark {
+    min-height: 252px !important;
+    width: 100% !important;
+    padding: 28px 26px !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    justify-items: stretch !important;
+    column-gap: 28px !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    background:
+      radial-gradient(circle at 52% 44%, rgba(210, 173, 87, .18), transparent 40%),
+      linear-gradient(145deg, #151916, #090b0a) !important;
+    box-shadow: 0 26px 70px rgba(0, 0, 0, .42) !important;
+    text-align: left !important;
+  }
+
+  .hero-mark span {
+    justify-self: start !important;
+    color: rgba(239, 213, 141, .20) !important;
+    font-size: clamp(5.7rem, 25vw, 7.6rem) !important;
+    line-height: .8 !important;
+  }
+
+  .hero-mark small {
+    justify-self: end !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: #d2ad57 !important;
+    font-size: .56rem !important;
+    line-height: 1.2 !important;
+    letter-spacing: .18em !important;
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    text-align: right !important;
+  }
+
+  /* Trace the bloodline: exact old 2x2 boxed layout. */
+  .home-actions {
+    padding-top: 52px !important;
+  }
+
+  .home-actions .section-heading {
+    margin-bottom: 28px !important;
+  }
+
+  .home-actions .action-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .home-actions .action-card {
+    min-height: 202px !important;
+    padding: 26px 24px !important;
+    border: 1px solid var(--line-soft) !important;
+    border-radius: 0 !important;
+    background: var(--surface) !important;
+    box-shadow: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-end !important;
+    align-items: flex-start !important;
+  }
+
+  .home-actions .action-icon {
+    width: auto !important;
+    height: auto !important;
+    margin: 0 0 42px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: var(--gold) !important;
+    font-size: 1.38rem !important;
+    line-height: 1 !important;
+  }
+
+  .home-actions .action-card strong {
+    font-family: var(--serif) !important;
+    font-size: clamp(1.22rem, 5vw, 1.58rem) !important;
+    font-weight: 600 !important;
+    line-height: 1.08 !important;
+  }
+
+  .home-actions .action-card small {
+    display: none !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero-mark {
+    min-height: 220px !important;
+    padding-inline: 20px !important;
+    column-gap: 16px !important;
+  }
+
+  .hero-mark span {
+    font-size: clamp(4.8rem, 24vw, 6.2rem) !important;
+  }
+
+  .hero-mark small {
+    font-size: .48rem !important;
+    letter-spacing: .13em !important;
+  }
+
+  .home-actions .action-card {
+    min-height: 174px !important;
+    padding: 22px 18px !important;
+  }
+
+  .home-actions .action-icon {
+    margin-bottom: 32px !important;
+  }
+
+  .home-actions .action-card strong {
+    font-size: 1.12rem !important;
+  }
+}
