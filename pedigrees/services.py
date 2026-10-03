@@ -1,5 +1,6 @@
 from collections import Counter, defaultdict
 from hashlib import sha256
+from time import perf_counter
 
 from django.core.cache import cache
 from django.db import connection
@@ -678,7 +679,10 @@ def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
         raise ValueError("Sire and dam must be different dogs.")
 
     generations = _bounded_generations(generations)
+    analysis_started = perf_counter()
+    graph_started = perf_counter()
     links, graph_dogs = _pedigree_graph(sire, dam, public_only=public_only)
+    graph_ms = (perf_counter() - graph_started) * 1000
     ordered = _ordered_from_links((sire.pk, dam.pk), links)
     revision = _pedigree_links_revision(links)
     cache_key = (
@@ -688,6 +692,7 @@ def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
     payload = cache.get(cache_key)
     cache_hit = payload is not None
 
+    compute_started = perf_counter()
     if payload is None:
         projected = max(
             0.0,
@@ -717,6 +722,8 @@ def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
         }
         cache.set(cache_key, payload, 5 * 60)
 
+    compute_ms = (perf_counter() - compute_started) * 1000
+    materialize_started = perf_counter()
     graph_dogs_by_key = {
         str(dog_id): dog
         for dog_id, dog in graph_dogs.items()
@@ -738,11 +745,18 @@ def virtual_mating_analysis(sire, dam, generations=10, public_only=True):
             row["dog"].name,
         )
     )
+    materialize_ms = (perf_counter() - materialize_started) * 1000
     return {
         "projected_inbreeding": payload["projected_inbreeding"],
         "common": common,
         "pedigree_nodes": payload["pedigree_nodes"],
         "cache_hit": cache_hit,
+        "timings": {
+            "graph_ms": graph_ms,
+            "compute_ms": compute_ms,
+            "materialize_ms": materialize_ms,
+            "total_ms": (perf_counter() - analysis_started) * 1000,
+        },
     }
 
 

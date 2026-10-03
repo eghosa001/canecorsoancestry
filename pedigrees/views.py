@@ -1,4 +1,5 @@
 import csv
+from time import perf_counter
 from uuid import UUID
 
 from django.db.models import Q
@@ -186,6 +187,7 @@ def _resolve_mating_dog(raw_value, expected_sex, selected_id=""):
 
 
 def virtual_mating(request):
+    request_started = perf_counter()
     sire_query = (request.GET.get("sire_q") or "").strip()
     dam_query = (request.GET.get("dam_q") or "").strip()
     sire_id = (request.GET.get("sire") or "").strip()
@@ -224,8 +226,10 @@ def virtual_mating(request):
         )
 
     error = sire_error or dam_error
+    resolve_ms = (perf_counter() - request_started) * 1000
     projected_percent = None
     common = []
+    analysis = None
 
     if sire and dam and not error:
         try:
@@ -240,7 +244,8 @@ def virtual_mating(request):
         except ValueError as exc:
             error = str(exc)
 
-    return render(
+    render_started = perf_counter()
+    response = render(
         request,
         "pedigrees/virtual_mating.html",
         {
@@ -253,3 +258,20 @@ def virtual_mating(request):
             "error": error,
         },
     )
+    if (request.GET.get("probe") or "").startswith("profile"):
+        render_ms = (perf_counter() - render_started) * 1000
+        timings = (analysis or {}).get("timings", {})
+        response["Server-Timing"] = ", ".join(
+            [
+                f"resolve;dur={resolve_ms:.1f}",
+                f"graph;dur={timings.get('graph_ms', 0):.1f}",
+                f"compute;dur={timings.get('compute_ms', 0):.1f}",
+                f"materialize;dur={timings.get('materialize_ms', 0):.1f}",
+                f"render;dur={render_ms:.1f}",
+                f"vm;dur={(perf_counter() - request_started) * 1000:.1f}",
+            ]
+        )
+        if analysis:
+            response["X-VM-Nodes"] = str(analysis.get("pedigree_nodes", 0))
+            response["X-VM-Cache"] = "HIT" if analysis.get("cache_hit") else "MISS"
+    return response
