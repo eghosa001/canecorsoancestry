@@ -287,6 +287,100 @@ def submission_list(request):
 
 
 @login_required
+def submission_evidence_upload(request, pk):
+    submission = get_object_or_404(
+        Submission.objects.select_related("submitted_by", "dog", "kennel", "litter"),
+        pk=pk,
+        submitted_by=request.user,
+    )
+    if submission.status != Submission.Status.PENDING:
+        messages.error(request, "Evidence can only be added while a submission is pending.")
+        return redirect("accounts:submissions")
+
+    open_request = submission.evidence_requests.filter(
+        status=EvidenceRequest.Status.OPEN
+    ).order_by("-created_at").first()
+    form = SubmissionEvidenceForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        upload = form.cleaned_data["file"]
+        digest = hashlib.sha256()
+        for chunk in upload.chunks():
+            digest.update(chunk)
+        upload.seek(0)
+
+        with transaction.atomic():
+            evidence = SubmissionEvidence.objects.create(
+                submission=submission,
+                evidence_request=open_request,
+                evidence_type=form.cleaned_data["evidence_type"],
+                file=upload,
+                uploaded_by=request.user,
+                note=form.cleaned_data["note"],
+                sha256=digest.hexdigest(),
+            )
+            if open_request:
+                open_request.status = EvidenceRequest.Status.FULFILLED
+                open_request.fulfilled_at = timezone.now()
+                open_request.save(update_fields=("status", "fulfilled_at"))
+            verify_submission(submission)
+            record_audit(
+                action=ModerationAudit.Action.EVIDENCE_UPLOADED,
+                actor=request.user,
+                dog=submission.dog,
+                kennel=submission.kennel,
+                litter=submission.litter,
+                submission=submission,
+                summary={
+                    "evidence_id": str(evidence.pk),
+                    "evidence_type": evidence.evidence_type,
+                    "sha256": evidence.sha256,
+                    "private": True,
+                },
+                note=form.cleaned_data["note"],
+            )
+        messages.success(
+            request,
+            "Verification evidence uploaded privately. It is not published on the public dog profile.",
+        )
+        return redirect("accounts:submissions")
+
+    return render(
+        request,
+        "accounts/submission_form.html",
+        {
+            "form": form,
+            "eyebrow": "Private verification evidence",
+            "title": "Upload supporting evidence",
+            "intro": (
+                open_request.note
+                if open_request
+                else "This document is restricted to you and authorized reviewers unless a separate public-document submission is approved."
+            ),
+            "button_label": "Upload private evidence",
+            "multipart": True,
+        },
+    )
+
+
+@login_required
+def submission_evidence_download(request, pk):
+    evidence = get_object_or_404(
+        SubmissionEvidence.objects.select_related("submission"),
+        pk=pk,
+    )
+    if (
+        evidence.submission.submitted_by_id != request.user.pk
+        and not can_review_submissions(request.user)
+    ):
+        raise PermissionDenied
+    if not evidence.file:
+        raise PermissionDenied
+    evidence.file.open("rb")
+    filename = evidence.file.name.rsplit("/", 1)[-1]
+    return FileResponse(evidence.file, as_attachment=True, filename=filename)
+
+
+@login_required
 def submit_dog(request):
     return redirect(f"{reverse('accounts:new-payment')}?package={SubmissionPayment.Package.SINGLE_DOG}")
 
