@@ -68,7 +68,7 @@ class DogTitleInline(admin.TabularInline):
 
 @admin.register(Dog)
 class DogAdmin(admin.ModelAdmin):
-    list_display = ("name", "sex", "kennel", "verification_state", "is_public")
+    list_display = ("name", "sex", "kennel", "verification_state", "is_public", "is_record_locked")
     list_filter = ("sex", "verification_state", "is_public", "country")
     search_fields = (
         "name",
@@ -95,11 +95,18 @@ class DogAdmin(admin.ModelAdmin):
         )
         if obj and obj.is_public:
             return protected + (
+                "name",
                 "sex",
                 "date_of_birth",
+                "colour",
+                "country",
+                "bloodline",
+                "kennel",
                 "sire",
                 "dam",
                 "litter",
+                "bio",
+                "verification_state",
             )
         return protected
 
@@ -114,7 +121,7 @@ class KennelAdmin(admin.ModelAdmin):
 
 @admin.register(Litter)
 class LitterAdmin(admin.ModelAdmin):
-    list_display = ("code", "kennel", "date_of_birth", "declared_puppy_count", "is_public")
+    list_display = ("code", "kennel", "date_of_birth", "declared_puppy_count", "is_public", "is_record_locked")
     search_fields = ("code",)
 
     def get_readonly_fields(self, request, obj=None):
@@ -133,6 +140,7 @@ class LitterAdmin(admin.ModelAdmin):
                 "date_of_birth",
                 "country",
                 "declared_puppy_count",
+                "notes",
             )
         return protected
 
