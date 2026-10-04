@@ -149,7 +149,6 @@
         <input type="hidden" name="user_id" value="{{ user.pk }}">
         <strong>{{ user }}{% if user.is_superuser %} · Superuser{% endif %}</strong>
         <select name="role" {% if user.is_superuser %}disabled{% endif %}>
-          <option value="">No moderation role</option>
           {% for value,label in role_choices %}
             <option value="{{ value }}"{% if user.moderation_assignment and user.moderation_assignment.role == value %} selected{% endif %}>{{ label }}</option>
           {% endfor %}
