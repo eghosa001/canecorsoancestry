@@ -69,7 +69,7 @@ from registry.services import (
     submission_diff,
 )
 
-from registry.verification import current_findings, verify_submission
+from registry.verification import current_findings, verification_checklist, verify_submission
 
 from pedigrees.services import pedigree_analysis, pedigree_export_rows
 
@@ -1206,6 +1206,35 @@ def moderation_submission_detail(request, pk):
         for finding in findings
         if finding.risk_level != SubmissionRiskLevel.GREEN
     ]
+    check_rows = verification_checklist(submission)
+
+    litter_submission = None
+    if submission.kind == Submission.Kind.LITTER_CREATE:
+        litter_submission = submission
+    else:
+        litter_submission_id = (submission.payload or {}).get("litter_submission_id")
+        if litter_submission_id:
+            litter_submission = (
+                Submission.objects.select_related("litter", "kennel")
+                .filter(pk=litter_submission_id, kind=Submission.Kind.LITTER_CREATE)
+                .first()
+            )
+
+    litter_members = []
+    if litter_submission is not None:
+        litter_members = list(
+            Submission.objects.filter(
+                kind=Submission.Kind.DOG,
+                payload__litter_submission_id=str(litter_submission.pk),
+            )
+            .select_related("dog", "submitted_by")
+            .order_by("created_at")
+        )
+        for member in litter_members:
+            member.submitted_name = str((member.payload or {}).get("name") or "").strip()
+            member.submitted_sex = str((member.payload or {}).get("sex") or "").strip()
+            member.submitted_dob = str((member.payload or {}).get("date_of_birth") or "").strip()
+
     evidence_requests = list(
         submission.evidence_requests.select_related("requested_by").all()
     )
@@ -1238,6 +1267,9 @@ def moderation_submission_detail(request, pk):
             "submission": submission,
             "findings": findings,
             "blocking_findings": blocking_findings,
+            "check_rows": check_rows,
+            "litter_submission": litter_submission,
+            "litter_members": litter_members,
             "review_diff": submission_diff(submission),
             "evidence_requests": evidence_requests,
             "evidence": evidence,
