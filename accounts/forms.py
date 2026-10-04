@@ -267,9 +267,9 @@ class PaymentPackageForm(forms.Form):
     dog_count = forms.IntegerField(
         required=False,
         min_value=2,
-        max_value=6,
+        max_value=4,
         label="Number of dogs",
-        help_text="Choose 2–6 only for the ₦1,000 multi-dog package.",
+        help_text="Choose 2–4 only for the ₦1,500 multi-dog package.",
     )
 
     def __init__(self, *args, user=None, **kwargs):
@@ -290,8 +290,8 @@ class PaymentPackageForm(forms.Form):
         if package == SubmissionPayment.Package.SINGLE_DOG:
             dog_count = 1
         elif package == SubmissionPayment.Package.MULTI_DOG:
-            if dog_count is None or not 2 <= dog_count <= 6:
-                self.add_error("dog_count", "Choose between 2 and 6 dogs.")
+            if dog_count is None or not 2 <= dog_count <= 4:
+                self.add_error("dog_count", "Choose between 2 and 4 dogs.")
         elif package == SubmissionPayment.Package.LITTER:
             dog_count = 0
         if package and not self.errors:
