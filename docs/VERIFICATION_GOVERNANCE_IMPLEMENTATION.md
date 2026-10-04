@@ -62,6 +62,7 @@ This document tracks the October 2026 verification/governance upgrade requested 
   - Audit rows snapshot actor, submission, dog, kennel and litter identifiers so IDs remain historically visible even if an FK later becomes null.
   - Protected record corrections capture old → new values.
   - Warning snapshots, evidence snapshots, reasons and first/second reviewer IDs are retained.
+  - Moderators use stable public identifiers such as **Admin #10002** in review/audit displays; account usernames remain private to owner-level account/role management.
 
 - [x] **7. Admin override**
   - A flagged case cannot use normal Approve.

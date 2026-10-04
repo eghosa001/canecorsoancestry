@@ -240,6 +240,15 @@ class Dog(models.Model):
             )
         return super().save(*args, **kwargs)
 
+    @property
+    def record_locked_by_admin_label(self):
+        if not self.record_locked_by_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.record_locked_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
     def __str__(self):
         return self.name
 
@@ -300,6 +309,15 @@ class Litter(models.Model):
                 raise ValidationError({"sire": "The sire must be born before the litter."})
             if self.dam and self.dam.date_of_birth and self.dam.date_of_birth >= self.date_of_birth:
                 raise ValidationError({"dam": "The dam must be born before the litter."})
+
+    @property
+    def record_locked_by_admin_label(self):
+        if not self.record_locked_by_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.record_locked_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
 
     def __str__(self):
         return self.code
@@ -613,6 +631,24 @@ class Submission(models.Model):
             ),
         ]
 
+    @property
+    def assigned_to_admin_label(self):
+        if not self.assigned_to_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.assigned_to_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
+    @property
+    def reviewed_by_admin_label(self):
+        if not self.reviewed_by_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.reviewed_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
     def __str__(self):
         return f"{self.get_kind_display()} · {self.submitted_by}"
 
@@ -630,6 +666,13 @@ class ModerationRoleAssignment(models.Model):
         related_name="ancestry_moderation_role",
     )
     role = models.CharField(max_length=16, choices=Role.choices)
+    admin_number = models.PositiveIntegerField(
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+        db_index=True,
+    )
     assigned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -639,8 +682,21 @@ class ModerationRoleAssignment(models.Model):
     )
     assigned_at = models.DateTimeField(auto_now_add=True)
 
+    @property
+    def public_label(self):
+        return f"Admin #{self.admin_number}" if self.admin_number else "Admin"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.admin_number is None and self.pk:
+            number = 10000 + self.pk
+            type(self).objects.filter(pk=self.pk, admin_number__isnull=True).update(
+                admin_number=number
+            )
+            self.admin_number = number
+
     def __str__(self):
-        return f"{self.user} · {self.get_role_display()}"
+        return f"{self.public_label} · {self.get_role_display()}"
 
 
 class VerificationRule(models.Model):
@@ -738,6 +794,13 @@ class EvidenceRequest(models.Model):
     class Meta:
         ordering = ("-created_at",)
 
+    @property
+    def requested_by_admin_label(self):
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.requested_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
 
 class SubmissionEvidence(models.Model):
     class EvidenceType(models.TextChoices):
@@ -779,6 +842,13 @@ class SubmissionEvidence(models.Model):
     class Meta:
         ordering = ("-created_at",)
 
+    @property
+    def uploaded_by_display_label(self):
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.uploaded_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else str(self.uploaded_by)
+
 
 class SubmissionReview(models.Model):
     class Action(models.TextChoices):
@@ -805,14 +875,34 @@ class SubmissionReview(models.Model):
     reason = models.TextField(blank=True)
     warnings_snapshot = models.JSONField(default=list, blank=True)
     evidence_snapshot = models.JSONField(default=list, blank=True)
+    reviewer_admin_number_snapshot = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        editable=False,
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ("-created_at",)
 
+    @property
+    def reviewer_admin_label(self):
+        if self.reviewer_admin_number_snapshot:
+            return f"Admin #{self.reviewer_admin_number_snapshot}"
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.reviewer_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
     def save(self, *args, **kwargs):
         if self.pk and SubmissionReview.objects.filter(pk=self.pk).exists():
             raise ValidationError("Review history is append-only and cannot be edited.")
+        if not self.reviewer_admin_number_snapshot and self.reviewer_id:
+            assignment = ModerationRoleAssignment.objects.filter(
+                user_id=self.reviewer_id
+            ).only("admin_number").first()
+            if assignment and assignment.admin_number:
+                self.reviewer_admin_number_snapshot = assignment.admin_number
         return super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
@@ -907,6 +997,24 @@ class DisputeCase(models.Model):
     class Meta:
         ordering = ("status", "-created_at")
 
+    @property
+    def assigned_to_admin_label(self):
+        if not self.assigned_to_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.assigned_to_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
+    @property
+    def closed_by_admin_label(self):
+        if not self.closed_by_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.closed_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
     def __str__(self):
         return f"{self.dog} · {self.get_reason_display()}"
 
@@ -972,6 +1080,11 @@ class ModerationAudit(models.Model):
         related_name="audit_events",
     )
     actor_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
+    actor_admin_number_snapshot = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        editable=False,
+    )
     submission_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
     dog_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
     kennel_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
@@ -983,11 +1096,28 @@ class ModerationAudit(models.Model):
     class Meta:
         ordering = ("-created_at",)
 
+    @property
+    def actor_admin_label(self):
+        if self.actor_admin_number_snapshot:
+            return f"Admin #{self.actor_admin_number_snapshot}"
+        if not self.actor_id:
+            return "System"
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.actor_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Member"
+
     def save(self, *args, **kwargs):
         if self.pk and ModerationAudit.objects.filter(pk=self.pk).exists():
             raise ValidationError("Audit history is append-only and cannot be edited.")
         if not self.actor_id_snapshot and self.actor_id:
             self.actor_id_snapshot = str(self.actor_id)
+        if not self.actor_admin_number_snapshot and self.actor_id:
+            assignment = ModerationRoleAssignment.objects.filter(
+                user_id=self.actor_id
+            ).only("admin_number").first()
+            if assignment and assignment.admin_number:
+                self.actor_admin_number_snapshot = assignment.admin_number
         if not self.submission_id_snapshot and self.submission_id:
             self.submission_id_snapshot = str(self.submission_id)
         if not self.dog_id_snapshot and self.dog_id:

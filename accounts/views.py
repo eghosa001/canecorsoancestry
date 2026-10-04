@@ -53,6 +53,7 @@ from registry.permissions import (
     can_review_flagged_submissions,
     can_review_submissions,
     can_second_approve,
+    admin_public_label,
     moderation_role,
 )
 from registry.services import (
@@ -2000,6 +2001,7 @@ def verification_dashboard(request):
         reviewer_rows.append(
             {
                 "user": user,
+                "admin_label": admin_public_label(user),
                 "role": moderation_role(user),
                 "reviews": len(decision_rows),
                 "approved": approved,
@@ -2154,7 +2156,7 @@ def moderation_set_role(request):
     if requested_role not in dict(ModerationRoleAssignment.Role.choices):
         messages.error(request, "Unknown moderation role.")
         return redirect("accounts:verification-dashboard")
-    ModerationRoleAssignment.objects.update_or_create(
+    assignment, _ = ModerationRoleAssignment.objects.update_or_create(
         user=target,
         defaults={
             "role": requested_role,
@@ -2173,7 +2175,7 @@ def moderation_set_role(request):
         actor=request.user,
         summary={
             "type": "moderation_role_changed",
-            "target_user_id": target.pk,
+            "target_admin_number": assignment.admin_number,
             "previous_role": before,
             "new_role": requested_role,
         },
@@ -2332,17 +2334,31 @@ def moderation_audit(request):
     actor = request.GET.get("actor", "").strip()
 
     if query:
-        events = events.filter(
+        query_filter = (
             Q(dog__name__icontains=query)
             | Q(kennel__name__icontains=query)
             | Q(litter__code__icontains=query)
-            | Q(actor__username__icontains=query)
             | Q(note__icontains=query)
-        ).distinct()
+        )
+        query_digits = "".join(ch for ch in query if ch.isdigit())
+        if query_digits:
+            query_filter |= Q(
+                actor_admin_number_snapshot=int(query_digits)
+            ) | Q(
+                actor__ancestry_moderation_role__admin_number=int(query_digits)
+            )
+        events = events.filter(query_filter).distinct()
     if action in dict(ModerationAudit.Action.choices):
         events = events.filter(action=action)
     if actor:
-        events = events.filter(actor__username__icontains=actor)
+        actor_digits = "".join(ch for ch in actor if ch.isdigit())
+        if actor_digits:
+            events = events.filter(
+                Q(actor_admin_number_snapshot=int(actor_digits))
+                | Q(actor__ancestry_moderation_role__admin_number=int(actor_digits))
+            ).distinct()
+        else:
+            events = events.none()
 
     events = events.order_by("-created_at")
     paginator = Paginator(events, 100)

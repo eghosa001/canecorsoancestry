@@ -160,7 +160,7 @@ class SubmissionAdmin(admin.ModelAdmin):
         "verification_status",
         "requires_second_review",
         "priority",
-        "assigned_to",
+        "assigned_admin",
         "created_at",
     )
     list_filter = ("kind", "status", "risk_level", "verification_status", "priority", "created_at")
@@ -171,9 +171,11 @@ class SubmissionAdmin(admin.ModelAdmin):
         "kennel__name",
         "submitted_by__username",
     )
+    exclude = ("reviewed_by", "assigned_to")
     readonly_fields = (
         "status",
-        "reviewed_by",
+        "reviewed_by_admin",
+        "assigned_admin",
         "reviewed_at",
         "resolution_notes",
         "risk_level",
@@ -199,6 +201,24 @@ class SubmissionAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("payment_link__payment")
 
+    @admin.display(description="Reviewed by")
+    def reviewed_by_admin(self, obj):
+        if not obj.reviewed_by_id:
+            return "Not reviewed"
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=obj.reviewed_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
+    @admin.display(description="Assigned admin")
+    def assigned_admin(self, obj):
+        if not obj.assigned_to_id:
+            return "Unassigned"
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=obj.assigned_to_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
     @admin.display(description="Payment")
     def payment_state(self, obj):
         try:
@@ -210,9 +230,20 @@ class SubmissionAdmin(admin.ModelAdmin):
 
 @admin.register(VerificationEvent)
 class VerificationEventAdmin(admin.ModelAdmin):
-    list_display = ("dog", "kennel", "field_name", "state", "reviewer", "created_at")
+    list_display = ("dog", "kennel", "field_name", "state", "reviewer_admin", "created_at")
     list_filter = ("state", "created_at")
     search_fields = ("dog__name", "kennel__name", "field_name", "note")
+    exclude = ("reviewer",)
+    readonly_fields = ("reviewer_admin",)
+
+    @admin.display(description="Reviewer")
+    def reviewer_admin(self, obj):
+        if not obj.reviewer_id:
+            return "System"
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=obj.reviewer_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
 
     def has_add_permission(self, request):
         return False
@@ -229,8 +260,17 @@ class VerificationEventAdmin(admin.ModelAdmin):
 
 @admin.register(MergeHistory)
 class MergeHistoryAdmin(admin.ModelAdmin):
-    list_display = ("retired_name", "canonical_dog", "performed_by", "created_at")
+    list_display = ("retired_name", "canonical_dog", "performed_by_admin", "created_at")
     search_fields = ("retired_name", "retired_slug", "canonical_dog__name")
+    @admin.display(description="Performed by")
+    def performed_by_admin(self, obj):
+        if not obj.performed_by_id:
+            return "System"
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=obj.performed_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
     readonly_fields = (
         "canonical_dog",
         "retired_dog_id",
@@ -283,9 +323,18 @@ admin.site.register(Notification)
 
 @admin.register(DisputeCase)
 class DisputeCaseAdmin(admin.ModelAdmin):
-    list_display = ("dog", "reason", "status", "opened_by", "assigned_to", "created_at")
+    list_display = ("dog", "reason", "status", "opened_by", "assigned_admin", "created_at")
     list_filter = ("reason", "status", "created_at")
     search_fields = ("dog__name", "opened_by__username", "details", "resolution_notes")
+
+    @admin.display(description="Assigned admin")
+    def assigned_admin(self, obj):
+        if not obj.assigned_to_id:
+            return "Unassigned"
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=obj.assigned_to_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
 
 
 class AppendOnlyAdmin(admin.ModelAdmin):
@@ -304,16 +353,28 @@ class AppendOnlyAdmin(admin.ModelAdmin):
 
 @admin.register(ModerationAudit)
 class ModerationAuditAdmin(AppendOnlyAdmin):
-    list_display = ("action", "actor", "dog", "kennel", "litter", "created_at")
+    list_display = ("action", "public_actor", "dog", "kennel", "litter", "created_at")
     list_filter = ("action", "created_at")
-    search_fields = ("dog__name", "kennel__name", "litter__code", "actor__username", "note")
+    exclude = ("actor",)
+    readonly_fields = ("public_actor",)
+    search_fields = ("dog__name", "kennel__name", "litter__code", "note")
+
+    @admin.display(description="Admin")
+    def public_actor(self, obj):
+        return obj.actor_admin_label
 
 
 @admin.register(SubmissionReview)
 class SubmissionReviewAdmin(AppendOnlyAdmin):
-    list_display = ("submission", "action", "reviewer", "created_at")
+    list_display = ("submission", "action", "public_reviewer", "created_at")
     list_filter = ("action", "created_at")
-    search_fields = ("submission__id", "reviewer__username", "reason")
+    exclude = ("reviewer",)
+    readonly_fields = ("public_reviewer",)
+    search_fields = ("submission__id", "reason")
+
+    @admin.display(description="Admin")
+    def public_reviewer(self, obj):
+        return obj.reviewer_admin_label
 
 
 @admin.register(VerificationFinding)
@@ -325,16 +386,28 @@ class VerificationFindingAdmin(AppendOnlyAdmin):
 
 @admin.register(SubmissionEvidence)
 class SubmissionEvidenceAdmin(AppendOnlyAdmin):
-    list_display = ("submission", "evidence_type", "uploaded_by", "created_at")
+    list_display = ("submission", "evidence_type", "uploaded_by_display", "created_at")
     list_filter = ("evidence_type", "created_at")
-    search_fields = ("submission__id", "uploaded_by__username", "sha256", "note")
+    exclude = ("uploaded_by",)
+    readonly_fields = ("uploaded_by_display",)
+    search_fields = ("submission__id", "sha256", "note")
+
+    @admin.display(description="Uploaded by")
+    def uploaded_by_display(self, obj):
+        return obj.uploaded_by_display_label
 
 
 @admin.register(EvidenceRequest)
 class EvidenceRequestAdmin(AppendOnlyAdmin):
-    list_display = ("submission", "status", "requested_by", "created_at")
+    list_display = ("submission", "status", "requested_by_admin", "created_at")
     list_filter = ("status", "created_at")
-    search_fields = ("submission__id", "requested_by__username", "note")
+    exclude = ("requested_by",)
+    readonly_fields = ("requested_by_admin",)
+    search_fields = ("submission__id", "note")
+
+    @admin.display(description="Requested by")
+    def requested_by_admin(self, obj):
+        return obj.requested_by_admin_label
 
 
 @admin.register(VerificationRule)
@@ -346,9 +419,13 @@ class VerificationRuleAdmin(AppendOnlyAdmin):
 
 @admin.register(ModerationRoleAssignment)
 class ModerationRoleAssignmentAdmin(AppendOnlyAdmin):
-    list_display = ("user", "role", "assigned_by", "assigned_at")
+    list_display = ("public_admin", "role", "assigned_at")
     list_filter = ("role",)
     search_fields = ("user__username", "user__email")
+
+    @admin.display(description="Admin")
+    def public_admin(self, obj):
+        return obj.public_label
 
 
 @admin.register(DogIdentityNumber)

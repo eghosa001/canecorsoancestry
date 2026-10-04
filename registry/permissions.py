@@ -33,19 +33,43 @@ def can_contribute_to_dog(user, dog):
     ).exists()
 
 
+def moderation_assignment(user):
+    if not getattr(user, "is_authenticated", False):
+        return None
+
+    assignment = getattr(user, "ancestry_moderation_role", None)
+    if assignment:
+        return assignment
+
+    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+        default_role = (
+            ModerationRoleAssignment.Role.OWNER
+            if getattr(user, "is_superuser", False)
+            else ModerationRoleAssignment.Role.REVIEWER
+        )
+        assignment, _ = ModerationRoleAssignment.objects.get_or_create(
+            user=user,
+            defaults={"role": default_role},
+        )
+        return assignment
+    return None
+
+
+def admin_public_label(user):
+    assignment = moderation_assignment(user)
+    if assignment:
+        return assignment.public_label
+    return "Member" if getattr(user, "is_authenticated", False) else "System"
+
+
 def moderation_role(user):
     if not getattr(user, "is_authenticated", False):
         return None
     if getattr(user, "is_superuser", False):
+        moderation_assignment(user)
         return ModerationRoleAssignment.Role.OWNER
-    assignment = getattr(user, "ancestry_moderation_role", None)
-    if assignment:
-        return assignment.role
-    if getattr(user, "is_staff", False):
-        # Backward compatibility for existing moderators. Owners can explicitly
-        # promote/demote them from the verification dashboard.
-        return ModerationRoleAssignment.Role.REVIEWER
-    return None
+    assignment = moderation_assignment(user)
+    return assignment.role if assignment else None
 
 
 def can_review_submissions(user):

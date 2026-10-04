@@ -14,7 +14,7 @@
   <form class="moderation-filters audit-filters" method="get">
     <div class="filter-search">
       <label for="audit-q">Search</label>
-      <input id="audit-q" name="q" aria-label="Search audit history" value="{{ filters.q }}" placeholder="Dog, kennel, litter, moderator or note">
+      <input id="audit-q" name="q" aria-label="Search audit history" value="{{ filters.q }}" placeholder="Dog, kennel, litter, Admin ID or note">
     </div>
     <div>
       <label for="audit-action">Action</label>
@@ -26,8 +26,8 @@
       </select>
     </div>
     <div>
-      <label for="audit-actor">Moderator/member</label>
-      <input id="audit-actor" name="actor" aria-label="Filter audit history by moderator or member" value="{{ filters.actor }}" placeholder="Username">
+      <label for="audit-actor">Admin ID</label>
+      <input id="audit-actor" name="actor" aria-label="Filter audit history by Admin ID" value="{{ filters.actor }}" placeholder="e.g. 10002">
     </div>
     <button class="btn btn-gold" type="submit">Search audit</button>
   </form>
@@ -53,7 +53,7 @@
             {% endif %}
           </h2>
           <p>
-            {% if event.actor %}By {{ event.actor }}{% else %}System/unknown actor{% endif %}
+            By {{ event.actor_admin_label }}
             {% if event.note %} · {{ event.note }}{% endif %}
           </p>
           {% if event.summary %}
