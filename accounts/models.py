@@ -82,8 +82,8 @@ class SubmissionPayment(models.Model):
         super().clean()
         if self.package == self.Package.SINGLE_DOG and self.dog_count != 1:
             raise ValidationError({"dog_count": "A single-dog package contains exactly one dog."})
-        if self.package == self.Package.MULTI_DOG and not 2 <= self.dog_count <= 6:
-            raise ValidationError({"dog_count": "A multi-dog package must contain 2–6 dogs."})
+        if self.package == self.Package.MULTI_DOG and not 2 <= self.dog_count <= 4:
+            raise ValidationError({"dog_count": "A multi-dog package must contain 2–4 dogs."})
         if self.package == self.Package.LITTER and self.dog_count != 0:
             raise ValidationError({"dog_count": "Litter packages use the litter and puppy workflow."})
 
