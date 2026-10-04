@@ -1,6 +1,6 @@
 {% load static %}
 <!doctype html>
-<html lang="en" data-theme="dark" data-ui-version="customer-v48">
+<html lang="en" data-theme="dark" data-ui-version="customer-v49">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -29,6 +29,7 @@
   </script>
   <link rel="icon" href="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v46" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261003-virtual-mating-v45">
+  <link rel="stylesheet" href="{% static 'core/premium-polish.css' %}?v=20261004-interaction-v49">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -111,6 +112,8 @@
 
     (function () {
       var openSuggestions = [];
+      var pickerInteracting = false;
+      var lastPanelScrollAt = 0;
 
       function closeMobileMenus() {
         document.querySelectorAll(".mobile-nav[open], .dashboard-mobile-nav[open]").forEach(function (menu) {
@@ -119,9 +122,8 @@
       }
 
       function dismissSearchUI() {
-        openSuggestions.forEach(function (panel) {
-          panel.hidden = true;
-          panel.replaceChildren();
+        openSuggestions.forEach(function (entry) {
+          entry.close();
         });
         var active = document.activeElement;
         if (active && active.matches && active.matches("[data-dog-autocomplete]")) {
@@ -131,10 +133,15 @@
 
       window.addEventListener("scroll", function () {
         closeMobileMenus();
-        // iOS Safari moves the visual viewport when its keyboard opens.
-        // Do not blur an active virtual-mating combobox during that automatic scroll.
+
+        // Keep an open picker stable while the user is typing or scrolling its
+        // own results. This also avoids iOS visual-viewport scroll dismissals.
         var active = document.activeElement;
-        if (active && active.matches && active.matches(".mating-select [data-dog-autocomplete]")) {
+        if (
+          pickerInteracting ||
+          Date.now() - lastPanelScrollAt < 180 ||
+          (active && active.matches && active.matches("[data-dog-autocomplete]"))
+        ) {
           return;
         }
         dismissSearchUI();
@@ -146,38 +153,78 @@
         }
       });
 
-      var searchTouchStartY = null;
-      document.addEventListener("touchstart", function (event) {
-        if (event.touches.length === 1) {
-          searchTouchStartY = event.touches[0].clientY;
-        }
-      }, { passive: true });
-      document.addEventListener("touchend", function (event) {
-        if (searchTouchStartY === null || !event.changedTouches.length) return;
-        var deltaY = event.changedTouches[0].clientY - searchTouchStartY;
-        searchTouchStartY = null;
-        if (deltaY < -30) dismissSearchUI();
-      }, { passive: true });
-
       document.querySelectorAll(".mobile-nav a, .dashboard-mobile-nav a").forEach(function (link) {
         link.addEventListener("click", closeMobileMenus);
       });
 
-      document.querySelectorAll("[data-dog-autocomplete]").forEach(function (input) {
-        var host = input.closest(".mating-select, .filter-search, .hero-search, .header-search, .mobile-nav-search") || input.parentElement;
+      document.querySelectorAll("[data-dog-autocomplete]").forEach(function (input, inputIndex) {
+        var host = input.closest(".mating-select, .filter-search, .hero-search, .header-search, .mobile-nav-search, .form-field") || input.parentElement;
         host.classList.add("dog-autocomplete-host");
+
         var panel = document.createElement("div");
         panel.className = "dog-suggestions";
+        panel.id = "dog-suggestions-" + (inputIndex + 1);
         panel.setAttribute("role", "listbox");
         panel.hidden = true;
         host.appendChild(panel);
-        openSuggestions.push(panel);
 
-        // Keep iOS Safari touches inside the suggestion panel from being
-        // interpreted as an outside tap/swipe that dismisses the picker.
-        panel.addEventListener("pointerdown", function (event) { event.stopPropagation(); });
-        panel.addEventListener("touchstart", function (event) { event.stopPropagation(); }, { passive: true });
-        panel.addEventListener("touchend", function (event) { event.stopPropagation(); }, { passive: true });
+        input.setAttribute("role", "combobox");
+        input.setAttribute("aria-autocomplete", "list");
+        input.setAttribute("aria-expanded", "false");
+        input.setAttribute("aria-controls", panel.id);
+
+        var panelInteracting = false;
+        var panelTouchY = null;
+        var activeIndex = -1;
+
+        function setPanelInteracting(value) {
+          panelInteracting = value;
+          pickerInteracting = value;
+        }
+
+        panel.addEventListener("pointerdown", function (event) {
+          setPanelInteracting(true);
+          event.stopPropagation();
+        });
+        panel.addEventListener("pointerup", function (event) {
+          event.stopPropagation();
+          window.setTimeout(function () { setPanelInteracting(false); }, 0);
+        });
+        panel.addEventListener("pointercancel", function () {
+          setPanelInteracting(false);
+        });
+
+        panel.addEventListener("touchstart", function (event) {
+          setPanelInteracting(true);
+          if (event.touches.length === 1) panelTouchY = event.touches[0].clientY;
+          event.stopPropagation();
+        }, { passive: true });
+
+        panel.addEventListener("touchmove", function (event) {
+          if (!event.touches.length || panelTouchY === null) return;
+          var nextY = event.touches[0].clientY;
+          var deltaY = nextY - panelTouchY;
+          var atTop = panel.scrollTop <= 0;
+          var atBottom = panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 1;
+
+          // Prevent Safari from chaining an edge swipe into the page while still
+          // allowing the suggestion list itself to scroll naturally.
+          if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
+            event.preventDefault();
+          }
+          panelTouchY = nextY;
+          event.stopPropagation();
+        }, { passive: false });
+
+        panel.addEventListener("touchend", function (event) {
+          panelTouchY = null;
+          event.stopPropagation();
+          window.setTimeout(function () { setPanelInteracting(false); }, 0);
+        }, { passive: true });
+
+        panel.addEventListener("scroll", function () {
+          lastPanelScrollAt = Date.now();
+        }, { passive: true });
 
         if ((input.dataset.dogAutocompleteMode || "navigate") === "fill") {
           input.addEventListener("input", function () {
@@ -204,10 +251,12 @@
         function requestSuggestions(value, browse) {
           clearTimeout(timer);
           var expected = (value || "").trim();
-          if (!browse && expected.length < 3) {
+          if (!browse && expected.length < 2) {
             close();
             return;
           }
+
+          panel.setAttribute("aria-busy", "true");
           timer = setTimeout(function () {
             var serial = ++requestSerial;
             fetch(suggestionUrl(expected, browse), {
@@ -220,35 +269,68 @@
                 if (!browse && input.value.trim() !== expected) return;
                 render(data.results || []);
               })
-              .catch(close);
+              .catch(close)
+              .finally(function () {
+                if (serial === requestSerial) panel.setAttribute("aria-busy", "false");
+              });
           }, browse ? 0 : 100);
         }
 
         function close() {
+          activeIndex = -1;
+          input.removeAttribute("aria-activedescendant");
+          input.setAttribute("aria-expanded", "false");
+          panel.setAttribute("aria-busy", "false");
           panel.hidden = true;
           panel.replaceChildren();
         }
 
+        openSuggestions.push({ panel: panel, input: input, close: close });
+
+        function items() {
+          return Array.prototype.slice.call(panel.querySelectorAll(".dog-suggestion"));
+        }
+
+        function setActive(nextIndex) {
+          var options = items();
+          if (!options.length) {
+            activeIndex = -1;
+            input.removeAttribute("aria-activedescendant");
+            return;
+          }
+          activeIndex = (nextIndex + options.length) % options.length;
+          options.forEach(function (option, index) {
+            var selected = index === activeIndex;
+            option.setAttribute("aria-selected", selected ? "true" : "false");
+          });
+          var activeOption = options[activeIndex];
+          input.setAttribute("aria-activedescendant", activeOption.id);
+          activeOption.scrollIntoView({ block: "nearest" });
+        }
+
         function render(results) {
           panel.replaceChildren();
+          activeIndex = -1;
+          input.removeAttribute("aria-activedescendant");
+
           if (!results.length) {
             close();
             return;
           }
-          results.forEach(function (dog) {
+
+          results.forEach(function (dog, index) {
             var mode = input.dataset.dogAutocompleteMode || "navigate";
             var item = document.createElement(mode === "fill" ? "button" : "a");
             item.className = "dog-suggestion";
+            item.id = panel.id + "-option-" + (index + 1);
+            item.setAttribute("role", "option");
+            item.setAttribute("aria-selected", "false");
+
             if (mode === "fill") {
               item.type = "button";
-              var chosen = false;
-              function selectDog(event) {
-                if (event) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }
-                if (chosen) return;
-                chosen = true;
+              item.addEventListener("click", function (event) {
+                event.preventDefault();
+                event.stopPropagation();
                 input.value = dog.name;
                 var targetId = input.dataset.dogAutocompleteTarget;
                 if (targetId) {
@@ -256,19 +338,8 @@
                   if (target) target.value = dog.id || "";
                 }
                 close();
-                input.blur();
-              }
-              item.addEventListener("pointerdown", function (event) {
-                if (event.pointerType === "touch" || event.pointerType === "pen") {
-                  selectDog(event);
-                }
+                input.focus({ preventScroll: true });
               });
-              item.addEventListener("pointerup", function (event) {
-                if (event.pointerType === "touch" || event.pointerType === "pen") {
-                  selectDog(event);
-                }
-              });
-              item.addEventListener("click", selectDog);
             } else {
               item.href = "/dogs/" + encodeURIComponent(dog.slug) + "/?source=search";
             }
@@ -280,7 +351,9 @@
             item.append(title, meta);
             panel.appendChild(item);
           });
+
           panel.hidden = false;
+          input.setAttribute("aria-expanded", "true");
         }
 
         function refreshFromInput() {
@@ -291,7 +364,6 @@
         input.addEventListener("search", refreshFromInput);
         input.addEventListener("compositionend", refreshFromInput);
 
-        // On virtual mating, make the picker useful immediately on iPhone.
         input.addEventListener("focus", function () {
           if ((input.dataset.dogAutocompleteMode || "navigate") !== "fill") return;
           if (!input.value.trim()) {
@@ -302,13 +374,44 @@
         });
 
         input.addEventListener("keydown", function (event) {
+          if (event.key === "ArrowDown") {
+            if (panel.hidden) {
+              requestSuggestions(input.value.trim(), (input.dataset.dogAutocompleteMode || "navigate") === "fill" && !input.value.trim());
+              return;
+            }
+            event.preventDefault();
+            setActive(activeIndex + 1);
+            return;
+          }
+
+          if (event.key === "ArrowUp") {
+            if (panel.hidden) return;
+            event.preventDefault();
+            setActive(activeIndex <= 0 ? items().length - 1 : activeIndex - 1);
+            return;
+          }
+
+          if (event.key === "Enter" && !panel.hidden && activeIndex >= 0) {
+            var activeOption = items()[activeIndex];
+            if (activeOption) {
+              event.preventDefault();
+              activeOption.click();
+            }
+            return;
+          }
+
           if (event.key === "Escape") {
             close();
             input.blur();
           }
         });
+
         input.addEventListener("blur", function () {
-          window.setTimeout(close, 140);
+          window.setTimeout(function () {
+            if (!panelInteracting && !host.contains(document.activeElement)) {
+              close();
+            }
+          }, 180);
         });
       });
     })();
