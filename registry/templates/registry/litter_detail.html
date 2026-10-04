@@ -12,8 +12,8 @@
     <article class="panel">
       <div class="panel-heading"><h2>Parents</h2></div>
       <div class="parent-grid">
-        <div><span>Sire</span>{% if litter.sire %}<strong>{{ litter.sire.name }}</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
-        <div><span>Dam</span>{% if litter.dam %}<strong>{{ litter.dam.name }}</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
+        <div><span>Sire</span>{% if litter.sire %}{% if litter.sire.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' litter.sire.slug %}">{{ litter.sire.name }}</a>{% else %}<strong>{{ litter.sire.name }}</strong>{% endif %}{% else %}<strong>Not recorded</strong>{% endif %}</div>
+        <div><span>Dam</span>{% if litter.dam %}{% if litter.dam.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' litter.dam.slug %}">{{ litter.dam.name }}</a>{% else %}<strong>{{ litter.dam.name }}</strong>{% endif %}{% else %}<strong>Not recorded</strong>{% endif %}</div>
       </div>
     </article>
     <article class="panel">
@@ -28,7 +28,7 @@
   <div class="dog-card-grid">
     {% for dog in offspring %}
       <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
-        <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}" alt="{{ dog.name }}">{% else %}<div class="media-placeholder">CCA</div>{% endif %}</div>
+        <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}" loading="lazy" decoding="async">{% else %}<div class="media-placeholder">CCA</div>{% endif %}</div>
         <div class="dog-card-body"><h3>{{ dog.name }}</h3><p>{{ dog.get_sex_display }} · {{ dog.colour|default:"Colour not recorded" }}</p></div>
       </a>
     {% empty %}<div class="empty-state"><p>No public offspring are available yet.</p></div>{% endfor %}

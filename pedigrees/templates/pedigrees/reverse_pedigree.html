@@ -6,7 +6,7 @@
   <header class="page-heading">
     <p class="eyebrow">Reverse pedigree</p>
     <h1>Descendants of {{ dog.name }}</h1>
-    <p>Every relationship below is derived automatically from canonical sire and dam links. Adding a dog with {{ dog.name }} as a parent makes that dog appear here after approval.</p>
+    <p>Every relationship below is derived automatically from recorded sire and dam links. Adding a dog with {{ dog.name }} as a parent makes that dog appear here after approval.</p>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">Back to dog</a>
       <a class="btn btn-gold" href="{% url 'pedigrees:detail' dog.slug %}">View ancestry</a>
