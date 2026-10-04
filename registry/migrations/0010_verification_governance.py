@@ -49,9 +49,39 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AddField(
+            model_name="dog",
+            name="is_record_locked",
+            field=models.BooleanField(db_index=True, default=False),
+        ),
+        migrations.AddField(
+            model_name="dog",
+            name="record_locked_at",
+            field=models.DateTimeField(blank=True, null=True),
+        ),
+        migrations.AddField(
+            model_name="dog",
+            name="record_locked_by",
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="locked_ancestry_dogs", to=settings.AUTH_USER_MODEL),
+        ),
+        migrations.AddField(
             model_name="dogimage",
             name="content_sha256",
             field=models.CharField(blank=True, db_index=True, max_length=64),
+        ),
+        migrations.AddField(
+            model_name="litter",
+            name="is_record_locked",
+            field=models.BooleanField(db_index=True, default=False),
+        ),
+        migrations.AddField(
+            model_name="litter",
+            name="record_locked_at",
+            field=models.DateTimeField(blank=True, null=True),
+        ),
+        migrations.AddField(
+            model_name="litter",
+            name="record_locked_by",
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="locked_ancestry_litters", to=settings.AUTH_USER_MODEL),
         ),
         migrations.AddField(
             model_name="litter",
@@ -234,6 +264,7 @@ class Migration(migrations.Migration):
                     ("override_requested", "Override requested"),
                     ("second_approval", "Second approval"),
                     ("record_changed", "Locked record changed"),
+                    ("record_lock_changed", "Record lock changed"),
                 ],
                 db_index=True,
                 max_length=40,
