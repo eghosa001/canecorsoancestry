@@ -192,7 +192,7 @@ def _review_evidence_snapshot(submission):
             "id": str(item.pk),
             "type": item.evidence_type,
             "sha256": item.sha256,
-            "uploaded_by_id": item.uploaded_by_id,
+            "uploaded_by": item.uploaded_by_display_label,
             "created_at": item.created_at.isoformat(),
         }
         for item in submission.verification_evidence.select_related("uploaded_by").all()
@@ -324,7 +324,10 @@ def reject_high_risk_override(submission, reviewer, reason):
         kennel=submission.kennel,
         litter=submission.litter,
         submission=submission,
-        summary={"decision": "override_rejected", "first_reviewer_id": pending_override.reviewer_id},
+        summary={
+            "decision": "override_rejected",
+            "first_reviewer_admin_number": pending_override.reviewer_admin_number_snapshot,
+        },
         note=reason,
     )
     return submission
@@ -751,11 +754,13 @@ def approve_submission(
             "warnings": final_review.warnings_snapshot,
             "evidence": final_review.evidence_snapshot,
             "review_action": final_review.action,
-            "first_override_reviewer_id": (
-                override_review.reviewer_id if override_review is not None else None
+            "first_override_reviewer_admin_number": (
+                override_review.reviewer_admin_number_snapshot
+                if override_review is not None
+                else None
             ),
-            "second_reviewer_id": (
-                reviewer.pk
+            "second_reviewer_admin_number": (
+                final_review.reviewer_admin_number_snapshot
                 if final_review.action == SubmissionReview.Action.SECOND_APPROVED
                 else None
             ),
@@ -772,8 +777,8 @@ def approve_submission(
             submission=submission,
             summary={
                 "decision": "approved",
-                "first_reviewer_id": override_review.reviewer_id,
-                "second_reviewer_id": reviewer.pk,
+                "first_reviewer_admin_number": override_review.reviewer_admin_number_snapshot,
+                "second_reviewer_admin_number": final_review.reviewer_admin_number_snapshot,
                 "warnings": final_review.warnings_snapshot,
                 "evidence": final_review.evidence_snapshot,
             },
