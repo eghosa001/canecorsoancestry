@@ -2,6 +2,7 @@ from datetime import date
 import uuid
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
@@ -13,6 +14,7 @@ from registry.models import (
     ModerationAudit,
     ModerationRoleAssignment,
     Submission,
+    SubmissionEvidence,
     SubmissionReview,
     SubmissionRiskLevel,
     SubmissionVerificationStatus,
@@ -22,6 +24,7 @@ from registry.services import (
     request_high_risk_override,
 )
 from registry.verification import current_findings, verify_submission
+from core.media_views import _can_read_media
 
 from .models import PaymentSubmissionLink, SubmissionPayment
 
@@ -318,3 +321,27 @@ class VerificationGovernanceTests(TestCase):
             current_findings(submission).filter(code="payment_entitlement").exists()
         )
         self.assertEqual(submission.status, Submission.Status.PENDING)
+
+
+    def test_private_verification_evidence_is_not_public_media(self):
+        submission = self._puppy_submission(dob="2026-03-12", name="Evidence Puppy")
+        evidence = SubmissionEvidence.objects.create(
+            submission=submission,
+            evidence_type=SubmissionEvidence.EvidenceType.REGISTRATION,
+            file="verification-private/test-certificate.pdf",
+            uploaded_by=self.member,
+            sha256="a" * 64,
+        )
+
+        self.assertEqual(
+            _can_read_media(AnonymousUser(), evidence.file.name),
+            (False, False),
+        )
+        self.assertEqual(
+            _can_read_media(self.member, evidence.file.name),
+            (True, False),
+        )
+        self.assertEqual(
+            _can_read_media(self.reviewer, evidence.file.name),
+            (True, False),
+        )
