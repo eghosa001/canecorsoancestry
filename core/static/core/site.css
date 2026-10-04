@@ -6143,3 +6143,71 @@ html[data-theme="light"] .hero-search input {
   .hypothetical-label { margin: 14px 16px 0; }
   .compare-pairing-panel .button-row { display: grid; grid-template-columns: 1fr; }
 }
+
+
+/* Header/logo density v64 — larger supplied Cane Corso head, less wasted top space. */
+.site-header,
+.header-inner {
+  min-height: 74px !important;
+}
+
+.header-inner {
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
+}
+
+.brand {
+  min-width: 202px;
+  gap: 10px !important;
+}
+
+.brand-mark {
+  width: 66px !important;
+  height: 66px !important;
+  flex: 0 0 66px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+}
+
+.hero {
+  padding-top: 58px;
+}
+
+@media (max-width: 760px) {
+  .site-header,
+  .header-inner {
+    min-height: 64px !important;
+  }
+
+  .header-inner {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+  }
+
+  .brand {
+    gap: 7px !important;
+  }
+
+  .brand-mark {
+    width: 60px !important;
+    height: 60px !important;
+    flex-basis: 60px !important;
+  }
+
+  .hero {
+    padding-top: 54px !important;
+    gap: 30px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .brand-mark {
+    width: 58px !important;
+    height: 58px !important;
+    flex-basis: 58px !important;
+  }
+
+  .hero {
+    padding-top: 46px !important;
+  }
+}
