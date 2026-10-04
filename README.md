@@ -57,8 +57,8 @@ External registration numbers may be stored and displayed with their issuing bod
 New pedigree records use Paystack-backed submission packages:
 
 - **₦500** — one dog;
-- **₦1,000** — 2–6 dogs;
-- **₦1,000** — one litter plus the puppies belonging to that litter.
+- **₦1,500** — 2–4 dogs;
+- **₦200** — one litter plus the puppies belonging to that litter.
 
 Payment never publishes a record. The kennel/owner must already be approved, and every submitted dog or litter remains in the admin moderation queue until an administrator verifies and approves it.
 
