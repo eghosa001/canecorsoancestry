@@ -1337,6 +1337,8 @@ def review_submission(request, pk, decision):
 
 @staff_member_required
 def merge_dogs_view(request):
+    if not can_review_flagged_submissions(request.user):
+        raise PermissionDenied
     if request.method != "POST":
         return redirect("accounts:moderation")
     form = MergeDogsForm(request.POST)
@@ -1361,6 +1363,8 @@ def merge_dogs_view(request):
 
 @staff_member_required
 def verify_dog(request):
+    if not can_review_flagged_submissions(request.user):
+        raise PermissionDenied
     if request.method != "POST":
         return redirect("accounts:moderation")
     form = VerificationEventForm(request.POST)
@@ -1730,6 +1734,8 @@ def my_disputes(request):
 
 @staff_member_required
 def bulk_moderation(request):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
     if request.method != "POST":
         return redirect("accounts:moderation")
 
@@ -1799,6 +1805,8 @@ def bulk_moderation(request):
 
 @staff_member_required
 def review_dispute(request, pk, decision):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
     if request.method != "POST":
         return redirect("accounts:moderation")
 
@@ -1854,7 +1862,256 @@ def review_dispute(request, pk, decision):
 
 
 @staff_member_required
+def verification_dashboard(request):
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+
+    pending = Submission.objects.filter(status=Submission.Status.PENDING)
+    pending_count = pending.count()
+    yellow_count = pending.filter(risk_level=SubmissionRiskLevel.YELLOW).count()
+    red_count = pending.filter(risk_level=SubmissionRiskLevel.RED).count()
+    second_count = pending.filter(
+        verification_status=SubmissionVerificationStatus.AWAITING_SECOND
+    ).count()
+    overrides_count = SubmissionReview.objects.filter(
+        action__in=[
+            SubmissionReview.Action.OVERRIDE_APPROVED,
+            SubmissionReview.Action.OVERRIDE_REQUESTED,
+        ]
+    ).count()
+
+    reviewer_rows = []
+    staff_users = list(
+        get_user_model().objects.filter(is_staff=True).order_by("username")
+    )
+    decision_actions = {
+        SubmissionReview.Action.APPROVED,
+        SubmissionReview.Action.REJECTED,
+        SubmissionReview.Action.OVERRIDE_APPROVED,
+        SubmissionReview.Action.OVERRIDE_REQUESTED,
+        SubmissionReview.Action.SECOND_APPROVED,
+        SubmissionReview.Action.SECOND_REJECTED,
+    }
+    for user in staff_users:
+        decisions = list(
+            SubmissionReview.objects.filter(reviewer=user)
+            .select_related("submission")
+            .order_by("created_at")
+        )
+        decision_rows = [row for row in decisions if row.action in decision_actions]
+        approved = sum(
+            row.action
+            in {
+                SubmissionReview.Action.APPROVED,
+                SubmissionReview.Action.OVERRIDE_APPROVED,
+                SubmissionReview.Action.SECOND_APPROVED,
+            }
+            for row in decision_rows
+        )
+        rejected = sum(
+            row.action
+            in {
+                SubmissionReview.Action.REJECTED,
+                SubmissionReview.Action.SECOND_REJECTED,
+            }
+            for row in decision_rows
+        )
+        overrides = sum(
+            row.action
+            in {
+                SubmissionReview.Action.OVERRIDE_APPROVED,
+                SubmissionReview.Action.OVERRIDE_REQUESTED,
+            }
+            for row in decision_rows
+        )
+        flagged = sum(bool(row.warnings_snapshot) for row in decision_rows)
+        high_risk_approved = sum(
+            row.action == SubmissionReview.Action.SECOND_APPROVED
+            for row in decision_rows
+        )
+        durations = [
+            row.created_at - row.submission.created_at
+            for row in decision_rows
+            if row.created_at and row.submission.created_at
+        ]
+        avg_seconds = (
+            sum(item.total_seconds() for item in durations) / len(durations)
+            if durations
+            else 0
+        )
+        reviewer_rows.append(
+            {
+                "user": user,
+                "role": moderation_role(user),
+                "reviews": len(decision_rows),
+                "approved": approved,
+                "rejected": rejected,
+                "flagged": flagged,
+                "overrides": overrides,
+                "override_rate": (
+                    round((overrides / len(decision_rows)) * 100, 1)
+                    if decision_rows
+                    else 0
+                ),
+                "high_risk_approved": high_risk_approved,
+                "average_review_hours": round(avg_seconds / 3600, 1) if avg_seconds else 0,
+                "unusual_override": False,
+            }
+        )
+
+    established_rates = [
+        row["override_rate"] for row in reviewer_rows if row["reviews"] >= 20
+    ]
+    peer_average = (
+        sum(established_rates) / len(established_rates)
+        if established_rates
+        else 0
+    )
+    warning_threshold = max(10.0, peer_average + 5.0)
+    for row in reviewer_rows:
+        row["unusual_override"] = bool(
+            row["reviews"] >= 20 and row["override_rate"] > warning_threshold
+        )
+
+    second_queue = list(
+        pending.filter(
+            verification_status=SubmissionVerificationStatus.AWAITING_SECOND
+        )
+        .select_related("submitted_by", "kennel", "dog", "litter")
+        .order_by("created_at")[:50]
+    )
+    recent_changes = list(
+        ModerationAudit.objects.filter(action=ModerationAudit.Action.RECORD_CHANGED)
+        .select_related("actor", "dog", "litter", "submission")
+        .order_by("-created_at")[:30]
+    )
+    rules = list(VerificationRule.objects.order_by("code"))
+    role_assignments = {
+        item.user_id: item
+        for item in ModerationRoleAssignment.objects.select_related("user").all()
+    }
+    for user in staff_users:
+        user.moderation_assignment = role_assignments.get(user.pk)
+
+    return render(
+        request,
+        "accounts/verification_dashboard.html",
+        {
+            "pending_count": pending_count,
+            "yellow_count": yellow_count,
+            "red_count": red_count,
+            "second_count": second_count,
+            "overrides_count": overrides_count,
+            "reviewer_rows": reviewer_rows,
+            "peer_override_average": round(peer_average, 1),
+            "override_warning_threshold": round(warning_threshold, 1),
+            "second_queue": second_queue,
+            "recent_changes": recent_changes,
+            "rules": rules,
+            "staff_users": staff_users,
+            "role_choices": ModerationRoleAssignment.Role.choices,
+        },
+    )
+
+
+@staff_member_required
+@require_POST
+def moderation_set_role(request):
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+
+    target = get_object_or_404(
+        get_user_model(),
+        pk=request.POST.get("user_id"),
+    )
+    requested_role = request.POST.get("role", "").strip()
+    if target.is_superuser:
+        messages.info(request, "Superusers always have owner-level verification authority.")
+        return redirect("accounts:verification-dashboard")
+
+    current = ModerationRoleAssignment.objects.filter(user=target).first()
+    before = current.role if current else ""
+    if requested_role:
+        if requested_role not in dict(ModerationRoleAssignment.Role.choices):
+            messages.error(request, "Unknown moderation role.")
+            return redirect("accounts:verification-dashboard")
+        ModerationRoleAssignment.objects.update_or_create(
+            user=target,
+            defaults={
+                "role": requested_role,
+                "assigned_by": request.user,
+            },
+        )
+        if not target.is_staff:
+            target.is_staff = True
+            target.save(update_fields=("is_staff",))
+    else:
+        if current:
+            current.delete()
+        if target.is_staff:
+            target.is_staff = False
+            target.save(update_fields=("is_staff",))
+
+    record_audit(
+        action=ModerationAudit.Action.VERIFICATION,
+        actor=request.user,
+        summary={
+            "type": "moderation_role_changed",
+            "target_user_id": target.pk,
+            "previous_role": before,
+            "new_role": requested_role or "none",
+        },
+        note="Owner updated moderation authority.",
+    )
+    messages.success(request, "Moderator authority updated.")
+    return redirect("accounts:verification-dashboard")
+
+
+@staff_member_required
+@require_POST
+def verification_rule_update(request, pk):
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+
+    rule = get_object_or_404(VerificationRule, pk=pk)
+    risk_level = request.POST.get("risk_level", "").strip()
+    if risk_level not in dict(SubmissionRiskLevel.choices):
+        messages.error(request, "Unknown verification risk level.")
+        return redirect("accounts:verification-dashboard")
+
+    before = {
+        "enabled": rule.enabled,
+        "risk_level": rule.risk_level,
+        "second_approval_required": rule.second_approval_required,
+    }
+    rule.enabled = request.POST.get("enabled") == "on"
+    rule.risk_level = risk_level
+    rule.second_approval_required = request.POST.get("second_approval_required") == "on"
+    rule.updated_by = request.user
+    rule.save()
+    record_audit(
+        action=ModerationAudit.Action.VERIFICATION,
+        actor=request.user,
+        summary={
+            "type": "verification_rule_changed",
+            "rule": rule.code,
+            "previous": before,
+            "new": {
+                "enabled": rule.enabled,
+                "risk_level": rule.risk_level,
+                "second_approval_required": rule.second_approval_required,
+            },
+        },
+        note="Owner updated an automated verification rule.",
+    )
+    messages.success(request, f"Verification rule '{rule.title}' updated.")
+    return redirect("accounts:verification-dashboard")
+
+
+@staff_member_required
 def data_health(request):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
     report = quick_quality_report(sample_limit=12)
     counts = report["counts"]
     critical_total = sum(
@@ -1879,6 +2136,8 @@ def data_health(request):
 
 @staff_member_required
 def moderation_audit(request):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
     events = ModerationAudit.objects.select_related(
         "actor", "dog", "kennel", "litter", "submission", "dispute"
     )
