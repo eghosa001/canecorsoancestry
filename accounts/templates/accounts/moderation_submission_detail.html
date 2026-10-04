@@ -122,7 +122,7 @@
           <button class="btn btn-outline" type="submit">Request evidence</button>
         </form>
 
-        {% if not findings %}
+        {% if not blocking_findings %}
           <form method="post" action="{% url 'accounts:review-submission' submission.pk 'approve' %}">
             {% csrf_token %}
             <textarea name="resolution_notes" rows="3" placeholder="Optional approval note" aria-label="Approval note"></textarea>
@@ -137,7 +137,7 @@
         </form>
       </div>
 
-      {% if findings and can_review_flagged and submission.verification_status != "awaiting_second" %}
+      {% if blocking_findings and can_review_flagged and submission.verification_status != "awaiting_second" %}
         <div class="section-spacer-tight">
           <h3>Approve with override</h3>
           <p class="muted">The warning remains in history. Enter why the evidence supports approval despite the automated finding.</p>
