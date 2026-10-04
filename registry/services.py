@@ -39,7 +39,7 @@ from .models import (
     VerificationEvent,
     VerificationState,
 )
-from .permissions import can_review_flagged_submissions, can_second_approve
+from .permissions import can_review_flagged_submissions, can_review_submissions, can_second_approve
 from .verification import verification_snapshot, verify_submission
 
 
@@ -212,6 +212,8 @@ def _create_review(submission, reviewer, action, reason=""):
 
 @transaction.atomic
 def request_submission_evidence(submission, reviewer, reason):
+    if not can_review_submissions(reviewer):
+        raise ValueError("This account does not have submission-review authority.")
     reason = (reason or "").strip()
     if not reason:
         raise ValueError("Explain what evidence is required.")
@@ -337,6 +339,8 @@ def approve_submission(
     allow_override=False,
     override_review=None,
 ):
+    if not can_review_submissions(reviewer):
+        raise ValueError("This account does not have submission-review authority.")
     submission = Submission.objects.select_for_update().select_related(
         "dog", "kennel", "litter", "document", "submitted_by"
     ).get(pk=submission.pk)
@@ -756,6 +760,23 @@ def approve_submission(
         },
         note=resolution_notes,
     )
+    if final_review.action == SubmissionReview.Action.SECOND_APPROVED:
+        record_audit(
+            action=ModerationAudit.Action.SECOND_APPROVAL,
+            actor=reviewer,
+            dog=submission.dog,
+            kennel=submission.kennel,
+            litter=submission.litter,
+            submission=submission,
+            summary={
+                "decision": "approved",
+                "first_reviewer_id": override_review.reviewer_id,
+                "second_reviewer_id": reviewer.pk,
+                "warnings": final_review.warnings_snapshot,
+                "evidence": final_review.evidence_snapshot,
+            },
+            note=resolution_notes,
+        )
     if submission.kind in {Submission.Kind.CORRECTION, Submission.Kind.LITTER_EDIT} and review_diff:
         record_audit(
             action=ModerationAudit.Action.RECORD_CHANGED,
@@ -776,6 +797,8 @@ def approve_submission(
 
 @transaction.atomic
 def reject_submission(submission, reviewer, resolution_notes=""):
+    if not can_review_submissions(reviewer):
+        raise ValueError("This account does not have submission-review authority.")
     submission = Submission.objects.select_for_update().select_related(
         "submitted_by"
     ).get(pk=submission.pk)
