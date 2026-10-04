@@ -1049,6 +1049,9 @@ def notifications(request):
 
 @staff_member_required
 def moderation_queue(request):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
+
     pending = Submission.objects.filter(
         status=Submission.Status.PENDING
     ).select_related(
@@ -1065,6 +1068,7 @@ def moderation_queue(request):
     kind = request.GET.get("kind", "").strip()
     priority = request.GET.get("priority", "").strip()
     assignment = request.GET.get("assignment", "").strip()
+    risk = request.GET.get("risk", "").strip()
 
     if query:
         pending = pending.filter(
@@ -1079,12 +1083,14 @@ def moderation_queue(request):
         pending = pending.filter(kind=kind)
     if priority.isdigit() and int(priority) in dict(Submission.Priority.choices):
         pending = pending.filter(priority=int(priority))
+    if risk in dict(SubmissionRiskLevel.choices):
+        pending = pending.filter(risk_level=risk)
     if assignment == "mine":
         pending = pending.filter(assigned_to=request.user)
     elif assignment == "unassigned":
         pending = pending.filter(assigned_to__isnull=True)
 
-    pending = pending.order_by("-priority", "created_at")
+    pending = pending.order_by("-priority", "-risk_level", "created_at")
     paginator = Paginator(pending, 50)
     page_obj = paginator.get_page(request.GET.get("page"))
     pending_items = list(page_obj.object_list)
@@ -1092,7 +1098,11 @@ def moderation_queue(request):
     query_params.pop("page", None)
 
     for item in pending_items:
+        if item.verification_status == SubmissionVerificationStatus.UNCHECKED:
+            verify_submission(item)
+            item.refresh_from_db()
         item.review_diff = submission_diff(item)
+        item.current_findings = list(current_findings(item))
         age_days = max(0, (timezone.now() - item.created_at).days)
         item.age_days = age_days
         item.is_aging = age_days >= 7
@@ -1140,14 +1150,84 @@ def moderation_queue(request):
             "duplicate_results": duplicate_results,
             "bulk_form": BulkModerationForm(),
             "disputes": disputes,
+            "can_manage_verification": can_manage_verification(request.user),
             "filters": {
                 "q": query,
                 "kind": kind,
                 "priority": priority,
                 "assignment": assignment,
+                "risk": risk,
             },
             "submission_kinds": Submission.Kind.choices,
             "priority_choices": Submission.Priority.choices,
+            "risk_choices": SubmissionRiskLevel.choices,
+        },
+    )
+
+
+@staff_member_required
+def moderation_submission_detail(request, pk):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
+
+    submission = get_object_or_404(
+        Submission.objects.select_related(
+            "submitted_by",
+            "dog",
+            "kennel",
+            "litter",
+            "document",
+            "assigned_to",
+            "reviewed_by",
+            "payment_link__payment",
+        ),
+        pk=pk,
+    )
+    if submission.verification_status == SubmissionVerificationStatus.UNCHECKED:
+        verify_submission(submission)
+        submission.refresh_from_db()
+
+    findings = list(current_findings(submission))
+    evidence_requests = list(
+        submission.evidence_requests.select_related("requested_by").all()
+    )
+    evidence = list(
+        submission.verification_evidence.select_related(
+            "uploaded_by", "evidence_request"
+        ).all()
+    )
+    reviews = list(
+        submission.review_decisions.select_related("reviewer").all()
+    )
+    pending_override = None
+    if submission.verification_status == SubmissionVerificationStatus.AWAITING_SECOND:
+        pending_override = (
+            submission.review_decisions.filter(
+                action=SubmissionReview.Action.OVERRIDE_REQUESTED
+            )
+            .select_related("reviewer")
+            .order_by("-created_at")
+            .first()
+        )
+
+    return render(
+        request,
+        "accounts/moderation_submission_detail.html",
+        {
+            "submission": submission,
+            "findings": findings,
+            "review_diff": submission_diff(submission),
+            "evidence_requests": evidence_requests,
+            "evidence": evidence,
+            "reviews": reviews,
+            "pending_override": pending_override,
+            "can_review_flagged": can_review_flagged_submissions(request.user),
+            "can_second_approve": bool(
+                pending_override
+                and pending_override.reviewer_id != request.user.pk
+                and can_second_approve(request.user)
+            ),
+            "reviewer_role": moderation_role(request.user),
         },
     )
 
@@ -1156,24 +1236,102 @@ def moderation_queue(request):
 def review_submission(request, pk, decision):
     if request.method != "POST":
         return redirect("accounts:moderation")
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
+
     submission = get_object_or_404(Submission, pk=pk)
+    if submission.verification_status == SubmissionVerificationStatus.UNCHECKED:
+        verify_submission(submission)
+        submission.refresh_from_db()
+
     form = ReviewSubmissionForm(request.POST)
     if not form.is_valid():
         messages.error(request, "Review note was invalid.")
-        return redirect("accounts:moderation")
+        return redirect("accounts:moderation-submission", pk=submission.pk)
 
-    notes = form.cleaned_data["resolution_notes"]
+    notes = form.cleaned_data["resolution_notes"].strip()
+    findings = list(current_findings(submission))
+    flagged = bool(findings)
     try:
         if decision == "approve":
+            if flagged:
+                raise ValueError(
+                    "This submission has automated warnings. Use Approve with override so the reason is preserved."
+                )
             approve_submission(submission, request.user, notes)
             messages.success(request, "Submission approved.")
+
         elif decision == "reject":
+            if flagged and not can_review_flagged_submissions(request.user):
+                raise ValueError(
+                    "A senior reviewer or owner must decide a flagged submission."
+                )
             reject_submission(submission, request.user, notes)
             messages.success(request, "Submission rejected.")
+
+        elif decision == "request_evidence":
+            request_submission_evidence(submission, request.user, notes)
+            messages.success(request, "Evidence requested from the submitting member.")
+
+        elif decision == "override":
+            if not can_review_flagged_submissions(request.user):
+                raise ValueError(
+                    "Only a senior reviewer or owner can override an automated warning."
+                )
+            if not flagged:
+                raise ValueError("There is no current warning to override.")
+            if submission.risk_level == SubmissionRiskLevel.RED:
+                request_high_risk_override(submission, request.user, notes)
+                messages.success(
+                    request,
+                    "High-risk override recorded. A different senior reviewer or owner must approve it before publication.",
+                )
+            else:
+                approve_submission(
+                    submission,
+                    request.user,
+                    notes,
+                    allow_override=True,
+                )
+                messages.success(request, "Submission approved with a recorded override.")
+
+        elif decision == "second_approve":
+            if not can_second_approve(request.user):
+                raise ValueError(
+                    "Only a senior reviewer or owner can complete second review."
+                )
+            override_review = (
+                submission.review_decisions.filter(
+                    action=SubmissionReview.Action.OVERRIDE_REQUESTED
+                )
+                .order_by("-created_at")
+                .first()
+            )
+            if override_review is None:
+                raise ValueError("No high-risk override is awaiting second review.")
+            approve_submission(
+                submission,
+                request.user,
+                notes,
+                allow_override=True,
+                override_review=override_review,
+            )
+            messages.success(request, "Second approval completed. Submission published.")
+
+        elif decision == "second_reject":
+            reject_high_risk_override(submission, request.user, notes)
+            messages.success(
+                request,
+                "Second reviewer declined the override. The submission remains pending for review.",
+            )
         else:
             messages.error(request, "Unknown review action.")
+
     except ValueError as exc:
         messages.error(request, str(exc))
+
+    if Submission.objects.filter(pk=submission.pk, status=Submission.Status.PENDING).exists():
+        return redirect("accounts:moderation-submission", pk=submission.pk)
     return redirect("accounts:moderation")
 
 
