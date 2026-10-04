@@ -87,8 +87,8 @@ DEFAULT_RULES = {
     ),
     "unusually_large_litter": (
         "Unusually large declared litter",
-        SubmissionRiskLevel.YELLOW,
-        False,
+        SubmissionRiskLevel.RED,
+        True,
     ),
     "duplicate_litter": (
         "Possible duplicate litter",
