@@ -41,12 +41,26 @@ class PaidSubmissionTests(TestCase):
             {
                 "kennel": self.kennel.pk,
                 "package": SubmissionPayment.Package.MULTI_DOG,
-                "dog_count": 6,
+                "dog_count": 4,
             },
             user=self.user,
         )
         self.assertTrue(form.is_valid(), form.errors)
-        self.assertEqual(form.cleaned_data["amount_kobo"], 100000)
+        self.assertEqual(form.cleaned_data["amount_kobo"], 150000)
+        self.assertEqual(
+            SubmissionPayment.price_for(SubmissionPayment.Package.LITTER, 0),
+            20000,
+        )
+
+        too_many = PaymentPackageForm(
+            {
+                "kennel": self.kennel.pk,
+                "package": SubmissionPayment.Package.MULTI_DOG,
+                "dog_count": 5,
+            },
+            user=self.user,
+        )
+        self.assertFalse(too_many.is_valid())
 
     def test_paid_submission_cannot_be_approved_without_paid_link(self):
         submission = Submission.objects.create(
