@@ -1972,9 +1972,8 @@ def verification_dashboard(request):
             }
         )
 
-    established_rates = [
-        row["override_rate"] for row in reviewer_rows if row["reviews"] >= 20
-    ]
+    established = [row for row in reviewer_rows if row["reviews"] >= 20]
+    established_rates = [row["override_rate"] for row in established]
     peer_average = (
         sum(established_rates) / len(established_rates)
         if established_rates
@@ -1982,9 +1981,18 @@ def verification_dashboard(request):
     )
     warning_threshold = max(10.0, peer_average + 5.0)
     for row in reviewer_rows:
-        row["unusual_override"] = bool(
-            row["reviews"] >= 20 and row["override_rate"] > warning_threshold
-        )
+        peers = [
+            other["override_rate"]
+            for other in established
+            if other["user"].pk != row["user"].pk
+        ]
+        if row["reviews"] >= 20 and peers:
+            row_peer_average = sum(peers) / len(peers)
+            row["unusual_override"] = (
+                row["override_rate"] > max(10.0, row_peer_average + 5.0)
+            )
+        else:
+            row["unusual_override"] = False
 
     second_queue = list(
         pending.filter(
