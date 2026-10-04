@@ -85,6 +85,11 @@ DEFAULT_RULES = {
         SubmissionRiskLevel.RED,
         True,
     ),
+    "litter_kennel_conflict": (
+        "Litter kennel conflict",
+        SubmissionRiskLevel.RED,
+        True,
+    ),
     "litter_count_exceeded": (
         "Submitted puppies exceed declared litter size",
         SubmissionRiskLevel.RED,
@@ -512,6 +517,29 @@ def _litter_puppy_checks(findings, submission, run_id, payload):
         )
 
     submitted_dob = _date_value(payload.get("date_of_birth"))
+
+    sibling_dobs = set()
+    for sibling in Submission.objects.filter(
+        kind=Submission.Kind.DOG,
+        status=Submission.Status.PENDING,
+        payload__litter_submission_id=str(litter_submission.pk),
+    ).exclude(pk=submission.pk).order_by("-created_at")[:200]:
+        sibling_dob = _date_value((sibling.payload or {}).get("date_of_birth"))
+        if sibling_dob:
+            sibling_dobs.add(sibling_dob)
+
+    if not expected_dob and submitted_dob and sibling_dobs and submitted_dob not in sibling_dobs:
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="litter_dob_conflict",
+            message="The litter DOB is not recorded yet, but this puppy DOB conflicts with another submitted littermate.",
+            expected=", ".join(sorted(value.isoformat() for value in sibling_dobs)),
+            submitted=submitted_dob.isoformat(),
+            metadata={"litter_submission_id": str(litter_submission.pk), "source": "submitted_littermates"},
+        )
+
     if expected_dob and submitted_dob and expected_dob != submitted_dob:
         _add_finding(
             findings,
@@ -899,11 +927,19 @@ def verify_submission(submission, *, audit=True):
     open_evidence = submission.evidence_requests.filter(
         status=EvidenceRequest.Status.OPEN
     ).exists()
-    if submission.verification_status == SubmissionVerificationStatus.AWAITING_SECOND and findings:
+    blocking_findings = [
+        finding
+        for finding in findings
+        if finding.risk_level != SubmissionRiskLevel.GREEN
+    ]
+    if (
+        submission.verification_status == SubmissionVerificationStatus.AWAITING_SECOND
+        and blocking_findings
+    ):
         verification_status = SubmissionVerificationStatus.AWAITING_SECOND
     elif open_evidence:
         verification_status = SubmissionVerificationStatus.AWAITING_EVIDENCE
-    elif findings:
+    elif blocking_findings:
         verification_status = SubmissionVerificationStatus.REVIEW
     else:
         verification_status = SubmissionVerificationStatus.PASS
