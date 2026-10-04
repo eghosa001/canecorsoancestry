@@ -37,7 +37,21 @@
 
   <section class="panel">
     <div class="panel-heading">
-      <div><h2>Automated checks</h2><span>Every warning is explainable. The system never rejects a record solely because a check is suspicious.</span></div>
+      <div><h2>Automated checks</h2><span>PASS means no conflict was detected from the available database facts; it is not a claim of independent biological proof.</span></div>
+    </div>
+    <div class="review-diff">
+      {% for check in check_rows %}
+        <article class="review-diff-row">
+          <strong>
+            {% if check.status == "pass" %}✓{% elif check.status == "fail" %}✕{% else %}⚠{% endif %}
+            {{ check.label }}
+          </strong>
+          <span>{{ check.detail }}</span>
+          <span class="submission-state {% if check.status == 'pass' %}green{% elif check.status == 'fail' %}red{% else %}yellow{% endif %}">
+            {% if check.status == "pass" %}PASS{% elif check.status == "fail" %}CONFLICT{% else %}REVIEW{% endif %}
+          </span>
+        </article>
+      {% endfor %}
     </div>
     {% if blocking_findings %}
       <div class="review-diff">
@@ -72,6 +86,48 @@
             <span class="diff-arrow">→</span>
             <span class="diff-after">{{ change.after }}</span>
           </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if litter_submission %}
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Litter group</h2>
+          <span>One litter record groups independent dog submissions; every approved dog still receives its own canonical Dog ID.</span>
+        </div>
+      </div>
+      <div class="review-diff">
+        <div class="review-diff-row"><strong>Litter submission ID</strong><span>{{ litter_submission.pk }}</span></div>
+        <div class="review-diff-row"><strong>Litter ID</strong><span>{% if litter_submission.litter %}{{ litter_submission.litter.code }}{% else %}{{ litter_submission.payload.code|default:"Not recorded" }}{% endif %}</span></div>
+        <div class="review-diff-row"><strong>Declared puppies</strong><span>{% if litter_submission.litter and litter_submission.litter.declared_puppy_count %}{{ litter_submission.litter.declared_puppy_count }}{% else %}{{ litter_submission.payload.declared_puppy_count|default:"Not recorded" }}{% endif %}</span></div>
+        <div class="review-diff-row"><strong>Submitted dog records</strong><span>{{ litter_members|length }}</span></div>
+      </div>
+      <div class="moderation-list section-spacer-tight">
+        {% for member in litter_members %}
+          <article class="moderation-card">
+            <div class="moderation-card-content">
+              <div class="moderation-meta">
+                <div>
+                  <span class="eyebrow">{{ member.submitted_sex|default:"Sex not recorded" }}</span>
+                  <h3>{{ member.submitted_name|default:"Unnamed dog" }}</h3>
+                  <p>DOB: {{ member.submitted_dob|default:"Not recorded" }} · Submission {{ member.pk }}</p>
+                  {% if member.dog %}<small>Canonical Dog ID: {{ member.dog.pk }}</small>{% else %}<small>Canonical Dog ID: pending approval</small>{% endif %}
+                </div>
+                <div class="queue-badges">
+                  <span class="submission-state {{ member.risk_level }}">{{ member.get_risk_level_display }}</span>
+                  <span class="assignment-pill">{{ member.get_status_display }}</span>
+                </div>
+              </div>
+              {% if member.pk != submission.pk %}
+                <a class="text-link" href="{% url 'accounts:moderation-submission' member.pk %}">Open littermate review →</a>
+              {% endif %}
+            </div>
+          </article>
+        {% empty %}
+          <p class="muted">No individual dog submissions are linked to this litter yet.</p>
         {% endfor %}
       </div>
     </section>
