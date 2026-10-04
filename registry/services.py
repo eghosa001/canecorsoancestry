@@ -347,6 +347,10 @@ def approve_submission(
     if submission.status != Submission.Status.PENDING:
         raise ValueError("Only pending submissions can be reviewed.")
 
+    # Payment/package eligibility is a hard server-side prerequisite and is
+    # never overrideable by moderation. Run it before warning/override logic.
+    paid_link = _require_paid_submission(submission)
+
     findings = verify_submission(submission, audit=False)
     blocking_findings = [
         finding
@@ -379,8 +383,6 @@ def approve_submission(
 
     payload = submission.payload or {}
     review_diff = submission_diff(submission)
-
-    paid_link = _require_paid_submission(submission)
 
     if submission.kind == Submission.Kind.DOG:
         kennel = submission.kennel
