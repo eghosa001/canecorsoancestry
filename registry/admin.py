@@ -171,9 +171,11 @@ class SubmissionAdmin(admin.ModelAdmin):
         "kennel__name",
         "submitted_by__username",
     )
+    exclude = ("reviewed_by", "assigned_to")
     readonly_fields = (
         "status",
-        "reviewed_by",
+        "reviewed_by_admin",
+        "assigned_admin",
         "reviewed_at",
         "resolution_notes",
         "risk_level",
@@ -199,6 +201,15 @@ class SubmissionAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("payment_link__payment")
 
+    @admin.display(description="Reviewed by")
+    def reviewed_by_admin(self, obj):
+        if not obj.reviewed_by_id:
+            return "Not reviewed"
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=obj.reviewed_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
     @admin.display(description="Assigned admin")
     def assigned_admin(self, obj):
         if not obj.assigned_to_id:
@@ -222,6 +233,8 @@ class VerificationEventAdmin(admin.ModelAdmin):
     list_display = ("dog", "kennel", "field_name", "state", "reviewer_admin", "created_at")
     list_filter = ("state", "created_at")
     search_fields = ("dog__name", "kennel__name", "field_name", "note")
+    exclude = ("reviewer",)
+    readonly_fields = ("reviewer_admin",)
 
     @admin.display(description="Reviewer")
     def reviewer_admin(self, obj):
@@ -342,6 +355,8 @@ class AppendOnlyAdmin(admin.ModelAdmin):
 class ModerationAuditAdmin(AppendOnlyAdmin):
     list_display = ("action", "public_actor", "dog", "kennel", "litter", "created_at")
     list_filter = ("action", "created_at")
+    exclude = ("actor",)
+    readonly_fields = ("public_actor",)
     search_fields = ("dog__name", "kennel__name", "litter__code", "actor_admin_number_snapshot", "note")
 
     @admin.display(description="Admin")
@@ -353,6 +368,8 @@ class ModerationAuditAdmin(AppendOnlyAdmin):
 class SubmissionReviewAdmin(AppendOnlyAdmin):
     list_display = ("submission", "action", "public_reviewer", "created_at")
     list_filter = ("action", "created_at")
+    exclude = ("reviewer",)
+    readonly_fields = ("public_reviewer",)
     search_fields = ("submission__id", "reviewer_admin_number_snapshot", "reason")
 
     @admin.display(description="Admin")
@@ -371,6 +388,8 @@ class VerificationFindingAdmin(AppendOnlyAdmin):
 class SubmissionEvidenceAdmin(AppendOnlyAdmin):
     list_display = ("submission", "evidence_type", "uploaded_by_display", "created_at")
     list_filter = ("evidence_type", "created_at")
+    exclude = ("uploaded_by",)
+    readonly_fields = ("uploaded_by_display",)
     search_fields = ("submission__id", "sha256", "note")
 
     @admin.display(description="Uploaded by")
@@ -382,6 +401,8 @@ class SubmissionEvidenceAdmin(AppendOnlyAdmin):
 class EvidenceRequestAdmin(AppendOnlyAdmin):
     list_display = ("submission", "status", "requested_by_admin", "created_at")
     list_filter = ("status", "created_at")
+    exclude = ("requested_by",)
+    readonly_fields = ("requested_by_admin",)
     search_fields = ("submission__id", "note")
 
     @admin.display(description="Requested by")
