@@ -18,6 +18,7 @@ from registry.models import (
     SubmissionReview,
     SubmissionRiskLevel,
     SubmissionVerificationStatus,
+    VerificationRule,
 )
 from registry.services import (
     approve_submission,
@@ -322,6 +323,115 @@ class VerificationGovernanceTests(TestCase):
         )
         self.assertEqual(submission.status, Submission.Status.PENDING)
 
+
+    def test_green_configured_finding_does_not_block_clean_review(self):
+        rule = VerificationRule.objects.get(code="litter_dob_conflict")
+        rule.risk_level = SubmissionRiskLevel.GREEN
+        rule.second_approval_required = False
+        rule.save()
+
+        submission = self._puppy_submission(
+            dob="2024-01-05",
+            name="Configured Green Puppy",
+        )
+        self.assertEqual(submission.risk_level, SubmissionRiskLevel.GREEN)
+        self.assertEqual(
+            submission.verification_status,
+            SubmissionVerificationStatus.PASS,
+        )
+
+        approve_submission(submission, self.reviewer)
+        submission.refresh_from_db()
+        dog = Dog.objects.get(name="Configured Green Puppy")
+        self.assertEqual(submission.status, Submission.Status.APPROVED)
+        self.assertEqual(dog.date_of_birth, date(2026, 3, 12))
+
+    def test_explicit_record_lock_requires_high_risk_review_for_any_correction(self):
+        dog = Dog.objects.create(
+            name="Locked Dog",
+            slug="locked-dog",
+            sex=Dog.Sex.MALE,
+            date_of_birth=date(2025, 2, 1),
+            colour="Black",
+            kennel=self.kennel,
+            sire=self.sire,
+            dam=self.dam,
+            is_public=True,
+            is_record_locked=True,
+            record_locked_at=timezone.now(),
+            record_locked_by=self.senior_one,
+        )
+        correction = Submission.objects.create(
+            kind=Submission.Kind.CORRECTION,
+            submitted_by=self.member,
+            dog=dog,
+            kennel=self.kennel,
+            payload={
+                "name": dog.name,
+                "sex": dog.sex,
+                "date_of_birth": dog.date_of_birth.isoformat(),
+                "colour": "Grey",
+                "country": dog.country,
+                "bloodline": dog.bloodline,
+                "sire_id": str(self.sire.pk),
+                "dam_id": str(self.dam.pk),
+                "litter_id": None,
+                "registration": "",
+                "microchip_number": "",
+                "bio": dog.bio,
+            },
+        )
+        verify_submission(correction)
+        correction.refresh_from_db()
+
+        self.assertEqual(correction.risk_level, SubmissionRiskLevel.RED)
+        finding = current_findings(correction).filter(
+            code="locked_ancestry_change",
+            metadata__record_locked=True,
+        ).first()
+        self.assertIsNotNone(finding)
+        self.assertIn("explicitly locked", finding.message)
+
+    def test_puppy_cannot_borrow_a_different_paid_litter_package(self):
+        second_payment = SubmissionPayment.objects.create(
+            user=self.member,
+            kennel=self.kennel,
+            package=SubmissionPayment.Package.LITTER,
+            dog_count=0,
+            amount_kobo=20000,
+            reference="CCA-other-litter-package",
+            status=SubmissionPayment.Status.PAID,
+            paid_at=timezone.now(),
+        )
+        submission = Submission.objects.create(
+            kind=Submission.Kind.DOG,
+            submitted_by=self.member,
+            kennel=self.kennel,
+            payload={
+                "_paid_submission": True,
+                "litter_submission_id": str(self.litter_submission.pk),
+                "litter_code": "CCA-L-TEST-001",
+                "sire_id": str(self.sire.pk),
+                "dam_id": str(self.dam.pk),
+                "name": "Borrowed Package Puppy",
+                "sex": Dog.Sex.FEMALE,
+                "date_of_birth": "2026-03-12",
+            },
+        )
+        PaymentSubmissionLink.objects.create(
+            payment=second_payment,
+            submission=submission,
+            slot_kind=PaymentSubmissionLink.SlotKind.PUPPY,
+        )
+        verify_submission(submission)
+        submission.refresh_from_db()
+
+        finding = current_findings(submission).filter(
+            code="payment_entitlement"
+        ).first()
+        self.assertIsNotNone(finding)
+        self.assertIn("different paid packages", finding.message)
+        self.assertEqual(submission.risk_level, SubmissionRiskLevel.RED)
 
     def test_private_verification_evidence_is_not_public_media(self):
         submission = self._puppy_submission(dob="2026-03-12", name="Evidence Puppy")
