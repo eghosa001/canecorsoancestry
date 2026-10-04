@@ -223,7 +223,12 @@ class LitterWorkflowTests(TestCase):
         self.assertEqual(litter.code, "OLD-2026")
 
         submission = Submission.objects.get(kind=Submission.Kind.LITTER_EDIT)
-        approve_submission(submission, self.reviewer)
+        approve_submission(
+            submission,
+            self.reviewer,
+            "Reviewed incomplete historical litter data and approved the submitted correction.",
+            allow_override=True,
+        )
         litter.refresh_from_db()
         self.assertEqual(litter.code, "NEW-2026")
         self.assertEqual(litter.notes, "Updated note")
