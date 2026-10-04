@@ -247,8 +247,17 @@ class VerificationEventAdmin(admin.ModelAdmin):
 
 @admin.register(MergeHistory)
 class MergeHistoryAdmin(admin.ModelAdmin):
-    list_display = ("retired_name", "canonical_dog", "performed_by", "created_at")
+    list_display = ("retired_name", "canonical_dog", "performed_by_admin", "created_at")
     search_fields = ("retired_name", "retired_slug", "canonical_dog__name")
+    @admin.display(description="Performed by")
+    def performed_by_admin(self, obj):
+        if not obj.performed_by_id:
+            return "System"
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=obj.performed_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
     readonly_fields = (
         "canonical_dog",
         "retired_dog_id",
@@ -301,9 +310,18 @@ admin.site.register(Notification)
 
 @admin.register(DisputeCase)
 class DisputeCaseAdmin(admin.ModelAdmin):
-    list_display = ("dog", "reason", "status", "opened_by", "assigned_to", "created_at")
+    list_display = ("dog", "reason", "status", "opened_by", "assigned_admin", "created_at")
     list_filter = ("reason", "status", "created_at")
     search_fields = ("dog__name", "opened_by__username", "details", "resolution_notes")
+
+    @admin.display(description="Assigned admin")
+    def assigned_admin(self, obj):
+        if not obj.assigned_to_id:
+            return "Unassigned"
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=obj.assigned_to_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
 
 
 class AppendOnlyAdmin(admin.ModelAdmin):
@@ -351,16 +369,24 @@ class VerificationFindingAdmin(AppendOnlyAdmin):
 
 @admin.register(SubmissionEvidence)
 class SubmissionEvidenceAdmin(AppendOnlyAdmin):
-    list_display = ("submission", "evidence_type", "uploaded_by", "created_at")
+    list_display = ("submission", "evidence_type", "uploaded_by_display", "created_at")
     list_filter = ("evidence_type", "created_at")
-    search_fields = ("submission__id", "uploaded_by__username", "sha256", "note")
+    search_fields = ("submission__id", "sha256", "note")
+
+    @admin.display(description="Uploaded by")
+    def uploaded_by_display(self, obj):
+        return obj.uploaded_by_display_label
 
 
 @admin.register(EvidenceRequest)
 class EvidenceRequestAdmin(AppendOnlyAdmin):
-    list_display = ("submission", "status", "requested_by", "created_at")
+    list_display = ("submission", "status", "requested_by_admin", "created_at")
     list_filter = ("status", "created_at")
-    search_fields = ("submission__id", "requested_by__username", "note")
+    search_fields = ("submission__id", "note")
+
+    @admin.display(description="Requested by")
+    def requested_by_admin(self, obj):
+        return obj.requested_by_admin_label
 
 
 @admin.register(VerificationRule)
