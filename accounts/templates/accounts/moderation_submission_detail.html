@@ -39,12 +39,12 @@
     <div class="panel-heading">
       <div><h2>Automated checks</h2><span>Every warning is explainable. The system never rejects a record solely because a check is suspicious.</span></div>
     </div>
-    {% if findings %}
+    {% if blocking_findings %}
       <div class="review-diff">
-        {% for finding in findings %}
+        {% for finding in blocking_findings %}
           <article class="review-diff-row">
             <strong>
-              {% if finding.risk_level == "red" %}✕{% else %}⚠{% endif %}
+              {% if finding.risk_level == "red" %}✕{% elif finding.risk_level == "yellow" %}⚠{% else %}✓{% endif %}
               {{ finding.metadata.rule_title|default:finding.code }}
             </strong>
             <div>
