@@ -703,6 +703,17 @@ def _litter_checks(findings, submission, run_id, payload):
     if submission.kind == Submission.Kind.LITTER_EDIT and submission.litter_id:
         current = submission.litter
         critical = []
+        if current.is_record_locked:
+            _add_finding(
+                findings,
+                submission=submission,
+                run_id=run_id,
+                code="locked_ancestry_change",
+                message="This published litter record is explicitly locked by the Owner/Super Admin. Any correction requires high-risk review and preserved evidence.",
+                expected="Locked canonical litter unchanged without reviewed evidence",
+                submitted="Litter correction submitted",
+                metadata={"record_locked": True, "litter_id": str(current.pk)},
+            )
         if litter_dob != current.date_of_birth:
             critical.append(("DOB", current.date_of_birth, litter_dob))
         if _id_text(sire_id) != _id_text(current.sire_id):
@@ -729,6 +740,17 @@ def _correction_checks(findings, submission, run_id, payload):
     if dog is None or not dog.is_public:
         return
     critical = []
+    if dog.is_record_locked:
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="locked_ancestry_change",
+            message="This published dog record is explicitly locked by the Owner/Super Admin. Any correction requires high-risk review and preserved evidence.",
+            expected="Locked canonical record unchanged without reviewed evidence",
+            submitted="Correction submitted",
+            metadata={"record_locked": True, "dog_id": str(dog.pk)},
+        )
     if "date_of_birth" in payload and _date_value(payload.get("date_of_birth")) != dog.date_of_birth:
         critical.append(("DOB", dog.date_of_birth, _date_value(payload.get("date_of_birth"))))
     if "sire_id" in payload and _id_text(payload.get("sire_id")) != _id_text(dog.sire_id):
