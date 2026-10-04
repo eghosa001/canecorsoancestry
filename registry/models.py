@@ -240,6 +240,15 @@ class Dog(models.Model):
             )
         return super().save(*args, **kwargs)
 
+    @property
+    def record_locked_by_admin_label(self):
+        if not self.record_locked_by_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.record_locked_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
     def __str__(self):
         return self.name
 
@@ -300,6 +309,15 @@ class Litter(models.Model):
                 raise ValidationError({"sire": "The sire must be born before the litter."})
             if self.dam and self.dam.date_of_birth and self.dam.date_of_birth >= self.date_of_birth:
                 raise ValidationError({"dam": "The dam must be born before the litter."})
+
+    @property
+    def record_locked_by_admin_label(self):
+        if not self.record_locked_by_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.record_locked_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
 
     def __str__(self):
         return self.code
@@ -758,6 +776,13 @@ class EvidenceRequest(models.Model):
     class Meta:
         ordering = ("-created_at",)
 
+    @property
+    def requested_by_admin_label(self):
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.requested_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
 
 class SubmissionEvidence(models.Model):
     class EvidenceType(models.TextChoices):
@@ -798,6 +823,13 @@ class SubmissionEvidence(models.Model):
 
     class Meta:
         ordering = ("-created_at",)
+
+    @property
+    def uploaded_by_display_label(self):
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.uploaded_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else str(self.uploaded_by)
 
 
 class SubmissionReview(models.Model):
@@ -1037,7 +1069,7 @@ class ModerationAudit(models.Model):
         assignment = ModerationRoleAssignment.objects.filter(
             user_id=self.actor_id
         ).only("admin_number").first()
-        return assignment.public_label if assignment else "Admin"
+        return assignment.public_label if assignment else "Member"
 
     def save(self, *args, **kwargs):
         if self.pk and ModerationAudit.objects.filter(pk=self.pk).exists():
