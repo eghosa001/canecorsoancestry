@@ -2007,12 +2007,33 @@ def verification_dashboard(request):
         else:
             row["unusual_override"] = False
 
+    flagged_queue = list(
+        pending.exclude(risk_level=SubmissionRiskLevel.GREEN)
+        .select_related("submitted_by", "kennel", "dog", "litter")
+        .order_by("-requires_second_review", "created_at")[:50]
+    )
+    high_risk_queue = [
+        item for item in flagged_queue
+        if item.risk_level == SubmissionRiskLevel.RED
+    ][:30]
     second_queue = list(
         pending.filter(
             verification_status=SubmissionVerificationStatus.AWAITING_SECOND
         )
         .select_related("submitted_by", "kennel", "dog", "litter")
         .order_by("created_at")[:50]
+    )
+    recent_overrides = list(
+        SubmissionReview.objects.filter(
+            action__in=[
+                SubmissionReview.Action.OVERRIDE_APPROVED,
+                SubmissionReview.Action.OVERRIDE_REQUESTED,
+                SubmissionReview.Action.SECOND_APPROVED,
+                SubmissionReview.Action.SECOND_REJECTED,
+            ]
+        )
+        .select_related("submission", "reviewer", "submission__kennel", "submission__dog", "submission__litter")
+        .order_by("-created_at")[:50]
     )
     recent_changes = list(
         ModerationAudit.objects.filter(
@@ -2054,7 +2075,10 @@ def verification_dashboard(request):
             "reviewer_rows": reviewer_rows,
             "peer_override_average": round(peer_average, 1),
             "override_warning_threshold": round(warning_threshold, 1),
+            "flagged_queue": flagged_queue,
+            "high_risk_queue": high_risk_queue,
             "second_queue": second_queue,
+            "recent_overrides": recent_overrides,
             "recent_changes": recent_changes,
             "locked_dogs": locked_dogs,
             "locked_litters": locked_litters,
@@ -2146,8 +2170,14 @@ def moderation_record_lock(request):
         messages.error(request, "A reason is required to change a record lock.")
         return redirect("accounts:verification-dashboard")
 
+    try:
+        parsed_record_id = uuid.UUID(record_id)
+    except (TypeError, ValueError):
+        messages.error(request, "Enter a valid dog or litter UUID.")
+        return redirect("accounts:verification-dashboard")
+
     model = Dog if record_type == "dog" else Litter
-    record = get_object_or_404(model, pk=record_id)
+    record = get_object_or_404(model, pk=parsed_record_id)
     before = bool(record.is_record_locked)
     desired = action == "lock"
     if before == desired:
