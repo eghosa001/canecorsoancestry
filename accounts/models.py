@@ -22,7 +22,7 @@ class Profile(models.Model):
 class SubmissionPayment(models.Model):
     class Package(models.TextChoices):
         SINGLE_DOG = "single_dog", "1 dog"
-        MULTI_DOG = "multi_dog", "2–6 dogs"
+        MULTI_DOG = "multi_dog", "2–4 dogs"
         LITTER = "litter", "1 litter + its puppies"
 
     class Status(models.TextChoices):
@@ -68,8 +68,10 @@ class SubmissionPayment(models.Model):
     def price_for(cls, package, dog_count=1):
         if package == cls.Package.SINGLE_DOG:
             return 50_000
-        if package in {cls.Package.MULTI_DOG, cls.Package.LITTER}:
-            return 100_000
+        if package == cls.Package.MULTI_DOG:
+            return 150_000
+        if package == cls.Package.LITTER:
+            return 20_000
         raise ValidationError("Unknown submission package.")
 
     @property
