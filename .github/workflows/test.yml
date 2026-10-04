@@ -62,13 +62,53 @@ jobs:
 
           targets=()
           grep -q '^pedigrees/' <<<"$changed" && targets+=("pedigrees.tests.PedigreeServiceTests")
-          if grep -Eq '^registry/(management/commands/(import_canecorso_archive|refresh_canecorso_latest)\.py|tests_canecorso_(import|latest)\.py)$' <<<"$changed"; then
+
+          if grep -Eq '^registry/(management/commands/(import_canecorso_archive|refresh_canecorso_latest)\.py|tests_canecorso_(import|latest)\.py)
+            echo "No changed Python app requires tests."
+            exit 0
+          fi
+
+          printf 'Running scoped tests: %s\n' "${targets[*]}"
+          python manage.py test "${targets[@]}" --verbosity 1
+ <<<"$changed"; then
             targets+=("registry.tests_canecorso_import" "registry.tests_canecorso_latest")
           elif grep -q '^registry/' <<<"$changed"; then
             targets+=("registry.tests.DogModelTests")
           fi
-          grep -q '^accounts/' <<<"$changed" && targets+=("accounts")
-          grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
+
+          if grep -Eq '^(accounts/(views|forms|urls|admin)\.py|accounts/tests_verification\.py|accounts/tests_payments\.py|accounts/templates/accounts/(moderation_queue|moderation_submission_detail|submission_list|verification_dashboard)\.html|registry/(verification|services|permissions|models|admin)\.py|registry/migrations/.*|core/media_views\.py)
+            echo "No changed Python app requires tests."
+            exit 0
+          fi
+
+          printf 'Running scoped tests: %s\n' "${targets[*]}"
+          python manage.py test "${targets[@]}" --verbosity 1
+ <<<"$changed"; then
+            targets+=("accounts.tests_verification.VerificationGovernanceTests")
+            targets+=("accounts.tests_payments.PaidSubmissionTests")
+          elif grep -q '^accounts/' <<<"$changed"; then
+            targets+=("accounts")
+          fi
+
+          if grep -q '^core/media_views\.py
+            echo "No changed Python app requires tests."
+            exit 0
+          fi
+
+          printf 'Running scoped tests: %s\n' "${targets[*]}"
+          python manage.py test "${targets[@]}" --verbosity 1
+ <<<"$changed"; then
+            targets+=("core.tests_cloudflare_media")
+          elif grep -Eq '^core/.*\.py
+            echo "No changed Python app requires tests."
+            exit 0
+          fi
+
+          printf 'Running scoped tests: %s\n' "${targets[*]}"
+          python manage.py test "${targets[@]}" --verbosity 1
+ <<<"$changed"; then
+            targets+=("core")
+          fi
 
           if [ ${#targets[@]} -eq 0 ]; then
             echo "No changed Python app requires tests."
