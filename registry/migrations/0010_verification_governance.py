@@ -9,12 +9,14 @@ DEFAULT_RULES = [
     ("duplicate_registration", "Duplicate external registration number", "red", True),
     ("duplicate_microchip", "Duplicate microchip number", "red", True),
     ("duplicate_identity", "Possible duplicate dog identity", "red", True),
+    ("duplicate_submission", "Possible duplicate pending submission", "yellow", False),
     ("existing_identity_conflict", "Existing dog identity conflict", "red", True),
     ("duplicate_photo", "Duplicate identity photograph", "yellow", False),
     ("litter_dob_conflict", "Litter date-of-birth conflict", "red", True),
     ("litter_parent_conflict", "Litter parentage conflict", "red", True),
     ("litter_id_conflict", "Litter identity conflict", "red", True),
     ("litter_count_exceeded", "Submitted puppies exceed declared litter size", "red", True),
+    ("unusually_large_litter", "Unusually large declared litter", "yellow", False),
     ("duplicate_litter", "Possible duplicate litter", "yellow", False),
     ("missing_litter_core_data", "Incomplete litter identity data", "yellow", False),
     ("pedigree_chronology", "Pedigree chronology conflict", "red", True),
@@ -45,6 +47,11 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.AddField(
+            model_name="dogimage",
+            name="content_sha256",
+            field=models.CharField(blank=True, db_index=True, max_length=64),
+        ),
         migrations.AddField(
             model_name="litter",
             name="country",
@@ -207,6 +214,29 @@ class Migration(migrations.Migration):
                     models.Index(fields=["submission", "is_current", "risk_level"], name="finding_current_risk_idx")
                 ],
             },
+        ),
+        migrations.AlterField(
+            model_name="moderationaudit",
+            name="action",
+            field=models.CharField(
+                choices=[
+                    ("submission_approved", "Submission approved"),
+                    ("submission_rejected", "Submission rejected"),
+                    ("submission_bulk", "Bulk moderation update"),
+                    ("dog_merged", "Dog records merged"),
+                    ("verification", "Verification recorded"),
+                    ("dispute_opened", "Dispute opened"),
+                    ("dispute_updated", "Dispute updated"),
+                    ("verification_run", "Verification run"),
+                    ("evidence_requested", "Evidence requested"),
+                    ("evidence_uploaded", "Evidence uploaded"),
+                    ("override_requested", "Override requested"),
+                    ("second_approval", "Second approval"),
+                    ("record_changed", "Locked record changed"),
+                ],
+                db_index=True,
+                max_length=40,
+            ),
         ),
         migrations.RunPython(seed_verification_rules, migrations.RunPython.noop),
     ]
