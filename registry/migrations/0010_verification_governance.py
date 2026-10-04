@@ -16,7 +16,7 @@ DEFAULT_RULES = [
     ("litter_parent_conflict", "Litter parentage conflict", "red", True),
     ("litter_id_conflict", "Litter identity conflict", "red", True),
     ("litter_count_exceeded", "Submitted puppies exceed declared litter size", "red", True),
-    ("unusually_large_litter", "Unusually large declared litter", "yellow", False),
+    ("unusually_large_litter", "Unusually large declared litter", "red", True),
     ("duplicate_litter", "Possible duplicate litter", "yellow", False),
     ("missing_litter_core_data", "Incomplete litter identity data", "yellow", False),
     ("pedigree_chronology", "Pedigree chronology conflict", "red", True),
