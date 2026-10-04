@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
 
-from registry.models import DisputeCase, Dog, DogDocument, DogRegistration, DogSource, Kennel, KennelMembership, Litter, Submission, SubmissionEvidence, VerificationState
+from registry.models import DisputeCase, Dog, DogDocument, DogIdentityNumber, DogRegistration, DogSource, Kennel, KennelMembership, Litter, Submission, SubmissionEvidence, VerificationState
 
 from .models import SubmissionPayment
 
@@ -316,6 +316,16 @@ class LitterPuppySubmissionForm(forms.Form):
 
 
 class DogCorrectionForm(forms.ModelForm):
+    registration = forms.CharField(
+        max_length=120,
+        required=False,
+        help_text="Changing a published registration number is treated as a protected identity change.",
+    )
+    microchip_number = forms.CharField(
+        max_length=160,
+        required=False,
+        help_text="Optional private identity number. Changes are reviewed and audited.",
+    )
     notes = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={"rows": 3}),
@@ -360,6 +370,12 @@ class DogCorrectionForm(forms.ModelForm):
         self.fields["litter"].queryset = Litter.objects.filter(
             kennel_id__in=kennel_ids
         ).order_by("-date_of_birth", "code")
+        registration = self.instance.registrations.filter(authority__isnull=True).first()
+        microchip = self.instance.identity_numbers.filter(
+            kind=DogIdentityNumber.Kind.MICROCHIP
+        ).first()
+        self.fields["registration"].initial = registration.number if registration else ""
+        self.fields["microchip_number"].initial = microchip.value if microchip else ""
 
     def clean(self):
         cleaned = super().clean()
@@ -586,7 +602,6 @@ class LitterSubmissionForm(forms.Form):
     declared_puppy_count = forms.IntegerField(
         required=False,
         min_value=1,
-        max_value=100,
         label="Number of puppies",
         help_text="Declared litter size. Adult littermates can still be submitted later under this same litter.",
     )
