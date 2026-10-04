@@ -1,0 +1,123 @@
+/* Shared interaction polish v49.
+   Keep the owner-approved visual theme intact; improve touch, focus and picker behavior. */
+
+.dog-autocomplete-host {
+  isolation: isolate;
+}
+
+.dog-autocomplete-host:focus-within {
+  z-index: 140;
+}
+
+.dog-suggestions {
+  max-height: min(420px, 56dvh) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  touch-action: pan-y;
+  border-color: var(--line) !important;
+  background: var(--surface) !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, .34) !important;
+}
+
+.dog-suggestion {
+  min-height: 60px;
+  padding: 11px 14px;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.dog-suggestion[aria-selected="true"],
+.dog-suggestion:focus-visible {
+  background: var(--surface-2) !important;
+  box-shadow: inset 3px 0 0 var(--gold);
+  outline: none;
+}
+
+.dog-suggestion strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.dog-suggestion span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+:where(input, select, textarea):focus-visible {
+  border-color: var(--gold) !important;
+  outline: 2px solid color-mix(in srgb, var(--gold) 42%, transparent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 10%, transparent);
+}
+
+:where(.btn, .theme-toggle, .account-link, .main-nav a, .mobile-nav a, .action-card, .dog-card, .search-result-card, .pedigree-index-card):focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .btn,
+  .theme-toggle,
+  .account-link,
+  .action-card,
+  .dog-card,
+  .search-result-card,
+  .pedigree-index-card,
+  .dog-suggestion {
+    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+  }
+
+  .action-card:hover,
+  .dog-card:hover,
+  .search-result-card:hover,
+  .pedigree-index-card:hover {
+    transform: translateY(-1px);
+  }
+}
+
+@media (pointer: coarse) {
+  .dog-suggestions {
+    max-height: min(50dvh, 370px) !important;
+  }
+
+  .dog-suggestion {
+    min-height: 64px;
+    padding: 12px 14px;
+  }
+
+  .btn,
+  .theme-toggle,
+  .account-link,
+  .mobile-nav a {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 760px) {
+  .header-search .dog-suggestions,
+  .hero-search .dog-suggestions,
+  .filter-search .dog-suggestions,
+  .mating-select .dog-suggestions,
+  .form-field .dog-suggestions,
+  .mobile-nav-search .dog-suggestions {
+    max-height: min(48dvh, 360px) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .theme-toggle,
+  .account-link,
+  .action-card,
+  .dog-card,
+  .search-result-card,
+  .pedigree-index-card,
+  .dog-suggestion {
+    transition: none !important;
+  }
+}

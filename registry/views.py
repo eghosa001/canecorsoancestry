@@ -132,6 +132,9 @@ def dog_suggestions(request):
         .order_by("id")
         .values("number")[:1]
     )
+    # Keep an empty browse picker compact, but give typed searches enough
+    # room for duplicate names, kennels and registration variants.
+    suggestion_limit = 8 if browse and not query else 16
     rows = list(
         dogs.annotate(_registration=Subquery(registration_number))
         .values(
@@ -142,7 +145,7 @@ def dog_suggestions(request):
             "kennel__name",
             "_registration",
         )
-        .order_by("-search_count", "-updated_at", "name")[:8]
+        .order_by("-search_count", "-updated_at", "name")[:suggestion_limit]
     )
     sex_labels = dict(Dog.Sex.choices)
     results = [
