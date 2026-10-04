@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import json
 import logging
 import uuid
@@ -13,8 +14,8 @@ from django.core.exceptions import PermissionDenied
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
-from django.http import HttpResponse
+from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -29,17 +30,30 @@ from registry.models import (
     DisputeCase,
     Dog,
     DogDocument,
+    EvidenceRequest,
     Kennel,
     Litter,
     ModerationAudit,
+    ModerationRoleAssignment,
     Notification,
     Submission,
+    SubmissionEvidence,
+    SubmissionReview,
+    SubmissionRiskLevel,
+    SubmissionVerificationStatus,
     VerificationEvent,
+    VerificationFinding,
+    VerificationRule,
 )
 from registry.permissions import (
     can_contribute_to_dog,
     can_contribute_to_kennel,
     can_edit_kennel,
+    can_manage_verification,
+    can_review_flagged_submissions,
+    can_review_submissions,
+    can_second_approve,
+    moderation_role,
 )
 from registry.services import (
     approve_submission,
@@ -48,9 +62,14 @@ from registry.services import (
     merge_dogs,
     moderation_dog_search,
     record_audit,
+    reject_high_risk_override,
     reject_submission,
+    request_high_risk_override,
+    request_submission_evidence,
     submission_diff,
 )
+
+from registry.verification import current_findings, verify_submission
 
 from pedigrees.services import pedigree_analysis, pedigree_export_rows
 
@@ -77,6 +96,7 @@ from .forms import (
     PaymentPackageForm,
     MergeDogsForm,
     ReviewSubmissionForm,
+    SubmissionEvidenceForm,
     VerificationEventForm,
     VerificationResendForm,
 )
