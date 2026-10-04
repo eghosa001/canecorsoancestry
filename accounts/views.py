@@ -1421,7 +1421,7 @@ def merge_dogs_view(request):
 
 @staff_member_required
 def verify_dog(request):
-    if not can_review_flagged_submissions(request.user):
+    if not can_review_submissions(request.user):
         raise PermissionDenied
     if request.method != "POST":
         return redirect("accounts:moderation")
