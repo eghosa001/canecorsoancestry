@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
 
-from registry.models import DisputeCase, Dog, DogDocument, DogRegistration, DogSource, Kennel, KennelMembership, Litter, Submission, VerificationState
+from registry.models import DisputeCase, Dog, DogDocument, DogRegistration, DogSource, Kennel, KennelMembership, Litter, Submission, SubmissionEvidence, VerificationState
 
 from .models import SubmissionPayment
 
@@ -204,6 +204,11 @@ class DogSubmissionForm(forms.Form):
     sire = forms.ModelChoiceField(queryset=Dog.objects.none(), required=False)
     dam = forms.ModelChoiceField(queryset=Dog.objects.none(), required=False)
     registration = forms.CharField(max_length=120, required=False)
+    microchip_number = forms.CharField(
+        max_length=160,
+        required=False,
+        help_text="Optional. Used privately for identity verification and duplicate checking.",
+    )
     litter = forms.ModelChoiceField(queryset=Litter.objects.none(), required=False)
     bio = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 4}))
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
@@ -232,29 +237,9 @@ class DogSubmissionForm(forms.Form):
         sire = _resolve_parent_autocomplete(self, cleaned, "sire", Dog.Sex.MALE)
         dam = _resolve_parent_autocomplete(self, cleaned, "dam", Dog.Sex.FEMALE)
 
-        registration = (cleaned.get("registration") or "").strip()
-        if registration and DogRegistration.objects.filter(
-            authority__isnull=True, number__iexact=registration
-        ).exists():
-            self.add_error(
-                "registration",
-                "This registration number is already attached to a dog. Open the existing record instead of creating a duplicate.",
-            )
-
-        name = (cleaned.get("name") or "").strip()
-        date_of_birth = cleaned.get("date_of_birth")
-        if name and date_of_birth:
-            likely = Dog.objects.filter(
-                name__iexact=name,
-                date_of_birth=date_of_birth,
-                sire=sire,
-                dam=dam,
-            ).first()
-            if likely:
-                self.add_error(
-                    "name",
-                    f"A likely matching dog already exists: {likely.name}. Use the existing record or submit a correction.",
-                )
+        # Duplicate identity signals are deliberately not rejected here. They are
+        # evaluated server-side by the verification engine so legitimate corrections
+        # can reach the admin review queue with an explainable warning.
         return cleaned
 
 
@@ -303,10 +288,20 @@ class PaymentPackageForm(forms.Form):
 class LitterPuppySubmissionForm(forms.Form):
     name = forms.CharField(max_length=220)
     sex = forms.ChoiceField(choices=Dog.Sex.choices)
+    date_of_birth = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        help_text="Enter the puppy's actual DOB. It will be checked against the paid litter.",
+    )
     colour = forms.CharField(max_length=100, required=False)
     country = forms.CharField(max_length=80, required=False)
     bloodline = forms.CharField(max_length=220, required=False)
     registration = forms.CharField(max_length=120, required=False)
+    microchip_number = forms.CharField(
+        max_length=160,
+        required=False,
+        help_text="Optional. Kept for private identity verification.",
+    )
     bio = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 4}))
     notes = forms.CharField(
         required=False,
@@ -315,15 +310,9 @@ class LitterPuppySubmissionForm(forms.Form):
     )
 
     def clean_registration(self):
-        registration = (self.cleaned_data.get("registration") or "").strip()
-        if registration and DogRegistration.objects.filter(
-            authority__isnull=True,
-            number__iexact=registration,
-        ).exists():
-            raise forms.ValidationError(
-                "This registration number is already attached to a dog."
-            )
-        return registration
+        # Existing numbers are allowed into moderation so the verifier can explain
+        # the conflict rather than treating every discrepancy as fraud.
+        return (self.cleaned_data.get("registration") or "").strip()
 
 
 class DogCorrectionForm(forms.ModelForm):
@@ -477,6 +466,21 @@ class ReviewSubmissionForm(forms.Form):
     )
 
 
+class SubmissionEvidenceForm(forms.Form):
+    evidence_type = forms.ChoiceField(choices=SubmissionEvidence.EvidenceType.choices)
+    file = forms.FileField(
+        validators=[
+            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            validate_document_upload,
+        ]
+    )
+    note = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="Optional context for the reviewing administrator.",
+    )
+
+
 class DogReferenceField(forms.CharField):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault(
@@ -572,8 +576,20 @@ class KennelClaimForm(forms.Form):
 
 
 class LitterSubmissionForm(forms.Form):
-    code = forms.CharField(max_length=80)
+    code = forms.CharField(max_length=80, label="Litter ID")
     kennel = forms.ModelChoiceField(queryset=Kennel.objects.none())
+    country = forms.CharField(
+        max_length=80,
+        required=False,
+        help_text="Country where the litter was whelped, where known.",
+    )
+    declared_puppy_count = forms.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=100,
+        label="Number of puppies",
+        help_text="Declared litter size. Adult littermates can still be submitted later under this same litter.",
+    )
     sire = forms.ModelChoiceField(queryset=Dog.objects.none(), required=False)
     dam = forms.ModelChoiceField(queryset=Dog.objects.none(), required=False)
     date_of_birth = forms.DateField(
@@ -615,6 +631,8 @@ class LitterSubmissionForm(forms.Form):
                 {
                     "code": litter.code,
                     "kennel": litter.kennel,
+                    "country": litter.country,
+                    "declared_puppy_count": litter.declared_puppy_count,
                     "sire": litter.sire,
                     "dam": litter.dam,
                     "date_of_birth": litter.date_of_birth,
