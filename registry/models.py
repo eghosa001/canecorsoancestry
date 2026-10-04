@@ -619,6 +619,7 @@ class Submission(models.Model):
 
 class ModerationRoleAssignment(models.Model):
     class Role(models.TextChoices):
+        NONE = "none", "No verification role"
         OWNER = "owner", "Owner / Super Admin"
         SENIOR = "senior", "Senior Reviewer"
         REVIEWER = "reviewer", "Reviewer"
