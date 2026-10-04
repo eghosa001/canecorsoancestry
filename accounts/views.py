@@ -2121,6 +2121,10 @@ def verification_rule_update(request, pk):
     rule.second_approval_required = request.POST.get("second_approval_required") == "on"
     rule.updated_by = request.user
     rule.save()
+    Submission.objects.filter(status=Submission.Status.PENDING).update(
+        verification_status=SubmissionVerificationStatus.UNCHECKED,
+        verification_checked_at=None,
+    )
     record_audit(
         action=ModerationAudit.Action.VERIFICATION,
         actor=request.user,
