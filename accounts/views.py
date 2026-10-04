@@ -2117,26 +2117,24 @@ def moderation_set_role(request):
 
     current = ModerationRoleAssignment.objects.filter(user=target).first()
     before = current.role if current else ""
-    if requested_role:
-        if requested_role not in dict(ModerationRoleAssignment.Role.choices):
-            messages.error(request, "Unknown moderation role.")
-            return redirect("accounts:verification-dashboard")
-        ModerationRoleAssignment.objects.update_or_create(
-            user=target,
-            defaults={
-                "role": requested_role,
-                "assigned_by": request.user,
-            },
-        )
-        if not target.is_staff:
-            target.is_staff = True
-            target.save(update_fields=("is_staff",))
-    else:
-        if current:
-            current.delete()
-        if target.is_staff:
-            target.is_staff = False
-            target.save(update_fields=("is_staff",))
+    if not requested_role:
+        requested_role = ModerationRoleAssignment.Role.NONE
+    if requested_role not in dict(ModerationRoleAssignment.Role.choices):
+        messages.error(request, "Unknown moderation role.")
+        return redirect("accounts:verification-dashboard")
+    ModerationRoleAssignment.objects.update_or_create(
+        user=target,
+        defaults={
+            "role": requested_role,
+            "assigned_by": request.user,
+        },
+    )
+    if (
+        requested_role != ModerationRoleAssignment.Role.NONE
+        and not target.is_staff
+    ):
+        target.is_staff = True
+        target.save(update_fields=("is_staff",))
 
     record_audit(
         action=ModerationAudit.Action.VERIFICATION,
@@ -2145,7 +2143,7 @@ def moderation_set_role(request):
             "type": "moderation_role_changed",
             "target_user_id": target.pk,
             "previous_role": before,
-            "new_role": requested_role or "none",
+            "new_role": requested_role,
         },
         note="Owner updated moderation authority.",
     )
