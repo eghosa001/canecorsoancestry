@@ -25,13 +25,6 @@ DEFAULT_SOURCE_URL = (
     "blob/main/data/dogs.json"
 )
 
-# Canonical display corrections confirmed against the attached source evidence.
-# Keep the source payload untouched in DogSource for provenance.
-CANONICAL_NAME_OVERRIDES = {
-    "sforza-ludovico": "SFORZA LUDOVICO",
-}
-
-
 def _parse_date(value):
     if not value:
         return None
@@ -127,7 +120,7 @@ class Command(BaseCommand):
                     else None
                 )
                 values = {
-                    "name": CANONICAL_NAME_OVERRIDES.get(source_id, str(record["name"]).strip()),
+                    "name": str(record["name"]).strip(),
                     "sex": _sex(record.get("sex")),
                     "date_of_birth": _parse_date(record.get("dateOfBirth")),
                     "colour": str(record.get("colour") or "").strip(),
@@ -223,18 +216,16 @@ class Command(BaseCommand):
                 ):
                     continue
                 dog = source_to_dog[source_id]
-                dog.sire = (
-                    source_to_dog.get(record.get("sireId"))
-                    if record.get("sireId")
-                    else None
-                )
-                dog.dam = (
-                    source_to_dog.get(record.get("damId"))
-                    if record.get("damId")
-                    else None
-                )
-                dog.full_clean(exclude=("litter",))
-                dog.save(update_fields=("sire", "dam", "updated_at"))
+                changed_parent_fields = []
+                if record.get("sireId"):
+                    dog.sire = source_to_dog.get(record.get("sireId"))
+                    changed_parent_fields.append("sire")
+                if record.get("damId"):
+                    dog.dam = source_to_dog.get(record.get("damId"))
+                    changed_parent_fields.append("dam")
+                if changed_parent_fields:
+                    dog.full_clean(exclude=("litter",))
+                    dog.save(update_fields=(*changed_parent_fields, "updated_at"))
 
             if options["dry_run"]:
                 transaction.set_rollback(True)
