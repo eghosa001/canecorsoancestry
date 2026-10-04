@@ -444,8 +444,7 @@ def approve_submission(
         registration = payload.get("registration", "").strip()
         if registration:
             existing = DogRegistration.objects.filter(
-                authority__isnull=True,
-                number=registration,
+                number__iexact=registration,
             ).first()
             if existing and existing.dog_id != dog.pk:
                 raise ValueError(
@@ -497,6 +496,60 @@ def approve_submission(
         dog.full_clean()
         dog.save()
 
+        if "registration" in payload:
+            desired_registration = str(payload.get("registration") or "").strip()
+            current_registration = dog.registrations.filter(
+                authority__isnull=True
+            ).first()
+            if desired_registration:
+                conflict = DogRegistration.objects.filter(
+                    number__iexact=desired_registration
+                ).exclude(dog=dog).first()
+                if conflict:
+                    raise ValueError(
+                        "That registration number is already linked to another canonical dog. Resolve the identity conflict first."
+                    )
+                if current_registration:
+                    current_registration.number = desired_registration
+                    current_registration.save(update_fields=("number",))
+                else:
+                    DogRegistration.objects.create(
+                        dog=dog,
+                        authority=None,
+                        number=desired_registration,
+                    )
+            elif current_registration:
+                current_registration.delete()
+
+        if "microchip_number" in payload:
+            desired_microchip = str(payload.get("microchip_number") or "").strip()
+            current_microchip = dog.identity_numbers.filter(
+                kind=DogIdentityNumber.Kind.MICROCHIP
+            ).first()
+            if desired_microchip:
+                normalized_chip = re.sub(
+                    r"[^A-Za-z0-9]+", "", desired_microchip
+                ).upper()
+                conflict = DogIdentityNumber.objects.filter(
+                    kind=DogIdentityNumber.Kind.MICROCHIP,
+                    normalized_value=normalized_chip,
+                ).exclude(dog=dog).first()
+                if conflict:
+                    raise ValueError(
+                        "That microchip is already linked to another canonical dog. Resolve the identity conflict first."
+                    )
+                if current_microchip:
+                    current_microchip.value = desired_microchip
+                    current_microchip.save()
+                else:
+                    DogIdentityNumber.objects.create(
+                        dog=dog,
+                        kind=DogIdentityNumber.Kind.MICROCHIP,
+                        value=desired_microchip,
+                    )
+            elif current_microchip:
+                current_microchip.delete()
+
         VerificationEvent.objects.create(
             dog=dog,
             state=dog.verification_state,
@@ -516,6 +569,7 @@ def approve_submission(
             dog=submission.dog,
             image=submission.attachment.name,
             caption=payload.get("caption", "").strip(),
+            content_sha256=str(payload.get("sha256") or "").strip(),
             is_primary=is_primary,
         )
 
@@ -1007,6 +1061,22 @@ def submission_diff(submission):
                 dog.litter.code if dog.litter else None,
                 _litter_name(payload.get("litter_id")),
             )
+        if "registration" in payload:
+            current_registration = dog.registrations.filter(authority__isnull=True).first()
+            add(
+                "Registration number",
+                current_registration.number if current_registration else None,
+                payload.get("registration"),
+            )
+        if "microchip_number" in payload:
+            current_microchip = dog.identity_numbers.filter(
+                kind=DogIdentityNumber.Kind.MICROCHIP
+            ).first()
+            add(
+                "Microchip number",
+                current_microchip.value if current_microchip else None,
+                payload.get("microchip_number"),
+            )
 
     elif submission.kind == Submission.Kind.KENNEL and submission.kennel:
         for label, field in (
@@ -1025,6 +1095,8 @@ def submission_diff(submission):
         add("Sire", litter.sire.name if litter.sire else None, _dog_name(payload.get("sire_id")))
         add("Dam", litter.dam.name if litter.dam else None, _dog_name(payload.get("dam_id")))
         add("Date of birth", litter.date_of_birth, payload.get("date_of_birth"))
+        add("Country", litter.country, payload.get("country"))
+        add("Declared puppy count", litter.declared_puppy_count, payload.get("declared_puppy_count"))
         add("Notes", litter.notes, payload.get("notes"))
 
     elif submission.kind == Submission.Kind.DOCUMENT_VISIBILITY and submission.document:
