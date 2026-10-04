@@ -2,10 +2,12 @@ from django.contrib import admin
 
 from .models import (
     DisputeCase,
+    EvidenceRequest,
     Dog,
     DogAlias,
     DogDocument,
     DogExternalKey,
+    DogIdentityNumber,
     DogImage,
     DogRedirect,
     DogRegistration,
@@ -17,16 +19,36 @@ from .models import (
     Litter,
     MergeHistory,
     ModerationAudit,
+    ModerationRoleAssignment,
     Notification,
     RegistrationAuthority,
     Submission,
+    SubmissionEvidence,
+    SubmissionReview,
     VerificationEvent,
+    VerificationFinding,
+    VerificationRule,
 )
 
 
 class DogRegistrationInline(admin.TabularInline):
     model = DogRegistration
     extra = 0
+
+    def has_add_permission(self, request, obj=None):
+        if obj and obj.is_public:
+            return False
+        return super().has_add_permission(request, obj)
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.is_public:
+            return ("authority", "number", "issued_on")
+        return ()
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.is_public:
+            return False
+        return super().has_delete_permission(request, obj)
 
 
 class DogAliasInline(admin.TabularInline):
@@ -46,7 +68,7 @@ class DogTitleInline(admin.TabularInline):
 
 @admin.register(Dog)
 class DogAdmin(admin.ModelAdmin):
-    list_display = ("name", "sex", "kennel", "verification_state", "is_public")
+    list_display = ("name", "sex", "kennel", "verification_state", "is_public", "is_record_locked")
     list_filter = ("sex", "verification_state", "is_public", "country")
     search_fields = (
         "name",
@@ -64,18 +86,63 @@ class DogAdmin(admin.ModelAdmin):
         DogTitleInline,
     )
 
+    def get_readonly_fields(self, request, obj=None):
+        protected = (
+            "is_public",
+            "is_record_locked",
+            "record_locked_at",
+            "record_locked_by",
+        )
+        if obj and obj.is_public:
+            return protected + (
+                "name",
+                "sex",
+                "date_of_birth",
+                "colour",
+                "country",
+                "bloodline",
+                "kennel",
+                "sire",
+                "dam",
+                "litter",
+                "bio",
+                "verification_state",
+            )
+        return protected
+
 
 @admin.register(Kennel)
 class KennelAdmin(admin.ModelAdmin):
     list_display = ("name", "country", "city", "verified_at")
     search_fields = ("name", "country", "city")
     prepopulated_fields = {"slug": ("name",)}
+    readonly_fields = ("verified_at",)
 
 
 @admin.register(Litter)
 class LitterAdmin(admin.ModelAdmin):
-    list_display = ("code", "kennel", "date_of_birth", "is_public")
+    list_display = ("code", "kennel", "date_of_birth", "declared_puppy_count", "is_public", "is_record_locked")
     search_fields = ("code",)
+
+    def get_readonly_fields(self, request, obj=None):
+        protected = (
+            "is_public",
+            "is_record_locked",
+            "record_locked_at",
+            "record_locked_by",
+        )
+        if obj and obj.is_public:
+            return protected + (
+                "code",
+                "kennel",
+                "sire",
+                "dam",
+                "date_of_birth",
+                "country",
+                "declared_puppy_count",
+                "notes",
+            )
+        return protected
 
 
 @admin.register(Submission)
@@ -89,11 +156,14 @@ class SubmissionAdmin(admin.ModelAdmin):
         "kennel",
         "payment_state",
         "status",
+        "risk_level",
+        "verification_status",
+        "requires_second_review",
         "priority",
         "assigned_to",
         "created_at",
     )
-    list_filter = ("kind", "status", "priority", "created_at")
+    list_filter = ("kind", "status", "risk_level", "verification_status", "priority", "created_at")
     search_fields = (
         "dog__name",
         "litter__code",
@@ -106,9 +176,25 @@ class SubmissionAdmin(admin.ModelAdmin):
         "reviewed_by",
         "reviewed_at",
         "resolution_notes",
+        "risk_level",
+        "verification_status",
+        "verification_checked_at",
+        "requires_second_review",
         "created_at",
         "updated_at",
     )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return bool(request.user and request.user.is_staff)
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("payment_link__payment")
@@ -127,6 +213,18 @@ class VerificationEventAdmin(admin.ModelAdmin):
     list_display = ("dog", "kennel", "field_name", "state", "reviewer", "created_at")
     list_filter = ("state", "created_at")
     search_fields = ("dog__name", "kennel__name", "field_name", "note")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return bool(request.user and request.user.is_staff)
 
 
 @admin.register(MergeHistory)
@@ -153,7 +251,29 @@ class KennelMembershipAdmin(admin.ModelAdmin):
 
 admin.site.register(RegistrationAuthority)
 admin.site.register(DogImage)
-admin.site.register(DogDocument)
+
+@admin.register(DogDocument)
+class DogDocumentAdmin(admin.ModelAdmin):
+    list_display = ("title", "dog", "document_type", "is_public", "created_at")
+    list_filter = ("document_type", "is_public", "created_at")
+    search_fields = ("title", "dog__name", "submitted_by__username")
+    readonly_fields = (
+        "dog",
+        "title",
+        "document_type",
+        "file",
+        "is_public",
+        "submitted_by",
+        "source_submission",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 admin.site.register(HealthRecord)
 admin.site.register(DogSource)
 admin.site.register(DogRedirect)
@@ -168,20 +288,70 @@ class DisputeCaseAdmin(admin.ModelAdmin):
     search_fields = ("dog__name", "opened_by__username", "details", "resolution_notes")
 
 
+class AppendOnlyAdmin(admin.ModelAdmin):
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return bool(request.user and request.user.is_staff)
+
+
 @admin.register(ModerationAudit)
-class ModerationAuditAdmin(admin.ModelAdmin):
+class ModerationAuditAdmin(AppendOnlyAdmin):
     list_display = ("action", "actor", "dog", "kennel", "litter", "created_at")
     list_filter = ("action", "created_at")
     search_fields = ("dog__name", "kennel__name", "litter__code", "actor__username", "note")
-    readonly_fields = (
-        "actor",
-        "action",
-        "dog",
-        "kennel",
-        "litter",
-        "submission",
-        "dispute",
-        "summary",
-        "note",
-        "created_at",
-    )
+
+
+@admin.register(SubmissionReview)
+class SubmissionReviewAdmin(AppendOnlyAdmin):
+    list_display = ("submission", "action", "reviewer", "created_at")
+    list_filter = ("action", "created_at")
+    search_fields = ("submission__id", "reviewer__username", "reason")
+
+
+@admin.register(VerificationFinding)
+class VerificationFindingAdmin(AppendOnlyAdmin):
+    list_display = ("submission", "code", "risk_level", "is_current", "created_at")
+    list_filter = ("risk_level", "is_current", "created_at")
+    search_fields = ("submission__id", "code", "message")
+
+
+@admin.register(SubmissionEvidence)
+class SubmissionEvidenceAdmin(AppendOnlyAdmin):
+    list_display = ("submission", "evidence_type", "uploaded_by", "created_at")
+    list_filter = ("evidence_type", "created_at")
+    search_fields = ("submission__id", "uploaded_by__username", "sha256", "note")
+
+
+@admin.register(EvidenceRequest)
+class EvidenceRequestAdmin(AppendOnlyAdmin):
+    list_display = ("submission", "status", "requested_by", "created_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("submission__id", "requested_by__username", "note")
+
+
+@admin.register(VerificationRule)
+class VerificationRuleAdmin(AppendOnlyAdmin):
+    list_display = ("code", "title", "enabled", "risk_level", "second_approval_required")
+    list_filter = ("enabled", "risk_level", "second_approval_required")
+    search_fields = ("code", "title", "description")
+
+
+@admin.register(ModerationRoleAssignment)
+class ModerationRoleAssignmentAdmin(AppendOnlyAdmin):
+    list_display = ("user", "role", "assigned_by", "assigned_at")
+    list_filter = ("role",)
+    search_fields = ("user__username", "user__email")
+
+
+@admin.register(DogIdentityNumber)
+class DogIdentityNumberAdmin(AppendOnlyAdmin):
+    list_display = ("dog", "kind", "value", "created_at")
+    search_fields = ("dog__name", "value")

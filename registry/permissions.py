@@ -1,4 +1,4 @@
-from .models import KennelMembership, Submission
+from .models import KennelMembership, ModerationRoleAssignment, Submission
 
 
 def membership_for(user, kennel):
@@ -31,3 +31,41 @@ def can_contribute_to_dog(user, dog):
         submitted_by=user,
         dog=dog,
     ).exists()
+
+
+def moderation_role(user):
+    if not getattr(user, "is_authenticated", False):
+        return None
+    if getattr(user, "is_superuser", False):
+        return ModerationRoleAssignment.Role.OWNER
+    assignment = getattr(user, "ancestry_moderation_role", None)
+    if assignment:
+        return assignment.role
+    if getattr(user, "is_staff", False):
+        # Backward compatibility for existing moderators. Owners can explicitly
+        # promote/demote them from the verification dashboard.
+        return ModerationRoleAssignment.Role.REVIEWER
+    return None
+
+
+def can_review_submissions(user):
+    return moderation_role(user) in {
+        ModerationRoleAssignment.Role.OWNER,
+        ModerationRoleAssignment.Role.SENIOR,
+        ModerationRoleAssignment.Role.REVIEWER,
+    }
+
+
+def can_review_flagged_submissions(user):
+    return moderation_role(user) in {
+        ModerationRoleAssignment.Role.OWNER,
+        ModerationRoleAssignment.Role.SENIOR,
+    }
+
+
+def can_second_approve(user):
+    return can_review_flagged_submissions(user)
+
+
+def can_manage_verification(user):
+    return moderation_role(user) == ModerationRoleAssignment.Role.OWNER

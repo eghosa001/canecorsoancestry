@@ -22,6 +22,20 @@ class VerificationState(models.TextChoices):
     HEALTH_VERIFIED = "health", "Health/DNA verified"
 
 
+class SubmissionRiskLevel(models.TextChoices):
+    GREEN = "green", "Green — pass"
+    YELLOW = "yellow", "Yellow — review"
+    RED = "red", "Red — high risk"
+
+
+class SubmissionVerificationStatus(models.TextChoices):
+    UNCHECKED = "unchecked", "Not yet checked"
+    PASS = "pass", "Pass"
+    REVIEW = "review", "Requires admin review"
+    AWAITING_EVIDENCE = "awaiting_evidence", "Awaiting evidence"
+    AWAITING_SECOND = "awaiting_second", "Second review required"
+
+
 class Kennel(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=180)
@@ -115,6 +129,15 @@ class Dog(models.Model):
         db_index=True,
     )
     is_public = models.BooleanField(default=False, db_index=True)
+    is_record_locked = models.BooleanField(default=False, db_index=True)
+    record_locked_at = models.DateTimeField(null=True, blank=True)
+    record_locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="locked_ancestry_dogs",
+    )
     search_count = models.PositiveBigIntegerField(default=0, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -246,8 +269,19 @@ class Litter(models.Model):
         related_name="dammed_litters",
     )
     date_of_birth = models.DateField(null=True, blank=True)
+    country = models.CharField(max_length=80, blank=True)
+    declared_puppy_count = models.PositiveSmallIntegerField(null=True, blank=True)
     notes = models.TextField(blank=True)
     is_public = models.BooleanField(default=False)
+    is_record_locked = models.BooleanField(default=False, db_index=True)
+    record_locked_at = models.DateTimeField(null=True, blank=True)
+    record_locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="locked_ancestry_litters",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -345,10 +379,43 @@ class DogRegistration(models.Model):
         return self.number
 
 
+class DogIdentityNumber(models.Model):
+    class Kind(models.TextChoices):
+        MICROCHIP = "microchip", "Microchip"
+
+    dog = models.ForeignKey(
+        Dog,
+        on_delete=models.CASCADE,
+        related_name="identity_numbers",
+    )
+    kind = models.CharField(max_length=24, choices=Kind.choices, default=Kind.MICROCHIP)
+    value = models.CharField(max_length=160)
+    normalized_value = models.CharField(
+        max_length=160, editable=False, db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=("kind", "normalized_value"),
+                name="unique_dog_identity_number",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        self.normalized_value = re.sub(r"[^A-Za-z0-9]+", "", self.value or "").upper()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.value}"
+
+
 class DogImage(models.Model):
     dog = models.ForeignKey(Dog, on_delete=models.CASCADE, related_name="images")
     image = models.FileField(upload_to="dogs/%Y/%m/")
     caption = models.CharField(max_length=220, blank=True)
+    content_sha256 = models.CharField(max_length=64, blank=True, db_index=True)
     is_primary = models.BooleanField(default=False)
     sort_order = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -454,6 +521,20 @@ class Submission(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True
     )
+    risk_level = models.CharField(
+        max_length=12,
+        choices=SubmissionRiskLevel.choices,
+        default=SubmissionRiskLevel.GREEN,
+        db_index=True,
+    )
+    verification_status = models.CharField(
+        max_length=24,
+        choices=SubmissionVerificationStatus.choices,
+        default=SubmissionVerificationStatus.UNCHECKED,
+        db_index=True,
+    )
+    verification_checked_at = models.DateTimeField(null=True, blank=True)
+    requires_second_review = models.BooleanField(default=False, db_index=True)
     priority = models.PositiveSmallIntegerField(
         choices=Priority.choices,
         default=Priority.NORMAL,
@@ -526,10 +607,216 @@ class Submission(models.Model):
                 fields=("submitted_by", "status"),
                 name="submission_member_status_idx",
             ),
+            models.Index(
+                fields=("status", "risk_level", "verification_status"),
+                name="submission_verify_queue_idx",
+            ),
         ]
 
     def __str__(self):
         return f"{self.get_kind_display()} · {self.submitted_by}"
+
+
+class ModerationRoleAssignment(models.Model):
+    class Role(models.TextChoices):
+        NONE = "none", "No verification role"
+        OWNER = "owner", "Owner / Super Admin"
+        SENIOR = "senior", "Senior Reviewer"
+        REVIEWER = "reviewer", "Reviewer"
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ancestry_moderation_role",
+    )
+    role = models.CharField(max_length=16, choices=Role.choices)
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ancestry_roles_assigned",
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user} · {self.get_role_display()}"
+
+
+class VerificationRule(models.Model):
+    code = models.SlugField(max_length=80, unique=True)
+    title = models.CharField(max_length=180)
+    description = models.TextField(blank=True)
+    enabled = models.BooleanField(default=True)
+    risk_level = models.CharField(
+        max_length=12,
+        choices=SubmissionRiskLevel.choices,
+        default=SubmissionRiskLevel.YELLOW,
+    )
+    second_approval_required = models.BooleanField(default=False)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="verification_rules_updated",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("code",)
+
+    def __str__(self):
+        return self.title
+
+
+class VerificationFinding(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    submission = models.ForeignKey(
+        Submission,
+        on_delete=models.CASCADE,
+        related_name="verification_findings",
+    )
+    rule = models.ForeignKey(
+        VerificationRule,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="findings",
+    )
+    run_id = models.UUIDField(default=uuid.uuid4, editable=False, db_index=True)
+    code = models.CharField(max_length=80, db_index=True)
+    risk_level = models.CharField(
+        max_length=12,
+        choices=SubmissionRiskLevel.choices,
+        db_index=True,
+    )
+    message = models.TextField()
+    expected_value = models.TextField(blank=True)
+    submitted_value = models.TextField(blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    is_current = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(
+                fields=("submission", "is_current", "risk_level"),
+                name="finding_current_risk_idx",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.code} · {self.get_risk_level_display()}"
+
+
+class EvidenceRequest(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        FULFILLED = "fulfilled", "Fulfilled"
+        CANCELLED = "cancelled", "Cancelled"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    submission = models.ForeignKey(
+        Submission,
+        on_delete=models.CASCADE,
+        related_name="evidence_requests",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="verification_evidence_requests",
+    )
+    note = models.TextField()
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.OPEN, db_index=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    fulfilled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+
+class SubmissionEvidence(models.Model):
+    class EvidenceType(models.TextChoices):
+        PEDIGREE = "pedigree", "Pedigree certificate"
+        REGISTRATION = "registration", "Registration certificate"
+        BREEDING = "breeding", "Breeding record"
+        LITTER = "litter", "Litter record"
+        KENNEL = "kennel", "Kennel documentation"
+        DNA = "dna", "DNA / parentage documentation"
+        PHOTO = "photo", "Identity photograph"
+        OTHER = "other", "Other supporting document"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    submission = models.ForeignKey(
+        Submission,
+        on_delete=models.CASCADE,
+        related_name="verification_evidence",
+    )
+    evidence_request = models.ForeignKey(
+        EvidenceRequest,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="evidence",
+    )
+    evidence_type = models.CharField(
+        max_length=20, choices=EvidenceType.choices, default=EvidenceType.OTHER
+    )
+    file = models.FileField(upload_to="verification-private/%Y/%m/")
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="verification_evidence_uploaded",
+    )
+    note = models.TextField(blank=True)
+    sha256 = models.CharField(max_length=64, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+
+class SubmissionReview(models.Model):
+    class Action(models.TextChoices):
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        EVIDENCE_REQUESTED = "evidence_requested", "Evidence requested"
+        OVERRIDE_APPROVED = "override_approved", "Approved with override"
+        OVERRIDE_REQUESTED = "override_requested", "High-risk override requested"
+        SECOND_APPROVED = "second_approved", "Second reviewer approved"
+        SECOND_REJECTED = "second_rejected", "Second reviewer rejected"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    submission = models.ForeignKey(
+        Submission,
+        on_delete=models.PROTECT,
+        related_name="review_decisions",
+    )
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="ancestry_review_decisions",
+    )
+    action = models.CharField(max_length=24, choices=Action.choices, db_index=True)
+    reason = models.TextField(blank=True)
+    warnings_snapshot = models.JSONField(default=list, blank=True)
+    evidence_snapshot = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def save(self, *args, **kwargs):
+        if self.pk and SubmissionReview.objects.filter(pk=self.pk).exists():
+            raise ValidationError("Review history is append-only and cannot be edited.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Review history is append-only and cannot be deleted.")
 
 
 class DogDocument(models.Model):
@@ -633,6 +920,13 @@ class ModerationAudit(models.Model):
         VERIFICATION = "verification", "Verification recorded"
         DISPUTE_OPENED = "dispute_opened", "Dispute opened"
         DISPUTE_UPDATED = "dispute_updated", "Dispute updated"
+        VERIFICATION_RUN = "verification_run", "Verification run"
+        EVIDENCE_REQUESTED = "evidence_requested", "Evidence requested"
+        EVIDENCE_UPLOADED = "evidence_uploaded", "Evidence uploaded"
+        OVERRIDE_REQUESTED = "override_requested", "Override requested"
+        SECOND_APPROVAL = "second_approval", "Second approval"
+        RECORD_CHANGED = "record_changed", "Locked record changed"
+        RECORD_LOCK_CHANGED = "record_lock_changed", "Record lock changed"
 
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -677,12 +971,35 @@ class ModerationAudit(models.Model):
         on_delete=models.SET_NULL,
         related_name="audit_events",
     )
+    actor_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
+    submission_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
+    dog_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
+    kennel_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
+    litter_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
     summary = models.JSONField(default=dict, blank=True)
     note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ("-created_at",)
+
+    def save(self, *args, **kwargs):
+        if self.pk and ModerationAudit.objects.filter(pk=self.pk).exists():
+            raise ValidationError("Audit history is append-only and cannot be edited.")
+        if not self.actor_id_snapshot and self.actor_id:
+            self.actor_id_snapshot = str(self.actor_id)
+        if not self.submission_id_snapshot and self.submission_id:
+            self.submission_id_snapshot = str(self.submission_id)
+        if not self.dog_id_snapshot and self.dog_id:
+            self.dog_id_snapshot = str(self.dog_id)
+        if not self.kennel_id_snapshot and self.kennel_id:
+            self.kennel_id_snapshot = str(self.kennel_id)
+        if not self.litter_id_snapshot and self.litter_id:
+            self.litter_id_snapshot = str(self.litter_id)
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Audit history is append-only and cannot be deleted.")
 
     def __str__(self):
         return f"{self.get_action_display()} · {self.created_at:%Y-%m-%d %H:%M}"

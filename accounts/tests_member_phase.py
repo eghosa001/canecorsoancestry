@@ -10,6 +10,7 @@ from registry.models import (
     Kennel,
     KennelMembership,
     Litter,
+    ModerationRoleAssignment,
     Submission,
 )
 from registry.services import approve_submission
@@ -130,6 +131,10 @@ class LitterWorkflowTests(TestCase):
         self.reviewer = get_user_model().objects.create_user(
             username="litter-reviewer", is_staff=True
         )
+        ModerationRoleAssignment.objects.create(
+            user=self.reviewer,
+            role=ModerationRoleAssignment.Role.SENIOR,
+        )
         self.kennel = Kennel.objects.create(
             name="Litter Kennel",
             slug="litter-kennel",
@@ -159,7 +164,7 @@ class LitterWorkflowTests(TestCase):
             kennel=self.kennel,
             package=SubmissionPayment.Package.LITTER,
             dog_count=0,
-            amount_kobo=100000,
+            amount_kobo=20000,
             reference="CCA-litter-test",
             status=SubmissionPayment.Status.PAID,
             paid_at=timezone.now(),
@@ -218,7 +223,12 @@ class LitterWorkflowTests(TestCase):
         self.assertEqual(litter.code, "OLD-2026")
 
         submission = Submission.objects.get(kind=Submission.Kind.LITTER_EDIT)
-        approve_submission(submission, self.reviewer)
+        approve_submission(
+            submission,
+            self.reviewer,
+            "Reviewed incomplete historical litter data and approved the submitted correction.",
+            allow_override=True,
+        )
         litter.refresh_from_db()
         self.assertEqual(litter.code, "NEW-2026")
         self.assertEqual(litter.notes, "Updated note")

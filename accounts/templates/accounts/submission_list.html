@@ -20,9 +20,20 @@
           <h2>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.code }}{% elif item.document %}{{ item.document.title }}{% elif item.kennel %}{{ item.kennel.name }}{% else %}New record{% endif %}</h2>
           <p>{{ item.created_at|date:"d M Y, H:i" }}{% if item.notes %} · {{ item.notes|truncatewords:16 }}{% endif %}</p>
         </div>
-        <div class="submission-state {{ item.status }}">{{ item.get_status_display }}</div>
+        <div>
+          <div class="submission-state {{ item.status }}">{{ item.get_status_display }}</div>
+          {% if item.status == "pending" %}
+            <div class="submission-state {{ item.risk_level }}">{{ item.get_risk_level_display }}</div>
+            <p class="muted">{{ item.get_verification_status_display }}</p>
+          {% endif %}
+        </div>
         {% if item.payment_link %}
           <p class="muted">Paystack: {{ item.payment_link.payment.get_status_display }} · ₦{{ item.payment_link.payment.amount_naira }}</p>
+        {% endif %}
+        {% if item.verification_status == "awaiting_evidence" and item.status == "pending" %}
+          <a class="btn btn-gold" href="{% url 'accounts:submission-evidence-upload' item.pk %}">Upload requested evidence</a>
+        {% elif item.status == "pending" %}
+          <a class="text-link" href="{% url 'accounts:submission-evidence-upload' item.pk %}">Add private verification evidence →</a>
         {% endif %}
         {% if item.resolution_notes %}<p class="resolution-note">{{ item.resolution_notes }}</p>{% endif %}
       </article>

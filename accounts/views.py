@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import json
 import logging
 import uuid
@@ -14,7 +15,7 @@ from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -29,17 +30,30 @@ from registry.models import (
     DisputeCase,
     Dog,
     DogDocument,
+    EvidenceRequest,
     Kennel,
     Litter,
     ModerationAudit,
+    ModerationRoleAssignment,
     Notification,
     Submission,
+    SubmissionEvidence,
+    SubmissionReview,
+    SubmissionRiskLevel,
+    SubmissionVerificationStatus,
     VerificationEvent,
+    VerificationFinding,
+    VerificationRule,
 )
 from registry.permissions import (
     can_contribute_to_dog,
     can_contribute_to_kennel,
     can_edit_kennel,
+    can_manage_verification,
+    can_review_flagged_submissions,
+    can_review_submissions,
+    can_second_approve,
+    moderation_role,
 )
 from registry.services import (
     approve_submission,
@@ -48,9 +62,14 @@ from registry.services import (
     merge_dogs,
     moderation_dog_search,
     record_audit,
+    reject_high_risk_override,
     reject_submission,
+    request_high_risk_override,
+    request_submission_evidence,
     submission_diff,
 )
+
+from registry.verification import current_findings, verification_checklist, verify_submission
 
 from pedigrees.services import pedigree_analysis, pedigree_export_rows
 
@@ -77,6 +96,7 @@ from .forms import (
     PaymentPackageForm,
     MergeDogsForm,
     ReviewSubmissionForm,
+    SubmissionEvidenceForm,
     VerificationEventForm,
     VerificationResendForm,
 )
@@ -267,6 +287,100 @@ def submission_list(request):
 
 
 @login_required
+def submission_evidence_upload(request, pk):
+    submission = get_object_or_404(
+        Submission.objects.select_related("submitted_by", "dog", "kennel", "litter"),
+        pk=pk,
+        submitted_by=request.user,
+    )
+    if submission.status != Submission.Status.PENDING:
+        messages.error(request, "Evidence can only be added while a submission is pending.")
+        return redirect("accounts:submissions")
+
+    open_request = submission.evidence_requests.filter(
+        status=EvidenceRequest.Status.OPEN
+    ).order_by("-created_at").first()
+    form = SubmissionEvidenceForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        upload = form.cleaned_data["file"]
+        digest = hashlib.sha256()
+        for chunk in upload.chunks():
+            digest.update(chunk)
+        upload.seek(0)
+
+        with transaction.atomic():
+            evidence = SubmissionEvidence.objects.create(
+                submission=submission,
+                evidence_request=open_request,
+                evidence_type=form.cleaned_data["evidence_type"],
+                file=upload,
+                uploaded_by=request.user,
+                note=form.cleaned_data["note"],
+                sha256=digest.hexdigest(),
+            )
+            if open_request:
+                open_request.status = EvidenceRequest.Status.FULFILLED
+                open_request.fulfilled_at = timezone.now()
+                open_request.save(update_fields=("status", "fulfilled_at"))
+            verify_submission(submission)
+            record_audit(
+                action=ModerationAudit.Action.EVIDENCE_UPLOADED,
+                actor=request.user,
+                dog=submission.dog,
+                kennel=submission.kennel,
+                litter=submission.litter,
+                submission=submission,
+                summary={
+                    "evidence_id": str(evidence.pk),
+                    "evidence_type": evidence.evidence_type,
+                    "sha256": evidence.sha256,
+                    "private": True,
+                },
+                note=form.cleaned_data["note"],
+            )
+        messages.success(
+            request,
+            "Verification evidence uploaded privately. It is not published on the public dog profile.",
+        )
+        return redirect("accounts:submissions")
+
+    return render(
+        request,
+        "accounts/submission_form.html",
+        {
+            "form": form,
+            "eyebrow": "Private verification evidence",
+            "title": "Upload supporting evidence",
+            "intro": (
+                open_request.note
+                if open_request
+                else "This document is restricted to you and authorized reviewers unless a separate public-document submission is approved."
+            ),
+            "button_label": "Upload private evidence",
+            "multipart": True,
+        },
+    )
+
+
+@login_required
+def submission_evidence_download(request, pk):
+    evidence = get_object_or_404(
+        SubmissionEvidence.objects.select_related("submission"),
+        pk=pk,
+    )
+    if (
+        evidence.submission.submitted_by_id != request.user.pk
+        and not can_review_submissions(request.user)
+    ):
+        raise PermissionDenied
+    if not evidence.file:
+        raise PermissionDenied
+    evidence.file.open("rb")
+    filename = evidence.file.name.rsplit("/", 1)[-1]
+    return FileResponse(evidence.file, as_attachment=True, filename=filename)
+
+
+@login_required
 def submit_dog(request):
     return redirect(f"{reverse('accounts:new-payment')}?package={SubmissionPayment.Package.SINGLE_DOG}")
 
@@ -447,6 +561,7 @@ def payment_submit_dog(request, pk):
                     "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
                     "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
                     "registration": cleaned["registration"],
+                    "microchip_number": cleaned["microchip_number"],
                     "litter_id": str(cleaned["litter"].pk) if cleaned["litter"] else None,
                     "bio": cleaned["bio"],
                 },
@@ -457,6 +572,7 @@ def payment_submit_dog(request, pk):
                 submission=submission,
                 slot_kind=PaymentSubmissionLink.SlotKind.DOG,
             )
+            verify_submission(submission)
         messages.success(
             request,
             "Dog submitted. It remains private until an administrator verifies and approves it.",
@@ -517,6 +633,8 @@ def payment_submit_litter(request, pk):
                         "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
                         "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
                         "date_of_birth": _date_value(cleaned["date_of_birth"]),
+                        "country": cleaned["country"],
+                        "declared_puppy_count": cleaned["declared_puppy_count"],
                         "notes": cleaned["notes"],
                     },
                     notes=cleaned["review_notes"],
@@ -526,6 +644,7 @@ def payment_submit_litter(request, pk):
                     submission=submission,
                     slot_kind=PaymentSubmissionLink.SlotKind.LITTER,
                 )
+                verify_submission(submission)
             messages.success(
                 request,
                 "Litter submitted for admin verification. You can now add puppies from this same litter.",
@@ -563,28 +682,42 @@ def payment_submit_puppy(request, pk):
     form = LitterPuppySubmissionForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         cleaned = form.cleaned_data
-        submission = Submission.objects.create(
-            kind=Submission.Kind.DOG,
-            submitted_by=request.user,
-            kennel=payment.kennel,
-            payload={
-                "_paid_submission": True,
-                "litter_submission_id": str(litter_link.submission_id),
-                "name": cleaned["name"],
-                "sex": cleaned["sex"],
-                "colour": cleaned["colour"],
-                "country": cleaned["country"],
-                "bloodline": cleaned["bloodline"],
-                "registration": cleaned["registration"],
-                "bio": cleaned["bio"],
-            },
-            notes=cleaned["notes"],
-        )
-        PaymentSubmissionLink.objects.create(
-            payment=payment,
-            submission=submission,
-            slot_kind=PaymentSubmissionLink.SlotKind.PUPPY,
-        )
+        litter_submission = litter_link.submission
+        litter_payload = litter_submission.payload or {}
+        canonical_litter = litter_submission.litter
+        litter_code = canonical_litter.code if canonical_litter else litter_payload.get("code")
+        sire_id = canonical_litter.sire_id if canonical_litter else litter_payload.get("sire_id")
+        dam_id = canonical_litter.dam_id if canonical_litter else litter_payload.get("dam_id")
+        with transaction.atomic():
+            locked = SubmissionPayment.objects.select_for_update().get(pk=payment.pk)
+            submission = Submission.objects.create(
+                kind=Submission.Kind.DOG,
+                submitted_by=request.user,
+                kennel=payment.kennel,
+                payload={
+                    "_paid_submission": True,
+                    "litter_submission_id": str(litter_link.submission_id),
+                    "litter_code": litter_code or "",
+                    "sire_id": str(sire_id) if sire_id else None,
+                    "dam_id": str(dam_id) if dam_id else None,
+                    "name": cleaned["name"],
+                    "sex": cleaned["sex"],
+                    "date_of_birth": _date_value(cleaned["date_of_birth"]),
+                    "colour": cleaned["colour"],
+                    "country": cleaned["country"],
+                    "bloodline": cleaned["bloodline"],
+                    "registration": cleaned["registration"],
+                    "microchip_number": cleaned["microchip_number"],
+                    "bio": cleaned["bio"],
+                },
+                notes=cleaned["notes"],
+            )
+            PaymentSubmissionLink.objects.create(
+                payment=locked,
+                submission=submission,
+                slot_kind=PaymentSubmissionLink.SlotKind.PUPPY,
+            )
+            verify_submission(submission)
         messages.success(
             request,
             "Puppy submitted for admin verification under this litter package.",
@@ -664,7 +797,7 @@ def submit_correction(request, pk):
     )
     if request.method == "POST" and form.is_valid():
         cleaned = form.cleaned_data
-        Submission.objects.create(
+        submission = Submission.objects.create(
             kind=Submission.Kind.CORRECTION,
             submitted_by=request.user,
             dog=dog,
@@ -679,10 +812,13 @@ def submit_correction(request, pk):
                 "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
                 "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
                 "litter_id": str(cleaned["litter"].pk) if cleaned["litter"] else None,
+                "registration": cleaned["registration"],
+                "microchip_number": cleaned["microchip_number"],
                 "bio": cleaned["bio"],
             },
             notes=cleaned["notes"],
         )
+        verify_submission(submission)
         messages.success(request, "Correction submitted for moderator review.")
         return redirect("accounts:submissions")
 
@@ -708,7 +844,12 @@ def submit_image(request, pk):
 
     form = DogImageSubmissionForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        Submission.objects.create(
+        upload = form.cleaned_data["attachment"]
+        digest = hashlib.sha256()
+        for chunk in upload.chunks():
+            digest.update(chunk)
+        upload.seek(0)
+        submission = Submission.objects.create(
             kind=Submission.Kind.IMAGE,
             submitted_by=request.user,
             dog=dog,
@@ -716,10 +857,12 @@ def submit_image(request, pk):
             payload={
                 "caption": form.cleaned_data["caption"],
                 "is_primary": form.cleaned_data["is_primary"],
+                "sha256": digest.hexdigest(),
             },
-            attachment=form.cleaned_data["attachment"],
+            attachment=upload,
             notes=form.cleaned_data["notes"],
         )
+        verify_submission(submission)
         messages.success(request, "Photo submitted for review.")
         return redirect("accounts:submissions")
 
@@ -915,6 +1058,9 @@ def notifications(request):
 
 @staff_member_required
 def moderation_queue(request):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
+
     pending = Submission.objects.filter(
         status=Submission.Status.PENDING
     ).select_related(
@@ -931,6 +1077,7 @@ def moderation_queue(request):
     kind = request.GET.get("kind", "").strip()
     priority = request.GET.get("priority", "").strip()
     assignment = request.GET.get("assignment", "").strip()
+    risk = request.GET.get("risk", "").strip()
 
     if query:
         pending = pending.filter(
@@ -945,12 +1092,14 @@ def moderation_queue(request):
         pending = pending.filter(kind=kind)
     if priority.isdigit() and int(priority) in dict(Submission.Priority.choices):
         pending = pending.filter(priority=int(priority))
+    if risk in dict(SubmissionRiskLevel.choices):
+        pending = pending.filter(risk_level=risk)
     if assignment == "mine":
         pending = pending.filter(assigned_to=request.user)
     elif assignment == "unassigned":
         pending = pending.filter(assigned_to__isnull=True)
 
-    pending = pending.order_by("-priority", "created_at")
+    pending = pending.order_by("-priority", "-risk_level", "created_at")
     paginator = Paginator(pending, 50)
     page_obj = paginator.get_page(request.GET.get("page"))
     pending_items = list(page_obj.object_list)
@@ -958,7 +1107,15 @@ def moderation_queue(request):
     query_params.pop("page", None)
 
     for item in pending_items:
+        if item.verification_status == SubmissionVerificationStatus.UNCHECKED:
+            verify_submission(item)
+            item.refresh_from_db()
         item.review_diff = submission_diff(item)
+        item.current_findings = [
+            finding
+            for finding in current_findings(item)
+            if finding.risk_level != SubmissionRiskLevel.GREEN
+        ]
         age_days = max(0, (timezone.now() - item.created_at).days)
         item.age_days = age_days
         item.is_aging = age_days >= 7
@@ -1006,14 +1163,126 @@ def moderation_queue(request):
             "duplicate_results": duplicate_results,
             "bulk_form": BulkModerationForm(),
             "disputes": disputes,
+            "can_manage_verification": can_manage_verification(request.user),
             "filters": {
                 "q": query,
                 "kind": kind,
                 "priority": priority,
                 "assignment": assignment,
+                "risk": risk,
             },
             "submission_kinds": Submission.Kind.choices,
             "priority_choices": Submission.Priority.choices,
+            "risk_choices": SubmissionRiskLevel.choices,
+        },
+    )
+
+
+@staff_member_required
+def moderation_submission_detail(request, pk):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
+
+    submission = get_object_or_404(
+        Submission.objects.select_related(
+            "submitted_by",
+            "dog",
+            "kennel",
+            "litter",
+            "document",
+            "assigned_to",
+            "reviewed_by",
+            "payment_link__payment",
+        ),
+        pk=pk,
+    )
+    if submission.verification_status == SubmissionVerificationStatus.UNCHECKED:
+        verify_submission(submission)
+        submission.refresh_from_db()
+
+    findings = list(current_findings(submission))
+    blocking_findings = [
+        finding
+        for finding in findings
+        if finding.risk_level != SubmissionRiskLevel.GREEN
+    ]
+    check_rows = verification_checklist(submission)
+
+    litter_submission = None
+    if submission.kind == Submission.Kind.LITTER_CREATE:
+        litter_submission = submission
+    else:
+        litter_submission_id = (submission.payload or {}).get("litter_submission_id")
+        if litter_submission_id:
+            litter_submission = (
+                Submission.objects.select_related("litter", "kennel")
+                .filter(pk=litter_submission_id, kind=Submission.Kind.LITTER_CREATE)
+                .first()
+            )
+
+    litter_members = []
+    if litter_submission is not None:
+        litter_members = list(
+            Submission.objects.filter(
+                kind=Submission.Kind.DOG,
+                payload__litter_submission_id=str(litter_submission.pk),
+            )
+            .select_related("dog", "submitted_by")
+            .order_by("created_at")
+        )
+        for member in litter_members:
+            member.submitted_name = str((member.payload or {}).get("name") or "").strip()
+            member.submitted_sex = str((member.payload or {}).get("sex") or "").strip()
+            member.submitted_dob = str((member.payload or {}).get("date_of_birth") or "").strip()
+
+    evidence_requests = list(
+        submission.evidence_requests.select_related("requested_by").all()
+    )
+    evidence = list(
+        submission.verification_evidence.select_related(
+            "uploaded_by", "evidence_request"
+        ).all()
+    )
+    reviews = list(
+        submission.review_decisions.select_related("reviewer").all()
+    )
+    audit_events = list(
+        submission.audit_events.select_related("actor").order_by("-created_at")
+    )
+    pending_override = None
+    if submission.verification_status == SubmissionVerificationStatus.AWAITING_SECOND:
+        pending_override = (
+            submission.review_decisions.filter(
+                action=SubmissionReview.Action.OVERRIDE_REQUESTED
+            )
+            .select_related("reviewer")
+            .order_by("-created_at")
+            .first()
+        )
+
+    return render(
+        request,
+        "accounts/moderation_submission_detail.html",
+        {
+            "submission": submission,
+            "findings": findings,
+            "blocking_findings": blocking_findings,
+            "check_rows": check_rows,
+            "litter_submission": litter_submission,
+            "litter_members": litter_members,
+            "review_diff": submission_diff(submission),
+            "evidence_requests": evidence_requests,
+            "evidence": evidence,
+            "reviews": reviews,
+            "audit_events": audit_events,
+            "pending_override": pending_override,
+            "can_review_flagged": can_review_flagged_submissions(request.user),
+            "can_second_approve": bool(
+                pending_override
+                and pending_override.reviewer_id != request.user.pk
+                and can_second_approve(request.user)
+            ),
+            "reviewer_role": moderation_role(request.user),
         },
     )
 
@@ -1022,29 +1291,112 @@ def moderation_queue(request):
 def review_submission(request, pk, decision):
     if request.method != "POST":
         return redirect("accounts:moderation")
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
+
     submission = get_object_or_404(Submission, pk=pk)
+    if submission.verification_status == SubmissionVerificationStatus.UNCHECKED:
+        verify_submission(submission)
+        submission.refresh_from_db()
+
     form = ReviewSubmissionForm(request.POST)
     if not form.is_valid():
         messages.error(request, "Review note was invalid.")
-        return redirect("accounts:moderation")
+        return redirect("accounts:moderation-submission", pk=submission.pk)
 
-    notes = form.cleaned_data["resolution_notes"]
+    notes = form.cleaned_data["resolution_notes"].strip()
+    findings = list(current_findings(submission))
+    flagged = any(
+        finding.risk_level != SubmissionRiskLevel.GREEN
+        for finding in findings
+    )
     try:
         if decision == "approve":
+            if flagged:
+                raise ValueError(
+                    "This submission has automated warnings. Use Approve with override so the reason is preserved."
+                )
             approve_submission(submission, request.user, notes)
             messages.success(request, "Submission approved.")
+
         elif decision == "reject":
+            if flagged and not can_review_flagged_submissions(request.user):
+                raise ValueError(
+                    "A senior reviewer or owner must decide a flagged submission."
+                )
             reject_submission(submission, request.user, notes)
             messages.success(request, "Submission rejected.")
+
+        elif decision == "request_evidence":
+            request_submission_evidence(submission, request.user, notes)
+            messages.success(request, "Evidence requested from the submitting member.")
+
+        elif decision == "override":
+            if not can_review_flagged_submissions(request.user):
+                raise ValueError(
+                    "Only a senior reviewer or owner can override an automated warning."
+                )
+            if not flagged:
+                raise ValueError("There is no current warning to override.")
+            if submission.requires_second_review:
+                request_high_risk_override(submission, request.user, notes)
+                messages.success(
+                    request,
+                    "High-risk override recorded. A different senior reviewer or owner must approve it before publication.",
+                )
+            else:
+                approve_submission(
+                    submission,
+                    request.user,
+                    notes,
+                    allow_override=True,
+                )
+                messages.success(request, "Submission approved with a recorded override.")
+
+        elif decision == "second_approve":
+            if not can_second_approve(request.user):
+                raise ValueError(
+                    "Only a senior reviewer or owner can complete second review."
+                )
+            override_review = (
+                submission.review_decisions.filter(
+                    action=SubmissionReview.Action.OVERRIDE_REQUESTED
+                )
+                .order_by("-created_at")
+                .first()
+            )
+            if override_review is None:
+                raise ValueError("No high-risk override is awaiting second review.")
+            approve_submission(
+                submission,
+                request.user,
+                notes,
+                allow_override=True,
+                override_review=override_review,
+            )
+            messages.success(request, "Second approval completed. Submission published.")
+
+        elif decision == "second_reject":
+            reject_high_risk_override(submission, request.user, notes)
+            messages.success(
+                request,
+                "Second reviewer declined the override. The submission remains pending for review.",
+            )
         else:
             messages.error(request, "Unknown review action.")
+
     except ValueError as exc:
         messages.error(request, str(exc))
+
+    if Submission.objects.filter(pk=submission.pk, status=Submission.Status.PENDING).exists():
+        return redirect("accounts:moderation-submission", pk=submission.pk)
     return redirect("accounts:moderation")
 
 
 @staff_member_required
 def merge_dogs_view(request):
+    if not can_review_flagged_submissions(request.user):
+        raise PermissionDenied
     if request.method != "POST":
         return redirect("accounts:moderation")
     form = MergeDogsForm(request.POST)
@@ -1069,6 +1421,8 @@ def merge_dogs_view(request):
 
 @staff_member_required
 def verify_dog(request):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
     if request.method != "POST":
         return redirect("accounts:moderation")
     form = VerificationEventForm(request.POST)
@@ -1244,7 +1598,7 @@ def edit_litter(request, pk):
         if cleaned["kennel"] != litter.kennel:
             form.add_error("kennel", "An existing litter cannot be moved to another kennel.")
         else:
-            Submission.objects.create(
+            submission = Submission.objects.create(
                 kind=Submission.Kind.LITTER_EDIT,
                 submitted_by=request.user,
                 kennel=litter.kennel,
@@ -1254,10 +1608,13 @@ def edit_litter(request, pk):
                     "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
                     "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
                     "date_of_birth": _date_value(cleaned["date_of_birth"]),
+                    "country": cleaned["country"],
+                    "declared_puppy_count": cleaned["declared_puppy_count"],
                     "notes": cleaned["notes"],
                 },
                 notes=cleaned["review_notes"],
             )
+            verify_submission(submission)
             messages.success(request, "Litter changes submitted for moderator review.")
             return redirect("accounts:submissions")
 
@@ -1435,6 +1792,8 @@ def my_disputes(request):
 
 @staff_member_required
 def bulk_moderation(request):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
     if request.method != "POST":
         return redirect("accounts:moderation")
 
@@ -1504,6 +1863,8 @@ def bulk_moderation(request):
 
 @staff_member_required
 def review_dispute(request, pk, decision):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
     if request.method != "POST":
         return redirect("accounts:moderation")
 
@@ -1559,7 +1920,383 @@ def review_dispute(request, pk, decision):
 
 
 @staff_member_required
+def verification_dashboard(request):
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+
+    pending = Submission.objects.filter(status=Submission.Status.PENDING)
+    pending_count = pending.count()
+    yellow_count = pending.filter(risk_level=SubmissionRiskLevel.YELLOW).count()
+    red_count = pending.filter(risk_level=SubmissionRiskLevel.RED).count()
+    second_count = pending.filter(
+        verification_status=SubmissionVerificationStatus.AWAITING_SECOND
+    ).count()
+    overrides_count = SubmissionReview.objects.filter(
+        action__in=[
+            SubmissionReview.Action.OVERRIDE_APPROVED,
+            SubmissionReview.Action.OVERRIDE_REQUESTED,
+        ]
+    ).count()
+
+    reviewer_rows = []
+    staff_users = list(
+        get_user_model().objects.filter(is_staff=True).order_by("username")
+    )
+    decision_actions = {
+        SubmissionReview.Action.APPROVED,
+        SubmissionReview.Action.REJECTED,
+        SubmissionReview.Action.OVERRIDE_APPROVED,
+        SubmissionReview.Action.OVERRIDE_REQUESTED,
+        SubmissionReview.Action.SECOND_APPROVED,
+        SubmissionReview.Action.SECOND_REJECTED,
+    }
+    for user in staff_users:
+        decisions = list(
+            SubmissionReview.objects.filter(reviewer=user)
+            .select_related("submission")
+            .order_by("created_at")
+        )
+        decision_rows = [row for row in decisions if row.action in decision_actions]
+        approved = sum(
+            row.action
+            in {
+                SubmissionReview.Action.APPROVED,
+                SubmissionReview.Action.OVERRIDE_APPROVED,
+                SubmissionReview.Action.SECOND_APPROVED,
+            }
+            for row in decision_rows
+        )
+        rejected = sum(
+            row.action
+            in {
+                SubmissionReview.Action.REJECTED,
+                SubmissionReview.Action.SECOND_REJECTED,
+            }
+            for row in decision_rows
+        )
+        overrides = sum(
+            row.action
+            in {
+                SubmissionReview.Action.OVERRIDE_APPROVED,
+                SubmissionReview.Action.OVERRIDE_REQUESTED,
+            }
+            for row in decision_rows
+        )
+        flagged = sum(bool(row.warnings_snapshot) for row in decision_rows)
+        high_risk_approved = sum(
+            row.action == SubmissionReview.Action.SECOND_APPROVED
+            for row in decision_rows
+        )
+        durations = [
+            row.created_at - row.submission.created_at
+            for row in decision_rows
+            if row.created_at and row.submission.created_at
+        ]
+        avg_seconds = (
+            sum(item.total_seconds() for item in durations) / len(durations)
+            if durations
+            else 0
+        )
+        reviewer_rows.append(
+            {
+                "user": user,
+                "role": moderation_role(user),
+                "reviews": len(decision_rows),
+                "approved": approved,
+                "rejected": rejected,
+                "flagged": flagged,
+                "overrides": overrides,
+                "override_rate": (
+                    round((overrides / len(decision_rows)) * 100, 1)
+                    if decision_rows
+                    else 0
+                ),
+                "high_risk_approved": high_risk_approved,
+                "average_review_hours": round(avg_seconds / 3600, 1) if avg_seconds else 0,
+                "unusual_override": False,
+            }
+        )
+
+    established = [row for row in reviewer_rows if row["reviews"] >= 20]
+    established_rates = [row["override_rate"] for row in established]
+    peer_average = (
+        sum(established_rates) / len(established_rates)
+        if established_rates
+        else 0
+    )
+    warning_threshold = max(10.0, peer_average + 5.0)
+    for row in reviewer_rows:
+        peers = [
+            other["override_rate"]
+            for other in established
+            if other["user"].pk != row["user"].pk
+        ]
+        if row["reviews"] >= 20 and peers:
+            row_peer_average = sum(peers) / len(peers)
+            row["unusual_override"] = (
+                row["override_rate"] > max(10.0, row_peer_average + 5.0)
+            )
+        else:
+            row["unusual_override"] = False
+
+    flagged_queue = list(
+        pending.exclude(risk_level=SubmissionRiskLevel.GREEN)
+        .select_related("submitted_by", "kennel", "dog", "litter")
+        .order_by("-requires_second_review", "created_at")[:50]
+    )
+    high_risk_queue = [
+        item for item in flagged_queue
+        if item.risk_level == SubmissionRiskLevel.RED
+    ][:30]
+    second_queue = list(
+        pending.filter(
+            verification_status=SubmissionVerificationStatus.AWAITING_SECOND
+        )
+        .select_related("submitted_by", "kennel", "dog", "litter")
+        .order_by("created_at")[:50]
+    )
+    recent_overrides = list(
+        SubmissionReview.objects.filter(
+            action__in=[
+                SubmissionReview.Action.OVERRIDE_APPROVED,
+                SubmissionReview.Action.OVERRIDE_REQUESTED,
+                SubmissionReview.Action.SECOND_APPROVED,
+                SubmissionReview.Action.SECOND_REJECTED,
+            ]
+        )
+        .select_related("submission", "reviewer", "submission__kennel", "submission__dog", "submission__litter")
+        .order_by("-created_at")[:50]
+    )
+    recent_changes = list(
+        ModerationAudit.objects.filter(
+            action__in=[
+                ModerationAudit.Action.RECORD_CHANGED,
+                ModerationAudit.Action.RECORD_LOCK_CHANGED,
+            ]
+        )
+        .select_related("actor", "dog", "litter", "submission")
+        .order_by("-created_at")[:30]
+    )
+    locked_dogs = list(
+        Dog.objects.filter(is_record_locked=True)
+        .select_related("record_locked_by", "kennel")
+        .order_by("-record_locked_at", "name")[:30]
+    )
+    locked_litters = list(
+        Litter.objects.filter(is_record_locked=True)
+        .select_related("record_locked_by", "kennel")
+        .order_by("-record_locked_at", "code")[:30]
+    )
+    rules = list(VerificationRule.objects.order_by("code"))
+    role_assignments = {
+        item.user_id: item
+        for item in ModerationRoleAssignment.objects.select_related("user").all()
+    }
+    for user in staff_users:
+        user.moderation_assignment = role_assignments.get(user.pk)
+
+    return render(
+        request,
+        "accounts/verification_dashboard.html",
+        {
+            "pending_count": pending_count,
+            "yellow_count": yellow_count,
+            "red_count": red_count,
+            "second_count": second_count,
+            "overrides_count": overrides_count,
+            "reviewer_rows": reviewer_rows,
+            "peer_override_average": round(peer_average, 1),
+            "override_warning_threshold": round(warning_threshold, 1),
+            "flagged_queue": flagged_queue,
+            "high_risk_queue": high_risk_queue,
+            "second_queue": second_queue,
+            "recent_overrides": recent_overrides,
+            "recent_changes": recent_changes,
+            "locked_dogs": locked_dogs,
+            "locked_litters": locked_litters,
+            "rules": rules,
+            "staff_users": staff_users,
+            "role_choices": ModerationRoleAssignment.Role.choices,
+            "risk_choices": SubmissionRiskLevel.choices,
+        },
+    )
+
+
+@staff_member_required
+@require_POST
+def moderation_set_role(request):
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+
+    user_id = request.POST.get("user_id", "").strip()
+    user_lookup = request.POST.get("user_lookup", "").strip()
+    if user_id:
+        target = get_object_or_404(get_user_model(), pk=user_id)
+    elif user_lookup:
+        target = get_user_model().objects.filter(
+            Q(username__iexact=user_lookup) | Q(email__iexact=user_lookup)
+        ).first()
+        if target is None:
+            messages.error(request, "No user matches that username or email.")
+            return redirect("accounts:verification-dashboard")
+    else:
+        messages.error(request, "Choose a user or enter a username/email.")
+        return redirect("accounts:verification-dashboard")
+    requested_role = request.POST.get("role", "").strip()
+    if target.is_superuser:
+        messages.info(request, "Superusers always have owner-level verification authority.")
+        return redirect("accounts:verification-dashboard")
+
+    current = ModerationRoleAssignment.objects.filter(user=target).first()
+    before = current.role if current else ""
+    if not requested_role:
+        requested_role = ModerationRoleAssignment.Role.NONE
+    if requested_role not in dict(ModerationRoleAssignment.Role.choices):
+        messages.error(request, "Unknown moderation role.")
+        return redirect("accounts:verification-dashboard")
+    ModerationRoleAssignment.objects.update_or_create(
+        user=target,
+        defaults={
+            "role": requested_role,
+            "assigned_by": request.user,
+        },
+    )
+    if (
+        requested_role != ModerationRoleAssignment.Role.NONE
+        and not target.is_staff
+    ):
+        target.is_staff = True
+        target.save(update_fields=("is_staff",))
+
+    record_audit(
+        action=ModerationAudit.Action.VERIFICATION,
+        actor=request.user,
+        summary={
+            "type": "moderation_role_changed",
+            "target_user_id": target.pk,
+            "previous_role": before,
+            "new_role": requested_role,
+        },
+        note="Owner updated moderation authority.",
+    )
+    messages.success(request, "Moderator authority updated.")
+    return redirect("accounts:verification-dashboard")
+
+
+@staff_member_required
+@require_POST
+def moderation_record_lock(request):
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+
+    record_type = request.POST.get("record_type", "").strip()
+    record_id = request.POST.get("record_id", "").strip()
+    action = request.POST.get("action", "").strip()
+    reason = request.POST.get("reason", "").strip()
+    if action not in {"lock", "unlock"} or record_type not in {"dog", "litter"}:
+        messages.error(request, "Invalid record-lock request.")
+        return redirect("accounts:verification-dashboard")
+    if not reason:
+        messages.error(request, "A reason is required to change a record lock.")
+        return redirect("accounts:verification-dashboard")
+
+    try:
+        parsed_record_id = uuid.UUID(record_id)
+    except (TypeError, ValueError):
+        messages.error(request, "Enter a valid dog or litter UUID.")
+        return redirect("accounts:verification-dashboard")
+
+    model = Dog if record_type == "dog" else Litter
+    record = get_object_or_404(model, pk=parsed_record_id)
+    before = bool(record.is_record_locked)
+    desired = action == "lock"
+    if before == desired:
+        messages.info(
+            request,
+            f"This {record_type} record is already {'locked' if desired else 'unlocked'}.",
+        )
+        return redirect("accounts:verification-dashboard")
+
+    record.is_record_locked = desired
+    record.record_locked_at = timezone.now() if desired else None
+    record.record_locked_by = request.user if desired else None
+    record.save(
+        update_fields=(
+            "is_record_locked",
+            "record_locked_at",
+            "record_locked_by",
+        )
+    )
+    record_audit(
+        action=ModerationAudit.Action.RECORD_LOCK_CHANGED,
+        actor=request.user,
+        dog=record if record_type == "dog" else None,
+        kennel=record.kennel,
+        litter=record if record_type == "litter" else None,
+        summary={
+            "record_type": record_type,
+            "record_id": str(record.pk),
+            "previous_locked": before,
+            "new_locked": desired,
+        },
+        note=reason,
+    )
+    messages.success(
+        request,
+        f"{record_type.title()} record {'locked' if desired else 'unlocked'} with an audit entry.",
+    )
+    return redirect("accounts:verification-dashboard")
+
+
+@staff_member_required
+@require_POST
+def verification_rule_update(request, pk):
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+
+    rule = get_object_or_404(VerificationRule, pk=pk)
+    risk_level = request.POST.get("risk_level", "").strip()
+    if risk_level not in dict(SubmissionRiskLevel.choices):
+        messages.error(request, "Unknown verification risk level.")
+        return redirect("accounts:verification-dashboard")
+
+    before = {
+        "enabled": rule.enabled,
+        "risk_level": rule.risk_level,
+        "second_approval_required": rule.second_approval_required,
+    }
+    rule.enabled = request.POST.get("enabled") == "on"
+    rule.risk_level = risk_level
+    rule.second_approval_required = request.POST.get("second_approval_required") == "on"
+    rule.updated_by = request.user
+    rule.save()
+    Submission.objects.filter(status=Submission.Status.PENDING).update(
+        verification_status=SubmissionVerificationStatus.UNCHECKED,
+        verification_checked_at=None,
+    )
+    record_audit(
+        action=ModerationAudit.Action.VERIFICATION,
+        actor=request.user,
+        summary={
+            "type": "verification_rule_changed",
+            "rule": rule.code,
+            "previous": before,
+            "new": {
+                "enabled": rule.enabled,
+                "risk_level": rule.risk_level,
+                "second_approval_required": rule.second_approval_required,
+            },
+        },
+        note="Owner updated an automated verification rule.",
+    )
+    messages.success(request, f"Verification rule '{rule.title}' updated.")
+    return redirect("accounts:verification-dashboard")
+
+
+@staff_member_required
 def data_health(request):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
     report = quick_quality_report(sample_limit=12)
     counts = report["counts"]
     critical_total = sum(
@@ -1584,6 +2321,8 @@ def data_health(request):
 
 @staff_member_required
 def moderation_audit(request):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
     events = ModerationAudit.objects.select_related(
         "actor", "dog", "kennel", "litter", "submission", "dispute"
     )

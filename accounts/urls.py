@@ -9,6 +9,16 @@ urlpatterns = [
     path("verify-email/<uidb64>/<token>/", views.verify_email, name="verify-email"),
     path("resend-verification/", views.resend_verification, name="resend-verification"),
     path("submissions/", views.submission_list, name="submissions"),
+    path(
+        "submissions/<uuid:pk>/evidence/",
+        views.submission_evidence_upload,
+        name="submission-evidence-upload",
+    ),
+    path(
+        "verification-evidence/<uuid:pk>/download/",
+        views.submission_evidence_download,
+        name="submission-evidence-download",
+    ),
     path("payments/new/", views.new_payment, name="new-payment"),
     path("payments/paystack/callback/", views.paystack_callback, name="paystack-callback"),
     path("payments/paystack/webhook/", views.paystack_webhook, name="paystack-webhook"),
@@ -39,9 +49,34 @@ urlpatterns = [
     ),
     path("notifications/", views.notifications, name="notifications"),
     path("moderation/", views.moderation_queue, name="moderation"),
+    path(
+        "moderation/verification/",
+        views.verification_dashboard,
+        name="verification-dashboard",
+    ),
+    path(
+        "moderation/verification/roles/",
+        views.moderation_set_role,
+        name="moderation-set-role",
+    ),
+    path(
+        "moderation/verification/rules/<int:pk>/",
+        views.verification_rule_update,
+        name="verification-rule-update",
+    ),
+    path(
+        "moderation/verification/record-lock/",
+        views.moderation_record_lock,
+        name="moderation-record-lock",
+    ),
     path("moderation/bulk/", views.bulk_moderation, name="bulk-moderation"),
     path("moderation/audit/", views.moderation_audit, name="moderation-audit"),
     path("moderation/data-health/", views.data_health, name="data-health"),
+    path(
+        "moderation/submissions/<uuid:pk>/",
+        views.moderation_submission_detail,
+        name="moderation-submission",
+    ),
     path(
         "moderation/submissions/<uuid:pk>/<str:decision>/",
         views.review_submission,

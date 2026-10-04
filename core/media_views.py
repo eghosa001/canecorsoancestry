@@ -5,7 +5,7 @@ from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponseRedirect
 
 from core.cloudflare_media import signed_media_url
-from registry.models import DisputeCase, DogDocument, DogImage, DogSource, Submission
+from registry.models import DisputeCase, DogDocument, DogImage, DogSource, Submission, SubmissionEvidence
 
 
 def _member_kennel_ids(user):
@@ -48,6 +48,14 @@ def _can_read_media(user, path):
         or Submission.objects.filter(
             attachment=path,
             kennel_id__in=kennel_ids,
+        ).exists()
+        or SubmissionEvidence.objects.filter(
+            file=path,
+            submission__submitted_by=user,
+        ).exists()
+        or SubmissionEvidence.objects.filter(
+            file=path,
+            submission__kennel_id__in=kennel_ids,
         ).exists()
         or DisputeCase.objects.filter(
             attachment=path,
