@@ -16,6 +16,7 @@ from registry.models import (
     DogSource,
     DogTitle,
     HealthRecord,
+    Kennel,
     VerificationState,
     normalize_identity_name,
 )
@@ -24,11 +25,78 @@ from registry.models import (
 DEFAULT_NAMESPACE = "canecorsopedigree.com"
 DEFAULT_SOURCE_TITLE = "CaneCorsoPedigree.com archive (2026-09-15)"
 UNKNOWN_VALUES = {"", "unknown", "nan", "none", "null", "yyyy/mm/dd"}
+SOURCE_KENNEL_MIN_DISTINCT_DOGS = 3
+GENERIC_SOURCE_KENNEL_SUFFIXES = {
+    "DOG KENNEL",
+    "DOG KENNELS",
+    "CORSO KENNEL",
+    "CORSO KENNELS",
+    "CANE CORSO KENNEL",
+    "CANE CORSO KENNELS",
+    "HOUSE KENNEL",
+    "HOUSE KENNELS",
+    "FAMILY KENNEL",
+    "FAMILY KENNELS",
+}
 
 
 def _text(value):
     value = str(value or "").strip()
     return "" if value.casefold() in UNKNOWN_VALUES else value
+
+
+def _source_name_key(value):
+    return re.sub(r"[^A-Z0-9]+", " ", _text(value).upper()).strip()
+
+
+def _source_kennel_suffixes(records):
+    """Return repeated, explicit kennel suffixes backed by source dog names."""
+    evidence = defaultdict(set)
+    display = {}
+    for record in records:
+        dog_name = _text(record.get("name"))
+        if not dog_name or not re.search(r"\bKENNELS?\s*$", dog_name, re.IGNORECASE):
+            continue
+
+        parts = dog_name.split()
+        normalized_dog_name = _source_name_key(dog_name)
+        for size in range(2, min(5, len(parts)) + 1):
+            candidate = " ".join(parts[-size:])
+            key = _source_name_key(candidate)
+            if (
+                key in GENERIC_SOURCE_KENNEL_SUFFIXES
+                or key.startswith("OF ")
+            ):
+                continue
+            evidence[key].add(normalized_dog_name)
+            display.setdefault(key, candidate.title())
+
+    eligible = {
+        key
+        for key, dog_names in evidence.items()
+        if len(dog_names) >= SOURCE_KENNEL_MIN_DISTINCT_DOGS
+    }
+
+    # Prefer the more specific repeated suffix. This keeps fragments such as
+    # "Sikania Kennel" from becoming a duplicate of "Dell'Antica Sikania Kennel".
+    return {
+        key: display[key]
+        for key in eligible
+        if not any(
+            other != key and other.endswith(f" {key}")
+            for other in eligible
+        )
+    }
+
+
+def _source_kennel_for(record, suffixes):
+    dog_name = _source_name_key(record.get("name"))
+    matches = [
+        (len(key.split()), display_name)
+        for key, display_name in suffixes.items()
+        if dog_name == key or dog_name.endswith(f" {key}")
+    ]
+    return max(matches, default=(0, ""))[1]
 
 
 def _registration_key(value):
@@ -263,6 +331,12 @@ class Command(BaseCommand):
             frontier = next_frontier
 
         records = {source_id: all_records[source_id] for source_id in selected_ids}
+        source_kennel_suffixes = _source_kennel_suffixes(all_records.values())
+        record_kennel_names = {
+            source_id: kennel_name
+            for source_id, record in records.items()
+            if (kennel_name := _source_kennel_for(record, source_kennel_suffixes))
+        }
         if _cycle_exists(records):
             raise CommandError("Pedigree cycle detected in selected source records.")
 
@@ -337,6 +411,31 @@ class Command(BaseCommand):
                 [dog for _, dog in created_dogs],
                 batch_size=1000,
             )
+
+            source_kennels = {}
+            created_source_kennels = 0
+            for kennel_name in sorted(set(record_kennel_names.values())):
+                kennel = Kennel.objects.filter(name__iexact=kennel_name).first()
+                if kennel is None:
+                    base_slug = slugify(kennel_name)[:180] or "source-kennel"
+                    slug = base_slug
+                    suffix = 2
+                    while Kennel.objects.filter(slug=slug).exists():
+                        tail = f"-{suffix}"
+                        slug = f"{base_slug[:190-len(tail)]}{tail}"
+                        suffix += 1
+                    kennel = Kennel.objects.create(name=kennel_name, slug=slug)
+                    created_source_kennels += 1
+                source_kennels[kennel_name] = kennel
+
+            kennel_updates = []
+            for source_id, kennel_name in record_kennel_names.items():
+                dog = source_to_dog[source_id]
+                if dog.kennel_id:
+                    continue
+                dog.kennel = source_kennels[kennel_name]
+                kennel_updates.append(dog)
+            Dog.objects.bulk_update(kennel_updates, ["kennel"], batch_size=1000)
 
             DogExternalKey.objects.bulk_create(
                 [
@@ -452,6 +551,8 @@ class Command(BaseCommand):
                 f"{len(created_dogs)} created; {len(existing_keys)} already linked; "
                 f"{published_existing} existing source-created dogs published; "
                 f"{reused_by_registration} matched by corroborated registration; "
+                f"{created_source_kennels} source kennels created; "
+                f"{len(kennel_updates)} source kennel links added; "
                 f"{skipped_parent_links} unsafe parent links skipped; "
                 f"{preserved_parent_conflicts} existing parent links preserved."
             )
