@@ -397,6 +397,7 @@ class DogImage(models.Model):
     dog = models.ForeignKey(Dog, on_delete=models.CASCADE, related_name="images")
     image = models.FileField(upload_to="dogs/%Y/%m/")
     caption = models.CharField(max_length=220, blank=True)
+    content_sha256 = models.CharField(max_length=64, blank=True, db_index=True)
     is_primary = models.BooleanField(default=False)
     sort_order = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
