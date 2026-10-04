@@ -812,6 +812,8 @@ def submit_correction(request, pk):
                 "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
                 "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
                 "litter_id": str(cleaned["litter"].pk) if cleaned["litter"] else None,
+                "registration": cleaned["registration"],
+                "microchip_number": cleaned["microchip_number"],
                 "bio": cleaned["bio"],
             },
             notes=cleaned["notes"],
@@ -842,7 +844,12 @@ def submit_image(request, pk):
 
     form = DogImageSubmissionForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        Submission.objects.create(
+        upload = form.cleaned_data["attachment"]
+        digest = hashlib.sha256()
+        for chunk in upload.chunks():
+            digest.update(chunk)
+        upload.seek(0)
+        submission = Submission.objects.create(
             kind=Submission.Kind.IMAGE,
             submitted_by=request.user,
             dog=dog,
@@ -850,10 +857,12 @@ def submit_image(request, pk):
             payload={
                 "caption": form.cleaned_data["caption"],
                 "is_primary": form.cleaned_data["is_primary"],
+                "sha256": digest.hexdigest(),
             },
-            attachment=form.cleaned_data["attachment"],
+            attachment=upload,
             notes=form.cleaned_data["notes"],
         )
+        verify_submission(submission)
         messages.success(request, "Photo submitted for review.")
         return redirect("accounts:submissions")
 
