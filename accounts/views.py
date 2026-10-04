@@ -467,6 +467,7 @@ def payment_submit_dog(request, pk):
                     "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
                     "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
                     "registration": cleaned["registration"],
+                    "microchip_number": cleaned["microchip_number"],
                     "litter_id": str(cleaned["litter"].pk) if cleaned["litter"] else None,
                     "bio": cleaned["bio"],
                 },
@@ -477,6 +478,7 @@ def payment_submit_dog(request, pk):
                 submission=submission,
                 slot_kind=PaymentSubmissionLink.SlotKind.DOG,
             )
+            verify_submission(submission)
         messages.success(
             request,
             "Dog submitted. It remains private until an administrator verifies and approves it.",
@@ -537,6 +539,8 @@ def payment_submit_litter(request, pk):
                         "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
                         "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
                         "date_of_birth": _date_value(cleaned["date_of_birth"]),
+                        "country": cleaned["country"],
+                        "declared_puppy_count": cleaned["declared_puppy_count"],
                         "notes": cleaned["notes"],
                     },
                     notes=cleaned["review_notes"],
@@ -546,6 +550,7 @@ def payment_submit_litter(request, pk):
                     submission=submission,
                     slot_kind=PaymentSubmissionLink.SlotKind.LITTER,
                 )
+                verify_submission(submission)
             messages.success(
                 request,
                 "Litter submitted for admin verification. You can now add puppies from this same litter.",
@@ -583,28 +588,42 @@ def payment_submit_puppy(request, pk):
     form = LitterPuppySubmissionForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         cleaned = form.cleaned_data
-        submission = Submission.objects.create(
-            kind=Submission.Kind.DOG,
-            submitted_by=request.user,
-            kennel=payment.kennel,
-            payload={
-                "_paid_submission": True,
-                "litter_submission_id": str(litter_link.submission_id),
-                "name": cleaned["name"],
-                "sex": cleaned["sex"],
-                "colour": cleaned["colour"],
-                "country": cleaned["country"],
-                "bloodline": cleaned["bloodline"],
-                "registration": cleaned["registration"],
-                "bio": cleaned["bio"],
-            },
-            notes=cleaned["notes"],
-        )
-        PaymentSubmissionLink.objects.create(
-            payment=payment,
-            submission=submission,
-            slot_kind=PaymentSubmissionLink.SlotKind.PUPPY,
-        )
+        litter_submission = litter_link.submission
+        litter_payload = litter_submission.payload or {}
+        canonical_litter = litter_submission.litter
+        litter_code = canonical_litter.code if canonical_litter else litter_payload.get("code")
+        sire_id = canonical_litter.sire_id if canonical_litter else litter_payload.get("sire_id")
+        dam_id = canonical_litter.dam_id if canonical_litter else litter_payload.get("dam_id")
+        with transaction.atomic():
+            locked = SubmissionPayment.objects.select_for_update().get(pk=payment.pk)
+            submission = Submission.objects.create(
+                kind=Submission.Kind.DOG,
+                submitted_by=request.user,
+                kennel=payment.kennel,
+                payload={
+                    "_paid_submission": True,
+                    "litter_submission_id": str(litter_link.submission_id),
+                    "litter_code": litter_code or "",
+                    "sire_id": str(sire_id) if sire_id else None,
+                    "dam_id": str(dam_id) if dam_id else None,
+                    "name": cleaned["name"],
+                    "sex": cleaned["sex"],
+                    "date_of_birth": _date_value(cleaned["date_of_birth"]),
+                    "colour": cleaned["colour"],
+                    "country": cleaned["country"],
+                    "bloodline": cleaned["bloodline"],
+                    "registration": cleaned["registration"],
+                    "microchip_number": cleaned["microchip_number"],
+                    "bio": cleaned["bio"],
+                },
+                notes=cleaned["notes"],
+            )
+            PaymentSubmissionLink.objects.create(
+                payment=locked,
+                submission=submission,
+                slot_kind=PaymentSubmissionLink.SlotKind.PUPPY,
+            )
+            verify_submission(submission)
         messages.success(
             request,
             "Puppy submitted for admin verification under this litter package.",
@@ -684,7 +703,7 @@ def submit_correction(request, pk):
     )
     if request.method == "POST" and form.is_valid():
         cleaned = form.cleaned_data
-        Submission.objects.create(
+        submission = Submission.objects.create(
             kind=Submission.Kind.CORRECTION,
             submitted_by=request.user,
             dog=dog,
@@ -703,6 +722,7 @@ def submit_correction(request, pk):
             },
             notes=cleaned["notes"],
         )
+        verify_submission(submission)
         messages.success(request, "Correction submitted for moderator review.")
         return redirect("accounts:submissions")
 
@@ -1264,7 +1284,7 @@ def edit_litter(request, pk):
         if cleaned["kennel"] != litter.kennel:
             form.add_error("kennel", "An existing litter cannot be moved to another kennel.")
         else:
-            Submission.objects.create(
+            submission = Submission.objects.create(
                 kind=Submission.Kind.LITTER_EDIT,
                 submitted_by=request.user,
                 kennel=litter.kennel,
@@ -1274,10 +1294,13 @@ def edit_litter(request, pk):
                     "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
                     "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
                     "date_of_birth": _date_value(cleaned["date_of_birth"]),
+                    "country": cleaned["country"],
+                    "declared_puppy_count": cleaned["declared_puppy_count"],
                     "notes": cleaned["notes"],
                 },
                 notes=cleaned["review_notes"],
             )
+            verify_submission(submission)
             messages.success(request, "Litter changes submitted for moderator review.")
             return redirect("accounts:submissions")
 
