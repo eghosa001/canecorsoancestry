@@ -37,16 +37,36 @@ class PaidSubmissionTests(TestCase):
         )
 
     def test_package_prices_and_multi_dog_limit(self):
-        form = PaymentPackageForm(
+        batch_form = PaymentPackageForm(
             {
                 "kennel": self.kennel.pk,
                 "package": SubmissionPayment.Package.MULTI_DOG,
-                "dog_count": 6,
+                "dog_count": 4,
             },
             user=self.user,
         )
-        self.assertTrue(form.is_valid(), form.errors)
-        self.assertEqual(form.cleaned_data["amount_kobo"], 100000)
+        self.assertTrue(batch_form.is_valid(), batch_form.errors)
+        self.assertEqual(batch_form.cleaned_data["amount_kobo"], 150000)
+
+        oversized_form = PaymentPackageForm(
+            {
+                "kennel": self.kennel.pk,
+                "package": SubmissionPayment.Package.MULTI_DOG,
+                "dog_count": 5,
+            },
+            user=self.user,
+        )
+        self.assertFalse(oversized_form.is_valid())
+
+        litter_form = PaymentPackageForm(
+            {
+                "kennel": self.kennel.pk,
+                "package": SubmissionPayment.Package.LITTER,
+            },
+            user=self.user,
+        )
+        self.assertTrue(litter_form.is_valid(), litter_form.errors)
+        self.assertEqual(litter_form.cleaned_data["amount_kobo"], 20000)
 
     def test_paid_submission_cannot_be_approved_without_paid_link(self):
         submission = Submission.objects.create(
