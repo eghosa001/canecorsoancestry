@@ -14,7 +14,7 @@ from django.core.exceptions import PermissionDenied
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
+from django.db.models import Q
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -1199,6 +1199,9 @@ def moderation_submission_detail(request, pk):
     reviews = list(
         submission.review_decisions.select_related("reviewer").all()
     )
+    audit_events = list(
+        submission.audit_events.select_related("actor").order_by("-created_at")
+    )
     pending_override = None
     if submission.verification_status == SubmissionVerificationStatus.AWAITING_SECOND:
         pending_override = (
@@ -1220,6 +1223,7 @@ def moderation_submission_detail(request, pk):
             "evidence_requests": evidence_requests,
             "evidence": evidence,
             "reviews": reviews,
+            "audit_events": audit_events,
             "pending_override": pending_override,
             "can_review_flagged": can_review_flagged_submissions(request.user),
             "can_second_approve": bool(
@@ -1280,7 +1284,7 @@ def review_submission(request, pk, decision):
                 )
             if not flagged:
                 raise ValueError("There is no current warning to override.")
-            if submission.risk_level == SubmissionRiskLevel.RED:
+            if submission.requires_second_review:
                 request_high_risk_override(submission, request.user, notes)
                 messages.success(
                     request,
@@ -2010,6 +2014,7 @@ def verification_dashboard(request):
             "rules": rules,
             "staff_users": staff_users,
             "role_choices": ModerationRoleAssignment.Role.choices,
+            "risk_choices": SubmissionRiskLevel.choices,
         },
     )
 
@@ -2020,10 +2025,20 @@ def moderation_set_role(request):
     if not can_manage_verification(request.user):
         raise PermissionDenied
 
-    target = get_object_or_404(
-        get_user_model(),
-        pk=request.POST.get("user_id"),
-    )
+    user_id = request.POST.get("user_id", "").strip()
+    user_lookup = request.POST.get("user_lookup", "").strip()
+    if user_id:
+        target = get_object_or_404(get_user_model(), pk=user_id)
+    elif user_lookup:
+        target = get_user_model().objects.filter(
+            Q(username__iexact=user_lookup) | Q(email__iexact=user_lookup)
+        ).first()
+        if target is None:
+            messages.error(request, "No user matches that username or email.")
+            return redirect("accounts:verification-dashboard")
+    else:
+        messages.error(request, "Choose a user or enter a username/email.")
+        return redirect("accounts:verification-dashboard")
     requested_role = request.POST.get("role", "").strip()
     if target.is_superuser:
         messages.info(request, "Superusers always have owner-level verification authority.")
