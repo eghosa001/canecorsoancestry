@@ -21,6 +21,7 @@ from registry.models import (
     SubmissionVerificationStatus,
     VerificationRule,
 )
+from registry.permissions import moderation_role
 from registry.services import (
     approve_submission,
     request_high_risk_override,
@@ -443,6 +444,7 @@ class VerificationGovernanceTests(TestCase):
         self.assertEqual(submission.risk_level, SubmissionRiskLevel.RED)
 
     def test_moderators_receive_stable_public_admin_numbers(self):
+        moderation_role(self.reviewer)
         reviewer_assignment = ModerationRoleAssignment.objects.get(user=self.reviewer)
         senior_assignment = ModerationRoleAssignment.objects.get(user=self.senior_one)
 
