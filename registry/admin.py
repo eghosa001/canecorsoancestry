@@ -357,7 +357,7 @@ class ModerationAuditAdmin(AppendOnlyAdmin):
     list_filter = ("action", "created_at")
     exclude = ("actor",)
     readonly_fields = ("public_actor",)
-    search_fields = ("dog__name", "kennel__name", "litter__code", "actor_admin_number_snapshot", "note")
+    search_fields = ("dog__name", "kennel__name", "litter__code", "note")
 
     @admin.display(description="Admin")
     def public_actor(self, obj):
@@ -370,7 +370,7 @@ class SubmissionReviewAdmin(AppendOnlyAdmin):
     list_filter = ("action", "created_at")
     exclude = ("reviewer",)
     readonly_fields = ("public_reviewer",)
-    search_fields = ("submission__id", "reviewer_admin_number_snapshot", "reason")
+    search_fields = ("submission__id", "reason")
 
     @admin.display(description="Admin")
     def public_reviewer(self, obj):
@@ -421,7 +421,7 @@ class VerificationRuleAdmin(AppendOnlyAdmin):
 class ModerationRoleAssignmentAdmin(AppendOnlyAdmin):
     list_display = ("public_admin", "role", "assigned_at")
     list_filter = ("role",)
-    search_fields = ("admin_number", "user__username", "user__email")
+    search_fields = ("user__username", "user__email")
 
     @admin.display(description="Admin")
     def public_admin(self, obj):
