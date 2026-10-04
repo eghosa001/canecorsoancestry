@@ -631,6 +631,24 @@ class Submission(models.Model):
             ),
         ]
 
+    @property
+    def assigned_to_admin_label(self):
+        if not self.assigned_to_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.assigned_to_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
+    @property
+    def reviewed_by_admin_label(self):
+        if not self.reviewed_by_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.reviewed_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
     def __str__(self):
         return f"{self.get_kind_display()} · {self.submitted_by}"
 
@@ -978,6 +996,24 @@ class DisputeCase(models.Model):
 
     class Meta:
         ordering = ("status", "-created_at")
+
+    @property
+    def assigned_to_admin_label(self):
+        if not self.assigned_to_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.assigned_to_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
+
+    @property
+    def closed_by_admin_label(self):
+        if not self.closed_by_id:
+            return ""
+        assignment = ModerationRoleAssignment.objects.filter(
+            user_id=self.closed_by_id
+        ).only("admin_number").first()
+        return assignment.public_label if assignment else "Admin"
 
     def __str__(self):
         return f"{self.dog} · {self.get_reason_display()}"
