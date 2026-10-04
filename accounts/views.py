@@ -1197,6 +1197,11 @@ def moderation_submission_detail(request, pk):
         submission.refresh_from_db()
 
     findings = list(current_findings(submission))
+    blocking_findings = [
+        finding
+        for finding in findings
+        if finding.risk_level != SubmissionRiskLevel.GREEN
+    ]
     evidence_requests = list(
         submission.evidence_requests.select_related("requested_by").all()
     )
@@ -1228,6 +1233,7 @@ def moderation_submission_detail(request, pk):
         {
             "submission": submission,
             "findings": findings,
+            "blocking_findings": blocking_findings,
             "review_diff": submission_diff(submission),
             "evidence_requests": evidence_requests,
             "evidence": evidence,
@@ -1264,7 +1270,10 @@ def review_submission(request, pk, decision):
 
     notes = form.cleaned_data["resolution_notes"].strip()
     findings = list(current_findings(submission))
-    flagged = bool(findings)
+    flagged = any(
+        finding.risk_level != SubmissionRiskLevel.GREEN
+        for finding in findings
+    )
     try:
         if decision == "approve":
             if flagged:
