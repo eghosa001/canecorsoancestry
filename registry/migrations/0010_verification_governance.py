@@ -41,6 +41,25 @@ def seed_verification_rules(apps, schema_editor):
         )
 
 
+def backfill_audit_snapshots(apps, schema_editor):
+    ModerationAudit = apps.get_model("registry", "ModerationAudit")
+    for event in ModerationAudit.objects.all().iterator(chunk_size=500):
+        event.actor_id_snapshot = str(event.actor_id or "")
+        event.submission_id_snapshot = str(event.submission_id or "")
+        event.dog_id_snapshot = str(event.dog_id or "")
+        event.kennel_id_snapshot = str(event.kennel_id or "")
+        event.litter_id_snapshot = str(event.litter_id or "")
+        event.save(
+            update_fields=(
+                "actor_id_snapshot",
+                "submission_id_snapshot",
+                "dog_id_snapshot",
+                "kennel_id_snapshot",
+                "litter_id_snapshot",
+            )
+        )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -68,6 +87,31 @@ class Migration(migrations.Migration):
             model_name="dogimage",
             name="content_sha256",
             field=models.CharField(blank=True, db_index=True, max_length=64),
+        ),
+        migrations.AddField(
+            model_name="moderationaudit",
+            name="actor_id_snapshot",
+            field=models.CharField(blank=True, editable=False, max_length=64),
+        ),
+        migrations.AddField(
+            model_name="moderationaudit",
+            name="submission_id_snapshot",
+            field=models.CharField(blank=True, editable=False, max_length=64),
+        ),
+        migrations.AddField(
+            model_name="moderationaudit",
+            name="dog_id_snapshot",
+            field=models.CharField(blank=True, editable=False, max_length=64),
+        ),
+        migrations.AddField(
+            model_name="moderationaudit",
+            name="kennel_id_snapshot",
+            field=models.CharField(blank=True, editable=False, max_length=64),
+        ),
+        migrations.AddField(
+            model_name="moderationaudit",
+            name="litter_id_snapshot",
+            field=models.CharField(blank=True, editable=False, max_length=64),
         ),
         migrations.AddField(
             model_name="litter",
@@ -271,5 +315,6 @@ class Migration(migrations.Migration):
                 max_length=40,
             ),
         ),
+        migrations.RunPython(backfill_audit_snapshots, migrations.RunPython.noop),
         migrations.RunPython(seed_verification_rules, migrations.RunPython.noop),
     ]
