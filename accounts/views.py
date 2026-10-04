@@ -2002,9 +2002,24 @@ def verification_dashboard(request):
         .order_by("created_at")[:50]
     )
     recent_changes = list(
-        ModerationAudit.objects.filter(action=ModerationAudit.Action.RECORD_CHANGED)
+        ModerationAudit.objects.filter(
+            action__in=[
+                ModerationAudit.Action.RECORD_CHANGED,
+                ModerationAudit.Action.RECORD_LOCK_CHANGED,
+            ]
+        )
         .select_related("actor", "dog", "litter", "submission")
         .order_by("-created_at")[:30]
+    )
+    locked_dogs = list(
+        Dog.objects.filter(is_record_locked=True)
+        .select_related("record_locked_by", "kennel")
+        .order_by("-record_locked_at", "name")[:30]
+    )
+    locked_litters = list(
+        Litter.objects.filter(is_record_locked=True)
+        .select_related("record_locked_by", "kennel")
+        .order_by("-record_locked_at", "code")[:30]
     )
     rules = list(VerificationRule.objects.order_by("code"))
     role_assignments = {
@@ -2028,6 +2043,8 @@ def verification_dashboard(request):
             "override_warning_threshold": round(warning_threshold, 1),
             "second_queue": second_queue,
             "recent_changes": recent_changes,
+            "locked_dogs": locked_dogs,
+            "locked_litters": locked_litters,
             "rules": rules,
             "staff_users": staff_users,
             "role_choices": ModerationRoleAssignment.Role.choices,
@@ -2096,6 +2113,65 @@ def moderation_set_role(request):
         note="Owner updated moderation authority.",
     )
     messages.success(request, "Moderator authority updated.")
+    return redirect("accounts:verification-dashboard")
+
+
+@staff_member_required
+@require_POST
+def moderation_record_lock(request):
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+
+    record_type = request.POST.get("record_type", "").strip()
+    record_id = request.POST.get("record_id", "").strip()
+    action = request.POST.get("action", "").strip()
+    reason = request.POST.get("reason", "").strip()
+    if action not in {"lock", "unlock"} or record_type not in {"dog", "litter"}:
+        messages.error(request, "Invalid record-lock request.")
+        return redirect("accounts:verification-dashboard")
+    if not reason:
+        messages.error(request, "A reason is required to change a record lock.")
+        return redirect("accounts:verification-dashboard")
+
+    model = Dog if record_type == "dog" else Litter
+    record = get_object_or_404(model, pk=record_id)
+    before = bool(record.is_record_locked)
+    desired = action == "lock"
+    if before == desired:
+        messages.info(
+            request,
+            f"This {record_type} record is already {'locked' if desired else 'unlocked'}.",
+        )
+        return redirect("accounts:verification-dashboard")
+
+    record.is_record_locked = desired
+    record.record_locked_at = timezone.now() if desired else None
+    record.record_locked_by = request.user if desired else None
+    record.save(
+        update_fields=(
+            "is_record_locked",
+            "record_locked_at",
+            "record_locked_by",
+        )
+    )
+    record_audit(
+        action=ModerationAudit.Action.RECORD_LOCK_CHANGED,
+        actor=request.user,
+        dog=record if record_type == "dog" else None,
+        kennel=record.kennel,
+        litter=record if record_type == "litter" else None,
+        summary={
+            "record_type": record_type,
+            "record_id": str(record.pk),
+            "previous_locked": before,
+            "new_locked": desired,
+        },
+        note=reason,
+    )
+    messages.success(
+        request,
+        f"{record_type.title()} record {'locked' if desired else 'unlocked'} with an audit entry.",
+    )
     return redirect("accounts:verification-dashboard")
 
 
