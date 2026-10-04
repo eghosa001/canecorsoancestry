@@ -8,7 +8,7 @@
       <h1>Fact-check & review queue</h1>
       <p>Check submitted facts and evidence before approval, compare proposed changes against canonical data, investigate disputes, and merge duplicates deliberately.</p>
     </div>
-    <div class="button-row"><a class="btn btn-outline" href="{% url 'accounts:data-health' %}">Data health</a><a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a></div>
+    <div class="button-row">{% if can_manage_verification %}<a class="btn btn-gold" href="{% url 'accounts:verification-dashboard' %}">Verification control</a>{% endif %}<a class="btn btn-outline" href="{% url 'accounts:data-health' %}">Data health</a><a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a></div>
   </header>
 
   <form class="moderation-filters" method="get">
@@ -28,6 +28,13 @@
       <select id="moderation-priority" name="priority">
         <option value="">All priorities</option>
         {% for value,label in priority_choices %}<option value="{{ value }}" {% if filters.priority == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="moderation-risk">Risk</label>
+      <select id="moderation-risk" name="risk">
+        <option value="">All risk levels</option>
+        {% for value,label in risk_choices %}<option value="{{ value }}" {% if filters.risk == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
       </select>
     </div>
     <div>
@@ -56,6 +63,7 @@
       <input type="hidden" name="kind" value="{{ filters.kind }}">
       <input type="hidden" name="priority" value="{{ filters.priority }}">
       <input type="hidden" name="assignment" value="{{ filters.assignment }}">
+      <input type="hidden" name="risk" value="{{ filters.risk }}">
       <div><label for="{{ duplicate_form.duplicate_q.id_for_label }}">{{ duplicate_form.duplicate_q.label }}</label>{{ duplicate_form.duplicate_q }}</div>
       <button class="btn btn-gold" type="submit">Search dogs</button>
     </form>
@@ -214,6 +222,9 @@
             <div class="queue-badges">
               <span class="priority-pill priority-{{ item.priority }}">{{ item.get_priority_display }}</span>
               {% if item.assigned_to %}<span class="assignment-pill">{{ item.assigned_to }}</span>{% else %}<span class="assignment-pill unassigned">Unassigned</span>{% endif %}
+              <span class="submission-state {{ item.risk_level }}">{{ item.get_risk_level_display }}</span>
+              <span class="assignment-pill">{{ item.get_verification_status_display }}</span>
+              {% if item.requires_second_review %}<span class="assignment-pill">Two-person approval</span>{% endif %}
               {% if item.payment_link %}<span class="assignment-pill">Paystack · {{ item.payment_link.payment.get_status_display }} · ₦{{ item.payment_link.payment.amount_naira }}</span>{% endif %}
               {% if item.kennel and item.kennel.verified_at %}<span class="assignment-pill">Kennel verified</span>{% endif %}
             </div>
@@ -239,16 +250,16 @@
           {% if item.notes %}<p class="moderator-note">{{ item.notes }}</p>{% endif %}
 
           <div class="review-actions">
-            <form method="post" action="{% url 'accounts:review-submission' item.pk 'approve' %}">
-              {% csrf_token %}
-              <textarea name="resolution_notes" rows="2" placeholder="Optional approval note" aria-label="Approval note for {{ item.get_kind_display }}"></textarea>
-              <button class="btn btn-gold" type="submit">Approve</button>
-            </form>
-            <form method="post" action="{% url 'accounts:review-submission' item.pk 'reject' %}">
-              {% csrf_token %}
-              <textarea name="resolution_notes" rows="2" placeholder="Reason for rejection" aria-label="Reason for rejecting {{ item.get_kind_display }}"></textarea>
-              <button class="btn btn-outline" type="submit">Reject</button>
-            </form>
+            <a class="btn btn-gold" href="{% url 'accounts:moderation-submission' item.pk %}">
+              {% if item.current_findings %}Review warnings{% else %}Open review{% endif %}
+            </a>
+            {% if not item.current_findings %}
+              <form method="post" action="{% url 'accounts:review-submission' item.pk 'approve' %}">
+                {% csrf_token %}
+                <textarea name="resolution_notes" rows="2" placeholder="Optional approval note" aria-label="Approval note for {{ item.get_kind_display }}"></textarea>
+                <button class="btn btn-outline" type="submit">Approve clean case</button>
+              </form>
+            {% endif %}
           </div>
         </div>
       </article>
