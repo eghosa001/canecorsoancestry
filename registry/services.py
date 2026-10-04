@@ -344,9 +344,14 @@ def approve_submission(
         raise ValueError("Only pending submissions can be reviewed.")
 
     findings = verify_submission(submission, audit=False)
+    blocking_findings = [
+        finding
+        for finding in findings
+        if finding.risk_level != SubmissionRiskLevel.GREEN
+    ]
     submission.refresh_from_db()
     resolution_notes = (resolution_notes or "").strip()
-    if findings:
+    if blocking_findings:
         if allow_override and not can_review_flagged_submissions(reviewer):
             raise ValueError("Only a senior reviewer or owner can override automated warnings.")
         if not allow_override:
@@ -716,9 +721,9 @@ def approve_submission(
         )
     )
     review_action = SubmissionReview.Action.APPROVED
-    if findings and submission.requires_second_review:
+    if blocking_findings and submission.requires_second_review:
         review_action = SubmissionReview.Action.SECOND_APPROVED
-    elif findings:
+    elif blocking_findings:
         review_action = SubmissionReview.Action.OVERRIDE_APPROVED
     final_review = _create_review(
         submission,
@@ -778,8 +783,13 @@ def reject_submission(submission, reviewer, resolution_notes=""):
         raise ValueError("Only pending submissions can be reviewed.")
 
     findings = verify_submission(submission, audit=False)
+    blocking_findings = [
+        finding
+        for finding in findings
+        if finding.risk_level != SubmissionRiskLevel.GREEN
+    ]
     submission.refresh_from_db()
-    if findings and not can_review_flagged_submissions(reviewer):
+    if blocking_findings and not can_review_flagged_submissions(reviewer):
         raise ValueError("A senior reviewer or owner must decide a flagged submission.")
     review_diff = submission_diff(submission)
     submission.status = Submission.Status.REJECTED
