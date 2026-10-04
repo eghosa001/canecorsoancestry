@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from registry.models import (
@@ -221,8 +222,16 @@ class VerificationGovernanceTests(TestCase):
             submission=submission,
             action=ModerationAudit.Action.SUBMISSION_APPROVED,
         ).latest("created_at")
-        self.assertEqual(audit.summary["first_override_reviewer_id"], self.senior_one.pk)
-        self.assertEqual(audit.summary["second_reviewer_id"], self.senior_two.pk)
+        first_assignment = ModerationRoleAssignment.objects.get(user=self.senior_one)
+        second_assignment = ModerationRoleAssignment.objects.get(user=self.senior_two)
+        self.assertEqual(
+            audit.summary["first_override_reviewer_admin_number"],
+            first_assignment.admin_number,
+        )
+        self.assertEqual(
+            audit.summary["second_reviewer_admin_number"],
+            second_assignment.admin_number,
+        )
 
     def test_normal_reviewer_cannot_override_red_finding(self):
         submission = self._puppy_submission()
@@ -432,6 +441,62 @@ class VerificationGovernanceTests(TestCase):
         self.assertIsNotNone(finding)
         self.assertIn("different paid packages", finding.message)
         self.assertEqual(submission.risk_level, SubmissionRiskLevel.RED)
+
+    def test_moderators_receive_stable_public_admin_numbers(self):
+        reviewer_assignment = ModerationRoleAssignment.objects.get(user=self.reviewer)
+        senior_assignment = ModerationRoleAssignment.objects.get(user=self.senior_one)
+
+        self.assertGreaterEqual(reviewer_assignment.admin_number, 10001)
+        self.assertGreaterEqual(senior_assignment.admin_number, 10001)
+        self.assertNotEqual(
+            reviewer_assignment.admin_number,
+            senior_assignment.admin_number,
+        )
+        self.assertEqual(
+            reviewer_assignment.public_label,
+            f"Admin #{reviewer_assignment.admin_number}",
+        )
+
+    def test_review_and_audit_snapshot_public_admin_number(self):
+        submission = self._puppy_submission(dob="2026-03-12", name="Admin ID Puppy")
+        approve_submission(submission, self.reviewer)
+
+        review = submission.review_decisions.latest("created_at")
+        audit = submission.audit_events.filter(
+            action=ModerationAudit.Action.SUBMISSION_APPROVED
+        ).latest("created_at")
+        assignment = ModerationRoleAssignment.objects.get(user=self.reviewer)
+
+        self.assertEqual(
+            review.reviewer_admin_number_snapshot,
+            assignment.admin_number,
+        )
+        self.assertEqual(
+            review.reviewer_admin_label,
+            f"Admin #{assignment.admin_number}",
+        )
+        self.assertEqual(
+            audit.actor_admin_number_snapshot,
+            assignment.admin_number,
+        )
+        self.assertEqual(
+            audit.actor_admin_label,
+            f"Admin #{assignment.admin_number}",
+        )
+
+    def test_review_page_uses_admin_id_not_reviewer_username(self):
+        submission = self._puppy_submission(dob="2026-03-12", name="Rendered Admin ID Puppy")
+        approve_submission(submission, self.reviewer)
+        assignment = ModerationRoleAssignment.objects.get(user=self.reviewer)
+
+        self.client.force_login(self.senior_one)
+        response = self.client.get(
+            reverse("accounts:moderation-submission", args=[submission.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f"Admin #{assignment.admin_number}")
+        self.assertNotContains(response, self.reviewer.username)
 
     def test_private_verification_evidence_is_not_public_media(self):
         submission = self._puppy_submission(dob="2026-03-12", name="Evidence Puppy")
