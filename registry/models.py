@@ -129,6 +129,15 @@ class Dog(models.Model):
         db_index=True,
     )
     is_public = models.BooleanField(default=False, db_index=True)
+    is_record_locked = models.BooleanField(default=False, db_index=True)
+    record_locked_at = models.DateTimeField(null=True, blank=True)
+    record_locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="locked_ancestry_dogs",
+    )
     search_count = models.PositiveBigIntegerField(default=0, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -264,6 +273,15 @@ class Litter(models.Model):
     declared_puppy_count = models.PositiveSmallIntegerField(null=True, blank=True)
     notes = models.TextField(blank=True)
     is_public = models.BooleanField(default=False)
+    is_record_locked = models.BooleanField(default=False, db_index=True)
+    record_locked_at = models.DateTimeField(null=True, blank=True)
+    record_locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="locked_ancestry_litters",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -907,6 +925,7 @@ class ModerationAudit(models.Model):
         OVERRIDE_REQUESTED = "override_requested", "Override requested"
         SECOND_APPROVAL = "second_approval", "Second approval"
         RECORD_CHANGED = "record_changed", "Locked record changed"
+        RECORD_LOCK_CHANGED = "record_lock_changed", "Record lock changed"
 
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
