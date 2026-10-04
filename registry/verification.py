@@ -80,6 +80,11 @@ DEFAULT_RULES = {
         SubmissionRiskLevel.RED,
         True,
     ),
+    "litter_kennel_conflict": (
+        "Litter kennel conflict",
+        SubmissionRiskLevel.RED,
+        True,
+    ),
     "litter_count_exceeded": (
         "Submitted puppies exceed declared litter size",
         SubmissionRiskLevel.RED,
@@ -470,6 +475,42 @@ def _litter_puppy_checks(findings, submission, run_id, payload):
         else str(expected.get("code") or "")
     )
 
+    if litter_submission.kennel_id != submission.kennel_id:
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="litter_kennel_conflict",
+            message="The puppy submission kennel does not match the paid litter kennel.",
+            expected=_id_text(litter_submission.kennel_id),
+            submitted=_id_text(submission.kennel_id),
+            metadata={"litter_submission_id": str(litter_submission.pk)},
+        )
+
+    from accounts.models import PaymentSubmissionLink
+
+    puppy_payment_id = (
+        PaymentSubmissionLink.objects.filter(submission=submission)
+        .values_list("payment_id", flat=True)
+        .first()
+    )
+    litter_payment_id = (
+        PaymentSubmissionLink.objects.filter(submission=litter_submission)
+        .values_list("payment_id", flat=True)
+        .first()
+    )
+    if puppy_payment_id and litter_payment_id and puppy_payment_id != litter_payment_id:
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="payment_entitlement",
+            message="The puppy and litter are linked to different paid packages.",
+            expected=str(litter_payment_id),
+            submitted=str(puppy_payment_id),
+            metadata={"litter_submission_id": str(litter_submission.pk)},
+        )
+
     submitted_dob = _date_value(payload.get("date_of_birth"))
     if expected_dob and submitted_dob and expected_dob != submitted_dob:
         _add_finding(
@@ -492,6 +533,29 @@ def _litter_puppy_checks(findings, submission, run_id, payload):
             expected=expected_dob.isoformat(),
             submitted="Not provided",
         )
+    elif not expected_dob and submitted_dob:
+        siblings = Submission.objects.filter(
+            kind=Submission.Kind.DOG,
+            payload__litter_submission_id=str(litter_submission.pk),
+            status__in=[Submission.Status.PENDING, Submission.Status.APPROVED],
+        ).exclude(pk=submission.pk)
+        for sibling in siblings.order_by("created_at")[:100]:
+            sibling_dob = _date_value((sibling.payload or {}).get("date_of_birth"))
+            if sibling_dob and sibling_dob != submitted_dob:
+                _add_finding(
+                    findings,
+                    submission=submission,
+                    run_id=run_id,
+                    code="litter_dob_conflict",
+                    message="Puppies linked to this litter have conflicting submitted dates of birth.",
+                    expected=sibling_dob.isoformat(),
+                    submitted=submitted_dob.isoformat(),
+                    metadata={
+                        "litter_submission_id": str(litter_submission.pk),
+                        "other_submission_id": str(sibling.pk),
+                    },
+                )
+                break
 
     if payload.get("sire_id") and expected_sire and _id_text(payload.get("sire_id")) != _id_text(expected_sire):
         _add_finding(
@@ -541,8 +605,6 @@ def _litter_puppy_checks(findings, submission, run_id, payload):
     except (TypeError, ValueError):
         declared = None
     if declared:
-        from accounts.models import PaymentSubmissionLink
-
         litter_payment = (
             PaymentSubmissionLink.objects.filter(submission=litter_submission)
             .values_list("payment_id", flat=True)
@@ -552,6 +614,8 @@ def _litter_puppy_checks(findings, submission, run_id, payload):
             puppy_count = PaymentSubmissionLink.objects.filter(
                 payment_id=litter_payment,
                 slot_kind=PaymentSubmissionLink.SlotKind.PUPPY,
+            ).exclude(
+                submission__status=Submission.Status.REJECTED
             ).count()
             if puppy_count > declared:
                 _add_finding(
