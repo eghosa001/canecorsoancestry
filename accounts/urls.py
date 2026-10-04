@@ -64,6 +64,11 @@ urlpatterns = [
         views.verification_rule_update,
         name="verification-rule-update",
     ),
+    path(
+        "moderation/verification/record-lock/",
+        views.moderation_record_lock,
+        name="moderation-record-lock",
+    ),
     path("moderation/bulk/", views.bulk_moderation, name="bulk-moderation"),
     path("moderation/audit/", views.moderation_audit, name="moderation-audit"),
     path("moderation/data-health/", views.data_health, name="data-health"),
