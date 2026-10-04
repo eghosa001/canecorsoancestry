@@ -112,6 +112,44 @@
   </section>
 
   <section class="panel">
+    <div class="panel-heading">
+      <div><h2>Record locking</h2><span>Lock important published dog or litter records. Lock/unlock actions require a reason and are written to the audit trail.</span></div>
+    </div>
+    <form class="review-diff-row" method="post" action="{% url 'accounts:moderation-record-lock' %}">
+      {% csrf_token %}
+      <select name="record_type" required>
+        <option value="dog">Dog</option>
+        <option value="litter">Litter</option>
+      </select>
+      <input name="record_id" required placeholder="Dog or litter UUID" aria-label="Dog or litter UUID">
+      <select name="action" required>
+        <option value="lock">Lock record</option>
+        <option value="unlock">Unlock record</option>
+      </select>
+      <input name="reason" required placeholder="Required reason" aria-label="Record lock reason">
+      <button class="btn btn-gold" type="submit">Apply record lock</button>
+    </form>
+
+    <div class="review-diff section-spacer-tight">
+      {% for dog in locked_dogs %}
+        <article class="review-diff-row">
+          <strong>Dog · {{ dog.name }}</strong>
+          <span>{{ dog.pk }}</span>
+          <span>{% if dog.kennel %}{{ dog.kennel.name }} · {% endif %}locked {{ dog.record_locked_at|date:"d M Y, H:i" }}{% if dog.record_locked_by %} by {{ dog.record_locked_by }}{% endif %}</span>
+        </article>
+      {% endfor %}
+      {% for litter in locked_litters %}
+        <article class="review-diff-row">
+          <strong>Litter · {{ litter.code }}</strong>
+          <span>{{ litter.pk }}</span>
+          <span>{% if litter.kennel %}{{ litter.kennel.name }} · {% endif %}locked {{ litter.record_locked_at|date:"d M Y, H:i" }}{% if litter.record_locked_by %} by {{ litter.record_locked_by }}{% endif %}</span>
+        </article>
+      {% endfor %}
+      {% if not locked_dogs and not locked_litters %}<p class="muted">No records are explicitly locked yet.</p>{% endif %}
+    </div>
+  </section>
+
+  <section class="panel">
     <div class="panel-heading"><h2>Recently changed protected records</h2><span>Old and new values remain in the audit event.</span></div>
     {% for event in recent_changes %}
       <article class="audit-card">
