@@ -205,7 +205,7 @@ class Migration(migrations.Migration):
             name="ModerationRoleAssignment",
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("role", models.CharField(choices=[("owner", "Owner / Super Admin"), ("senior", "Senior Reviewer"), ("reviewer", "Reviewer")], max_length=16)),
+                ("role", models.CharField(choices=[("none", "No verification role"), ("owner", "Owner / Super Admin"), ("senior", "Senior Reviewer"), ("reviewer", "Reviewer")], max_length=16)),
                 ("assigned_at", models.DateTimeField(auto_now_add=True)),
                 ("assigned_by", models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="ancestry_roles_assigned", to=settings.AUTH_USER_MODEL)),
                 ("user", models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name="ancestry_moderation_role", to=settings.AUTH_USER_MODEL)),
