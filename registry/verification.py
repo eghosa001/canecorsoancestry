@@ -504,7 +504,18 @@ def _litter_puppy_checks(findings, submission, run_id, payload):
         .values_list("payment_id", flat=True)
         .first()
     )
-    if puppy_payment_id and litter_payment_id and puppy_payment_id != litter_payment_id:
+    if not litter_payment_id:
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="payment_entitlement",
+            message="The referenced litter has no paid litter-package entitlement.",
+            expected="Paid litter submission linked to the same payment",
+            submitted="Missing litter payment link",
+            metadata={"litter_submission_id": str(litter_submission.pk)},
+        )
+    elif puppy_payment_id and puppy_payment_id != litter_payment_id:
         _add_finding(
             findings,
             submission=submission,
@@ -521,9 +532,12 @@ def _litter_puppy_checks(findings, submission, run_id, payload):
     sibling_dobs = set()
     for sibling in Submission.objects.filter(
         kind=Submission.Kind.DOG,
-        status=Submission.Status.PENDING,
         payload__litter_submission_id=str(litter_submission.pk),
-    ).exclude(pk=submission.pk).order_by("-created_at")[:200]:
+    ).exclude(
+        pk=submission.pk
+    ).exclude(
+        status=Submission.Status.REJECTED
+    ).order_by("-created_at")[:200]:
         sibling_dob = _date_value((sibling.payload or {}).get("date_of_birth"))
         if sibling_dob:
             sibling_dobs.add(sibling_dob)
