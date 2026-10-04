@@ -1111,7 +1111,11 @@ def moderation_queue(request):
             verify_submission(item)
             item.refresh_from_db()
         item.review_diff = submission_diff(item)
-        item.current_findings = list(current_findings(item))
+        item.current_findings = [
+            finding
+            for finding in current_findings(item)
+            if finding.risk_level != SubmissionRiskLevel.GREEN
+        ]
         age_days = max(0, (timezone.now() - item.created_at).days)
         item.age_days = age_days
         item.is_aging = age_days >= 7
