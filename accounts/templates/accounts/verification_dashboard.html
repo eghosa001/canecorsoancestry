@@ -69,6 +69,14 @@
 
   <section class="panel">
     <div class="panel-heading"><h2>Administrator authority</h2><span>Owner/Super Admin can assign reviewer authority. Superusers always retain owner-level authority.</span></div>
+    <form class="review-diff-row" method="post" action="{% url 'accounts:moderation-set-role' %}">
+      {% csrf_token %}
+      <input name="user_lookup" required placeholder="Username or email" aria-label="Username or email">
+      <select name="role" required>
+        {% for value,label in role_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-gold" type="submit">Add / update administrator</button>
+    </form>
     {% for user in staff_users %}
       <form class="review-diff-row" method="post" action="{% url 'accounts:moderation-set-role' %}">
         {% csrf_token %}
