@@ -7,6 +7,7 @@ from django.utils import timezone
 from .models import (
     Dog,
     DogIdentityNumber,
+    DogImage,
     DogRegistration,
     EvidenceRequest,
     Litter,
@@ -49,6 +50,11 @@ DEFAULT_RULES = {
         SubmissionRiskLevel.RED,
         True,
     ),
+    "duplicate_submission": (
+        "Possible duplicate pending submission",
+        SubmissionRiskLevel.YELLOW,
+        False,
+    ),
     "existing_identity_conflict": (
         "Existing dog identity conflict",
         SubmissionRiskLevel.RED,
@@ -78,6 +84,11 @@ DEFAULT_RULES = {
         "Submitted puppies exceed declared litter size",
         SubmissionRiskLevel.RED,
         True,
+    ),
+    "unusually_large_litter": (
+        "Unusually large declared litter",
+        SubmissionRiskLevel.YELLOW,
+        False,
     ),
     "duplicate_litter": (
         "Possible duplicate litter",
@@ -250,7 +261,7 @@ def _dog_identity_checks(findings, submission, run_id, payload):
     if registration:
         existing = (
             DogRegistration.objects.select_related("dog")
-            .filter(authority__isnull=True, number__iexact=registration)
+            .filter(number__iexact=registration)
             .first()
         )
         if existing and existing.dog_id != submission.dog_id:
@@ -339,6 +350,79 @@ def _dog_identity_checks(findings, submission, run_id, payload):
                 expected=f"Reuse/merge canonical dog {candidate.pk} if identity is confirmed",
                 submitted=f"{name}; {dob or 'DOB unknown'}",
                 metadata={"existing_dog_id": str(candidate.pk), "matches": matches},
+            )
+
+
+def _pending_duplicate_checks(findings, submission, run_id, payload):
+    if submission.kind != Submission.Kind.DOG:
+        return
+
+    name = str(payload.get("name") or "").strip()
+    dob = str(payload.get("date_of_birth") or "").strip()
+    registration = str(payload.get("registration") or "").strip()
+    microchip = "".join(
+        ch for ch in str(payload.get("microchip_number") or "").upper()
+        if ch.isalnum()
+    )
+
+    pending = Submission.objects.filter(
+        kind=Submission.Kind.DOG,
+        status=Submission.Status.PENDING,
+    ).exclude(pk=submission.pk)
+
+    strong_match = None
+    if registration:
+        strong_match = pending.filter(
+            payload__registration__iexact=registration
+        ).first()
+        if strong_match:
+            _add_finding(
+                findings,
+                submission=submission,
+                run_id=run_id,
+                code="duplicate_registration",
+                message="The same registration number is present on another pending dog submission.",
+                expected=f"Resolve pending submission {strong_match.pk} before publishing another identity",
+                submitted=registration,
+                metadata={"other_submission_id": str(strong_match.pk)},
+            )
+
+    if microchip:
+        # Microchip formatting can vary, so normalize the small pending candidate set
+        # in Python instead of trusting the raw browser/request formatting.
+        for other in pending.exclude(payload__microchip_number="").order_by("-created_at")[:200]:
+            other_chip = "".join(
+                ch for ch in str((other.payload or {}).get("microchip_number") or "").upper()
+                if ch.isalnum()
+            )
+            if other_chip and other_chip == microchip:
+                _add_finding(
+                    findings,
+                    submission=submission,
+                    run_id=run_id,
+                    code="duplicate_microchip",
+                    message="The same microchip number is present on another pending dog submission.",
+                    expected=f"Resolve pending submission {other.pk} before publishing another identity",
+                    submitted=str(payload.get("microchip_number") or ""),
+                    metadata={"other_submission_id": str(other.pk)},
+                )
+                break
+
+    if name and dob:
+        possible = pending.filter(
+            payload__name__iexact=name,
+            payload__date_of_birth=dob,
+        ).order_by("-created_at").first()
+        if possible:
+            _add_finding(
+                findings,
+                submission=submission,
+                run_id=run_id,
+                code="duplicate_submission",
+                message="Another pending submission has the same dog name and date of birth. Review both identities before publication.",
+                expected=f"Compare with pending submission {possible.pk}",
+                submitted=f"{name}; {dob}",
+                metadata={"other_submission_id": str(possible.pk)},
             )
 
 
@@ -487,6 +571,21 @@ def _litter_checks(findings, submission, run_id, payload):
     sire_id = payload.get("sire_id")
     dam_id = payload.get("dam_id")
     litter_dob = _date_value(payload.get("date_of_birth"))
+    try:
+        declared_puppy_count = int(payload.get("declared_puppy_count")) if payload.get("declared_puppy_count") not in (None, "") else None
+    except (TypeError, ValueError):
+        declared_puppy_count = None
+
+    if declared_puppy_count and declared_puppy_count > 20:
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="unusually_large_litter",
+            message="The declared litter size is unusually large and should be supported by breeding/litter documentation. This is not an automatic rejection.",
+            expected="A documented biologically plausible litter size",
+            submitted=str(declared_puppy_count),
+        )
 
     if submission.kind == Submission.Kind.LITTER_CREATE:
         if code and Litter.objects.filter(code__iexact=code).exists():
@@ -574,6 +673,20 @@ def _correction_checks(findings, submission, run_id, payload):
         critical.append(("dam", dog.dam_id, payload.get("dam_id")))
     if "litter_id" in payload and _id_text(payload.get("litter_id")) != _id_text(dog.litter_id):
         critical.append(("litter", dog.litter_id, payload.get("litter_id")))
+    if "sex" in payload and payload.get("sex") != dog.sex:
+        critical.append(("sex", dog.sex, payload.get("sex")))
+
+    current_registration = dog.registrations.filter(authority__isnull=True).first()
+    current_registration_value = current_registration.number if current_registration else ""
+    if "registration" in payload and str(payload.get("registration") or "").strip() != current_registration_value:
+        critical.append(("registration", current_registration_value, str(payload.get("registration") or "").strip()))
+
+    current_microchip = dog.identity_numbers.filter(
+        kind=DogIdentityNumber.Kind.MICROCHIP
+    ).first()
+    current_microchip_value = current_microchip.value if current_microchip else ""
+    if "microchip_number" in payload and str(payload.get("microchip_number") or "").strip() != current_microchip_value:
+        critical.append(("microchip", current_microchip_value, str(payload.get("microchip_number") or "").strip()))
     if critical:
         _add_finding(
             findings,
@@ -595,23 +708,45 @@ def _photo_checks(findings, submission, run_id):
         .exclude(sha256="")
         .values_list("sha256", flat=True)
     )
-    for digest in hashes:
-        other = (
+    payload_hash = str((submission.payload or {}).get("sha256") or "").strip()
+    if payload_hash:
+        hashes.append(payload_hash)
+
+    for digest in set(hashes):
+        other_evidence = (
             SubmissionEvidence.objects.select_related("submission")
             .filter(sha256=digest, evidence_type=SubmissionEvidence.EvidenceType.PHOTO)
             .exclude(submission=submission)
             .first()
         )
-        if other:
+        existing_image = DogImage.objects.filter(content_sha256=digest).first()
+        other_submission = (
+            Submission.objects.filter(
+                kind=Submission.Kind.IMAGE,
+                status=Submission.Status.PENDING,
+                payload__sha256=digest,
+            )
+            .exclude(pk=submission.pk)
+            .first()
+        )
+        if other_evidence or existing_image or other_submission:
+            metadata = {}
+            if other_evidence:
+                metadata["other_submission_id"] = str(other_evidence.submission_id)
+            if existing_image:
+                metadata["existing_dog_id"] = str(existing_image.dog_id)
+                metadata["existing_image_id"] = existing_image.pk
+            if other_submission:
+                metadata["other_pending_submission_id"] = str(other_submission.pk)
             _add_finding(
                 findings,
                 submission=submission,
                 run_id=run_id,
                 code="duplicate_photo",
-                message="The same uploaded identity photograph is attached to another submission. Review context before deciding.",
+                message="The same image content already appears in another dog record or pending verification submission. Review context before deciding.",
                 expected="Unique identity photo unless reuse is documented",
                 submitted=digest,
-                metadata={"other_submission_id": str(other.submission_id)},
+                metadata=metadata,
             )
 
 
@@ -649,6 +784,7 @@ def verify_submission(submission, *, audit=True):
 
     if submission.kind in {Submission.Kind.DOG, Submission.Kind.CORRECTION}:
         _dog_identity_checks(findings, submission, run_id, payload)
+        _pending_duplicate_checks(findings, submission, run_id, payload)
         _litter_puppy_checks(findings, submission, run_id, payload)
         _correction_checks(findings, submission, run_id, payload)
 
