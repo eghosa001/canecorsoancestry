@@ -16,12 +16,14 @@ from .models import (
     DogAlias,
     DogDocument,
     DogExternalKey,
+    DogIdentityNumber,
     DogImage,
     DogRedirect,
     DogRegistration,
     DogSource,
     DogTitle,
     DisputeCase,
+    EvidenceRequest,
     HealthRecord,
     Kennel,
     Litter,
@@ -30,9 +32,15 @@ from .models import (
     ModerationAudit,
     Notification,
     Submission,
+    SubmissionEvidence,
+    SubmissionReview,
+    SubmissionRiskLevel,
+    SubmissionVerificationStatus,
     VerificationEvent,
     VerificationState,
 )
+from .permissions import can_second_approve
+from .verification import verification_snapshot, verify_submission
 
 
 def unique_dog_slug(name):
@@ -155,26 +163,206 @@ def _require_paid_submission(submission):
 
     if submission.kind == Submission.Kind.DOG:
         if payload.get("litter_submission_id"):
-            if link.slot_kind != PaymentSubmissionLink.SlotKind.PUPPY:
-                raise ValueError("This puppy is not linked to a litter payment package.")
-        elif link.slot_kind != PaymentSubmissionLink.SlotKind.DOG:
-            raise ValueError("This dog is not linked to a dog payment slot.")
-    elif (
-        submission.kind == Submission.Kind.LITTER_CREATE
-        and link.slot_kind != PaymentSubmissionLink.SlotKind.LITTER
-    ):
-        raise ValueError("This litter is not linked to a litter payment package.")
+            if (
+                link.slot_kind != PaymentSubmissionLink.SlotKind.PUPPY
+                or payment.package != SubmissionPayment.Package.LITTER
+            ):
+                raise ValueError("This puppy is not linked to a paid litter package.")
+        else:
+            if link.slot_kind != PaymentSubmissionLink.SlotKind.DOG:
+                raise ValueError("This dog is not linked to a dog payment slot.")
+            if payment.package not in {
+                SubmissionPayment.Package.SINGLE_DOG,
+                SubmissionPayment.Package.MULTI_DOG,
+            }:
+                raise ValueError("This dog slot is backed by the wrong payment package.")
+    elif submission.kind == Submission.Kind.LITTER_CREATE:
+        if (
+            link.slot_kind != PaymentSubmissionLink.SlotKind.LITTER
+            or payment.package != SubmissionPayment.Package.LITTER
+        ):
+            raise ValueError("This litter is not linked to a paid litter package.")
 
     return link
 
 
+def _review_evidence_snapshot(submission):
+    return [
+        {
+            "id": str(item.pk),
+            "type": item.evidence_type,
+            "sha256": item.sha256,
+            "uploaded_by_id": item.uploaded_by_id,
+            "created_at": item.created_at.isoformat(),
+        }
+        for item in submission.verification_evidence.select_related("uploaded_by").all()
+    ]
+
+
+def _create_review(submission, reviewer, action, reason=""):
+    return SubmissionReview.objects.create(
+        submission=submission,
+        reviewer=reviewer,
+        action=action,
+        reason=reason,
+        warnings_snapshot=verification_snapshot(submission),
+        evidence_snapshot=_review_evidence_snapshot(submission),
+    )
+
+
 @transaction.atomic
-def approve_submission(submission, reviewer, resolution_notes=""):
+def request_submission_evidence(submission, reviewer, reason):
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Explain what evidence is required.")
+    submission = Submission.objects.select_for_update().get(pk=submission.pk)
+    if submission.status != Submission.Status.PENDING:
+        raise ValueError("Only pending submissions can request evidence.")
+    evidence_request = EvidenceRequest.objects.create(
+        submission=submission,
+        requested_by=reviewer,
+        note=reason,
+    )
+    submission.verification_status = SubmissionVerificationStatus.AWAITING_EVIDENCE
+    submission.save(update_fields=("verification_status", "updated_at"))
+    _create_review(
+        submission,
+        reviewer,
+        SubmissionReview.Action.EVIDENCE_REQUESTED,
+        reason,
+    )
+    Notification.objects.create(
+        user=submission.submitted_by,
+        title="Verification evidence requested",
+        message=reason,
+        link="/member/submissions/",
+    )
+    record_audit(
+        action=ModerationAudit.Action.EVIDENCE_REQUESTED,
+        actor=reviewer,
+        dog=submission.dog,
+        kennel=submission.kennel,
+        litter=submission.litter,
+        submission=submission,
+        summary={"evidence_request_id": str(evidence_request.pk), "warnings": verification_snapshot(submission)},
+        note=reason,
+    )
+    return evidence_request
+
+
+@transaction.atomic
+def request_high_risk_override(submission, reviewer, reason):
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("An override reason is required.")
+    submission = Submission.objects.select_for_update().get(pk=submission.pk)
+    if submission.status != Submission.Status.PENDING:
+        raise ValueError("Only pending submissions can be overridden.")
+    verify_submission(submission, audit=False)
+    submission.refresh_from_db()
+    if submission.risk_level != SubmissionRiskLevel.RED:
+        raise ValueError("This submission does not require a high-risk second approval.")
+    review = _create_review(
+        submission,
+        reviewer,
+        SubmissionReview.Action.OVERRIDE_REQUESTED,
+        reason,
+    )
+    submission.verification_status = SubmissionVerificationStatus.AWAITING_SECOND
+    submission.requires_second_review = True
+    submission.save(
+        update_fields=(
+            "verification_status",
+            "requires_second_review",
+            "updated_at",
+        )
+    )
+    record_audit(
+        action=ModerationAudit.Action.OVERRIDE_REQUESTED,
+        actor=reviewer,
+        dog=submission.dog,
+        kennel=submission.kennel,
+        litter=submission.litter,
+        submission=submission,
+        summary={"review_id": str(review.pk), "warnings": review.warnings_snapshot, "evidence": review.evidence_snapshot},
+        note=reason,
+    )
+    return review
+
+
+@transaction.atomic
+def reject_high_risk_override(submission, reviewer, reason):
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("A second-review rejection reason is required.")
+    submission = Submission.objects.select_for_update().get(pk=submission.pk)
+    pending_override = submission.review_decisions.filter(
+        action=SubmissionReview.Action.OVERRIDE_REQUESTED
+    ).order_by("-created_at").first()
+    if pending_override is None:
+        raise ValueError("No high-risk override is awaiting second review.")
+    if pending_override.reviewer_id == reviewer.pk:
+        raise ValueError("The second reviewer must be a different administrator.")
+    if not can_second_approve(reviewer):
+        raise ValueError("Only a senior reviewer or owner can complete second review.")
+    _create_review(
+        submission,
+        reviewer,
+        SubmissionReview.Action.SECOND_REJECTED,
+        reason,
+    )
+    submission.verification_status = SubmissionVerificationStatus.REVIEW
+    submission.save(update_fields=("verification_status", "updated_at"))
+    record_audit(
+        action=ModerationAudit.Action.SECOND_APPROVAL,
+        actor=reviewer,
+        dog=submission.dog,
+        kennel=submission.kennel,
+        litter=submission.litter,
+        submission=submission,
+        summary={"decision": "override_rejected", "first_reviewer_id": pending_override.reviewer_id},
+        note=reason,
+    )
+    return submission
+
+
+@transaction.atomic
+def approve_submission(
+    submission,
+    reviewer,
+    resolution_notes="",
+    *,
+    allow_override=False,
+    override_review=None,
+):
     submission = Submission.objects.select_for_update().select_related(
         "dog", "kennel", "litter", "document", "submitted_by"
     ).get(pk=submission.pk)
     if submission.status != Submission.Status.PENDING:
         raise ValueError("Only pending submissions can be reviewed.")
+
+    findings = verify_submission(submission, audit=False)
+    submission.refresh_from_db()
+    resolution_notes = (resolution_notes or "").strip()
+    if findings:
+        if not allow_override:
+            raise ValueError(
+                "Automated verification warnings are present. Use Approve with override and provide a reason."
+            )
+        if not resolution_notes:
+            raise ValueError("An override reason is required.")
+        if submission.risk_level == SubmissionRiskLevel.RED:
+            if override_review is None:
+                raise ValueError("High-risk findings require a second administrator.")
+            if (
+                override_review.submission_id != submission.pk
+                or override_review.action != SubmissionReview.Action.OVERRIDE_REQUESTED
+            ):
+                raise ValueError("The high-risk override request is invalid.")
+            if override_review.reviewer_id == reviewer.pk:
+                raise ValueError("The second reviewer must be a different administrator.")
+            if not can_second_approve(reviewer):
+                raise ValueError("Only a senior reviewer or owner can complete second review.")
 
     payload = submission.payload or {}
     review_diff = submission_diff(submission)
@@ -257,12 +445,30 @@ def approve_submission(submission, reviewer, resolution_notes=""):
             ).first()
             if existing and existing.dog_id != dog.pk:
                 raise ValueError(
-                    "That external registration number is already linked to another dog."
+                    "That external registration number is already linked to another dog. Resolve or merge the identity instead of creating a duplicate registration."
                 )
             DogRegistration.objects.get_or_create(
                 dog=dog,
                 authority=None,
                 number=registration,
+            )
+
+        microchip = str(payload.get("microchip_number") or "").strip()
+        if microchip:
+            normalized_chip = re.sub(r"[^A-Za-z0-9]+", "", microchip).upper()
+            existing_chip = DogIdentityNumber.objects.filter(
+                kind=DogIdentityNumber.Kind.MICROCHIP,
+                normalized_value=normalized_chip,
+            ).first()
+            if existing_chip and existing_chip.dog_id != dog.pk:
+                raise ValueError(
+                    "That microchip is already linked to another canonical dog. Resolve the identity conflict first."
+                )
+            DogIdentityNumber.objects.get_or_create(
+                dog=dog,
+                kind=DogIdentityNumber.Kind.MICROCHIP,
+                normalized_value=normalized_chip,
+                defaults={"value": microchip},
             )
 
     elif submission.kind == Submission.Kind.CORRECTION:
@@ -399,6 +605,8 @@ def approve_submission(submission, reviewer, resolution_notes=""):
             sire=_resolve_dog(payload.get("sire_id")),
             dam=_resolve_dog(payload.get("dam_id")),
             date_of_birth=_date_from_payload(payload.get("date_of_birth")),
+            country=str(payload.get("country") or "").strip(),
+            declared_puppy_count=payload.get("declared_puppy_count") or None,
             notes=str(payload.get("notes") or "").strip(),
             is_public=True,
         )
@@ -417,6 +625,8 @@ def approve_submission(submission, reviewer, resolution_notes=""):
         litter.sire = _resolve_dog(payload.get("sire_id"))
         litter.dam = _resolve_dog(payload.get("dam_id"))
         litter.date_of_birth = _date_from_payload(payload.get("date_of_birth"))
+        litter.country = str(payload.get("country") or "").strip()
+        litter.declared_puppy_count = payload.get("declared_puppy_count") or None
         litter.notes = str(payload.get("notes") or "").strip()
         litter.full_clean()
         litter.save()
@@ -447,6 +657,17 @@ def approve_submission(submission, reviewer, resolution_notes=""):
             "updated_at",
         )
     )
+    review_action = SubmissionReview.Action.APPROVED
+    if findings and submission.risk_level == SubmissionRiskLevel.RED:
+        review_action = SubmissionReview.Action.SECOND_APPROVED
+    elif findings:
+        review_action = SubmissionReview.Action.OVERRIDE_APPROVED
+    final_review = _create_review(
+        submission,
+        reviewer,
+        review_action,
+        resolution_notes,
+    )
     _notify_submission(submission)
     record_audit(
         action=ModerationAudit.Action.SUBMISSION_APPROVED,
@@ -458,9 +679,35 @@ def approve_submission(submission, reviewer, resolution_notes=""):
         summary={
             "kind": submission.kind,
             "changes": review_diff,
+            "warnings": final_review.warnings_snapshot,
+            "evidence": final_review.evidence_snapshot,
+            "review_action": final_review.action,
+            "first_override_reviewer_id": (
+                override_review.reviewer_id if override_review is not None else None
+            ),
+            "second_reviewer_id": (
+                reviewer.pk
+                if final_review.action == SubmissionReview.Action.SECOND_APPROVED
+                else None
+            ),
         },
         note=resolution_notes,
     )
+    if submission.kind in {Submission.Kind.CORRECTION, Submission.Kind.LITTER_EDIT} and review_diff:
+        record_audit(
+            action=ModerationAudit.Action.RECORD_CHANGED,
+            actor=reviewer,
+            dog=submission.dog,
+            kennel=submission.kennel,
+            litter=submission.litter,
+            submission=submission,
+            summary={
+                "changes": review_diff,
+                "warnings": final_review.warnings_snapshot,
+                "review_action": final_review.action,
+            },
+            note=resolution_notes,
+        )
     return submission
 
 
@@ -472,6 +719,8 @@ def reject_submission(submission, reviewer, resolution_notes=""):
     if submission.status != Submission.Status.PENDING:
         raise ValueError("Only pending submissions can be reviewed.")
 
+    verify_submission(submission, audit=False)
+    submission.refresh_from_db()
     review_diff = submission_diff(submission)
     submission.status = Submission.Status.REJECTED
     submission.reviewed_by = reviewer
@@ -486,6 +735,12 @@ def reject_submission(submission, reviewer, resolution_notes=""):
             "updated_at",
         )
     )
+    final_review = _create_review(
+        submission,
+        reviewer,
+        SubmissionReview.Action.REJECTED,
+        resolution_notes,
+    )
     _notify_submission(submission)
     record_audit(
         action=ModerationAudit.Action.SUBMISSION_REJECTED,
@@ -497,6 +752,8 @@ def reject_submission(submission, reviewer, resolution_notes=""):
         summary={
             "kind": submission.kind,
             "changes": review_diff,
+            "warnings": final_review.warnings_snapshot,
+            "evidence": final_review.evidence_snapshot,
         },
         note=resolution_notes,
     )
