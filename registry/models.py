@@ -970,6 +970,11 @@ class ModerationAudit(models.Model):
         on_delete=models.SET_NULL,
         related_name="audit_events",
     )
+    actor_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
+    submission_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
+    dog_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
+    kennel_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
+    litter_id_snapshot = models.CharField(max_length=64, blank=True, editable=False)
     summary = models.JSONField(default=dict, blank=True)
     note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -980,6 +985,16 @@ class ModerationAudit(models.Model):
     def save(self, *args, **kwargs):
         if self.pk and ModerationAudit.objects.filter(pk=self.pk).exists():
             raise ValidationError("Audit history is append-only and cannot be edited.")
+        if not self.actor_id_snapshot and self.actor_id:
+            self.actor_id_snapshot = str(self.actor_id)
+        if not self.submission_id_snapshot and self.submission_id:
+            self.submission_id_snapshot = str(self.submission_id)
+        if not self.dog_id_snapshot and self.dog_id:
+            self.dog_id_snapshot = str(self.dog_id)
+        if not self.kennel_id_snapshot and self.kennel_id:
+            self.kennel_id_snapshot = str(self.kennel_id)
+        if not self.litter_id_snapshot and self.litter_id:
+            self.litter_id_snapshot = str(self.litter_id)
         return super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
