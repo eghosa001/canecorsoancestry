@@ -39,7 +39,7 @@ from .models import (
     VerificationEvent,
     VerificationState,
 )
-from .permissions import can_second_approve
+from .permissions import can_review_flagged_submissions, can_second_approve
 from .verification import verification_snapshot, verify_submission
 
 
@@ -252,6 +252,8 @@ def request_submission_evidence(submission, reviewer, reason):
 
 @transaction.atomic
 def request_high_risk_override(submission, reviewer, reason):
+    if not can_review_flagged_submissions(reviewer):
+        raise ValueError("Only a senior reviewer or owner can request a high-risk override.")
     reason = (reason or "").strip()
     if not reason:
         raise ValueError("An override reason is required.")
@@ -345,6 +347,8 @@ def approve_submission(
     submission.refresh_from_db()
     resolution_notes = (resolution_notes or "").strip()
     if findings:
+        if allow_override and not can_review_flagged_submissions(reviewer):
+            raise ValueError("Only a senior reviewer or owner can override automated warnings.")
         if not allow_override:
             raise ValueError(
                 "Automated verification warnings are present. Use Approve with override and provide a reason."
@@ -719,8 +723,10 @@ def reject_submission(submission, reviewer, resolution_notes=""):
     if submission.status != Submission.Status.PENDING:
         raise ValueError("Only pending submissions can be reviewed.")
 
-    verify_submission(submission, audit=False)
+    findings = verify_submission(submission, audit=False)
     submission.refresh_from_db()
+    if findings and not can_review_flagged_submissions(reviewer):
+        raise ValueError("A senior reviewer or owner must decide a flagged submission.")
     review_diff = submission_diff(submission)
     submission.status = Submission.Status.REJECTED
     submission.reviewed_by = reviewer
