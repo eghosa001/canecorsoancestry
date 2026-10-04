@@ -87,15 +87,21 @@ class DogAdmin(admin.ModelAdmin):
     )
 
     def get_readonly_fields(self, request, obj=None):
+        protected = (
+            "is_public",
+            "is_record_locked",
+            "record_locked_at",
+            "record_locked_by",
+        )
         if obj and obj.is_public:
-            return (
+            return protected + (
                 "sex",
                 "date_of_birth",
                 "sire",
                 "dam",
                 "litter",
             )
-        return ()
+        return protected
 
 
 @admin.register(Kennel)
@@ -103,6 +109,7 @@ class KennelAdmin(admin.ModelAdmin):
     list_display = ("name", "country", "city", "verified_at")
     search_fields = ("name", "country", "city")
     prepopulated_fields = {"slug": ("name",)}
+    readonly_fields = ("verified_at",)
 
 
 @admin.register(Litter)
@@ -111,8 +118,14 @@ class LitterAdmin(admin.ModelAdmin):
     search_fields = ("code",)
 
     def get_readonly_fields(self, request, obj=None):
+        protected = (
+            "is_public",
+            "is_record_locked",
+            "record_locked_at",
+            "record_locked_by",
+        )
         if obj and obj.is_public:
-            return (
+            return protected + (
                 "code",
                 "kennel",
                 "sire",
@@ -121,7 +134,7 @@ class LitterAdmin(admin.ModelAdmin):
                 "country",
                 "declared_puppy_count",
             )
-        return ()
+        return protected
 
 
 @admin.register(Submission)
@@ -230,7 +243,29 @@ class KennelMembershipAdmin(admin.ModelAdmin):
 
 admin.site.register(RegistrationAuthority)
 admin.site.register(DogImage)
-admin.site.register(DogDocument)
+
+@admin.register(DogDocument)
+class DogDocumentAdmin(admin.ModelAdmin):
+    list_display = ("title", "dog", "document_type", "is_public", "created_at")
+    list_filter = ("document_type", "is_public", "created_at")
+    search_fields = ("title", "dog__name", "submitted_by__username")
+    readonly_fields = (
+        "dog",
+        "title",
+        "document_type",
+        "file",
+        "is_public",
+        "submitted_by",
+        "source_submission",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 admin.site.register(HealthRecord)
 admin.site.register(DogSource)
 admin.site.register(DogRedirect)
