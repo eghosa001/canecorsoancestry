@@ -85,11 +85,6 @@ DEFAULT_RULES = {
         SubmissionRiskLevel.RED,
         True,
     ),
-    "litter_kennel_conflict": (
-        "Litter kennel conflict",
-        SubmissionRiskLevel.RED,
-        True,
-    ),
     "litter_count_exceeded": (
         "Submitted puppies exceed declared litter size",
         SubmissionRiskLevel.RED,
@@ -882,6 +877,10 @@ def current_findings(submission):
     return submission.verification_findings.filter(is_current=True).select_related("rule")
 
 
+def blocking_findings(submission):
+    return current_findings(submission).exclude(risk_level=SubmissionRiskLevel.GREEN)
+
+
 def verification_snapshot(submission):
     return [
         {
@@ -934,7 +933,8 @@ def verify_submission(submission, *, audit=True):
         if RISK_ORDER[finding.risk_level] > RISK_ORDER[risk]:
             risk = finding.risk_level
     requires_second = any(
-        bool(finding.metadata.get("second_approval_required"))
+        finding.risk_level != SubmissionRiskLevel.GREEN
+        and bool(finding.metadata.get("second_approval_required"))
         for finding in findings
     )
 
