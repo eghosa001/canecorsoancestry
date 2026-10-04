@@ -262,8 +262,8 @@ def request_high_risk_override(submission, reviewer, reason):
         raise ValueError("Only pending submissions can be overridden.")
     verify_submission(submission, audit=False)
     submission.refresh_from_db()
-    if submission.risk_level != SubmissionRiskLevel.RED:
-        raise ValueError("This submission does not require a high-risk second approval.")
+    if not submission.requires_second_review:
+        raise ValueError("This submission does not require a second approval.")
     review = _create_review(
         submission,
         reviewer,
@@ -355,7 +355,7 @@ def approve_submission(
             )
         if not resolution_notes:
             raise ValueError("An override reason is required.")
-        if submission.risk_level == SubmissionRiskLevel.RED:
+        if submission.requires_second_review:
             if override_review is None:
                 raise ValueError("High-risk findings require a second administrator.")
             if (
@@ -662,7 +662,7 @@ def approve_submission(
         )
     )
     review_action = SubmissionReview.Action.APPROVED
-    if findings and submission.risk_level == SubmissionRiskLevel.RED:
+    if findings and submission.requires_second_review:
         review_action = SubmissionReview.Action.SECOND_APPROVED
     elif findings:
         review_action = SubmissionReview.Action.OVERRIDE_APPROVED
