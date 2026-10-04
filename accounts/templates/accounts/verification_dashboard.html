@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Verification control · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell moderation-page">
+  <header class="page-heading moderation-heading">
+    <div>
+      <p class="eyebrow">Owner / Super Admin</p>
+      <h1>Verification & audit control</h1>
+      <p>Admins review the evidence; admins do not erase the evidence.</p>
+    </div>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Review queue</a>
+      <a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a>
+    </div>
+  </header>
+
+  <div class="moderation-summary">
+    <article><strong>{{ pending_count }}</strong><span>Pending submissions</span></article>
+    <article><strong>{{ yellow_count }}</strong><span>Yellow review</span></article>
+    <article><strong>{{ red_count }}</strong><span>Red high risk</span></article>
+    <article><strong>{{ second_count }}</strong><span>Second approval required</span></article>
+    <article><strong>{{ overrides_count }}</strong><span>Override decisions</span></article>
+  </div>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div><h2>Records requiring second approval</h2><span>Two different authorized reviewers must sign off before publication.</span></div>
+    </div>
+    <div class="moderation-list">
+      {% for item in second_queue %}
+        <article class="moderation-card">
+          <div class="moderation-card-content">
+            <div class="moderation-meta">
+              <div>
+                <span class="eyebrow">{{ item.get_kind_display }}</span>
+                <h3>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.code }}{% else %}Submission {{ item.pk }}{% endif %}</h3>
+                <p>{{ item.submitted_by }}{% if item.kennel %} · {{ item.kennel.name }}{% endif %}</p>
+              </div>
+              <span class="submission-state red">RED — HIGH RISK</span>
+            </div>
+            <a class="btn btn-gold" href="{% url 'accounts:moderation-submission' item.pk %}">Open second review</a>
+          </div>
+        </article>
+      {% empty %}
+        <p class="muted">No cases currently require second approval.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div><h2>Admin activity monitoring</h2><span>Unusual override activity is a review signal, not an accusation. Current comparison threshold: {{ override_warning_threshold }}% (peer average {{ peer_override_average }}%).</span></div>
+    </div>
+    <div class="review-diff">
+      {% for row in reviewer_rows %}
+        <article class="review-diff-row">
+          <strong>{{ row.user }} · {{ row.role|default:"No role" }}</strong>
+          <span>{{ row.reviews }} reviews · {{ row.approved }} approved · {{ row.rejected }} rejected · {{ row.flagged }} flagged</span>
+          <span>{{ row.overrides }} overrides · {{ row.override_rate }}% · {{ row.high_risk_approved }} high-risk approvals · avg {{ row.average_review_hours }}h</span>
+          {% if row.unusual_override %}
+            <span class="submission-state yellow">Unusually high override activity — review recommended</span>
+          {% endif %}
+        </article>
+      {% empty %}
+        <p class="muted">No reviewer activity recorded yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading"><h2>Administrator authority</h2><span>Owner/Super Admin can assign reviewer authority. Superusers always retain owner-level authority.</span></div>
+    {% for user in staff_users %}
+      <form class="review-diff-row" method="post" action="{% url 'accounts:moderation-set-role' %}">
+        {% csrf_token %}
+        <input type="hidden" name="user_id" value="{{ user.pk }}">
+        <strong>{{ user }}{% if user.is_superuser %} · Superuser{% endif %}</strong>
+        <select name="role" {% if user.is_superuser %}disabled{% endif %}>
+          <option value="">No moderation role</option>
+          {% for value,label in role_choices %}
+            <option value="{{ value }}"{% if user.moderation_assignment and user.moderation_assignment.role == value %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% if not user.is_superuser %}<button class="btn btn-outline" type="submit">Update authority</button>{% endif %}
+      </form>
+    {% endfor %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading"><h2>Verification rules</h2><span>Risk and second-approval requirements are explicit and configurable; there is no hidden score.</span></div>
+    {% for rule in rules %}
+      <form class="review-diff-row" method="post" action="{% url 'accounts:verification-rule-update' rule.pk %}">
+        {% csrf_token %}
+        <div><strong>{{ rule.title }}</strong><small>{{ rule.code }}{% if rule.description %} · {{ rule.description }}{% endif %}</small></div>
+        <label><input type="checkbox" name="enabled"{% if rule.enabled %} checked{% endif %}> Enabled</label>
+        <select name="risk_level">
+          {% for value,label in risk_choices %}
+            <option value="{{ value }}"{% if rule.risk_level == value %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <label><input type="checkbox" name="second_approval_required"{% if rule.second_approval_required %} checked{% endif %}> Require second approval</label>
+        <button class="btn btn-outline" type="submit">Save rule</button>
+      </form>
+    {% endfor %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading"><h2>Recently changed protected records</h2><span>Old and new values remain in the audit event.</span></div>
+    {% for event in recent_changes %}
+      <article class="audit-card">
+        <div class="audit-time">{{ event.created_at|date:"d M Y" }}<small>{{ event.created_at|date:"H:i" }}</small></div>
+        <div class="audit-main">
+          <span class="eyebrow">{{ event.get_action_display }}</span>
+          <h3>{% if event.dog %}{{ event.dog.name }}{% elif event.litter %}{{ event.litter.code }}{% else %}Protected record{% endif %}</h3>
+          <p>{% if event.actor %}Changed by {{ event.actor }}{% else %}System{% endif %}{% if event.note %} · {{ event.note }}{% endif %}</p>
+          <pre class="audit-summary">{{ event.summary }}</pre>
+        </div>
+      </article>
+    {% empty %}
+      <p class="muted">No protected record changes have been recorded yet.</p>
+    {% endfor %}
+  </section>
+</section>
+{% endblock %}
