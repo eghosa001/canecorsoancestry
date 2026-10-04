@@ -60,6 +60,21 @@ DEFAULT_RULES = {
         SubmissionRiskLevel.RED,
         True,
     ),
+    "invalid_sex": (
+        "Invalid dog sex value",
+        SubmissionRiskLevel.RED,
+        True,
+    ),
+    "parent_role_conflict": (
+        "Parent role conflict",
+        SubmissionRiskLevel.RED,
+        True,
+    ),
+    "same_parent_conflict": (
+        "Sire and dam are the same dog",
+        SubmissionRiskLevel.RED,
+        True,
+    ),
     "duplicate_photo": (
         "Duplicate identity photograph",
         SubmissionRiskLevel.YELLOW,
@@ -174,6 +189,38 @@ def _add_finding(findings, *, submission, run_id, code, message, expected="", su
 
 
 def _parent_checks(findings, submission, run_id, sire, dam, child_dob):
+    if sire is not None and dam is not None and sire.pk == dam.pk:
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="same_parent_conflict",
+            message="The same canonical dog is submitted as both sire and dam.",
+            expected="Two different parent records",
+            submitted=str(sire.pk),
+        )
+    if sire is not None and sire.sex == Dog.Sex.FEMALE:
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="parent_role_conflict",
+            message="The selected sire is currently recorded as female.",
+            expected="Sire recorded male or unknown pending correction",
+            submitted=f"{sire.name}: {sire.get_sex_display()}",
+            metadata={"parent_id": str(sire.pk), "role": "sire"},
+        )
+    if dam is not None and dam.sex == Dog.Sex.MALE:
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="parent_role_conflict",
+            message="The selected dam is currently recorded as male.",
+            expected="Dam recorded female or unknown pending correction",
+            submitted=f"{dam.name}: {dam.get_sex_display()}",
+            metadata={"parent_id": str(dam.pk), "role": "dam"},
+        )
     if not child_dob:
         return
     for role, parent in (("Sire", sire), ("Dam", dam)):
@@ -262,6 +309,18 @@ def _payment_checks(findings, submission, run_id):
 
 
 def _dog_identity_checks(findings, submission, run_id, payload):
+    sex = str(payload.get("sex") or Dog.Sex.UNKNOWN)
+    if sex not in dict(Dog.Sex.choices):
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="invalid_sex",
+            message="Submitted sex value is not one of the server-supported dog sex values.",
+            expected=", ".join(dict(Dog.Sex.choices)),
+            submitted=sex,
+        )
+
     registration = str(payload.get("registration") or "").strip()
     if registration:
         existing = (
@@ -847,6 +906,173 @@ def _photo_checks(findings, submission, run_id):
                 submitted=digest,
                 metadata=metadata,
             )
+
+
+def verification_checklist(submission):
+    """Return moderator-facing pass/warn/unknown checks without claiming proof beyond available data."""
+    payload = submission.payload or {}
+    findings = list(current_findings(submission))
+    finding_codes = {finding.code for finding in findings}
+
+    rows = []
+
+    def add(label, status, detail):
+        rows.append({"label": label, "status": status, "detail": detail})
+
+    if payload.get("_paid_submission"):
+        if "payment_entitlement" in finding_codes:
+            add("Payment eligibility", "fail", "Paid package or server-side entitlement conflict detected.")
+        else:
+            add("Payment eligibility", "pass", "No server-side package entitlement conflict detected.")
+
+    sex = str(payload.get("sex") or "").strip()
+    if submission.kind == Submission.Kind.DOG:
+        if not sex:
+            add("Sex", "unknown", "No sex was supplied.")
+        elif sex in dict(Dog.Sex.choices):
+            add("Sex", "pass", f"Submitted value is valid: {dict(Dog.Sex.choices).get(sex)}.")
+        else:
+            add("Sex", "fail", f"Unsupported submitted value: {sex}.")
+
+    litter_submission_id = payload.get("litter_submission_id")
+    if litter_submission_id:
+        litter_submission = (
+            Submission.objects.select_related("litter", "kennel")
+            .filter(pk=litter_submission_id, kind=Submission.Kind.LITTER_CREATE)
+            .first()
+        )
+        if litter_submission is None:
+            add("Litter ID", "fail", "Referenced litter submission does not exist.")
+        else:
+            expected = litter_submission.payload or {}
+            expected_code = (
+                litter_submission.litter.code
+                if litter_submission.litter_id
+                else str(expected.get("code") or "")
+            )
+            expected_sire = (
+                litter_submission.litter.sire_id
+                if litter_submission.litter_id
+                else expected.get("sire_id")
+            )
+            expected_dam = (
+                litter_submission.litter.dam_id
+                if litter_submission.litter_id
+                else expected.get("dam_id")
+            )
+            expected_dob = (
+                litter_submission.litter.date_of_birth
+                if litter_submission.litter_id
+                else _date_value(expected.get("date_of_birth"))
+            )
+
+            add(
+                "Litter ID",
+                "fail" if "litter_id_conflict" in finding_codes else "pass",
+                (
+                    "Submitted litter identity conflicts with the paid litter."
+                    if "litter_id_conflict" in finding_codes
+                    else f"No litter-ID conflict detected{f' ({expected_code})' if expected_code else ''}."
+                ),
+            )
+            if expected_sire:
+                add(
+                    "Sire",
+                    "fail" if "litter_parent_conflict" in finding_codes and _id_text(payload.get("sire_id")) != _id_text(expected_sire) else "pass",
+                    (
+                        "Submitted sire conflicts with the litter sire."
+                        if _id_text(payload.get("sire_id")) != _id_text(expected_sire)
+                        else "Submitted sire matches the litter sire."
+                    ),
+                )
+            else:
+                add("Sire", "unknown", "Litter sire is not recorded yet.")
+
+            if expected_dam:
+                add(
+                    "Dam",
+                    "fail" if "litter_parent_conflict" in finding_codes and _id_text(payload.get("dam_id")) != _id_text(expected_dam) else "pass",
+                    (
+                        "Submitted dam conflicts with the litter dam."
+                        if _id_text(payload.get("dam_id")) != _id_text(expected_dam)
+                        else "Submitted dam matches the litter dam."
+                    ),
+                )
+            else:
+                add("Dam", "unknown", "Litter dam is not recorded yet.")
+
+            submitted_dob = _date_value(payload.get("date_of_birth"))
+            if expected_dob and submitted_dob:
+                add(
+                    "Date of birth",
+                    "pass" if expected_dob == submitted_dob else "fail",
+                    (
+                        "Submitted DOB matches the litter DOB."
+                        if expected_dob == submitted_dob
+                        else f"Litter DOB {expected_dob.isoformat()} vs submitted {submitted_dob.isoformat()}."
+                    ),
+                )
+            elif expected_dob and not submitted_dob:
+                add("Date of birth", "unknown", f"Litter DOB is {expected_dob.isoformat()}, but this dog omitted DOB.")
+            elif not expected_dob:
+                add(
+                    "Date of birth",
+                    "fail" if "litter_dob_conflict" in finding_codes else "unknown",
+                    (
+                        "Submitted littermates contain conflicting DOB values."
+                        if "litter_dob_conflict" in finding_codes
+                        else "Litter DOB is not recorded; no independent DOB match can be claimed."
+                    ),
+                )
+
+            add(
+                "Kennel",
+                "fail" if "litter_kennel_conflict" in finding_codes else "pass",
+                (
+                    "Puppy kennel conflicts with the litter kennel."
+                    if "litter_kennel_conflict" in finding_codes
+                    else "No litter/kennel conflict detected."
+                ),
+            )
+
+    duplicate_codes = {
+        "duplicate_identity",
+        "duplicate_submission",
+        "duplicate_registration",
+        "duplicate_microchip",
+        "duplicate_photo",
+        "existing_identity_conflict",
+    }
+    active_duplicates = sorted(finding_codes & duplicate_codes)
+    add(
+        "Existing record / duplicate conflict",
+        "fail" if active_duplicates else "pass",
+        (
+            "Detected: " + ", ".join(active_duplicates)
+            if active_duplicates
+            else "No duplicate identity conflict was detected from the available identifiers and records."
+        ),
+    )
+
+    pedigree_codes = {
+        "pedigree_chronology",
+        "young_parent",
+        "parent_role_conflict",
+        "same_parent_conflict",
+        "locked_ancestry_change",
+    }
+    active_pedigree = sorted(finding_codes & pedigree_codes)
+    add(
+        "Pedigree consistency",
+        "fail" if active_pedigree else "pass",
+        (
+            "Detected: " + ", ".join(active_pedigree)
+            if active_pedigree
+            else "No pedigree chronology or parent-role conflict was detected from the available data."
+        ),
+    )
+
+    return rows
 
 
 def current_findings(submission):
