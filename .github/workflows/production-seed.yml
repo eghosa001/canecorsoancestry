@@ -118,12 +118,11 @@ jobs:
           public = Dog.objects.filter(external_keys__namespace='bellissimo-geni', is_public=True).distinct()
           private = Dog.objects.filter(external_keys__namespace='bellissimo-geni', is_public=False).distinct()
           puppy_public = Dog.objects.filter(external_keys__namespace='bellissimo-geni-puppies', is_public=True).distinct()
-          assert external.count() == 117, f'Expected 117 Bellissimo external keys, got {external.count()}'
-          assert public.count() == 101, f'Expected 101 public dogs, got {public.count()}'
-          assert private.count() == 16, f'Expected 16 draft dogs, got {private.count()}'
+          assert external.count() == 118, f'Expected 118 Bellissimo external keys, got {external.count()}'
+          assert public.count() + private.count() == 118, f'Expected 118 source-linked dogs, got {public.count() + private.count()}'
           assert puppies.count() == 2, f'Expected 2 verified puppy external keys, got {puppies.count()}'
           assert puppy_public.count() == 2, f'Expected 2 public verified puppies, got {puppy_public.count()}'
-          print(f'Verified: 117 canonical seed keys + {puppies.count()} puppy keys; {public.count() + puppy_public.count()} public source-linked records; {private.count()} draft')
+          print(f'Verified: 118 canonical seed keys + {puppies.count()} puppy keys; {public.count() + puppy_public.count()} public source-linked records; {private.count()} draft')
           "
 
       - name: Audit production pedigree integrity

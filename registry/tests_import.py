@@ -58,17 +58,23 @@ class BellissimoImportTests(TestCase):
 
 
 
-    def test_verified_name_override_preserves_source_payload(self):
+    def test_ludovico_records_remain_distinct(self):
         payload = {
-            "schemaVersion": 4,
+            "schemaVersion": 5,
             "dogs": [
                 {
                     "id": "sforza-ludovico",
-                    "name": "Sforza Ludovico II Imperatore",
+                    "name": "SFORZA LUDOVICO",
                     "sex": "Male",
                     "group": "ancestor",
                     "registration": "JR 80580 Cc",
-                }
+                },
+                {
+                    "id": "sforza-ludovico-ii-imperatore",
+                    "name": "Sforza Ludovico II Imperatore",
+                    "sex": "Male",
+                    "group": "ancestor",
+                },
             ],
         }
         with tempfile.NamedTemporaryFile(
@@ -85,12 +91,12 @@ class BellissimoImportTests(TestCase):
         finally:
             source.unlink(missing_ok=True)
 
-        dog = Dog.objects.get(slug="sforza-ludovico")
-        self.assertEqual(dog.name, "SFORZA LUDOVICO")
-        self.assertEqual(
-            DogSource.objects.get(dog=dog).raw_payload["name"],
-            "Sforza Ludovico II Imperatore",
-        )
+        ludovico = Dog.objects.get(slug="sforza-ludovico")
+        ludovico_ii = Dog.objects.get(slug="sforza-ludovico-ii-imperatore")
+        self.assertNotEqual(ludovico.pk, ludovico_ii.pk)
+        self.assertEqual(ludovico_ii.name, "Sforza Ludovico II Imperatore")
+        self.assertEqual(DogRegistration.objects.get(dog=ludovico).number, "JR 80580 Cc")
+        self.assertFalse(DogRegistration.objects.filter(dog=ludovico_ii).exists())
 
 
 class BellissimoPuppyImportTests(TestCase):
