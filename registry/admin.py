@@ -35,6 +35,11 @@ class DogRegistrationInline(admin.TabularInline):
     model = DogRegistration
     extra = 0
 
+    def has_add_permission(self, request, obj=None):
+        if obj and obj.is_public:
+            return False
+        return super().has_add_permission(request, obj)
+
     def get_readonly_fields(self, request, obj=None):
         if obj and obj.is_public:
             return ("authority", "number", "issued_on")
@@ -158,6 +163,18 @@ class SubmissionAdmin(admin.ModelAdmin):
         "updated_at",
     )
 
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return bool(request.user and request.user.is_staff)
+
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("payment_link__payment")
 
@@ -175,6 +192,18 @@ class VerificationEventAdmin(admin.ModelAdmin):
     list_display = ("dog", "kennel", "field_name", "state", "reviewer", "created_at")
     list_filter = ("state", "created_at")
     search_fields = ("dog__name", "kennel__name", "field_name", "note")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return bool(request.user and request.user.is_staff)
 
 
 @admin.register(MergeHistory)
@@ -266,39 +295,20 @@ class EvidenceRequestAdmin(AppendOnlyAdmin):
 
 
 @admin.register(VerificationRule)
-class VerificationRuleAdmin(admin.ModelAdmin):
+class VerificationRuleAdmin(AppendOnlyAdmin):
     list_display = ("code", "title", "enabled", "risk_level", "second_approval_required")
     list_filter = ("enabled", "risk_level", "second_approval_required")
     search_fields = ("code", "title", "description")
 
-    def has_change_permission(self, request, obj=None):
-        return bool(request.user and request.user.is_superuser)
-
-    def has_add_permission(self, request):
-        return bool(request.user and request.user.is_superuser)
-
-    def has_delete_permission(self, request, obj=None):
-        return False
-
 
 @admin.register(ModerationRoleAssignment)
-class ModerationRoleAssignmentAdmin(admin.ModelAdmin):
+class ModerationRoleAssignmentAdmin(AppendOnlyAdmin):
     list_display = ("user", "role", "assigned_by", "assigned_at")
     list_filter = ("role",)
     search_fields = ("user__username", "user__email")
 
-    def has_change_permission(self, request, obj=None):
-        return bool(request.user and request.user.is_superuser)
-
-    def has_add_permission(self, request):
-        return bool(request.user and request.user.is_superuser)
-
-    def has_delete_permission(self, request, obj=None):
-        return bool(request.user and request.user.is_superuser)
-
 
 @admin.register(DogIdentityNumber)
-class DogIdentityNumberAdmin(admin.ModelAdmin):
+class DogIdentityNumberAdmin(AppendOnlyAdmin):
     list_display = ("dog", "kind", "value", "created_at")
     search_fields = ("dog__name", "value")
-    readonly_fields = ("normalized_value", "created_at")
