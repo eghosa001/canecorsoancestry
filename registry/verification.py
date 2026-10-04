@@ -570,30 +570,6 @@ def _litter_puppy_checks(findings, submission, run_id, payload):
             expected=expected_dob.isoformat(),
             submitted="Not provided",
         )
-    elif not expected_dob and submitted_dob:
-        siblings = Submission.objects.filter(
-            kind=Submission.Kind.DOG,
-            payload__litter_submission_id=str(litter_submission.pk),
-            status__in=[Submission.Status.PENDING, Submission.Status.APPROVED],
-        ).exclude(pk=submission.pk)
-        for sibling in siblings.order_by("created_at")[:100]:
-            sibling_dob = _date_value((sibling.payload or {}).get("date_of_birth"))
-            if sibling_dob and sibling_dob != submitted_dob:
-                _add_finding(
-                    findings,
-                    submission=submission,
-                    run_id=run_id,
-                    code="litter_dob_conflict",
-                    message="Puppies linked to this litter have conflicting submitted dates of birth.",
-                    expected=sibling_dob.isoformat(),
-                    submitted=submitted_dob.isoformat(),
-                    metadata={
-                        "litter_submission_id": str(litter_submission.pk),
-                        "other_submission_id": str(sibling.pk),
-                    },
-                )
-                break
-
     if payload.get("sire_id") and expected_sire and _id_text(payload.get("sire_id")) != _id_text(expected_sire):
         _add_finding(
             findings,
