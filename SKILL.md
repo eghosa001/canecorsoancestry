@@ -14,7 +14,7 @@ Use this file for future implementation work in this repository.
 8. External registration numbers must retain their issuing authority.
 9. A verification badge means evidence review, not registration by Cane Corso Ancestry.
 10. Never delete a duplicate dog before all relationships and attached records have been safely merged/repointed.
-11. New dog/litter publication is **pay-to-submit, never pay-to-publish**: ₦500 for one dog, ₦1,000 for 2–6 dogs, or ₦1,000 for one litter plus its puppies.
+11. New dog/litter publication is **pay-to-submit, never pay-to-publish**: ₦500 for one dog, ₦1,500 for 2–4 dogs, or ₦200 for one litter plus its puppies.
 12. A Paystack payment only creates submission entitlement. An administrator must still verify and approve every dog/litter before it becomes public.
 13. A kennel must be administrator-verified and the submitting member must be an approved kennel owner/editor before a paid dog/litter package can be used.
 
