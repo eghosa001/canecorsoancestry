@@ -6,7 +6,7 @@ from pathlib import Path
 from django.core.management import call_command
 from django.test import TestCase
 
-from .models import Dog, DogExternalKey, DogRegistration, DogSource
+from .models import Dog, DogExternalKey, DogRegistration, DogSource, Kennel
 
 
 FIELDS = [
@@ -67,6 +67,56 @@ class CaneCorsoArchiveImportTests(TestCase):
             DogExternalKey.objects.filter(namespace="canecorsopedigree.com").count(), 3
         )
         self.assertEqual(DogSource.objects.count(), 3)
+
+    def test_repeated_explicit_kennel_suffixes_are_linked(self):
+        rows = [
+            {
+                "id": "11",
+                "name": "BATMAN NASKA CANE CORSO KENNEL",
+                "gender": "male",
+                "dob": "2024/01/01",
+            },
+            {
+                "id": "12",
+                "name": "BLUE SIRIUS NASKA CANE CORSO KENNEL",
+                "gender": "male",
+                "dob": "2024/01/02",
+            },
+            {
+                "id": "13",
+                "name": "AMAZON NASKA CANE CORSO KENNEL",
+                "gender": "female",
+                "dob": "2024/01/03",
+            },
+            {
+                "id": "14",
+                "name": "SOLO ONE OFF KENNEL",
+                "gender": "female",
+                "dob": "2024/01/04",
+            },
+        ]
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".csv", encoding="utf-8", newline="", delete=False
+        ) as handle:
+            writer = csv.DictWriter(handle, fieldnames=FIELDS)
+            writer.writeheader()
+            writer.writerows(rows)
+            source = Path(handle.name)
+
+        try:
+            call_command(
+                "import_canecorso_archive",
+                source,
+                start_year=2020,
+                end_year=2026,
+                stdout=StringIO(),
+            )
+        finally:
+            source.unlink(missing_ok=True)
+
+        kennel = Kennel.objects.get(name="Naska Cane Corso Kennel")
+        self.assertEqual(Dog.objects.filter(kennel=kennel).count(), 3)
+        self.assertIsNone(Dog.objects.get(name="SOLO ONE OFF KENNEL").kennel)
 
     def test_composite_registration_fragment_reuses_canonical_dog(self):
         existing = Dog.objects.create(
