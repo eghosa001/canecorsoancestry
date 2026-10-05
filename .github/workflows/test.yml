@@ -137,5 +137,15 @@ jobs:
             exit 0
           fi
 
+          unique_targets=()
+          declare -A seen_targets=()
+          for target in "${targets[@]}"; do
+            if [ -z "${seen_targets[$target]+x}" ]; then
+              unique_targets+=("$target")
+              seen_targets["$target"]=1
+            fi
+          done
+          targets=("${unique_targets[@]}")
+
           printf 'Running scoped tests: %s\n' "${targets[*]}"
           python manage.py test "${targets[@]}" --verbosity 1
