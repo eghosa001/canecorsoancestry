@@ -270,6 +270,7 @@ class MergeHistoryAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related(
             "performed_by__ancestry_moderation_role",
         )
+
     @admin.display(description="Performed by")
     def performed_by_admin(self, obj):
         if not obj.performed_by_id:
@@ -342,9 +343,7 @@ class DisputeCaseAdmin(admin.ModelAdmin):
     def assigned_admin(self, obj):
         if not obj.assigned_to_id:
             return "Unassigned"
-        assignment = ModerationRoleAssignment.objects.filter(
-            user_id=obj.assigned_to_id
-        ).only("admin_number").first()
+        assignment = getattr(obj.assigned_to, "ancestry_moderation_role", None)
         return assignment.public_label if assignment else "Admin"
 
 
