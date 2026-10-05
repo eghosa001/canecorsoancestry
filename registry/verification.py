@@ -1,7 +1,6 @@
 import uuid
 from datetime import date
 
-from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
@@ -35,6 +34,11 @@ DEFAULT_RULES = {
         "Paid package entitlement mismatch",
         SubmissionRiskLevel.RED,
         True,
+    ),
+    "invalid_reference": (
+        "Malformed canonical reference",
+        SubmissionRiskLevel.YELLOW,
+        False,
     ),
     "duplicate_registration": (
         "Duplicate external registration number",
@@ -166,27 +170,6 @@ def _dog_from_value(value):
 
 def _id_text(value):
     return str(value) if value else ""
-
-
-def _uuid_value(value):
-    if not value:
-        return None
-    try:
-        return uuid.UUID(str(value))
-    except (TypeError, ValueError, AttributeError):
-        return None
-
-
-def _safe_dog(value):
-    dog_id = _uuid_value(value)
-    return Dog.objects.filter(pk=dog_id).first() if dog_id else None
-
-
-def _safe_submission(value, **filters):
-    submission_id = _uuid_value(value)
-    if not submission_id:
-        return None
-    return Submission.objects.filter(pk=submission_id, **filters).first()
 
 
 def _get_rule(code):
@@ -1166,8 +1149,30 @@ def verify_submission(submission, *, audit=True):
         _correction_checks(findings, submission, run_id, payload)
 
         child_dob = _date_value(payload.get("date_of_birth"))
-        sire = _dog_from_value(payload.get("sire_id"))
-        dam = _dog_from_value(payload.get("dam_id"))
+        raw_sire_id = payload.get("sire_id")
+        raw_dam_id = payload.get("dam_id")
+        sire = _dog_from_value(raw_sire_id)
+        dam = _dog_from_value(raw_dam_id)
+        if raw_sire_id and _uuid_value(raw_sire_id) is None:
+            _add_finding(
+                findings,
+                submission=submission,
+                run_id=run_id,
+                code="invalid_reference",
+                message="The submitted sire reference is malformed and cannot identify a canonical dog.",
+                expected="A valid dog UUID or no sire reference",
+                submitted=str(raw_sire_id),
+            )
+        if raw_dam_id and _uuid_value(raw_dam_id) is None:
+            _add_finding(
+                findings,
+                submission=submission,
+                run_id=run_id,
+                code="invalid_reference",
+                message="The submitted dam reference is malformed and cannot identify a canonical dog.",
+                expected="A valid dog UUID or no dam reference",
+                submitted=str(raw_dam_id),
+            )
         _parent_checks(findings, submission, run_id, sire, dam, child_dob)
 
     if submission.kind in {Submission.Kind.LITTER_CREATE, Submission.Kind.LITTER_EDIT}:
