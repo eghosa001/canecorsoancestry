@@ -109,6 +109,20 @@ if database.get("ENGINE", "").endswith("postgresql"):
     if db_sslmode:
         db_options["sslmode"] = db_sslmode
 
+    db_connect_timeout = int(os.getenv("DJANGO_DB_CONNECT_TIMEOUT", "5"))
+    if db_connect_timeout > 0:
+        db_options["connect_timeout"] = db_connect_timeout
+
+    db_options["keepalives"] = 1
+    for env_name, option_name, default in (
+        ("DJANGO_DB_KEEPALIVES_IDLE", "keepalives_idle", "30"),
+        ("DJANGO_DB_KEEPALIVES_INTERVAL", "keepalives_interval", "10"),
+        ("DJANGO_DB_KEEPALIVES_COUNT", "keepalives_count", "3"),
+    ):
+        value = int(os.getenv(env_name, default))
+        if value > 0:
+            db_options[option_name] = value
+
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",

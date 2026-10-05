@@ -1286,13 +1286,17 @@ def duplicate_matches(reference, limit=20):
 
 
 def duplicate_candidates(limit=30):
-    """Return conservative duplicate pairs without scanning every dog in Python."""
-    bucket_limit = max(limit * 4, 100)
+    """Return high-signal duplicate pairs from bounded same-name buckets."""
+    # Very common names (for example Ares/Zeus) create thousands of low-value
+    # pair combinations and used to make the moderation queue load tens of
+    # thousands of rows. Restrict automatic suggestions to small buckets;
+    # moderators can still search any dog explicitly with duplicate_matches().
+    bucket_limit = max(limit * 2, 60)
     duplicate_names = list(
         Dog.objects.exclude(normalized_name="")
         .values("normalized_name")
         .annotate(total=Count("pk"))
-        .filter(total__gt=1)
+        .filter(total__gt=1, total__lte=8)
         .order_by("-total", "normalized_name")
         .values_list("normalized_name", flat=True)[:bucket_limit]
     )
