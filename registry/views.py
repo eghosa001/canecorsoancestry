@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
+from django.db import DatabaseError, connection, transaction
 from django.db.models import Count, Exists, F, OuterRef, Prefetch, Q, Subquery
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -236,6 +237,23 @@ def dog_search(request):
     )
 
 
+def _record_search_hit_without_wait(dog_id):
+    """Keep popularity useful without allowing a hot counter row to stall navigation."""
+    if connection.vendor != "postgresql":
+        Dog.objects.filter(pk=dog_id).update(search_count=F("search_count") + 1)
+        return
+
+    try:
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SET LOCAL lock_timeout = '100ms'")
+            Dog.objects.filter(pk=dog_id).update(search_count=F("search_count") + 1)
+    except DatabaseError:
+        # Search popularity is best-effort telemetry. Never hold up a page view
+        # because another request is updating the same counter row.
+        return
+
+
 def dog_detail(request, slug):
     dogs = _dog_cards(
         Dog.objects.filter(is_public=True),
@@ -279,7 +297,7 @@ def dog_detail(request, slug):
         coi_error = "Pedigree cycle detected"
 
     if request.GET.get("source") == "search":
-        Dog.objects.filter(pk=dog.pk).update(search_count=F("search_count") + 1)
+        _record_search_hit_without_wait(dog.pk)
 
     image_url = (
         dog.display_images[0].image.url
