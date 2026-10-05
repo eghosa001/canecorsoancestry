@@ -2287,23 +2287,12 @@ def verification_rule_update(request, pk):
     rule.second_approval_required = request.POST.get("second_approval_required") == "on"
     rule.updated_by = request.user
     rule.save()
-    pending_submissions = list(
-        Submission.objects.filter(status=Submission.Status.PENDING).only("pk")
-    )
-    Submission.objects.filter(status=Submission.Status.PENDING).update(
+    invalidated_count = Submission.objects.filter(
+        status=Submission.Status.PENDING
+    ).update(
         verification_status=SubmissionVerificationStatus.UNCHECKED,
         verification_checked_at=None,
     )
-    verification_failures = 0
-    for pending_submission in pending_submissions:
-        try:
-            verify_submission(pending_submission)
-        except Exception:
-            verification_failures += 1
-            logger.exception(
-                "pending_submission_reverification_failed submission_id=%s",
-                pending_submission.pk,
-            )
     record_audit(
         action=ModerationAudit.Action.VERIFICATION,
         actor=request.user,
@@ -2319,16 +2308,10 @@ def verification_rule_update(request, pk):
         },
         note="Owner updated an automated verification rule.",
     )
-    if verification_failures:
-        messages.warning(
-            request,
-            f"Verification rule '{rule.title}' updated, but {verification_failures} pending submission(s) need manual review.",
-        )
-    else:
-        messages.success(
-            request,
-            f"Verification rule '{rule.title}' updated and pending submissions were rechecked.",
-        )
+    messages.success(
+        request,
+        f"Verification rule '{rule.title}' updated. {invalidated_count} pending submission(s) will be rechecked when opened or reviewed.",
+    )
     return redirect("accounts:verification-dashboard")
 
 
