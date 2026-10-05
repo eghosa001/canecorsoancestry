@@ -88,9 +88,10 @@ class AdminSurfaceSmokeTests(TestCase):
         with CaptureQueriesContext(connection) as captured:
             report = quick_quality_report(sample_limit=2)
 
-        self.assertLessEqual(len(captured), 12)
+        self.assertLessEqual(len(captured), 10)
         self.assertGreaterEqual(report["counts"]["public_dogs"], 1)
         self.assertGreaterEqual(report["counts"]["source_backed_public"], 1)
+        self.assertEqual(report["counts"]["public_without_sources"], 0)
 
     def test_data_health_page_caches_repeated_reads(self):
         cache.clear()
