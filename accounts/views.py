@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.tokens import default_token_generator
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
@@ -2337,7 +2338,13 @@ def verification_rule_update(request, pk):
 def data_health(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
-    report = quick_quality_report(sample_limit=12)
+
+    cache_key = "admin:data-health:quick:v2"
+    report = None if request.GET.get("refresh") == "1" else cache.get(cache_key)
+    if report is None:
+        report = quick_quality_report(sample_limit=12)
+        cache.set(cache_key, report, timeout=60)
+
     counts = report["counts"]
     critical_total = sum(
         counts.get(key, 0)
