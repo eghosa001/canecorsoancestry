@@ -5,6 +5,7 @@ import re
 
 from django.conf import settings
 from django.contrib.postgres.search import TrigramSimilarity
+from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Count, Q
@@ -60,13 +61,19 @@ def _json_id(value):
 def _resolve_dog(value):
     if not value:
         return None
-    return Dog.objects.filter(pk=value).first()
+    try:
+        return Dog.objects.filter(pk=value).first()
+    except (TypeError, ValueError, ValidationError):
+        return None
 
 
 def _resolve_litter(value):
     if not value:
         return None
-    return Litter.objects.filter(pk=value).first()
+    try:
+        return Litter.objects.filter(pk=value).first()
+    except (TypeError, ValueError, ValidationError):
+        return None
 
 
 def _date_from_payload(value):
