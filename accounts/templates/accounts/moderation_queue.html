@@ -51,12 +51,21 @@
   <div class="moderation-summary">
     <article><strong>{{ pending_total }}</strong><span>Pending submissions</span></article>
     <article><strong>{{ disputes|length }}</strong><span>Open disputes</span></article>
-    <article><strong>{{ duplicate_candidates|length }}</strong><span>High-signal duplicate pairs</span></article>
+    <article>
+      {% if duplicate_scan_loaded %}
+        <strong>{{ duplicate_candidates|length }}</strong><span>High-signal duplicate pairs</span>
+      {% else %}
+        <strong>On demand</strong><span>Database-wide duplicate scan</span>
+      {% endif %}
+    </article>
   </div>
 
   <section class="panel duplicate-search-panel">
     <div class="panel-heading">
-      <div><h2>Duplicate intelligence</h2><span>PostgreSQL uses trigram preselection; exact registrations and pedigree facts strengthen confidence.</span></div>
+      <div><h2>Duplicate intelligence</h2><span>Search a specific dog instantly. The heavier database-wide scan runs only when requested.</span></div>
+      {% if not duplicate_scan_loaded %}
+        <a class="btn btn-outline" href="?duplicate_scan=1">Run duplicate scan</a>
+      {% endif %}
     </div>
     <form class="duplicate-search-form" method="get">
       <input type="hidden" name="q" value="{{ filters.q }}">
@@ -64,6 +73,7 @@
       <input type="hidden" name="priority" value="{{ filters.priority }}">
       <input type="hidden" name="assignment" value="{{ filters.assignment }}">
       <input type="hidden" name="risk" value="{{ filters.risk }}">
+      {% if duplicate_scan_loaded %}<input type="hidden" name="duplicate_scan" value="1">{% endif %}
       <div><label for="{{ duplicate_form.duplicate_q.id_for_label }}">{{ duplicate_form.duplicate_q.label }}</label>{{ duplicate_form.duplicate_q }}</div>
       <button class="btn btn-gold" type="submit">Search dogs</button>
     </form>
@@ -75,7 +85,7 @@
       </div>
       <div class="duplicate-result-list">
         {% for dog in duplicate_lookup_results %}
-          <a class="duplicate-result-card selectable" href="?reference={{ dog.pk }}&q={{ filters.q|urlencode }}&kind={{ filters.kind|urlencode }}&priority={{ filters.priority|urlencode }}&assignment={{ filters.assignment|urlencode }}">
+          <a class="duplicate-result-card selectable" href="?reference={{ dog.pk }}&q={{ filters.q|urlencode }}&kind={{ filters.kind|urlencode }}&priority={{ filters.priority|urlencode }}&assignment={{ filters.assignment|urlencode }}&risk={{ filters.risk|urlencode }}{% if duplicate_scan_loaded %}&duplicate_scan=1{% endif %}">
             <div>
               <h3>{{ dog.name }}</h3>
               <p>{% if dog.kennel %}{{ dog.kennel.name }}{% else %}Kennel unknown{% endif %}{% if dog.date_of_birth %} · {{ dog.date_of_birth }}{% endif %}</p>
@@ -112,8 +122,8 @@
       </div>
     {% endif %}
 
-    {% if duplicate_candidates %}
-      <details class="moderation-details">
+    {% if duplicate_scan_loaded and duplicate_candidates %}
+      <details class="moderation-details" open>
         <summary>High-signal database-wide duplicate suggestions</summary>
         <div class="duplicate-result-list">
           {% for item in duplicate_candidates %}
@@ -128,6 +138,8 @@
           {% endfor %}
         </div>
       </details>
+    {% elif duplicate_scan_loaded %}
+      <p class="muted">No high-signal database-wide duplicate pairs were found in the bounded scan.</p>
     {% endif %}
   </section>
 
