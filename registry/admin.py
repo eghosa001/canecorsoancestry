@@ -199,24 +199,24 @@ class SubmissionAdmin(admin.ModelAdmin):
         return bool(request.user and request.user.is_staff)
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("payment_link__payment")
+        return super().get_queryset(request).select_related(
+            "payment_link__payment",
+            "reviewed_by__ancestry_moderation_role",
+            "assigned_to__ancestry_moderation_role",
+        )
 
     @admin.display(description="Reviewed by")
     def reviewed_by_admin(self, obj):
         if not obj.reviewed_by_id:
             return "Not reviewed"
-        assignment = ModerationRoleAssignment.objects.filter(
-            user_id=obj.reviewed_by_id
-        ).only("admin_number").first()
+        assignment = getattr(obj.reviewed_by, "ancestry_moderation_role", None)
         return assignment.public_label if assignment else "Admin"
 
     @admin.display(description="Assigned admin")
     def assigned_admin(self, obj):
         if not obj.assigned_to_id:
             return "Unassigned"
-        assignment = ModerationRoleAssignment.objects.filter(
-            user_id=obj.assigned_to_id
-        ).only("admin_number").first()
+        assignment = getattr(obj.assigned_to, "ancestry_moderation_role", None)
         return assignment.public_label if assignment else "Admin"
 
     @admin.display(description="Payment")
@@ -236,13 +236,16 @@ class VerificationEventAdmin(admin.ModelAdmin):
     exclude = ("reviewer",)
     readonly_fields = ("reviewer_admin",)
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "reviewer__ancestry_moderation_role",
+        )
+
     @admin.display(description="Reviewer")
     def reviewer_admin(self, obj):
         if not obj.reviewer_id:
             return "System"
-        assignment = ModerationRoleAssignment.objects.filter(
-            user_id=obj.reviewer_id
-        ).only("admin_number").first()
+        assignment = getattr(obj.reviewer, "ancestry_moderation_role", None)
         return assignment.public_label if assignment else "Admin"
 
     def has_add_permission(self, request):
@@ -262,13 +265,17 @@ class VerificationEventAdmin(admin.ModelAdmin):
 class MergeHistoryAdmin(admin.ModelAdmin):
     list_display = ("retired_name", "canonical_dog", "performed_by_admin", "created_at")
     search_fields = ("retired_name", "retired_slug", "canonical_dog__name")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "performed_by__ancestry_moderation_role",
+        )
+
     @admin.display(description="Performed by")
     def performed_by_admin(self, obj):
         if not obj.performed_by_id:
             return "System"
-        assignment = ModerationRoleAssignment.objects.filter(
-            user_id=obj.performed_by_id
-        ).only("admin_number").first()
+        assignment = getattr(obj.performed_by, "ancestry_moderation_role", None)
         return assignment.public_label if assignment else "Admin"
 
     readonly_fields = (
@@ -327,13 +334,16 @@ class DisputeCaseAdmin(admin.ModelAdmin):
     list_filter = ("reason", "status", "created_at")
     search_fields = ("dog__name", "opened_by__username", "details", "resolution_notes")
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "assigned_to__ancestry_moderation_role",
+        )
+
     @admin.display(description="Assigned admin")
     def assigned_admin(self, obj):
         if not obj.assigned_to_id:
             return "Unassigned"
-        assignment = ModerationRoleAssignment.objects.filter(
-            user_id=obj.assigned_to_id
-        ).only("admin_number").first()
+        assignment = getattr(obj.assigned_to, "ancestry_moderation_role", None)
         return assignment.public_label if assignment else "Admin"
 
 

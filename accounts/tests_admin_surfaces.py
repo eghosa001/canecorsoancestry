@@ -49,6 +49,9 @@ class AdminSurfaceSmokeTests(TestCase):
             reverse("admin:auth_user_changelist"),
             reverse("admin:registry_submission_changelist"),
             reverse("admin:registry_dog_changelist"),
+            reverse("admin:registry_verificationevent_changelist"),
+            reverse("admin:registry_mergehistory_changelist"),
+            reverse("admin:registry_disputecase_changelist"),
             reverse("accounts:moderation"),
             reverse("accounts:verification-dashboard"),
             reverse("accounts:moderation-audit"),
@@ -119,6 +122,41 @@ class AdminSurfaceSmokeTests(TestCase):
             reviewer.ancestry_moderation_role.role,
             ModerationRoleAssignment.Role.NONE,
         )
+
+    def test_invalid_role_user_id_is_rejected_without_500(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.post(
+            reverse("accounts:moderation-set-role"),
+            {
+                "user_id": "not-an-integer",
+                "role": ModerationRoleAssignment.Role.REVIEWER,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.url,
+            reverse("accounts:verification-dashboard"),
+        )
+
+    def test_invalid_bulk_submission_uuid_is_rejected_without_500(self):
+        self.client.force_login(self.owner)
+        original_priority = self.submission.priority
+
+        response = self.client.post(
+            reverse("accounts:bulk-moderation"),
+            {
+                "submission_ids": ["not-a-uuid"],
+                "action": "priority_urgent",
+                "resolution_notes": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("accounts:moderation"))
+        self.submission.refresh_from_db()
+        self.assertEqual(self.submission.priority, original_priority)
 
     def test_invalid_duplicate_reference_is_safe_and_visible(self):
         self.client.force_login(self.owner)
