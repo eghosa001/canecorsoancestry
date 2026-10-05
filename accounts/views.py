@@ -1829,13 +1829,20 @@ def bulk_moderation(request):
         messages.error(request, "Select at least one pending submission and a valid bulk action.")
         return redirect("accounts:moderation")
 
+    parsed_submission_ids = []
+    try:
+        parsed_submission_ids = [uuid.UUID(str(value)) for value in submission_ids]
+    except (TypeError, ValueError, AttributeError):
+        messages.error(request, "One or more selected submission IDs are invalid.")
+        return redirect("accounts:moderation")
+
     action = form.cleaned_data["action"]
     note = form.cleaned_data["resolution_notes"].strip()
     now = timezone.now()
 
     with transaction.atomic():
         queryset = Submission.objects.select_for_update().filter(
-            pk__in=submission_ids,
+            pk__in=parsed_submission_ids,
             status=Submission.Status.PENDING,
         )
         items = list(queryset)
@@ -2158,7 +2165,10 @@ def moderation_set_role(request):
     user_id = request.POST.get("user_id", "").strip()
     user_lookup = request.POST.get("user_lookup", "").strip()
     if user_id:
-        target = get_object_or_404(get_user_model(), pk=user_id)
+        if not user_id.isdigit():
+            messages.error(request, "Invalid administrator account ID.")
+            return redirect("accounts:verification-dashboard")
+        target = get_object_or_404(get_user_model(), pk=int(user_id))
     elif user_lookup:
         target = get_user_model().objects.filter(
             Q(username__iexact=user_lookup) | Q(email__iexact=user_lookup)
