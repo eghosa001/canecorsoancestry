@@ -8,8 +8,11 @@ from django.urls import reverse
 from registry.models import (
     ModerationRoleAssignment,
     Submission,
+    SubmissionRiskLevel,
     SubmissionVerificationStatus,
+    VerificationRule,
 )
+from registry.verification import current_findings, verify_submission
 
 
 class AdminSurfaceSmokeTests(TestCase):
@@ -35,14 +38,17 @@ class AdminSurfaceSmokeTests(TestCase):
             kind=Submission.Kind.KENNEL_CREATE,
             submitted_by=self.member,
             payload={"name": "Smoke Kennel", "slug": "smoke-kennel"},
-            verification_status=SubmissionVerificationStatus.PASS,
         )
+        verify_submission(self.submission)
 
     def test_owner_admin_surfaces_render(self):
         self.client.force_login(self.owner)
 
         urls = [
             reverse("admin:index"),
+            reverse("admin:auth_user_changelist"),
+            reverse("admin:registry_submission_changelist"),
+            reverse("admin:registry_dog_changelist"),
             reverse("accounts:moderation"),
             reverse("accounts:verification-dashboard"),
             reverse("accounts:moderation-audit"),
@@ -78,6 +84,7 @@ class AdminSurfaceSmokeTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("admin:index"))
         self.assertEqual(
             int(self.client.session["_auth_user_id"]),
             self.owner.pk,
@@ -113,7 +120,7 @@ class AdminSurfaceSmokeTests(TestCase):
             ModerationRoleAssignment.Role.NONE,
         )
 
-    def test_invalid_duplicate_reference_is_safe(self):
+    def test_invalid_duplicate_reference_is_safe_and_visible(self):
         self.client.force_login(self.owner)
 
         response = self.client.get(
@@ -122,6 +129,7 @@ class AdminSurfaceSmokeTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "duplicate-reference ID is invalid")
 
     def test_queue_get_does_not_run_verification_writes(self):
         legacy = Submission.objects.create(
@@ -157,7 +165,7 @@ class AdminSurfaceSmokeTests(TestCase):
             self.assertEqual(response.status_code, 200)
             scan.assert_called_once_with()
 
-    def test_malformed_parent_ids_do_not_crash_review(self):
+    def test_malformed_parent_ids_become_findings_instead_of_500(self):
         submission = Submission.objects.create(
             kind=Submission.Kind.DOG,
             submitted_by=self.member,
@@ -166,6 +174,7 @@ class AdminSurfaceSmokeTests(TestCase):
                 "sex": "unknown",
                 "sire_id": "not-a-uuid",
                 "dam_id": "also-not-a-uuid",
+                "date_of_birth": "2025-01-01",
             },
         )
         self.client.force_login(self.owner)
@@ -178,6 +187,46 @@ class AdminSurfaceSmokeTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        submission.refresh_from_db()
+        self.assertEqual(
+            submission.verification_status,
+            SubmissionVerificationStatus.REVIEW,
+        )
+        self.assertEqual(
+            current_findings(submission).filter(code="invalid_reference").count(),
+            2,
+        )
+
+    def test_rule_update_invalidates_pending_without_rechecking_all_in_request(self):
+        rule = VerificationRule.objects.create(
+            code="invalid_reference",
+            title="Malformed canonical reference",
+            risk_level=SubmissionRiskLevel.YELLOW,
+        )
+        self.submission.refresh_from_db()
+        self.assertEqual(
+            self.submission.verification_status,
+            SubmissionVerificationStatus.PASS,
+        )
+        self.client.force_login(self.owner)
+
+        with patch("accounts.views.verify_submission") as verify:
+            response = self.client.post(
+                reverse("accounts:verification-rule-update", args=[rule.pk]),
+                {
+                    "enabled": "on",
+                    "risk_level": SubmissionRiskLevel.RED,
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        verify.assert_not_called()
+        self.submission.refresh_from_db()
+        self.assertEqual(
+            self.submission.verification_status,
+            SubmissionVerificationStatus.UNCHECKED,
+        )
+        self.assertIsNone(self.submission.verification_checked_at)
 
 
 class SubmissionVerificationTimingTests(TestCase):
