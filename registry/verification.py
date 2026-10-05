@@ -1098,7 +1098,7 @@ def verification_snapshot(submission):
 
 @transaction.atomic
 def verify_submission(submission, *, audit=True):
-    submission = Submission.objects.select_for_update().select_related(
+    submission = Submission.objects.select_for_update(of=("self",)).select_related(
         "dog", "litter", "kennel"
     ).get(pk=submission.pk)
     run_id = uuid.uuid4()
