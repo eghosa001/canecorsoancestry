@@ -1,6 +1,7 @@
 import uuid
 from datetime import date
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
@@ -165,6 +166,27 @@ def _dog_from_value(value):
 
 def _id_text(value):
     return str(value) if value else ""
+
+
+def _uuid_value(value):
+    if not value:
+        return None
+    try:
+        return uuid.UUID(str(value))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _safe_dog(value):
+    dog_id = _uuid_value(value)
+    return Dog.objects.filter(pk=dog_id).first() if dog_id else None
+
+
+def _safe_submission(value, **filters):
+    submission_id = _uuid_value(value)
+    if not submission_id:
+        return None
+    return Submission.objects.filter(pk=submission_id, **filters).first()
 
 
 def _get_rule(code):
