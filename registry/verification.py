@@ -149,6 +149,20 @@ def _date_value(value):
         return None
 
 
+def _uuid_value(value):
+    if not value:
+        return None
+    try:
+        return uuid.UUID(str(value))
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
+def _dog_from_value(value):
+    dog_id = _uuid_value(value)
+    return Dog.objects.filter(pk=dog_id).first() if dog_id else None
+
+
 def _id_text(value):
     return str(value) if value else ""
 
@@ -495,10 +509,16 @@ def _litter_puppy_checks(findings, submission, run_id, payload):
     if not litter_submission_id:
         return
 
+    parsed_litter_submission_id = _uuid_value(litter_submission_id)
     litter_submission = (
         Submission.objects.select_related("litter", "kennel")
-        .filter(pk=litter_submission_id, kind=Submission.Kind.LITTER_CREATE)
+        .filter(
+            pk=parsed_litter_submission_id,
+            kind=Submission.Kind.LITTER_CREATE,
+        )
         .first()
+        if parsed_litter_submission_id
+        else None
     )
     if litter_submission is None:
         _add_finding(
@@ -704,8 +724,8 @@ def _litter_puppy_checks(findings, submission, run_id, payload):
 
 def _litter_checks(findings, submission, run_id, payload):
     code = str(payload.get("code") or "").strip()
-    sire_id = payload.get("sire_id")
-    dam_id = payload.get("dam_id")
+    sire_id = _uuid_value(payload.get("sire_id"))
+    dam_id = _uuid_value(payload.get("dam_id"))
     litter_dob = _date_value(payload.get("date_of_birth"))
     try:
         declared_puppy_count = int(payload.get("declared_puppy_count")) if payload.get("declared_puppy_count") not in (None, "") else None
@@ -768,8 +788,8 @@ def _litter_checks(findings, submission, run_id, payload):
             submitted=f"DOB={litter_dob or 'missing'}, sire={sire_id or 'missing'}, dam={dam_id or 'missing'}",
         )
 
-    sire = Dog.objects.filter(pk=sire_id).first() if sire_id else None
-    dam = Dog.objects.filter(pk=dam_id).first() if dam_id else None
+    sire = _dog_from_value(sire_id)
+    dam = _dog_from_value(dam_id)
     _parent_checks(findings, submission, run_id, sire, dam, litter_dob)
 
     if submission.kind == Submission.Kind.LITTER_EDIT and submission.litter_id:
@@ -936,10 +956,16 @@ def verification_checklist(submission):
 
     litter_submission_id = payload.get("litter_submission_id")
     if litter_submission_id:
+        parsed_litter_submission_id = _uuid_value(litter_submission_id)
         litter_submission = (
             Submission.objects.select_related("litter", "kennel")
-            .filter(pk=litter_submission_id, kind=Submission.Kind.LITTER_CREATE)
+            .filter(
+                pk=parsed_litter_submission_id,
+                kind=Submission.Kind.LITTER_CREATE,
+            )
             .first()
+            if parsed_litter_submission_id
+            else None
         )
         if litter_submission is None:
             add("Litter ID", "fail", "Referenced litter submission does not exist.")
@@ -1118,8 +1144,8 @@ def verify_submission(submission, *, audit=True):
         _correction_checks(findings, submission, run_id, payload)
 
         child_dob = _date_value(payload.get("date_of_birth"))
-        sire = Dog.objects.filter(pk=payload.get("sire_id")).first() if payload.get("sire_id") else None
-        dam = Dog.objects.filter(pk=payload.get("dam_id")).first() if payload.get("dam_id") else None
+        sire = _dog_from_value(payload.get("sire_id"))
+        dam = _dog_from_value(payload.get("dam_id"))
         _parent_checks(findings, submission, run_id, sire, dam, child_dob)
 
     if submission.kind in {Submission.Kind.LITTER_CREATE, Submission.Kind.LITTER_EDIT}:
