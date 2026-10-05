@@ -2,10 +2,16 @@ from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
+from registry.data_quality import quick_quality_report
 from registry.models import (
+    Dog,
+    DogSource,
     ModerationRoleAssignment,
     Submission,
     SubmissionRiskLevel,
@@ -65,6 +71,60 @@ class AdminSurfaceSmokeTests(TestCase):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
+
+    def test_data_health_report_uses_bounded_query_count(self):
+        dog = Dog.objects.create(
+            name="Health Source Dog",
+            slug="health-source-dog",
+            is_public=True,
+        )
+        DogSource.objects.create(
+            dog=dog,
+            source_type=DogSource.SourceType.WEB,
+            title="Health source",
+            verified_at=None,
+        )
+
+        with CaptureQueriesContext(connection) as captured:
+            report = quick_quality_report(sample_limit=2)
+
+        self.assertLessEqual(len(captured), 12)
+        self.assertGreaterEqual(report["counts"]["public_dogs"], 1)
+        self.assertGreaterEqual(report["counts"]["source_backed_public"], 1)
+
+    def test_data_health_page_caches_repeated_reads(self):
+        cache.clear()
+        self.client.force_login(self.owner)
+        fake_report = {
+            "counts": {
+                "public_dogs": 1,
+                "source_backed_public": 1,
+                "verified_source_backed_public": 0,
+                "pedigree_linked_public": 0,
+                "public_without_sources": 0,
+                "community_only_public": 0,
+                "unknown_sex_public": 0,
+                "sire_sex_conflicts": 0,
+                "dam_sex_conflicts": 0,
+                "same_parent_conflicts": 0,
+                "parent_date_conflicts": 0,
+                "pending_submissions": 0,
+                "aging_submissions": 0,
+                "open_disputes": 0,
+            },
+            "source_coverage_percent": 100.0,
+            "verified_source_coverage_percent": 0.0,
+            "pedigree_linkage_percent": 0.0,
+            "samples": {},
+        }
+
+        with patch("accounts.views.quick_quality_report", return_value=fake_report) as report:
+            first = self.client.get(reverse("accounts:data-health"))
+            second = self.client.get(reverse("accounts:data-health"))
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        report.assert_called_once_with(sample_limit=12)
 
     def test_logged_out_moderation_uses_member_login(self):
         response = self.client.get(reverse("accounts:moderation"))
