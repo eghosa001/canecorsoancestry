@@ -64,7 +64,7 @@
     <div class="panel-heading">
       <div><h2>Duplicate intelligence</h2><span>Search a specific dog instantly. The heavier database-wide scan runs only when requested.</span></div>
       {% if not duplicate_scan_loaded %}
-        <a class="btn btn-outline" href="?duplicate_scan=1">Run duplicate scan</a>
+        <a class="btn btn-outline" href="?duplicate_scan=1&q={{ filters.q|urlencode }}&kind={{ filters.kind|urlencode }}&priority={{ filters.priority|urlencode }}&assignment={{ filters.assignment|urlencode }}&risk={{ filters.risk|urlencode }}">Run duplicate scan</a>
       {% endif %}
     </div>
     <form class="duplicate-search-form" method="get">

@@ -9,10 +9,10 @@ from django.conf import settings
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.tokens import default_token_generator
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -1230,11 +1230,19 @@ def moderation_submission_detail(request, pk):
     else:
         litter_submission_id = (submission.payload or {}).get("litter_submission_id")
         if litter_submission_id:
-            litter_submission = (
-                Submission.objects.select_related("litter", "kennel")
-                .filter(pk=litter_submission_id, kind=Submission.Kind.LITTER_CREATE)
-                .first()
-            )
+            try:
+                parsed_litter_submission_id = uuid.UUID(str(litter_submission_id))
+            except (TypeError, ValueError, AttributeError):
+                parsed_litter_submission_id = None
+            if parsed_litter_submission_id:
+                litter_submission = (
+                    Submission.objects.select_related("litter", "kennel")
+                    .filter(
+                        pk=parsed_litter_submission_id,
+                        kind=Submission.Kind.LITTER_CREATE,
+                    )
+                    .first()
+                )
 
     litter_members = []
     if litter_submission is not None:
@@ -1401,7 +1409,7 @@ def review_submission(request, pk, decision):
         else:
             messages.error(request, "Unknown review action.")
 
-    except ValueError as exc:
+    except (ValueError, ValidationError, IntegrityError) as exc:
         messages.error(request, str(exc))
 
     if Submission.objects.filter(pk=submission.pk, status=Submission.Status.PENDING).exists():
@@ -1424,7 +1432,7 @@ def merge_dogs_view(request):
     duplicate = form.cleaned_data["duplicate"]
     try:
         history = merge_dogs(canonical, duplicate, performed_by=request.user)
-    except ValueError as exc:
+    except (ValueError, ValidationError, IntegrityError) as exc:
         messages.error(request, str(exc))
     else:
         messages.success(
@@ -2287,23 +2295,12 @@ def verification_rule_update(request, pk):
     rule.second_approval_required = request.POST.get("second_approval_required") == "on"
     rule.updated_by = request.user
     rule.save()
-    pending_submissions = list(
-        Submission.objects.filter(status=Submission.Status.PENDING).only("pk")
-    )
-    Submission.objects.filter(status=Submission.Status.PENDING).update(
+    invalidated_count = Submission.objects.filter(
+        status=Submission.Status.PENDING
+    ).update(
         verification_status=SubmissionVerificationStatus.UNCHECKED,
         verification_checked_at=None,
     )
-    verification_failures = 0
-    for pending_submission in pending_submissions:
-        try:
-            verify_submission(pending_submission)
-        except Exception:
-            verification_failures += 1
-            logger.exception(
-                "pending_submission_reverification_failed submission_id=%s",
-                pending_submission.pk,
-            )
     record_audit(
         action=ModerationAudit.Action.VERIFICATION,
         actor=request.user,
@@ -2319,16 +2316,10 @@ def verification_rule_update(request, pk):
         },
         note="Owner updated an automated verification rule.",
     )
-    if verification_failures:
-        messages.warning(
-            request,
-            f"Verification rule '{rule.title}' updated, but {verification_failures} pending submission(s) need manual review.",
-        )
-    else:
-        messages.success(
-            request,
-            f"Verification rule '{rule.title}' updated and pending submissions were rechecked.",
-        )
+    messages.success(
+        request,
+        f"Verification rule '{rule.title}' updated. {invalidated_count} pending submission(s) will be rechecked when opened or reviewed.",
+    )
     return redirect("accounts:verification-dashboard")
 
 
