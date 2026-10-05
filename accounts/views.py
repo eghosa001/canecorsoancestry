@@ -5,7 +5,6 @@ import logging
 import uuid
 
 from django.contrib import messages
-from django.contrib.admin.views.decorators import staff_member_required
 from django.conf import settings
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
@@ -172,7 +171,7 @@ def signup(request):
             Q(name__iexact=kennel_name) | Q(slug__iexact=kennel_slug)
         ).first()
         if existing_kennel:
-            Submission.objects.get_or_create(
+            submission, _ = Submission.objects.get_or_create(
                 kind=Submission.Kind.KENNEL_CLAIM,
                 status=Submission.Status.PENDING,
                 submitted_by=user,
@@ -186,12 +185,14 @@ def signup(request):
                 },
             )
         else:
-            Submission.objects.create(
+            submission = Submission.objects.create(
                 kind=Submission.Kind.KENNEL_CREATE,
                 submitted_by=user,
                 payload={"name": kennel_name, "slug": kennel_slug},
                 notes="Kennel profile requested automatically during account signup.",
             )
+        if submission.verification_status == SubmissionVerificationStatus.UNCHECKED:
+            verify_submission(submission)
 
         if verification_required:
             try:
@@ -890,7 +891,7 @@ def submit_document(request, pk):
 
     form = DogDocumentSubmissionForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        Submission.objects.create(
+        submission = Submission.objects.create(
             kind=Submission.Kind.DOCUMENT,
             submitted_by=request.user,
             dog=dog,
@@ -903,6 +904,7 @@ def submit_document(request, pk):
             attachment=form.cleaned_data["attachment"],
             notes=form.cleaned_data["notes"],
         )
+        verify_submission(submission)
         messages.success(request, "Document submitted for review.")
         return redirect("accounts:submissions")
 
@@ -929,7 +931,7 @@ def submit_kennel(request):
         from django.utils.text import slugify
 
         kennel_slug = slugify(cleaned["name"])[:190]
-        Submission.objects.create(
+        submission = Submission.objects.create(
             kind=Submission.Kind.KENNEL_CREATE,
             submitted_by=request.user,
             payload={
@@ -942,6 +944,7 @@ def submit_kennel(request):
             },
             notes=cleaned["notes"],
         )
+        verify_submission(submission)
         messages.success(
             request,
             "Kennel profile submitted for fact-checking. The name is reserved while the submission is pending.",
@@ -973,7 +976,7 @@ def edit_kennel(request, pk):
     form = KennelEditForm(request.POST or None, instance=kennel)
     if request.method == "POST" and form.is_valid():
         cleaned = form.cleaned_data
-        Submission.objects.create(
+        submission = Submission.objects.create(
             kind=Submission.Kind.KENNEL,
             submitted_by=request.user,
             kennel=kennel,
@@ -986,6 +989,7 @@ def edit_kennel(request, pk):
             },
             notes=cleaned["notes"],
         )
+        verify_submission(submission)
         messages.success(request, "Kennel changes submitted for review.")
         return redirect("accounts:submissions")
 
@@ -1057,7 +1061,7 @@ def notifications(request):
     return render(request, "accounts/notifications.html", {"notifications": items})
 
 
-@staff_member_required
+@login_required
 def moderation_queue(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
@@ -1108,9 +1112,6 @@ def moderation_queue(request):
     query_params.pop("page", None)
 
     for item in pending_items:
-        if item.verification_status == SubmissionVerificationStatus.UNCHECKED:
-            verify_submission(item)
-            item.refresh_from_db()
         item.review_diff = submission_diff(item)
         item.current_findings = [
             finding
@@ -1127,17 +1128,30 @@ def moderation_queue(request):
     duplicate_reference = None
     reference_id = request.GET.get("reference", "").strip()
     duplicate_query = request.GET.get("duplicate_q", "").strip()
+    duplicate_scan_loaded = request.GET.get("duplicate_scan") == "1"
 
     if reference_id:
-        duplicate_reference = Dog.objects.select_related(
-            "kennel", "sire", "dam"
-        ).prefetch_related("registrations").filter(pk=reference_id).first()
-        if duplicate_reference:
-            duplicate_results = duplicate_matches(duplicate_reference)
+        try:
+            parsed_reference_id = uuid.UUID(reference_id)
+        except (TypeError, ValueError):
+            messages.error(request, "That duplicate-reference ID is invalid.")
+        else:
+            duplicate_reference = (
+                Dog.objects.select_related("kennel", "sire", "dam")
+                .prefetch_related("registrations")
+                .filter(pk=parsed_reference_id)
+                .first()
+            )
+            if duplicate_reference:
+                duplicate_results = duplicate_matches(duplicate_reference)
     elif duplicate_query and duplicate_form.is_valid():
         duplicate_lookup_results = moderation_dog_search(
             duplicate_form.cleaned_data["duplicate_q"]
         )
+
+    automatic_duplicate_candidates = (
+        duplicate_candidates() if duplicate_scan_loaded else []
+    )
 
     disputes = (
         DisputeCase.objects.filter(
@@ -1157,7 +1171,8 @@ def moderation_queue(request):
             "querystring": query_params.urlencode(),
             "merge_form": MergeDogsForm(),
             "verification_form": VerificationEventForm(),
-            "duplicate_candidates": duplicate_candidates(),
+            "duplicate_candidates": automatic_duplicate_candidates,
+            "duplicate_scan_loaded": duplicate_scan_loaded,
             "duplicate_form": duplicate_form,
             "duplicate_reference": duplicate_reference,
             "duplicate_lookup_results": duplicate_lookup_results,
@@ -1179,7 +1194,7 @@ def moderation_queue(request):
     )
 
 
-@staff_member_required
+@login_required
 def moderation_submission_detail(request, pk):
     if not can_review_submissions(request.user):
         raise PermissionDenied
@@ -1288,7 +1303,7 @@ def moderation_submission_detail(request, pk):
     )
 
 
-@staff_member_required
+@login_required
 def review_submission(request, pk, decision):
     if request.method != "POST":
         return redirect("accounts:moderation")
@@ -1394,7 +1409,7 @@ def review_submission(request, pk, decision):
     return redirect("accounts:moderation")
 
 
-@staff_member_required
+@login_required
 def merge_dogs_view(request):
     if not can_review_flagged_submissions(request.user):
         raise PermissionDenied
@@ -1420,7 +1435,7 @@ def merge_dogs_view(request):
 
 
 
-@staff_member_required
+@login_required
 def verify_dog(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
@@ -1662,7 +1677,7 @@ def claim_kennel(request, pk):
 
     form = KennelClaimForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        Submission.objects.create(
+        submission = Submission.objects.create(
             kind=Submission.Kind.KENNEL_CLAIM,
             submitted_by=request.user,
             kennel=kennel,
@@ -1670,6 +1685,7 @@ def claim_kennel(request, pk):
             attachment=form.cleaned_data["evidence"] or "",
             notes=form.cleaned_data["notes"],
         )
+        verify_submission(submission)
         messages.success(request, "Kennel ownership claim submitted for review.")
         return redirect("accounts:submissions")
 
@@ -1712,7 +1728,7 @@ def request_document_visibility(request, pk):
             messages.info(request, "A visibility request for this document is already pending.")
             return redirect("accounts:documents")
 
-        Submission.objects.create(
+        submission = Submission.objects.create(
             kind=Submission.Kind.DOCUMENT_VISIBILITY,
             submitted_by=request.user,
             dog=document.dog,
@@ -1721,6 +1737,7 @@ def request_document_visibility(request, pk):
             payload={"is_public": desired},
             notes=form.cleaned_data["notes"],
         )
+        verify_submission(submission)
         messages.success(request, "Document visibility change submitted for review.")
         return redirect("accounts:submissions")
 
@@ -1791,7 +1808,7 @@ def my_disputes(request):
     )
 
 
-@staff_member_required
+@login_required
 def bulk_moderation(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
@@ -1862,7 +1879,7 @@ def bulk_moderation(request):
     return redirect("accounts:moderation")
 
 
-@staff_member_required
+@login_required
 def review_dispute(request, pk, decision):
     if not can_review_submissions(request.user):
         raise PermissionDenied
@@ -1920,7 +1937,7 @@ def review_dispute(request, pk, decision):
     return redirect("accounts:moderation")
 
 
-@staff_member_required
+@login_required
 def verification_dashboard(request):
     if not can_manage_verification(request.user):
         raise PermissionDenied
@@ -2124,7 +2141,7 @@ def verification_dashboard(request):
     )
 
 
-@staff_member_required
+@login_required
 @require_POST
 def moderation_set_role(request):
     if not can_manage_verification(request.user):
@@ -2163,11 +2180,9 @@ def moderation_set_role(request):
             "assigned_by": request.user,
         },
     )
-    if (
-        requested_role != ModerationRoleAssignment.Role.NONE
-        and not target.is_staff
-    ):
-        target.is_staff = True
+    should_be_staff = requested_role != ModerationRoleAssignment.Role.NONE
+    if target.is_staff != should_be_staff:
+        target.is_staff = should_be_staff
         target.save(update_fields=("is_staff",))
 
     record_audit(
@@ -2185,7 +2200,7 @@ def moderation_set_role(request):
     return redirect("accounts:verification-dashboard")
 
 
-@staff_member_required
+@login_required
 @require_POST
 def moderation_record_lock(request):
     if not can_manage_verification(request.user):
@@ -2250,7 +2265,7 @@ def moderation_record_lock(request):
     return redirect("accounts:verification-dashboard")
 
 
-@staff_member_required
+@login_required
 @require_POST
 def verification_rule_update(request, pk):
     if not can_manage_verification(request.user):
@@ -2272,10 +2287,23 @@ def verification_rule_update(request, pk):
     rule.second_approval_required = request.POST.get("second_approval_required") == "on"
     rule.updated_by = request.user
     rule.save()
+    pending_submissions = list(
+        Submission.objects.filter(status=Submission.Status.PENDING).only("pk")
+    )
     Submission.objects.filter(status=Submission.Status.PENDING).update(
         verification_status=SubmissionVerificationStatus.UNCHECKED,
         verification_checked_at=None,
     )
+    verification_failures = 0
+    for pending_submission in pending_submissions:
+        try:
+            verify_submission(pending_submission)
+        except Exception:
+            verification_failures += 1
+            logger.exception(
+                "pending_submission_reverification_failed submission_id=%s",
+                pending_submission.pk,
+            )
     record_audit(
         action=ModerationAudit.Action.VERIFICATION,
         actor=request.user,
@@ -2291,11 +2319,20 @@ def verification_rule_update(request, pk):
         },
         note="Owner updated an automated verification rule.",
     )
-    messages.success(request, f"Verification rule '{rule.title}' updated.")
+    if verification_failures:
+        messages.warning(
+            request,
+            f"Verification rule '{rule.title}' updated, but {verification_failures} pending submission(s) need manual review.",
+        )
+    else:
+        messages.success(
+            request,
+            f"Verification rule '{rule.title}' updated and pending submissions were rechecked.",
+        )
     return redirect("accounts:verification-dashboard")
 
 
-@staff_member_required
+@login_required
 def data_health(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
@@ -2321,7 +2358,7 @@ def data_health(request):
     )
 
 
-@staff_member_required
+@login_required
 def moderation_audit(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
