@@ -80,7 +80,7 @@ class AdminSurfaceSmokeTests(TestCase):
         )
         DogSource.objects.create(
             dog=dog,
-            source_type=DogSource.SourceType.WEB,
+            source_type=DogSource.SourceType.OTHER,
             title="Health source",
             verified_at=None,
         )
