@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .models import Dog, DogImage, DogRegistration, Kennel, RegistrationAuthority
+from .services import duplicate_candidates
 
 
 class DogModelTests(TestCase):
@@ -30,6 +31,46 @@ class DogModelTests(TestCase):
         self.assertEqual(response.context["result_count"], 25)
         self.assertEqual(len(response.context["dogs"]), 24)
         self.assertTrue(response.context["page_obj"].has_next())
+
+    def test_duplicate_candidates_skip_very_common_name_buckets(self):
+        for index in range(9):
+            Dog.objects.create(name="Atlas", slug=f"atlas-{index}")
+
+        Dog.objects.create(name="Rare Twin", slug="rare-twin-a")
+        Dog.objects.create(name="Rare Twin", slug="rare-twin-b")
+
+        rows = duplicate_candidates(limit=10)
+
+        self.assertTrue(
+            any(
+                row["reference"].name == "Rare Twin"
+                and row["candidate"].name == "Rare Twin"
+                for row in rows
+            )
+        )
+        self.assertFalse(
+            any(
+                row["reference"].name == "Atlas"
+                or row["candidate"].name == "Atlas"
+                for row in rows
+            )
+        )
+
+    def test_search_origin_profile_still_records_popularity(self):
+        dog = Dog.objects.create(
+            name="Search Counter Dog",
+            slug="search-counter-dog",
+            is_public=True,
+        )
+
+        response = self.client.get(
+            reverse("registry:dog-detail", args=[dog.slug]),
+            {"source": "search"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        dog.refresh_from_db()
+        self.assertEqual(dog.search_count, 1)
 
     def test_default_browse_only_shows_imaged_dogs_by_popularity(self):
         kennel = Kennel.objects.create(name="Shared Kennel", slug="shared-kennel")
