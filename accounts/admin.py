@@ -1,6 +1,34 @@
+from django import forms
 from django.contrib import admin
+from django.contrib.admin.forms import AdminAuthenticationForm
+from django.contrib.auth import get_user_model
 
 from .models import PaymentSubmissionLink, Profile, SubmissionPayment
+
+
+class AdminEmailOrUsernameAuthenticationForm(AdminAuthenticationForm):
+    username = forms.CharField(
+        label="Email or username",
+        widget=forms.TextInput(
+            attrs={"autofocus": True, "autocomplete": "username"}
+        ),
+    )
+
+    def clean(self):
+        login_value = (self.cleaned_data.get("username") or "").strip()
+        if "@" in login_value:
+            user = (
+                get_user_model()
+                .objects.filter(email__iexact=login_value)
+                .only("username")
+                .first()
+            )
+            if user:
+                self.cleaned_data["username"] = user.get_username()
+        return super().clean()
+
+
+admin.site.login_form = AdminEmailOrUsernameAuthenticationForm
 
 
 @admin.register(Profile)
