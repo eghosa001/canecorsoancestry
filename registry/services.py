@@ -81,7 +81,10 @@ def _date_from_payload(value):
         return None
     if isinstance(value, date):
         return value
-    return date.fromisoformat(value)
+    try:
+        return date.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def record_audit(
