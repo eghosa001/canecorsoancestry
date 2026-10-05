@@ -9,30 +9,12 @@ from .models import DisputeCase, Dog, DogSource, Submission, VerificationState
 def quick_quality_report(sample_limit=12):
     public = Dog.objects.filter(is_public=True)
     source_rows = DogSource.objects.filter(dog_id=OuterRef("pk"))
-    public_with_source_flags = public.annotate(
-        _has_source=Exists(source_rows),
-        _has_verified_source=Exists(
-            source_rows.filter(verified_at__isnull=False)
-        ),
-    )
 
-    public_summary = public_with_source_flags.aggregate(
+    public_summary = public.aggregate(
         public_dogs=Count("pk"),
-        source_backed_public=Count(
-            "pk",
-            filter=Q(_has_source=True),
-        ),
-        verified_source_backed_public=Count(
-            "pk",
-            filter=Q(_has_verified_source=True),
-        ),
         pedigree_linked_public=Count(
             "pk",
             filter=Q(sire__isnull=False) | Q(dam__isnull=False),
-        ),
-        public_without_sources=Count(
-            "pk",
-            filter=Q(_has_source=False),
         ),
         community_only_public=Count(
             "pk",
@@ -42,6 +24,27 @@ def quick_quality_report(sample_limit=12):
             "pk",
             filter=Q(sex=Dog.Sex.UNKNOWN),
         ),
+    )
+    source_backed_public = (
+        DogSource.objects.filter(dog__is_public=True)
+        .values("dog_id")
+        .distinct()
+        .count()
+    )
+    verified_source_backed_public = (
+        DogSource.objects.filter(
+            dog__is_public=True,
+            verified_at__isnull=False,
+        )
+        .values("dog_id")
+        .distinct()
+        .count()
+    )
+    public_summary["source_backed_public"] = source_backed_public
+    public_summary["verified_source_backed_public"] = verified_source_backed_public
+    public_summary["public_without_sources"] = max(
+        public_summary["public_dogs"] - source_backed_public,
+        0,
     )
 
     integrity_summary = Dog.objects.aggregate(
@@ -138,25 +141,29 @@ def quick_quality_report(sample_limit=12):
             pedigree_linked / total_public * 100 if total_public else 100.0
         ),
         "samples": {
-            key: list(
-                queryset.select_related("sire", "dam", "kennel")
-                .only(
-                    "id",
-                    "name",
-                    "slug",
-                    "sex",
-                    "date_of_birth",
-                    "sire__id",
-                    "sire__name",
-                    "sire__sex",
-                    "sire__date_of_birth",
-                    "dam__id",
-                    "dam__name",
-                    "dam__sex",
-                    "dam__date_of_birth",
-                    "kennel__id",
-                    "kennel__name",
-                )[:sample_limit]
+            key: (
+                list(
+                    queryset.select_related("sire", "dam", "kennel")
+                    .only(
+                        "id",
+                        "name",
+                        "slug",
+                        "sex",
+                        "date_of_birth",
+                        "sire__id",
+                        "sire__name",
+                        "sire__sex",
+                        "sire__date_of_birth",
+                        "dam__id",
+                        "dam__name",
+                        "dam__sex",
+                        "dam__date_of_birth",
+                        "kennel__id",
+                        "kennel__name",
+                    )[:sample_limit]
+                )
+                if counts.get(key, 0) > 0
+                else []
             )
             for key, queryset in issue_sets.items()
         },
