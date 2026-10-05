@@ -63,21 +63,9 @@ jobs:
           targets=()
           grep -q '^pedigrees/' <<<"$changed" && targets+=("pedigrees.tests.PedigreeServiceTests")
 
-          if grep -Eq '^registry/(management/commands/(import_canecorso_archive|refresh_canecorso_latest)\.py|tests_canecorso_(import|latest)\.py)            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
+          if grep -Eq '^registry/(management/commands/(import_canecorso_archive|refresh_canecorso_latest)\.py|tests_canecorso_(import|latest)\.py)$' <<<"$changed"; then
             targets+=("registry.tests_canecorso_import" "registry.tests_canecorso_latest")
-          elif grep -Eq '^registry/(services|verification)\.py            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
+          elif grep -Eq '^registry/(services|verification)\.py$' <<<"$changed"; then
             targets+=(
               "accounts.tests_admin_surfaces"
               "accounts.tests_verification.VerificationGovernanceTests"
@@ -90,25 +78,17 @@ jobs:
           if grep -q '^accounts/' <<<"$changed"; then
             scoped_accounts=false
 
-            if grep -Eq '^accounts/(admin\.py|tests_admin_surfaces\.py)            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
+            if grep -Eq '^accounts/(admin\.py|tests_admin_surfaces\.py)$' <<<"$changed"; then
               targets+=("accounts.tests_admin_surfaces")
               scoped_accounts=true
             fi
 
-            if grep -q '^accounts/views\.py            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
-              view_diff="$(git diff -U0 "origin/${{ github.base_ref }}...HEAD" -- accounts/views.py 2>/dev/null || git diff -U0 HEAD^ HEAD -- accounts/views.py)"
+            if grep -q '^accounts/views\.py$' <<<"$changed"; then
+              if [ "${{ github.event_name }}" = "pull_request" ]; then
+                view_diff="$(git diff -U0 "origin/${{ github.base_ref }}...HEAD" -- accounts/views.py)"
+              else
+                view_diff="$(git diff -U0 HEAD^ HEAD -- accounts/views.py)"
+              fi
               if grep -Eq 'moderation_|verification_|review_submission|review_dispute|merge_dogs|verify_dog|duplicate_' <<<"$view_diff"; then
                 targets+=(
                   "accounts.tests_admin_surfaces"
@@ -127,43 +107,19 @@ jobs:
               scoped_accounts=true
             fi
 
-            if grep -Eq '^accounts/(forms\.py|tests_account_recovery\.py)            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
+            if grep -Eq '^accounts/(forms\.py|tests_account_recovery\.py)$' <<<"$changed"; then
               targets+=("accounts.tests_account_recovery")
               scoped_accounts=true
             fi
-            if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
+            if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
               targets+=("accounts.tests_payments")
               scoped_accounts=true
             fi
-            if grep -Eq '^accounts/tests_moderation_intelligence\.py            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
+            if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
               targets+=("accounts.tests_moderation_intelligence")
               scoped_accounts=true
             fi
-            if grep -Eq '^accounts/tests_verification\.py            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
+            if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
               targets+=("accounts.tests_verification")
               scoped_accounts=true
             fi
@@ -174,13 +130,7 @@ jobs:
             fi
           fi
 
-          grep -Eq '^core/.*\.py            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed" && targets+=("core")
+          grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
 
           if [ ${#targets[@]} -eq 0 ]; then
             echo "No changed Python app requires tests."
