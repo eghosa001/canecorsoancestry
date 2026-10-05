@@ -1,22 +1,108 @@
 from datetime import timedelta
 
-from django.db.models import F, Q
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.utils import timezone
 
-from .models import DisputeCase, Dog, Submission, VerificationState
+from .models import DisputeCase, Dog, DogSource, Submission, VerificationState
 
 
 def quick_quality_report(sample_limit=12):
     public = Dog.objects.filter(is_public=True)
-    total_public = public.count()
-    source_backed = public.filter(sources__isnull=False).distinct().count()
-    verified_source_backed = public.filter(
-        sources__verified_at__isnull=False
-    ).distinct().count()
-    pedigree_linked = public.filter(Q(sire__isnull=False) | Q(dam__isnull=False)).count()
+    source_rows = DogSource.objects.filter(dog_id=OuterRef("pk"))
+    public_with_source_flags = public.annotate(
+        _has_source=Exists(source_rows),
+        _has_verified_source=Exists(
+            source_rows.filter(verified_at__isnull=False)
+        ),
+    )
+
+    public_summary = public_with_source_flags.aggregate(
+        public_dogs=Count("pk"),
+        source_backed_public=Count(
+            "pk",
+            filter=Q(_has_source=True),
+        ),
+        verified_source_backed_public=Count(
+            "pk",
+            filter=Q(_has_verified_source=True),
+        ),
+        pedigree_linked_public=Count(
+            "pk",
+            filter=Q(sire__isnull=False) | Q(dam__isnull=False),
+        ),
+        public_without_sources=Count(
+            "pk",
+            filter=Q(_has_source=False),
+        ),
+        community_only_public=Count(
+            "pk",
+            filter=Q(verification_state=VerificationState.COMMUNITY),
+        ),
+        unknown_sex_public=Count(
+            "pk",
+            filter=Q(sex=Dog.Sex.UNKNOWN),
+        ),
+    )
+
+    integrity_summary = Dog.objects.aggregate(
+        sire_sex_conflicts=Count(
+            "pk",
+            filter=Q(sire__sex=Dog.Sex.FEMALE),
+        ),
+        dam_sex_conflicts=Count(
+            "pk",
+            filter=Q(dam__sex=Dog.Sex.MALE),
+        ),
+        same_parent_conflicts=Count(
+            "pk",
+            filter=Q(sire__isnull=False, sire=F("dam")),
+        ),
+        parent_date_conflicts=Count(
+            "pk",
+            filter=Q(date_of_birth__isnull=False)
+            & (
+                Q(sire__date_of_birth__gte=F("date_of_birth"))
+                | Q(dam__date_of_birth__gte=F("date_of_birth"))
+            ),
+        ),
+    )
+
+    submission_summary = Submission.objects.aggregate(
+        pending_submissions=Count(
+            "pk",
+            filter=Q(status=Submission.Status.PENDING),
+        ),
+        aging_submissions=Count(
+            "pk",
+            filter=Q(
+                status=Submission.Status.PENDING,
+                created_at__lt=timezone.now() - timedelta(days=7),
+            ),
+        ),
+    )
+    dispute_summary = DisputeCase.objects.aggregate(
+        open_disputes=Count(
+            "pk",
+            filter=Q(
+                status__in=[
+                    DisputeCase.Status.OPEN,
+                    DisputeCase.Status.REVIEWING,
+                ]
+            ),
+        )
+    )
+
+    counts = {
+        **public_summary,
+        **integrity_summary,
+        **submission_summary,
+        **dispute_summary,
+    }
 
     issue_sets = {
-        "public_without_sources": public.filter(sources__isnull=True).distinct(),
+        "public_without_sources": public.annotate(
+            _has_source=Exists(source_rows)
+        ).filter(_has_source=False),
         "community_only_public": public.filter(
             verification_state=VerificationState.COMMUNITY
         ),
@@ -24,7 +110,8 @@ def quick_quality_report(sample_limit=12):
         "sire_sex_conflicts": Dog.objects.filter(sire__sex=Dog.Sex.FEMALE),
         "dam_sex_conflicts": Dog.objects.filter(dam__sex=Dog.Sex.MALE),
         "same_parent_conflicts": Dog.objects.filter(
-            sire__isnull=False, sire=F("dam")
+            sire__isnull=False,
+            sire=F("dam"),
         ),
         "parent_date_conflicts": Dog.objects.filter(
             date_of_birth__isnull=False
@@ -34,28 +121,10 @@ def quick_quality_report(sample_limit=12):
         ),
     }
 
-    counts = {key: queryset.count() for key, queryset in issue_sets.items()}
-    counts.update(
-        {
-            "public_dogs": total_public,
-            "source_backed_public": source_backed,
-            "verified_source_backed_public": verified_source_backed,
-            "pedigree_linked_public": pedigree_linked,
-            "pending_submissions": Submission.objects.filter(
-                status=Submission.Status.PENDING
-            ).count(),
-            "aging_submissions": Submission.objects.filter(
-                status=Submission.Status.PENDING,
-                created_at__lt=timezone.now() - timedelta(days=7),
-            ).count(),
-            "open_disputes": DisputeCase.objects.filter(
-                status__in=[
-                    DisputeCase.Status.OPEN,
-                    DisputeCase.Status.REVIEWING,
-                ]
-            ).count(),
-        }
-    )
+    total_public = counts["public_dogs"]
+    source_backed = counts["source_backed_public"]
+    verified_source_backed = counts["verified_source_backed_public"]
+    pedigree_linked = counts["pedigree_linked_public"]
 
     return {
         "counts": counts,
