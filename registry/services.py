@@ -344,7 +344,7 @@ def approve_submission(
 ):
     if not can_review_submissions(reviewer):
         raise ValueError("This account does not have submission-review authority.")
-    submission = Submission.objects.select_for_update().select_related(
+    submission = Submission.objects.select_for_update(of=("self",)).select_related(
         "dog", "kennel", "litter", "document", "submitted_by"
     ).get(pk=submission.pk)
     if submission.status != Submission.Status.PENDING:
