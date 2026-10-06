@@ -48,18 +48,29 @@ class CloudflareR2GatewayStorage(Storage):
         if content_type:
             headers["Content-Type"] = content_type
 
-        request = urllib.request.Request(
-            self._url(name),
-            data=body if method == "PUT" else None,
-            method=method,
-            headers=headers,
-        )
-        try:
-            return urllib.request.urlopen(request, timeout=self.timeout)
-        except urllib.error.HTTPError as exc:
-            if exc.code == 404:
-                raise FileNotFoundError(name) from exc
-            raise
+        retryable_statuses = {408, 425, 429, 500, 502, 503, 504}
+        attempts = 3
+        for attempt in range(attempts):
+            request = urllib.request.Request(
+                self._url(name),
+                data=body if method == "PUT" else None,
+                method=method,
+                headers=headers,
+            )
+            try:
+                return urllib.request.urlopen(request, timeout=self.timeout)
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    raise FileNotFoundError(name) from exc
+                if exc.code not in retryable_statuses or attempt == attempts - 1:
+                    raise
+            except (urllib.error.URLError, TimeoutError):
+                if attempt == attempts - 1:
+                    raise
+
+            time.sleep(0.25 * (2 ** attempt))
+
+        raise RuntimeError("R2 gateway request retry loop exited unexpectedly.")
 
     def _save(self, name, content):
         return self.save_exact(name, content)
