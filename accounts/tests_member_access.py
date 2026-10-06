@@ -79,7 +79,10 @@ class MemberAccessFlowTests(TestCase):
                 "_paid_submission": True,
                 "name": "Member Dog",
                 "sex": Dog.Sex.MALE,
+                "photo_caption": "Stacked portrait",
+                "photo_sha256": "abc123",
             },
+            attachment="submissions/2026/10/member-dog.jpg",
         )
         PaymentSubmissionLink.objects.create(
             payment=payment,
@@ -93,12 +96,54 @@ class MemberAccessFlowTests(TestCase):
         approve_submission(submission, self.reviewer, "Facts checked.")
         submission.refresh_from_db()
         self.assertTrue(submission.dog.is_public)
+        image = DogImage.objects.get(dog=submission.dog)
+        self.assertEqual(image.image.name, "submissions/2026/10/member-dog.jpg")
+        self.assertEqual(image.caption, "Stacked portrait")
+        self.assertTrue(image.is_primary)
 
         self.client.force_login(member)
         pedigree = self.client.get(
             reverse("accounts:member-pedigree", args=[submission.dog.pk])
         )
         self.assertContains(pedigree, "Member Dog")
+
+
+    def test_paid_dog_form_accepts_first_profile_photo_in_same_submission(self):
+        member = get_user_model().objects.create_user(
+            username="photo-form-member",
+            email="photo-form@example.com",
+            password="test-pass-123",
+        )
+        kennel = Kennel.objects.create(
+            name="Photo Form Kennel",
+            slug="photo-form-kennel",
+            verified_at=timezone.now(),
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        payment = SubmissionPayment.objects.create(
+            user=member,
+            kennel=kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1,
+            amount_kobo=50000,
+            reference="CCA-photo-form",
+            status=SubmissionPayment.Status.PAID,
+            paid_at=timezone.now(),
+        )
+        self.client.force_login(member)
+
+        response = self.client.get(
+            reverse("accounts:payment-submit-dog", args=[payment.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'enctype="multipart/form-data"')
+        self.assertContains(response, 'name="primary_photo"')
+        self.assertContains(response, "first profile photo")
 
 
 class PopularDogTests(TestCase):
