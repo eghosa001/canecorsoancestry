@@ -2,6 +2,13 @@ name: Production smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/production-smoke.yml"
+  workflow_run:
+    workflows: ["Cloudflare site edge"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -12,6 +19,7 @@ concurrency:
 
 jobs:
   live:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
