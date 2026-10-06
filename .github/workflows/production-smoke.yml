@@ -11,7 +11,7 @@ on:
     paths:
       - ".github/workflows/production-smoke.yml"
   workflow_run:
-    workflows: ["Cloudflare site edge"]
+    workflows: ["Cloudflare site edge", "Provision Northflank origin"]
     types: [completed]
 
 permissions:
