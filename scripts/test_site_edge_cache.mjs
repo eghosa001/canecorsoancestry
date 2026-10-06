@@ -3,6 +3,7 @@ import {
   cacheKey,
   hasPrivateCookie,
   isCacheablePublicPath,
+  shouldWaitForOrigin,
   originRequest,
   timedOriginGet,
 } from "../src/site-edge.js";
@@ -14,6 +15,13 @@ const csrfRequest = new Request(publicUrl, {
 });
 assert.equal(hasPrivateCookie(csrfRequest), false);
 assert.equal(isCacheablePublicPath(publicUrl, csrfRequest), true);
+assert.equal(
+  shouldWaitForOrigin(
+    new Request(publicUrl, { headers: { accept: "text/html" } }),
+    true,
+  ),
+  true,
+);
 
 const sessionRequest = new Request(publicUrl, {
   headers: { cookie: "sessionid=authenticated-session; csrftoken=token" },
@@ -42,7 +50,7 @@ const suggestionsRequest = new Request(suggestionsUrl, {
 assert.equal(isCacheablePublicPath(suggestionsUrl, suggestionsRequest), true);
 assert.equal(
   cacheKey(trackedRequest).url,
-  "https://example.test/dogs/example-dog/?__cca_edge_v=public-polish-v66",
+  "https://example.test/dogs/example-dog/?__cca_edge_v=search-nav-v67",
 );
 
 console.log("site-edge cache policy tests passed");
