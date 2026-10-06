@@ -238,6 +238,7 @@ async function timedOriginGet(env, path, timeoutMs, userAgent, accept) {
       headers: {
         accept,
         "user-agent": userAgent,
+        "x-cca-edge": "1",
       },
       signal: controller.signal,
       redirect: "manual",
@@ -538,7 +539,7 @@ async function handleRequest(request, env, ctx) {
   return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
 
-export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, cacheKey, originRequest };
+export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, cacheKey, originRequest, timedOriginGet };
 
 export default {
   fetch(request, env, ctx) {
