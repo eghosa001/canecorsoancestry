@@ -212,7 +212,7 @@ jobs:
             echo "Created Northflank service: $service_id"
           else
             echo "Reusing existing Northflank service: $service_id"
-            patch="$(jq -n --arg site "$PUBLIC_SITE" --arg media "$MEDIA_EDGE" --arg db "$DATABASE_URL" --arg secret "$DJANGO_SECRET_KEY" --arg paystack "$PAYSTACK_SECRET_KEY" '{runtimeEnvironment:{DATABASE_URL:$db,DJANGO_SECRET_KEY:$secret,PAYSTACK_SECRET_KEY:$paystack,
+            patch="$(jq -n --arg site "$PUBLIC_SITE" --arg media "$MEDIA_EDGE" --arg db "$DATABASE_URL" --arg secret "$DJANGO_SECRET_KEY" --arg paystack "$PAYSTACK_SECRET_KEY" --arg email_host "$EMAIL_HOST" --arg email_user "$EMAIL_HOST_USER" --arg email_password "$EMAIL_HOST_PASSWORD" --arg from_email "$from_email" --arg email_enabled "$email_enabled" '{runtimeEnvironment:{DATABASE_URL:$db,DJANGO_SECRET_KEY:$secret,PAYSTACK_SECRET_KEY:$paystack,
                 EMAIL_HOST:$email_host,
                 EMAIL_HOST_USER:$email_user,
                 EMAIL_HOST_PASSWORD:$email_password,
