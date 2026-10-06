@@ -464,6 +464,35 @@ def main():
                     raise AssertionError("Production dog autocomplete returned an unexpected suggestion")
             page.close()
 
+        touch_search = browser.new_page(
+            viewport={"width": 390, "height": 844},
+            is_mobile=True,
+            has_touch=True,
+        )
+        wait_for_real_app(touch_search, "/dogs/?q=")
+        touch_input = touch_search.locator("#q")
+        touch_input.fill("Bran")
+        touch_option = touch_search.locator(".dog-suggestion").first
+        touch_option.wait_for(state="visible", timeout=10_000)
+        expected_href = touch_option.get_attribute("href")
+        if not expected_href or not expected_href.startswith("/dogs/"):
+            raise AssertionError(
+                f"Dog autocomplete suggestion has no navigable profile link: {expected_href}"
+            )
+        with touch_search.expect_navigation(wait_until="domcontentloaded", timeout=45_000) as nav:
+            touch_option.tap()
+        touch_response = nav.value
+        if touch_response and touch_response.headers.get("x-cca-edge-warming"):
+            raise AssertionError("Dog suggestion tap opened an edge database-warming page")
+        if "/dogs/" not in touch_search.url or "source=search" not in touch_search.url:
+            raise AssertionError(
+                f"Dog suggestion tap did not navigate to the selected profile: {touch_search.url}"
+            )
+        assert_page(touch_search, "dog-autocomplete-tap-mobile", mobile=True)
+        if "CONNECTING TO THE PEDIGREE DATABASE" in touch_search.locator("body").inner_text().upper():
+            raise AssertionError("Dog suggestion tap exposed the database-warming interstitial")
+        touch_search.close()
+
         if dog_load_path:
             dog_mobile = browser.new_page(viewport={"width": 390, "height": 844})
             dog_response, dog_elapsed = wait_for_real_app(
