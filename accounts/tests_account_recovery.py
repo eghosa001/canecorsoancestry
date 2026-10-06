@@ -29,6 +29,20 @@ class AccountRecoveryTests(TestCase):
         self.assertNotIn("test-pass-123", mail.outbox[0].body)
 
     @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.dummy.EmailBackend",
+        ACCOUNT_EMAIL_ENABLED=False,
+    )
+    def test_password_reset_does_not_claim_delivery_when_email_is_disabled(self):
+        response = self.client.post(
+            reverse("password_reset"),
+            {"email": "member@example.com"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Password-reset email is temporarily unavailable")
+        self.assertNotContains(response, "Check your email")
+
+    @override_settings(
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
         ACCOUNT_EMAIL_ENABLED=True,
     )
