@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 
@@ -23,6 +24,14 @@ class DashboardTests(TestCase):
 
 
 class PublicThemeRegressionTests(TestCase):
+    def test_home_caches_public_statistics_under_the_read_key(self):
+        cache.delete("cca:home:public-stats:v3")
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(cache.get("cca:home:public-stats:v3"))
+
     def test_home_restores_cca_plaque_and_theme_controls(self):
         response = self.client.get(reverse("home"))
 
