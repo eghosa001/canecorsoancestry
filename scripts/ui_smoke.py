@@ -98,10 +98,12 @@ def main():
 
         desktop = browser.new_page(viewport={"width": 1440, "height": 1000})
         capture(desktop, "/", "home-desktop")
-        logo_src = desktop.locator(".brand-mark").get_attribute("src")
-        logo_svg = desktop.evaluate("(src) => fetch(src).then((r) => r.text())", logo_src)
-        if 'translate(128 0) scale(-1 1)' not in logo_svg:
-            raise AssertionError("customer Cane Corso logo is not flipped to face right")
+        brand = desktop.locator(".brand-mark")
+        logo_src = brand.get_attribute("src") or ""
+        if "cane-corso-head-logo-right.webp" not in logo_src or logo_src.startswith("data:"):
+            raise AssertionError(f"customer Cane Corso logo asset is wrong: {logo_src}")
+        if brand.evaluate("(el) => !el.complete || el.naturalWidth < 32 || el.naturalHeight < 32"):
+            raise AssertionError("customer Cane Corso logo did not render correctly")
         plaque = desktop.locator(".hero-mark")
         if plaque.evaluate("(el) => getComputedStyle(el).borderTopWidth") != "1px":
             raise AssertionError("CCA plaque is not visibly boxed")
