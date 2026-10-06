@@ -33,7 +33,17 @@ def _can_read_media(user, path):
 
     kennel_ids = _member_kennel_ids(user)
     allowed = (
-        DogDocument.objects.filter(
+        DogImage.objects.filter(
+            image=path,
+            dog__kennel_id__in=kennel_ids,
+        ).exists()
+        or DogImage.objects.filter(
+            image=path,
+            dog__submissions__kind=Submission.Kind.DOG,
+            dog__submissions__status=Submission.Status.APPROVED,
+            dog__submissions__submitted_by=user,
+        ).exists()
+        or DogDocument.objects.filter(
             file=path,
             submitted_by=user,
         ).exists()
