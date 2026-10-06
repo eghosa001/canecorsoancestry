@@ -4821,6 +4821,32 @@ html[data-theme="dark"] .mobile-nav-panel {
   .dashboard-wide {
     grid-column: auto;
   }
+  .dashboard-shell,
+  .dashboard-main,
+  .dashboard-grid,
+  .dashboard-panel,
+  .dashboard-hero,
+  .dog-card-grid.compact,
+  .table-scroll {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .dashboard-panel,
+  .dashboard-hero {
+    overflow: hidden;
+  }
+  .activity-row,
+  .panel-heading,
+  .button-row {
+    min-width: 0;
+  }
+  .activity-row > *,
+  .panel-heading > *,
+  .button-row > * {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
 }
 
 
