@@ -345,8 +345,8 @@ button{width:100%;margin-top:18px;border:0;border-radius:10px;background:var(--g
 <form method="post" action="">
 <input type="hidden" name="csrfmiddlewaretoken" value="${token}">
 ${nextField}
-<label for="id_username">Username</label>
-<input id="id_username" name="username" type="text" autocomplete="username" autofocus required>
+<label for="id_username">Email</label>
+<input id="id_username" name="username" type="email" autocomplete="email" autofocus required>
 <label for="id_password">Password</label>
 <input id="id_password" name="password" type="password" autocomplete="current-password" required>
 <button id="submit" type="submit">Sign in</button>
@@ -539,7 +539,7 @@ async function handleRequest(request, env, ctx) {
   return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
 
-export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, cacheKey, originRequest, timedOriginGet };
+export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, cacheKey, originRequest, timedOriginGet, authWarmingPage };
 
 export default {
   fetch(request, env, ctx) {
