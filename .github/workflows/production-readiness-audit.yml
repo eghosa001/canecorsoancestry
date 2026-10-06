@@ -135,6 +135,47 @@ jobs:
       - run: python manage.py check --deploy
       - run: python scripts/fast_path_guard.py
 
+  production-data-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      DJANGO_DB_SCHEMA: django_app
+      DJANGO_DB_SSLMODE: require
+      DJANGO_DB_EXTRA_SCHEMAS: extensions,public
+      DJANGO_ALLOWED_HOSTS: testserver
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver
+      SITE_URL: https://testserver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Discover production database pooler
+        shell: bash
+        run: |
+          test -n "$SUPABASE_DATABASE_URL"
+          test -n "$DJANGO_SECRET_KEY"
+          target_url="$(python scripts/discover_supabase_session_pooler.py)"
+          echo "::add-mask::$target_url"
+          echo "DATABASE_URL=$target_url" >> "$GITHUB_ENV"
+      - run: python manage.py migrate --check
+      - name: Check canonical production dataset
+        run: |
+          python manage.py shell -c "
+          from registry.models import Dog, Kennel, Litter
+          dogs=Dog.objects.count(); public=Dog.objects.filter(is_public=True).count()
+          kennels=Kennel.objects.count(); litters=Litter.objects.count()
+          assert dogs >= 33000, dogs
+          assert public > 0 and kennels > 0
+          print(f'dogs={dogs} public={public} kennels={kennels} litters={litters}')
+          "
+      - run: python manage.py audit_pedigree_data --fail-on-critical
+
   live-production:
     runs-on: ubuntu-latest
     timeout-minutes: 15
