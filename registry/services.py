@@ -1074,8 +1074,12 @@ def _litter_name(value):
     return litter.code if litter else "Not recorded"
 
 
-def submission_diff(submission):
-    """Return moderator-friendly before/after changes without mutating the target."""
+def submission_diff(submission, *, dog_names=None, litter_names=None):
+    """Return moderator-friendly before/after changes without mutating the target.
+
+    Optional lookup maps let queue/list callers batch-reference related records
+    instead of issuing one lookup query per payload field.
+    """
     payload = submission.payload or {}
     changes = []
 
@@ -1086,6 +1090,16 @@ def submission_diff(submission):
             changes.append(
                 {"field": label, "before": before_text, "after": after_text}
             )
+
+    def dog_name(value):
+        if dog_names is None:
+            return _dog_name(value)
+        return dog_names.get(str(value), "Not recorded") if value else "Not recorded"
+
+    def litter_name(value):
+        if litter_names is None:
+            return _litter_name(value)
+        return litter_names.get(str(value), "Not recorded") if value else "Not recorded"
 
     if submission.kind == Submission.Kind.CORRECTION and submission.dog:
         dog = submission.dog
@@ -1102,14 +1116,14 @@ def submission_diff(submission):
             if field in payload:
                 add(label, getattr(dog, field), payload.get(field))
         if "sire_id" in payload:
-            add("Sire", dog.sire.name if dog.sire else None, _dog_name(payload.get("sire_id")))
+            add("Sire", dog.sire.name if dog.sire else None, dog_name(payload.get("sire_id")))
         if "dam_id" in payload:
-            add("Dam", dog.dam.name if dog.dam else None, _dog_name(payload.get("dam_id")))
+            add("Dam", dog.dam.name if dog.dam else None, dog_name(payload.get("dam_id")))
         if "litter_id" in payload:
             add(
                 "Litter",
                 dog.litter.code if dog.litter else None,
-                _litter_name(payload.get("litter_id")),
+                litter_name(payload.get("litter_id")),
             )
         if "registration" in payload:
             current_registration = dog.registrations.filter(authority__isnull=True).first()
@@ -1142,8 +1156,8 @@ def submission_diff(submission):
     elif submission.kind == Submission.Kind.LITTER_EDIT and submission.litter:
         litter = submission.litter
         add("Code", litter.code, payload.get("code"))
-        add("Sire", litter.sire.name if litter.sire else None, _dog_name(payload.get("sire_id")))
-        add("Dam", litter.dam.name if litter.dam else None, _dog_name(payload.get("dam_id")))
+        add("Sire", litter.sire.name if litter.sire else None, dog_name(payload.get("sire_id")))
+        add("Dam", litter.dam.name if litter.dam else None, dog_name(payload.get("dam_id")))
         add("Date of birth", litter.date_of_birth, payload.get("date_of_birth"))
         add("Country", litter.country, payload.get("country"))
         add("Declared puppy count", litter.declared_puppy_count, payload.get("declared_puppy_count"))
@@ -1167,9 +1181,9 @@ def submission_diff(submission):
         for key, value in payload.items():
             label = key.replace("_id", "").replace("_", " ").title()
             if key in {"sire_id", "dam_id"}:
-                value = _dog_name(value)
+                value = dog_name(value)
             elif key == "litter_id":
-                value = _litter_name(value)
+                value = litter_name(value)
             changes.append(
                 {"field": label, "before": "New record", "after": _display_value(value)}
             )
