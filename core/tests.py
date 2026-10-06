@@ -5,8 +5,9 @@ from django.core.cache import cache
 from django.contrib.staticfiles import finders
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
-from registry.models import Kennel, KennelMembership
+from registry.models import Dog, DogImage, Kennel, KennelMembership
 
 
 class DashboardTests(TestCase):
@@ -23,6 +24,56 @@ class DashboardTests(TestCase):
         response = self.client.get(reverse("dashboard"))
 
         self.assertContains(response, "Custodi Nos")
+
+    def test_dashboard_gives_each_member_action_a_clear_purpose(self):
+        user = get_user_model().objects.create_user(
+            username="structured-member",
+            password="test-pass-123",
+        )
+        kennel = Kennel.objects.create(
+            name="Structured Kennel",
+            slug="structured-kennel",
+            verified_at=timezone.now(),
+        )
+        KennelMembership.objects.create(
+            kennel=kennel,
+            user=user,
+            role=KennelMembership.Role.OWNER,
+        )
+        dog = Dog.objects.create(
+            name="Structured Dog",
+            slug="structured-dog",
+            kennel=kennel,
+            is_public=False,
+        )
+        DogImage.objects.create(
+            dog=dog,
+            image="dogs/private/structured-dog.jpg",
+            is_primary=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "What do you want to do?")
+        self.assertContains(response, "Start dog submission")
+        self.assertContains(response, "Manage existing records")
+        self.assertContains(response, "Track review")
+        self.assertContains(response, "Kennel verified")
+        self.assertContains(response, "Structured Dog")
+        self.assertContains(
+            response,
+            reverse("accounts:submit-image", args=[dog.pk]),
+        )
+        self.assertContains(
+            response,
+            reverse("accounts:submit-correction", args=[dog.pk]),
+        )
+        self.assertContains(
+            response,
+            reverse("accounts:submit-document", args=[dog.pk]),
+        )
 
 
 
