@@ -198,10 +198,17 @@
       <section class="dashboard-panel">
         <div class="panel-heading"><div><p class="eyebrow">Breeding records</p><h2>My litters</h2></div><a class="text-link" href="{% url 'accounts:my-litters' %}">Manage →</a></div>
         {% for litter in litters %}
-          <a class="activity-row" href="{% url 'registry:litter-detail' litter.pk %}">
-            <strong>{{ litter.code }}</strong>
-            <span>{{ litter.date_of_birth|default:"Date not recorded" }}</span>
-          </a>
+          {% if litter.is_public %}
+            <a class="activity-row" href="{% url 'registry:litter-detail' litter.pk %}">
+              <strong>{{ litter.code }}</strong>
+              <span>{{ litter.date_of_birth|default:"Date not recorded" }}</span>
+            </a>
+          {% else %}
+            <div class="activity-row">
+              <strong>{{ litter.code }}</strong>
+              <span>Private · {{ litter.date_of_birth|default:"Date not recorded" }}</span>
+            </div>
+          {% endif %}
         {% empty %}
           <p class="muted">No approved litters recorded yet.</p>
         {% endfor %}
