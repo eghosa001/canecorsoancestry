@@ -151,6 +151,43 @@ class MemberAccessFlowTests(TestCase):
         self.assertContains(response, "first profile photo")
 
 
+    def test_existing_dog_photo_form_shows_target_profile_and_current_photo(self):
+        member = get_user_model().objects.create_user(
+            username="target-photo-member",
+            password="test-pass-123",
+        )
+        kennel = Kennel.objects.create(
+            name="Target Photo Kennel",
+            slug="target-photo-kennel",
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        dog = Dog.objects.create(
+            name="Target Photo Dog",
+            slug="target-photo-dog",
+            kennel=kennel,
+            is_public=True,
+        )
+        DogImage.objects.create(
+            dog=dog,
+            image="dogs/target-photo-dog.jpg",
+            is_primary=True,
+        )
+        self.client.force_login(member)
+
+        response = self.client.get(
+            reverse("accounts:submit-image", args=[dog.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "You are updating")
+        self.assertContains(response, "Target Photo Dog")
+        self.assertContains(response, "/media/dogs/target-photo-dog.jpg")
+        self.assertContains(response, "View current profile")
+
     def test_photo_storage_failure_returns_form_error_instead_of_500(self):
         member = get_user_model().objects.create_user(
             username="upload-error-member",
