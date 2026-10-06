@@ -1,7 +1,12 @@
+from io import BytesIO
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from registry.models import Dog, DogImage, Kennel, KennelMembership, Submission
 
@@ -144,6 +149,57 @@ class MemberAccessFlowTests(TestCase):
         self.assertContains(response, 'enctype="multipart/form-data"')
         self.assertContains(response, 'name="primary_photo"')
         self.assertContains(response, "first profile photo")
+
+
+    def test_photo_storage_failure_returns_form_error_instead_of_500(self):
+        member = get_user_model().objects.create_user(
+            username="upload-error-member",
+            password="test-pass-123",
+        )
+        kennel = Kennel.objects.create(
+            name="Upload Error Kennel",
+            slug="upload-error-kennel",
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        dog = Dog.objects.create(
+            name="Upload Error Dog",
+            slug="upload-error-dog",
+            kennel=kennel,
+            is_public=True,
+        )
+        buffer = BytesIO()
+        Image.new("RGB", (3, 3)).save(buffer, format="JPEG")
+        photo = SimpleUploadedFile(
+            "dog.jpg",
+            buffer.getvalue(),
+            content_type="image/jpeg",
+        )
+        self.client.force_login(member)
+        storage = Submission._meta.get_field("attachment").storage
+
+        with patch.object(storage, "save", side_effect=OSError("gateway unavailable")):
+            response = self.client.post(
+                reverse("accounts:submit-image", args=[dog.pk]),
+                {
+                    "caption": "Portrait",
+                    "is_primary": "on",
+                    "notes": "",
+                    "attachment": photo,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The file could not be stored right now")
+        self.assertFalse(
+            Submission.objects.filter(
+                kind=Submission.Kind.IMAGE,
+                dog=dog,
+            ).exists()
+        )
 
 
 class PopularDogTests(TestCase):
