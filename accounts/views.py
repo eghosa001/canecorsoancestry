@@ -1212,13 +1212,31 @@ def moderation_queue(request):
         duplicate_candidates() if duplicate_scan_loaded else []
     )
 
-    disputes = (
+    disputes = list(
         DisputeCase.objects.filter(
             status__in=[DisputeCase.Status.OPEN, DisputeCase.Status.REVIEWING]
         )
         .select_related("dog", "opened_by", "assigned_to")
         .order_by("status", "created_at")[:50]
     )
+
+    assignee_ids = {
+        obj.assigned_to_id
+        for obj in [*pending_items, *disputes]
+        if obj.assigned_to_id
+    }
+    assignee_labels = {
+        assignment.user_id: assignment.public_label
+        for assignment in ModerationRoleAssignment.objects.filter(
+            user_id__in=assignee_ids
+        ).only("user_id", "admin_number")
+    }
+    for obj in [*pending_items, *disputes]:
+        obj.queue_assignee_label = (
+            assignee_labels.get(obj.assigned_to_id, "Admin")
+            if obj.assigned_to_id
+            else ""
+        )
 
     return render(
         request,
