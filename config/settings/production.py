@@ -42,7 +42,11 @@ STORAGES = {
     },
 }
 
-if not ACCOUNT_EMAIL_ENABLED and EMAIL_BACKEND.endswith("console.EmailBackend"):  # noqa: F405
+if ACCOUNT_EMAIL_ENABLED and EMAIL_BACKEND.endswith("console.EmailBackend"):  # noqa: F405
+    # A configured production mail service must send mail; never log live
+    # verification/password-reset tokens through the console backend.
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+elif not ACCOUNT_EMAIL_ENABLED and EMAIL_BACKEND.endswith("console.EmailBackend"):  # noqa: F405
     # Never write password-reset links/tokens to production logs.
     EMAIL_BACKEND = "django.core.mail.backends.dummy.EmailBackend"
 

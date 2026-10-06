@@ -28,7 +28,7 @@
     })();
   </script>
   <link rel="icon" href="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v46" type="image/svg+xml">
-  <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261004-header-logo-v64">
+  <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261006-tablet-grid-v67">
   <link rel="stylesheet" href="{% static 'core/premium-polish.css' %}?v=20261004-interaction-v49">
   {% block extra_head %}{% endblock %}
 </head>
@@ -134,14 +134,10 @@
       window.addEventListener("scroll", function () {
         closeMobileMenus();
 
-        // Keep an open picker stable while the user is typing or scrolling its
-        // own results. This also avoids iOS visual-viewport scroll dismissals.
-        var active = document.activeElement;
-        if (
-          pickerInteracting ||
-          Date.now() - lastPanelScrollAt < 180 ||
-          (active && active.matches && active.matches("[data-dog-autocomplete]"))
-        ) {
+        // Keep the picker stable only while its own suggestion panel is being
+        // manipulated. A real page scroll should dismiss autocomplete and blur
+        // the field so mobile keyboards do not remain pinned over the page.
+        if (pickerInteracting || Date.now() - lastPanelScrollAt < 180) {
           return;
         }
         dismissSearchUI();

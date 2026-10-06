@@ -1,6 +1,6 @@
 const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
 // Bump this whenever public HTML/static layout assets must invalidate edge cache. Image refresh 2026-10-02. Clean square logo v16.
-const EDGE_CACHE_VERSION = "public-polish-v64"; // Larger supplied dog-head logo and tighter top spacing
+const EDGE_CACHE_VERSION = "public-polish-v66"; // Larger supplied dog-head logo and tighter top spacing
 const CACHE_FRESH_SECONDS = 900;
 const CACHE_RETENTION_SECONDS = 604800;
 const ORIGIN_GRACE_MS = 3500;
@@ -133,6 +133,9 @@ function originRequest(request, env, pathOverride = null) {
   const clientIp = request.headers.get("cf-connecting-ip");
   if (clientIp) headers.set("x-forwarded-for", clientIp);
   headers.set("x-cca-edge", "1");
+  if (env.ORIGIN_EDGE_SECRET) {
+    headers.set("x-cca-origin-secret", env.ORIGIN_EDGE_SECRET);
+  }
 
   const init = {
     method: pathOverride ? "GET" : request.method,
@@ -238,6 +241,8 @@ async function timedOriginGet(env, path, timeoutMs, userAgent, accept) {
       headers: {
         accept,
         "user-agent": userAgent,
+        "x-cca-edge": "1",
+        "x-cca-origin-secret": env.ORIGIN_EDGE_SECRET || "",
       },
       signal: controller.signal,
       redirect: "manual",
@@ -344,8 +349,8 @@ button{width:100%;margin-top:18px;border:0;border-radius:10px;background:var(--g
 <form method="post" action="">
 <input type="hidden" name="csrfmiddlewaretoken" value="${token}">
 ${nextField}
-<label for="id_username">Username</label>
-<input id="id_username" name="username" type="text" autocomplete="username" autofocus required>
+<label for="id_username">Email</label>
+<input id="id_username" name="username" type="email" autocomplete="email" autofocus required>
 <label for="id_password">Password</label>
 <input id="id_password" name="password" type="password" autocomplete="current-password" required>
 <button id="submit" type="submit">Sign in</button>
@@ -538,7 +543,7 @@ async function handleRequest(request, env, ctx) {
   return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
 
-export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, cacheKey, originRequest };
+export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, cacheKey, originRequest, timedOriginGet, authWarmingPage };
 
 export default {
   fetch(request, env, ctx) {

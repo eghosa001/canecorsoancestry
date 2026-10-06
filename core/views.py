@@ -114,7 +114,7 @@ def home(request):
             .distinct()
             .count(),
         }
-        cache.set("cca:home:public-stats:v2", public_stats, 300)
+        cache.set("cca:home:public-stats:v3", public_stats, 300)
 
     public_root = request.build_absolute_uri("/").rstrip("/")
     context = {

@@ -1,11 +1,18 @@
 name: Cloudflare R2 media gateway
 
 on:
+  pull_request:
+    paths:
+      - "src/r2-media.js"
+      - "wrangler.r2.toml"
+      - "scripts/test_r2_media_policy.mjs"
+      - ".github/workflows/cloudflare-media.yml"
   push:
     branches: [main]
     paths:
       - "src/r2-media.js"
       - "wrangler.r2.toml"
+      - "scripts/test_r2_media_policy.mjs"
       - ".github/workflows/cloudflare-media.yml"
   workflow_dispatch:
 
@@ -17,7 +24,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate Worker JavaScript
+        run: node --check src/r2-media.js
+      - name: Test R2 source URL policy
+        run: node scripts/test_r2_media_policy.mjs
+      - name: Validate Worker bundle
+        run: npx --yes wrangler@4 deploy --dry-run --config wrangler.r2.toml
+
   deploy-r2:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:

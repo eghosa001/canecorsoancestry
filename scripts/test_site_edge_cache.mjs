@@ -4,6 +4,7 @@ import {
   hasPrivateCookie,
   isCacheablePublicPath,
   originRequest,
+  timedOriginGet,
 } from "../src/site-edge.js";
 
 const publicUrl = new URL("https://example.test/dogs/example-dog/");
@@ -41,15 +42,50 @@ const suggestionsRequest = new Request(suggestionsUrl, {
 assert.equal(isCacheablePublicPath(suggestionsUrl, suggestionsRequest), true);
 assert.equal(
   cacheKey(trackedRequest).url,
-  "https://example.test/dogs/example-dog/?__cca_edge_v=public-polish-v64",
+  "https://example.test/dogs/example-dog/?__cca_edge_v=public-polish-v66",
 );
 
 console.log("site-edge cache policy tests passed");
 
 const proxied = originRequest(
   new Request("https://example.test/media/dogs/example.jpg"),
-  { ORIGIN_URL: "https://origin.example" },
+  {
+    ORIGIN_URL: "https://origin.example",
+    ORIGIN_EDGE_SECRET: "edge-secret-test",
+  },
 );
 assert.equal(new URL(proxied.url).host, "origin.example");
 assert.equal(proxied.headers.get("x-forwarded-host"), "example.test");
 assert.equal(proxied.headers.get("x-cca-edge"), "1");
+assert.equal(proxied.headers.get("x-cca-origin-secret"), "edge-secret-test");
+
+
+const realFetch = globalThis.fetch;
+let warmupRequest = null;
+globalThis.fetch = async (url, init) => {
+  warmupRequest = { url: String(url), init };
+  return new Response("ok", {
+    status: 200,
+    headers: { "x-request-id": "edge-readiness-test" },
+  });
+};
+try {
+  await timedOriginGet(
+    {
+      ORIGIN_URL: "https://origin.example",
+      ORIGIN_EDGE_SECRET: "edge-secret-test",
+    },
+    "/accounts/login/",
+    1000,
+    "edge-readiness-test",
+    "text/html",
+  );
+  assert.equal(warmupRequest.url, "https://origin.example/accounts/login/");
+  assert.equal(warmupRequest.init.headers["x-cca-edge"], "1");
+  assert.equal(
+    warmupRequest.init.headers["x-cca-origin-secret"],
+    "edge-secret-test",
+  );
+} finally {
+  globalThis.fetch = realFetch;
+}

@@ -7,6 +7,7 @@ from registry.models import (
     Dog,
     Kennel,
     KennelMembership,
+    Litter,
     ModerationAudit,
     Submission,
 )
@@ -221,6 +222,45 @@ class DisputeWorkflowTests(TestCase):
 
 
 class ModerationQueueTests(TestCase):
+    def test_queue_batches_reference_labels(self):
+        staff = get_user_model().objects.create_user(
+            username="queue-batch-reviewer",
+            is_staff=True,
+        )
+        member = get_user_model().objects.create_user(username="queue-batch-member")
+        kennel = Kennel.objects.create(name="Queue Kennel", slug="queue-kennel")
+        sire = Dog.objects.create(name="Queue Sire", slug="queue-sire", sex=Dog.Sex.MALE)
+        dam = Dog.objects.create(name="Queue Dam", slug="queue-dam", sex=Dog.Sex.FEMALE)
+        litter = Litter.objects.create(
+            kennel=kennel,
+            code="QUEUE-LITTER",
+            sire=sire,
+            dam=dam,
+        )
+        Submission.objects.create(
+            kind=Submission.Kind.DOG,
+            submitted_by=member,
+            kennel=kennel,
+            payload={
+                "name": "Queue Dog",
+                "sire_id": str(sire.pk),
+                "dam_id": str(dam.pk),
+                "litter_id": str(litter.pk),
+            },
+        )
+        self.client.force_login(staff)
+
+        response = self.client.get(reverse("accounts:moderation"))
+
+        self.assertEqual(response.status_code, 200)
+        diff = {
+            row["field"]: row["after"]
+            for row in response.context["pending"][0].review_diff
+        }
+        self.assertEqual(diff["Sire"], "Queue Sire")
+        self.assertEqual(diff["Dam"], "Queue Dam")
+        self.assertEqual(diff["Litter"], "QUEUE-LITTER")
+
     def test_queue_prioritises_urgent_items(self):
         staff = get_user_model().objects.create_user(
             username="queue-reviewer", password="test-pass-123", is_staff=True

@@ -104,4 +104,4 @@ class DataHealthDashboardTests(TestCase):
         )
         self.client.force_login(member)
         response = self.client.get(reverse("accounts:data-health"))
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 403)

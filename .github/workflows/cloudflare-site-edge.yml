@@ -61,6 +61,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 19a03bec57c0277e01e1e70e241576af
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -72,13 +73,23 @@ jobs:
       - name: Validate Cloudflare token
         shell: bash
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error::Missing secret: CLOUDFLARE_API_TOKEN"
-            exit 1
-          fi
+          missing=0
+          for name in CLOUDFLARE_API_TOKEN DJANGO_SECRET_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing secret: $name"
+              missing=1
+            else
+              echo "::add-mask::${!name}"
+            fi
+          done
+          exit "$missing"
+
+      - name: Build Worker secret file
+        run: |
+          python -c 'import json, os; open("/tmp/site-edge-secrets.json", "w", encoding="utf-8").write(json.dumps({"ORIGIN_EDGE_SECRET": os.environ["DJANGO_SECRET_KEY"]}))'
 
       - name: Deploy site edge
-        run: npx --yes wrangler@4 deploy --config wrangler.site.toml
+        run: npx --yes wrangler@4 deploy --config wrangler.site.toml --secrets-file /tmp/site-edge-secrets.json
 
       - name: Verify public workers.dev edge and fast warm-up response
         shell: bash
@@ -105,7 +116,9 @@ jobs:
           fi
           grep -q 'data-ui-version="customer-v49"' /tmp/edge-page.html
           grep -q 'cane-corso-head-logo-right.webp' /tmp/edge-page.html
-          grep -q '20261004-headlogo-v64' /tmp/edge-page.html\n          grep -q 'premium-polish.css?v=20261004-interaction-v49' /tmp/edge-page.html
+          grep -q '20261004-headlogo-v64' /tmp/edge-page.html
+          grep -q 'premium-polish.css?v=20261004-interaction-v49' /tmp/edge-page.html
+          grep -q 'site.css?v=20261006-tablet-grid-v67' /tmp/edge-page.html
           logo_status="$(curl --connect-timeout 4 --max-time 8 -sS -o /tmp/live-logo.webp -w '%{http_code}' "$base/static/core/cane-corso-head-logo-right.webp?v=20261004-headlogo-v64" || true)"
           if [ "$logo_status" != "200" ] || [ ! -s /tmp/live-logo.webp ]; then
             echo "::error::New live logo asset is not being served; HTTP $logo_status"
@@ -173,7 +186,14 @@ jobs:
             sleep 3
           done
 
-          echo "Site edge, auth-first login UI, and readiness checks are healthy."
+          origin="https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
+          bypass_status="$(curl --connect-timeout 4 --max-time 10 -sS -H 'X-CCA-Edge: 1' -o /dev/null -w '%{http_code}' "$origin/statistics/" || true)"
+          if [ "$bypass_status" != "308" ]; then
+            echo "::error::Direct origin accepted an unauthenticated edge marker; HTTP $bypass_status"
+            exit 1
+          fi
+
+          echo "Site edge, authenticated origin path, auth-first login UI, and readiness checks are healthy."
 
 
       - name: Virtual mating concurrency probe
@@ -338,4 +358,4 @@ jobs:
 
       - name: Clean temporary files
         if: always()
-        run: rm -f /tmp/edge-health.json /tmp/edge-page.html /tmp/auth-headers.txt /tmp/auth-page.html /tmp/auth-ready.json /tmp/live-logo.webp /tmp/kennels-page.html /tmp/virtual-mating.html /tmp/male-suggestions.json /tmp/female-suggestions.json
+        run: rm -f /tmp/site-edge-secrets.json /tmp/edge-health.json /tmp/edge-page.html /tmp/auth-headers.txt /tmp/auth-page.html /tmp/auth-ready.json /tmp/live-logo.webp /tmp/kennels-page.html /tmp/virtual-mating.html /tmp/male-suggestions.json /tmp/female-suggestions.json

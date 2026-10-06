@@ -9,12 +9,13 @@ from django.conf import settings
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.views import PasswordResetView
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -146,6 +147,23 @@ def _send_verification_email(request, user):
         [user.email],
         fail_silently=False,
     )
+
+
+class AccountPasswordResetView(PasswordResetView):
+    """Do not pretend recovery email was sent when outbound mail is unavailable."""
+
+    template_name = "registration/password_reset_form.html"
+    email_template_name = "registration/password_reset_email.html"
+    subject_template_name = "registration/password_reset_subject.txt"
+
+    def form_valid(self, form):
+        if not settings.ACCOUNT_EMAIL_ENABLED:
+            form.add_error(
+                None,
+                "Password-reset email is temporarily unavailable. Please contact an administrator for account recovery.",
+            )
+            return self.form_invalid(form)
+        return super().form_valid(form)
 
 
 def signup(request):
@@ -282,10 +300,15 @@ def submission_list(request):
     submissions = request.user.ancestry_submissions.select_related(
         "dog", "kennel", "litter", "document", "reviewed_by", "payment_link__payment"
     )
+    paginator = Paginator(submissions, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
     return render(
         request,
         "accounts/submission_list.html",
-        {"submissions": submissions},
+        {
+            "submissions": page_obj.object_list,
+            "page_obj": page_obj,
+        },
     )
 
 
@@ -1030,18 +1053,25 @@ def documents(request):
     elif visibility == "private":
         items = items.filter(is_public=False)
 
+    paginator = Paginator(items, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    visible_items = page_obj.object_list
     pending_visibility_ids = set(
         Submission.objects.filter(
             kind=Submission.Kind.DOCUMENT_VISIBILITY,
             status=Submission.Status.PENDING,
-            document__in=items,
+            document__in=visible_items,
         ).values_list("document_id", flat=True)
     )
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
     return render(
         request,
         "accounts/documents.html",
         {
-            "documents": items,
+            "documents": visible_items,
+            "page_obj": page_obj,
+            "querystring": query_params.urlencode(),
             "document_types": DogDocument.DocumentType.choices,
             "selected_type": document_type,
             "selected_visibility": visibility,
@@ -1059,7 +1089,16 @@ def notifications(request):
         )
         return redirect("accounts:notifications")
     items = request.user.ancestry_notifications.all()
-    return render(request, "accounts/notifications.html", {"notifications": items})
+    paginator = Paginator(items, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(
+        request,
+        "accounts/notifications.html",
+        {
+            "notifications": page_obj.object_list,
+            "page_obj": page_obj,
+        },
+    )
 
 
 @login_required
@@ -1067,16 +1106,24 @@ def moderation_queue(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
 
-    pending = Submission.objects.filter(
-        status=Submission.Status.PENDING
-    ).select_related(
-        "submitted_by",
-        "dog",
-        "kennel",
-        "litter",
-        "document",
-        "assigned_to",
-        "payment_link__payment",
+    pending = (
+        Submission.objects.filter(status=Submission.Status.PENDING)
+        .select_related(
+            "submitted_by",
+            "dog",
+            "kennel",
+            "litter",
+            "document",
+            "assigned_to",
+            "payment_link__payment",
+        )
+        .prefetch_related(
+            Prefetch(
+                "verification_findings",
+                queryset=VerificationFinding.objects.filter(is_current=True).select_related("rule"),
+                to_attr="current_verification_findings",
+            )
+        )
     )
 
     query = request.GET.get("q", "").strip()
@@ -1112,11 +1159,43 @@ def moderation_queue(request):
     query_params = request.GET.copy()
     query_params.pop("page", None)
 
+    dog_reference_ids = set()
+    litter_reference_ids = set()
     for item in pending_items:
-        item.review_diff = submission_diff(item)
+        payload = item.payload or {}
+        for key in ("sire_id", "dam_id"):
+            value = payload.get(key)
+            if not value:
+                continue
+            try:
+                dog_reference_ids.add(uuid.UUID(str(value)))
+            except (TypeError, ValueError, AttributeError):
+                pass
+        value = payload.get("litter_id")
+        if value:
+            try:
+                litter_reference_ids.add(uuid.UUID(str(value)))
+            except (TypeError, ValueError, AttributeError):
+                pass
+
+    dog_names = {
+        str(pk): name
+        for pk, name in Dog.objects.filter(pk__in=dog_reference_ids).values_list("pk", "name")
+    }
+    litter_names = {
+        str(pk): code
+        for pk, code in Litter.objects.filter(pk__in=litter_reference_ids).values_list("pk", "code")
+    }
+
+    for item in pending_items:
+        item.review_diff = submission_diff(
+            item,
+            dog_names=dog_names,
+            litter_names=litter_names,
+        )
         item.current_findings = [
             finding
-            for finding in current_findings(item)
+            for finding in getattr(item, "current_verification_findings", ())
             if finding.risk_level != SubmissionRiskLevel.GREEN
         ]
         age_days = max(0, (timezone.now() - item.created_at).days)
@@ -1154,13 +1233,31 @@ def moderation_queue(request):
         duplicate_candidates() if duplicate_scan_loaded else []
     )
 
-    disputes = (
+    disputes = list(
         DisputeCase.objects.filter(
             status__in=[DisputeCase.Status.OPEN, DisputeCase.Status.REVIEWING]
         )
         .select_related("dog", "opened_by", "assigned_to")
         .order_by("status", "created_at")[:50]
     )
+
+    assignee_ids = {
+        obj.assigned_to_id
+        for obj in [*pending_items, *disputes]
+        if obj.assigned_to_id
+    }
+    assignee_labels = {
+        assignment.user_id: assignment.public_label
+        for assignment in ModerationRoleAssignment.objects.filter(
+            user_id__in=assignee_ids
+        ).only("user_id", "admin_number")
+    }
+    for obj in [*pending_items, *disputes]:
+        obj.queue_assignee_label = (
+            assignee_labels.get(obj.assigned_to_id, "Admin")
+            if obj.assigned_to_id
+            else ""
+        )
 
     return render(
         request,
@@ -1495,17 +1592,19 @@ def my_pedigrees(request):
     dogs = _member_dogs(request.user).select_related(
         "kennel", "sire", "dam"
     ).order_by("name")
+    paginator = Paginator(dogs, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
     rows = [
         {
             "dog": dog,
             "parent_count": int(bool(dog.sire_id)) + int(bool(dog.dam_id)),
         }
-        for dog in dogs
+        for dog in page_obj.object_list
     ]
     return render(
         request,
         "accounts/my_pedigrees.html",
-        {"rows": rows},
+        {"rows": rows, "page_obj": page_obj},
     )
 
 
@@ -1590,11 +1689,14 @@ def my_litters(request):
         .select_related("kennel", "sire", "dam")
         .order_by("-date_of_birth", "code")
     )
+    paginator = Paginator(litters, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
     return render(
         request,
         "accounts/my_litters.html",
         {
-            "litters": litters,
+            "litters": page_obj.object_list,
+            "page_obj": page_obj,
             "editable_kennel_ids": editable_kennel_ids,
             "can_create_litter": bool(editable_kennel_ids),
         },
@@ -1810,10 +1912,33 @@ def my_disputes(request):
     disputes = request.user.opened_ancestry_disputes.select_related(
         "dog", "assigned_to", "closed_by"
     )
+    paginator = Paginator(disputes, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    visible_disputes = list(page_obj.object_list)
+    assignee_ids = {
+        dispute.assigned_to_id
+        for dispute in visible_disputes
+        if dispute.assigned_to_id
+    }
+    assignee_labels = {
+        assignment.user_id: assignment.public_label
+        for assignment in ModerationRoleAssignment.objects.filter(
+            user_id__in=assignee_ids
+        ).only("user_id", "admin_number")
+    }
+    for dispute in visible_disputes:
+        dispute.member_assignee_label = (
+            assignee_labels.get(dispute.assigned_to_id, "Admin")
+            if dispute.assigned_to_id
+            else ""
+        )
     return render(
         request,
         "accounts/my_disputes.html",
-        {"disputes": disputes},
+        {
+            "disputes": visible_disputes,
+            "page_obj": page_obj,
+        },
     )
 
 
