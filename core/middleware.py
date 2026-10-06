@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import logging
 import time
 import uuid
@@ -38,9 +39,15 @@ class RequestSecurityMiddleware:
 
     def __call__(self, request):
         host = request.get_host().split(":", 1)[0].lower()
+        edge_marker = request.headers.get("X-CCA-Edge") == "1"
+        edge_secret = request.headers.get("X-CCA-Origin-Secret", "")
+        trusted_edge_request = edge_marker and bool(edge_secret) and hmac.compare_digest(
+            edge_secret,
+            settings.SECRET_KEY,
+        )
         is_direct_origin_request = (
             (host.endswith(".onrender.com") or host.endswith(".code.run"))
-            and request.headers.get("X-CCA-Edge") != "1"
+            and not trusted_edge_request
             and request.path != "/healthz/"
         )
         if is_direct_origin_request:
