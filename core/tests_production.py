@@ -54,6 +54,28 @@ class ProductionSurfaceTests(TestCase):
         self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow, noarchive")
         self.assertIn("no-store", response["Cache-Control"])
 
+    @override_settings(SITE_URL="https://canecorsoancestry.example")
+    def test_direct_origin_rejects_spoofed_edge_marker(self):
+        response = self.client.get(
+            reverse("home"),
+            HTTP_HOST="origin.code.run",
+            HTTP_X_CCA_EDGE="1",
+        )
+        self.assertEqual(response.status_code, 308)
+        self.assertTrue(response["Location"].startswith("https://canecorsoancestry.example/"))
+
+    @override_settings(SITE_URL="https://canecorsoancestry.example")
+    def test_direct_origin_accepts_authenticated_edge_request(self):
+        from django.conf import settings
+
+        response = self.client.get(
+            reverse("home"),
+            HTTP_HOST="origin.code.run",
+            HTTP_X_CCA_EDGE="1",
+            HTTP_X_CCA_ORIGIN_SECRET=settings.SECRET_KEY,
+        )
+        self.assertEqual(response.status_code, 200)
+
     def test_moderation_requires_staff(self):
         user = get_user_model().objects.create_user(username="ordinary", password="test-pass-123")
         self.client.force_login(user)
