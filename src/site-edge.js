@@ -133,6 +133,9 @@ function originRequest(request, env, pathOverride = null) {
   const clientIp = request.headers.get("cf-connecting-ip");
   if (clientIp) headers.set("x-forwarded-for", clientIp);
   headers.set("x-cca-edge", "1");
+  if (env.ORIGIN_EDGE_SECRET) {
+    headers.set("x-cca-origin-secret", env.ORIGIN_EDGE_SECRET);
+  }
 
   const init = {
     method: pathOverride ? "GET" : request.method,
@@ -239,6 +242,7 @@ async function timedOriginGet(env, path, timeoutMs, userAgent, accept) {
         accept,
         "user-agent": userAgent,
         "x-cca-edge": "1",
+        "x-cca-origin-secret": env.ORIGIN_EDGE_SECRET || "",
       },
       signal: controller.signal,
       redirect: "manual",
