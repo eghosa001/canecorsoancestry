@@ -238,6 +238,7 @@ jobs:
               targets+=("accounts.tests_payments")
               scoped_accounts=true
             fi
+
             if grep -Eq '^accounts/(forms\.py|views\.py|tests_member_access\.py)
             if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
               targets+=("accounts.tests_moderation_intelligence")
