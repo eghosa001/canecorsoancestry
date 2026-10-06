@@ -6,6 +6,7 @@ from django.contrib.sitemaps.views import index as sitemap_index, sitemap as sit
 from django.urls import include, path
 
 from accounts.forms import EmailAuthenticationForm
+from accounts.views import AccountPasswordResetView
 from core.media_views import media_file
 from core.sitemaps import SITEMAPS
 from core.views import dashboard, healthz, home, robots_txt
@@ -32,6 +33,11 @@ urlpatterns = [
         "accounts/login/",
         LoginView.as_view(authentication_form=EmailAuthenticationForm),
         name="login",
+    ),
+    path(
+        "accounts/password_reset/",
+        AccountPasswordResetView.as_view(),
+        name="password_reset",
     ),
     path("accounts/", include("django.contrib.auth.urls")),
     path("member/", include("accounts.urls")),
