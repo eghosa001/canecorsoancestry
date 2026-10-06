@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.views import PasswordResetView
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
@@ -146,6 +147,23 @@ def _send_verification_email(request, user):
         [user.email],
         fail_silently=False,
     )
+
+
+class AccountPasswordResetView(PasswordResetView):
+    """Do not pretend recovery email was sent when outbound mail is unavailable."""
+
+    template_name = "registration/password_reset_form.html"
+    email_template_name = "registration/password_reset_email.html"
+    subject_template_name = "registration/password_reset_subject.txt"
+
+    def form_valid(self, form):
+        if not settings.ACCOUNT_EMAIL_ENABLED:
+            form.add_error(
+                None,
+                "Password-reset email is temporarily unavailable. Please contact an administrator for account recovery.",
+            )
+            return self.form_invalid(form)
+        return super().form_valid(form)
 
 
 def signup(request):
