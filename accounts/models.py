@@ -71,7 +71,7 @@ class SubmissionPayment(models.Model):
         if package == cls.Package.MULTI_DOG:
             return 150_000
         if package == cls.Package.LITTER:
-            return 20_000
+            return 100_000
         raise ValidationError("Unknown submission package.")
 
     @property
