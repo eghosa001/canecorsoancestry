@@ -211,6 +211,21 @@ class DogSubmissionForm(forms.Form):
     )
     litter = forms.ModelChoiceField(queryset=Litter.objects.none(), required=False)
     bio = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 4}))
+    primary_photo = forms.FileField(
+        required=False,
+        label="Primary photo",
+        validators=[
+            FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
+            validate_image_upload,
+        ],
+        help_text="Optional. JPG, PNG or WebP, up to 10 MB. This becomes the dog's first profile photo after approval.",
+    )
+    photo_caption = forms.CharField(
+        max_length=220,
+        required=False,
+        label="Photo caption",
+        help_text="Optional caption for the submitted primary photo.",
+    )
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
 
     def __init__(self, *args, user=None, kennel=None, **kwargs):
@@ -303,6 +318,20 @@ class LitterPuppySubmissionForm(forms.Form):
         help_text="Optional. Kept for private identity verification.",
     )
     bio = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 4}))
+    primary_photo = forms.FileField(
+        required=False,
+        label="Primary photo",
+        validators=[
+            FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
+            validate_image_upload,
+        ],
+        help_text="Optional. JPG, PNG or WebP, up to 10 MB. It becomes the puppy's first profile photo after approval.",
+    )
+    photo_caption = forms.CharField(
+        max_length=220,
+        required=False,
+        label="Photo caption",
+    )
     notes = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={"rows": 3}),
@@ -391,10 +420,12 @@ class DogCorrectionForm(forms.ModelForm):
 
 class DogImageSubmissionForm(forms.Form):
     attachment = forms.FileField(
+        label="Photo",
         validators=[
             FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
             validate_image_upload,
-        ]
+        ],
+        help_text="JPG, PNG or WebP, up to 10 MB.",
     )
     caption = forms.CharField(max_length=220, required=False)
     is_primary = forms.BooleanField(required=False)
