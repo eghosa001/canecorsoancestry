@@ -108,17 +108,24 @@ jobs:
             sleep 5
           done
 
-          page_status="$(curl --connect-timeout 4 --max-time 8 -sS -H 'Accept: text/html' -o /tmp/edge-page.html -w '%{http_code}' "$base/" || true)"
-          if [ "$page_status" != "200" ]; then
-            echo "::error::Site edge did not return a usable page quickly; HTTP $page_status"
-            cat /tmp/edge-page.html 2>/dev/null || true
-            exit 1
-          fi
-          grep -q 'data-ui-version="customer-v49"' /tmp/edge-page.html
-          grep -q 'cane-corso-head-logo-right.webp' /tmp/edge-page.html
-          grep -q '20261004-headlogo-v64' /tmp/edge-page.html
-          grep -q 'premium-polish.css?v=20261004-interaction-v49' /tmp/edge-page.html
-          grep -q 'site.css?v=20261006-tablet-grid-v67' /tmp/edge-page.html
+          page_status=""
+          for attempt in $(seq 1 30); do
+            page_status="$(curl --connect-timeout 4 --max-time 8 -sS -H 'Accept: text/html' -o /tmp/edge-page.html -w '%{http_code}' "$base/" || true)"
+            if [ "$page_status" = "200" ] &&
+               grep -q 'data-ui-version="customer-v49"' /tmp/edge-page.html &&
+               grep -q 'cane-corso-head-logo-right.webp' /tmp/edge-page.html &&
+               grep -q '20261004-headlogo-v64' /tmp/edge-page.html &&
+               grep -q 'premium-polish.css?v=20261004-interaction-v49' /tmp/edge-page.html &&
+               grep -q 'site.css?v=20261006-tablet-grid-v67' /tmp/edge-page.html; then
+              break
+            fi
+            if [ "$attempt" = "30" ]; then
+              echo "::error::Site edge did not expose the expected deployed UI version; HTTP $page_status"
+              cat /tmp/edge-page.html 2>/dev/null || true
+              exit 1
+            fi
+            sleep 5
+          done
           logo_status="$(curl --connect-timeout 4 --max-time 8 -sS -o /tmp/live-logo.webp -w '%{http_code}' "$base/static/core/cane-corso-head-logo-right.webp?v=20261004-headlogo-v64" || true)"
           if [ "$logo_status" != "200" ] || [ ! -s /tmp/live-logo.webp ]; then
             echo "::error::New live logo asset is not being served; HTTP $logo_status"
