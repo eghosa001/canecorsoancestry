@@ -338,6 +338,14 @@
               });
             } else {
               item.href = "/dogs/" + encodeURIComponent(dog.slug) + "/?source=search";
+              item.addEventListener("click", function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                var target = item.href;
+                close();
+                input.blur();
+                window.location.assign(target);
+              });
             }
 
             var title = document.createElement("strong");
