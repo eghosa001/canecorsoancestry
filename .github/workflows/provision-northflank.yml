@@ -329,7 +329,7 @@ jobs:
           for path in "/healthz/" "/dogs/?q=Branco+Custodi+Nos" "/statistics/"; do
             status=""
             for attempt in $(seq 1 18); do
-              status="$(curl --connect-timeout 10 --max-time 30 -sS -H 'X-CCA-Edge: 1' -o /tmp/nf-response -w '%{http_code}' "$origin$path" || true)"
+              status="$(curl --connect-timeout 10 --max-time 30 -sS -H 'X-CCA-Edge: 1' -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" -o /tmp/nf-response -w '%{http_code}' "$origin$path" || true)"
               [ "$status" = "200" ] && break
               sleep 5
             done
