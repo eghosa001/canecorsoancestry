@@ -214,6 +214,9 @@ class DogSubmissionForm(forms.Form):
     primary_photo = forms.FileField(
         required=False,
         label="Primary photo",
+        widget=forms.ClearableFileInput(
+            attrs={"accept": "image/jpeg,image/png,image/webp"}
+        ),
         validators=[
             FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
             validate_image_upload,
@@ -321,6 +324,9 @@ class LitterPuppySubmissionForm(forms.Form):
     primary_photo = forms.FileField(
         required=False,
         label="Primary photo",
+        widget=forms.ClearableFileInput(
+            attrs={"accept": "image/jpeg,image/png,image/webp"}
+        ),
         validators=[
             FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
             validate_image_upload,
@@ -421,6 +427,9 @@ class DogCorrectionForm(forms.ModelForm):
 class DogImageSubmissionForm(forms.Form):
     attachment = forms.FileField(
         label="Photo",
+        widget=forms.ClearableFileInput(
+            attrs={"accept": "image/jpeg,image/png,image/webp"}
+        ),
         validators=[
             FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
             validate_image_upload,
@@ -436,6 +445,9 @@ class DogDocumentSubmissionForm(forms.Form):
     title = forms.CharField(max_length=220)
     document_type = forms.ChoiceField(choices=DogDocument.DocumentType.choices)
     attachment = forms.FileField(
+        widget=forms.ClearableFileInput(
+            attrs={"accept": "application/pdf,image/jpeg,image/png,image/webp"}
+        ),
         validators=[
             FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
             validate_document_upload,
@@ -516,6 +528,9 @@ class ReviewSubmissionForm(forms.Form):
 class SubmissionEvidenceForm(forms.Form):
     evidence_type = forms.ChoiceField(choices=SubmissionEvidence.EvidenceType.choices)
     file = forms.FileField(
+        widget=forms.ClearableFileInput(
+            attrs={"accept": "application/pdf,image/jpeg,image/png,image/webp"}
+        ),
         validators=[
             FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
             validate_document_upload,

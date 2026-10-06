@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
-from registry.models import Dog, DogImage, Kennel, KennelMembership, Submission
+from registry.models import Dog, DogImage, DogSource, Kennel, KennelMembership, Submission
 
 from .models import PaymentSubmissionLink, SubmissionPayment
 from registry.services import approve_submission
@@ -187,6 +187,51 @@ class MemberAccessFlowTests(TestCase):
         self.assertContains(response, "Target Photo Dog")
         self.assertContains(response, "/media/dogs/target-photo-dog.jpg")
         self.assertContains(response, "View current profile")
+
+    def test_existing_dog_photo_form_uses_public_source_photo_fallback(self):
+        member = get_user_model().objects.create_user(
+            username="source-photo-member",
+            password="test-pass-123",
+        )
+        kennel = Kennel.objects.create(
+            name="Source Photo Kennel",
+            slug="source-photo-kennel",
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        dog = Dog.objects.create(
+            name="Source Photo Dog",
+            slug="source-photo-dog",
+            kennel=kennel,
+            is_public=True,
+        )
+        source_url = (
+            "https://www.canecorsopedigree.com/"
+            "static/images/animal/123/source-photo.jpg"
+        )
+        DogSource.objects.create(
+            dog=dog,
+            source_type=DogSource.SourceType.PEDIGREE,
+            title="Archived pedigree source",
+            raw_payload={"image_url": source_url},
+        )
+        self.client.force_login(member)
+
+        response = self.client.get(
+            reverse("accounts:submit-image", args=[dog.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, source_url)
+        self.assertNotContains(response, "No approved photo yet")
+        self.assertContains(
+            response,
+            'accept="image/jpeg,image/png,image/webp"',
+            html=False,
+        )
 
     def test_photo_storage_failure_returns_form_error_instead_of_500(self):
         member = get_user_model().objects.create_user(

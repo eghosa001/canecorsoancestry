@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import urllib.error
+from urllib.parse import urlparse
 import uuid
 
 from django.contrib import messages
@@ -32,6 +33,8 @@ from registry.models import (
     DisputeCase,
     Dog,
     DogDocument,
+    DogImage,
+    DogSource,
     EvidenceRequest,
     Kennel,
     Litter,
@@ -125,6 +128,36 @@ def _upload_sha256(upload):
         digest.update(chunk)
     upload.seek(0)
     return digest.hexdigest()
+
+
+def _current_dog_photo_url(dog):
+    """Return the same best available photo members see on the public profile."""
+    managed = (
+        DogImage.objects.filter(dog=dog)
+        .order_by("-is_primary", "sort_order", "created_at")
+        .first()
+    )
+    if managed and managed.image:
+        return managed.image.url
+
+    for source in DogSource.objects.filter(dog=dog).order_by(
+        "-verified_at", "-created_at"
+    ):
+        payload = source.raw_payload if isinstance(source.raw_payload, dict) else {}
+        image_url = str(payload.get("image_url") or "").strip()
+        if not image_url:
+            continue
+        parsed = urlparse(image_url)
+        if (
+            parsed.scheme == "https"
+            and parsed.hostname in {"canecorsopedigree.com", "www.canecorsopedigree.com"}
+            and parsed.path.startswith("/static/images/animal/")
+            and not parsed.username
+            and not parsed.password
+            and parsed.port in (None, 443)
+        ):
+            return image_url
+    return ""
 
 
 def _add_upload_storage_error(form, field_name, exc):
@@ -901,6 +934,7 @@ def submit_correction(request, pk):
             "form": form,
             "eyebrow": "Correction",
             "title": f"Suggest changes to {dog.name}",
+            "current_photo_url": _current_dog_photo_url(dog),
             "intro": "Your edit is reviewed before the canonical pedigree record changes.",
             "button_label": "Submit correction",
             "dog": dog,
@@ -950,6 +984,7 @@ def submit_image(request, pk):
             "form": form,
             "eyebrow": "Dog media",
             "title": f"Submit a photo for {dog.name}",
+            "current_photo_url": _current_dog_photo_url(dog),
             "intro": "Original uploads are retained; approved photos are attached to the canonical dog.",
             "button_label": "Submit photo",
             "multipart": True,
@@ -995,6 +1030,7 @@ def submit_document(request, pk):
             "form": form,
             "eyebrow": "Evidence",
             "title": f"Submit a document for {dog.name}",
+            "current_photo_url": _current_dog_photo_url(dog),
             "intro": "Pedigree, health, DNA and external-registration evidence can be reviewed here.",
             "button_label": "Submit document",
             "multipart": True,
