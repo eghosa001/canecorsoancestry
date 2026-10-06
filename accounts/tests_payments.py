@@ -67,7 +67,7 @@ class PaidSubmissionTests(TestCase):
             user=self.user,
         )
         self.assertTrue(litter_form.is_valid(), litter_form.errors)
-        self.assertEqual(litter_form.cleaned_data["amount_kobo"], 20000)
+        self.assertEqual(litter_form.cleaned_data["amount_kobo"], 100000)
 
     def test_payment_start_fails_safely_without_paystack_configuration(self):
         self.client.force_login(self.user)
