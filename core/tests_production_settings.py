@@ -31,6 +31,7 @@ from django.conf import settings
 
 print(settings.DATABASES["default"]["OPTIONS"])
 print(settings.STORAGES["default"]["BACKEND"])
+print(settings.EMAIL_BACKEND)
 """
         return subprocess.run(
             [sys.executable, "-c", script],
@@ -48,6 +49,24 @@ print(settings.STORAGES["default"]["BACKEND"])
         self.assertIn("'sslmode': 'require'", result.stdout)
         self.assertIn(
             "django.core.files.storage.FileSystemStorage",
+            result.stdout,
+        )
+
+    def test_configured_account_email_uses_smtp_not_console(self):
+        env = self._production_env()
+        env.update(
+            {
+                "ACCOUNT_EMAIL_ENABLED": "1",
+                "EMAIL_BACKEND": "django.core.mail.backends.console.EmailBackend",
+                "EMAIL_HOST": "smtp.example.com",
+                "EMAIL_HOST_USER": "mailer@example.com",
+                "EMAIL_HOST_PASSWORD": "test-password",
+            }
+        )
+        result = self._run_settings_probe(env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(
+            "django.core.mail.backends.smtp.EmailBackend",
             result.stdout,
         )
 
