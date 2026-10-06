@@ -22,6 +22,30 @@ assert.equal(
   ),
   true,
 );
+assert.equal(
+  shouldWaitForOrigin(
+    new Request(publicUrl, {
+      headers: {
+        accept: "text/html",
+        cookie: "sessionid=authenticated-session",
+      },
+    }),
+    false,
+  ),
+  true,
+);
+assert.equal(
+  shouldWaitForOrigin(
+    new Request("https://example.test/dashboard/", {
+      headers: {
+        accept: "text/html",
+        cookie: "sessionid=authenticated-session",
+      },
+    }),
+    false,
+  ),
+  true,
+);
 
 const sessionRequest = new Request(publicUrl, {
   headers: { cookie: "sessionid=authenticated-session; csrftoken=token" },
