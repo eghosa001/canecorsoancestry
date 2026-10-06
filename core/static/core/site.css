@@ -4815,6 +4815,9 @@ html[data-theme="dark"] .mobile-nav-panel {
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
+  .dog-card-grid.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .dashboard-wide {
     grid-column: auto;
   }
