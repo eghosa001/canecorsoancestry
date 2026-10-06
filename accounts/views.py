@@ -353,41 +353,45 @@ def submission_evidence_upload(request, pk):
             digest.update(chunk)
         upload.seek(0)
 
-        with transaction.atomic():
-            evidence = SubmissionEvidence.objects.create(
-                submission=submission,
-                evidence_request=open_request,
-                evidence_type=form.cleaned_data["evidence_type"],
-                file=upload,
-                uploaded_by=request.user,
-                note=form.cleaned_data["note"],
-                sha256=digest.hexdigest(),
+        try:
+            with transaction.atomic():
+                evidence = SubmissionEvidence.objects.create(
+                    submission=submission,
+                    evidence_request=open_request,
+                    evidence_type=form.cleaned_data["evidence_type"],
+                    file=upload,
+                    uploaded_by=request.user,
+                    note=form.cleaned_data["note"],
+                    sha256=digest.hexdigest(),
+                )
+                if open_request:
+                    open_request.status = EvidenceRequest.Status.FULFILLED
+                    open_request.fulfilled_at = timezone.now()
+                    open_request.save(update_fields=("status", "fulfilled_at"))
+                verify_submission(submission)
+                record_audit(
+                    action=ModerationAudit.Action.EVIDENCE_UPLOADED,
+                    actor=request.user,
+                    dog=submission.dog,
+                    kennel=submission.kennel,
+                    litter=submission.litter,
+                    submission=submission,
+                    summary={
+                        "evidence_id": str(evidence.pk),
+                        "evidence_type": evidence.evidence_type,
+                        "sha256": evidence.sha256,
+                        "private": True,
+                    },
+                    note=form.cleaned_data["note"],
+                )
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "file", exc)
+        else:
+            messages.success(
+                request,
+                "Verification evidence uploaded privately. It is not published on the public dog profile.",
             )
-            if open_request:
-                open_request.status = EvidenceRequest.Status.FULFILLED
-                open_request.fulfilled_at = timezone.now()
-                open_request.save(update_fields=("status", "fulfilled_at"))
-            verify_submission(submission)
-            record_audit(
-                action=ModerationAudit.Action.EVIDENCE_UPLOADED,
-                actor=request.user,
-                dog=submission.dog,
-                kennel=submission.kennel,
-                litter=submission.litter,
-                submission=submission,
-                summary={
-                    "evidence_id": str(evidence.pk),
-                    "evidence_type": evidence.evidence_type,
-                    "sha256": evidence.sha256,
-                    "private": True,
-                },
-                note=form.cleaned_data["note"],
-            )
-        messages.success(
-            request,
-            "Verification evidence uploaded privately. It is not published on the public dog profile.",
-        )
-        return redirect("accounts:submissions")
+            return redirect("accounts:submissions")
 
     return render(
         request,
@@ -917,22 +921,26 @@ def submit_image(request, pk):
         for chunk in upload.chunks():
             digest.update(chunk)
         upload.seek(0)
-        submission = Submission.objects.create(
-            kind=Submission.Kind.IMAGE,
-            submitted_by=request.user,
-            dog=dog,
-            kennel=dog.kennel,
-            payload={
-                "caption": form.cleaned_data["caption"],
-                "is_primary": form.cleaned_data["is_primary"],
-                "sha256": digest.hexdigest(),
-            },
-            attachment=upload,
-            notes=form.cleaned_data["notes"],
-        )
-        verify_submission(submission)
-        messages.success(request, "Photo submitted for review.")
-        return redirect("accounts:submissions")
+        try:
+            submission = Submission.objects.create(
+                kind=Submission.Kind.IMAGE,
+                submitted_by=request.user,
+                dog=dog,
+                kennel=dog.kennel,
+                payload={
+                    "caption": form.cleaned_data["caption"],
+                    "is_primary": form.cleaned_data["is_primary"],
+                    "sha256": digest.hexdigest(),
+                },
+                attachment=upload,
+                notes=form.cleaned_data["notes"],
+            )
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "attachment", exc)
+        else:
+            verify_submission(submission)
+            messages.success(request, "Photo submitted for review.")
+            return redirect("accounts:submissions")
 
     return render(
         request,
@@ -957,22 +965,26 @@ def submit_document(request, pk):
 
     form = DogDocumentSubmissionForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        submission = Submission.objects.create(
-            kind=Submission.Kind.DOCUMENT,
-            submitted_by=request.user,
-            dog=dog,
-            kennel=dog.kennel,
-            payload={
-                "title": form.cleaned_data["title"],
-                "document_type": form.cleaned_data["document_type"],
-                "is_public": form.cleaned_data["is_public"],
-            },
-            attachment=form.cleaned_data["attachment"],
-            notes=form.cleaned_data["notes"],
-        )
-        verify_submission(submission)
-        messages.success(request, "Document submitted for review.")
-        return redirect("accounts:submissions")
+        try:
+            submission = Submission.objects.create(
+                kind=Submission.Kind.DOCUMENT,
+                submitted_by=request.user,
+                dog=dog,
+                kennel=dog.kennel,
+                payload={
+                    "title": form.cleaned_data["title"],
+                    "document_type": form.cleaned_data["document_type"],
+                    "is_public": form.cleaned_data["is_public"],
+                },
+                attachment=form.cleaned_data["attachment"],
+                notes=form.cleaned_data["notes"],
+            )
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "attachment", exc)
+        else:
+            verify_submission(submission)
+            messages.success(request, "Document submitted for review.")
+            return redirect("accounts:submissions")
 
     return render(
         request,
@@ -1830,17 +1842,21 @@ def claim_kennel(request, pk):
 
     form = KennelClaimForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        submission = Submission.objects.create(
-            kind=Submission.Kind.KENNEL_CLAIM,
-            submitted_by=request.user,
-            kennel=kennel,
-            payload={"relationship": form.cleaned_data["relationship"]},
-            attachment=form.cleaned_data["evidence"] or "",
-            notes=form.cleaned_data["notes"],
-        )
-        verify_submission(submission)
-        messages.success(request, "Kennel ownership claim submitted for review.")
-        return redirect("accounts:submissions")
+        try:
+            submission = Submission.objects.create(
+                kind=Submission.Kind.KENNEL_CLAIM,
+                submitted_by=request.user,
+                kennel=kennel,
+                payload={"relationship": form.cleaned_data["relationship"]},
+                attachment=form.cleaned_data["evidence"] or "",
+                notes=form.cleaned_data["notes"],
+            )
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "evidence", exc)
+        else:
+            verify_submission(submission)
+            messages.success(request, "Kennel ownership claim submitted for review.")
+            return redirect("accounts:submissions")
 
     return render(
         request,
@@ -1917,23 +1933,27 @@ def open_dispute(request, pk):
     )
     form = DisputeForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        dispute = DisputeCase.objects.create(
-            dog=dog,
-            opened_by=request.user,
-            reason=form.cleaned_data["reason"],
-            details=form.cleaned_data["details"],
-            attachment=form.cleaned_data["attachment"] or "",
-        )
-        record_audit(
-            action=ModerationAudit.Action.DISPUTE_OPENED,
-            actor=request.user,
-            dog=dog,
-            kennel=dog.kennel,
-            dispute=dispute,
-            summary={"reason": dispute.reason},
-        )
-        messages.success(request, "Review case opened. A moderator can now investigate it.")
-        return redirect("accounts:my-disputes")
+        try:
+            dispute = DisputeCase.objects.create(
+                dog=dog,
+                opened_by=request.user,
+                reason=form.cleaned_data["reason"],
+                details=form.cleaned_data["details"],
+                attachment=form.cleaned_data["attachment"] or "",
+            )
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "attachment", exc)
+        else:
+            record_audit(
+                action=ModerationAudit.Action.DISPUTE_OPENED,
+                actor=request.user,
+                dog=dog,
+                kennel=dog.kennel,
+                dispute=dispute,
+                summary={"reason": dispute.reason},
+            )
+            messages.success(request, "Review case opened. A moderator can now investigate it.")
+            return redirect("accounts:my-disputes")
 
     return render(
         request,
