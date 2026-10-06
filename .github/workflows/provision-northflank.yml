@@ -14,6 +14,7 @@ on:
       - "requirements.txt"
       - "manage.py"
       - "Dockerfile"
+      - ".github/workflows/provision-northflank.yml"
   workflow_dispatch:
 
 permissions:
@@ -32,6 +33,10 @@ jobs:
       SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
       PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
+      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+      EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+      DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
       NF_API: https://api.northflank.com/v1
       NF_PROJECT_NAME: CaneCorsoAncestry
       NF_SERVICE_NAME: canecorsoancestry
@@ -110,7 +115,18 @@ jobs:
           services="$(curl -fsS "${auth[@]}" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services")"
           service_id="$(printf '%s' "$services" | jq -r --arg name "$NF_SERVICE_NAME" '.data.services[]? | select(.name == $name) | .id' | head -n1)"
 
-          payload="$(jq -n             --arg name "$NF_SERVICE_NAME"             --arg db "$DATABASE_URL"             --arg secret "$DJANGO_SECRET_KEY"             --arg paystack "$PAYSTACK_SECRET_KEY"             --arg site "$PUBLIC_SITE"             --arg media "$MEDIA_EDGE"             '{
+          email_enabled="0"
+          from_email="$DEFAULT_FROM_EMAIL"
+          if [ -n "$EMAIL_HOST" ] && [ -n "$EMAIL_HOST_USER" ] && [ -n "$EMAIL_HOST_PASSWORD" ]; then
+            email_enabled="1"
+            [ -n "$from_email" ] || from_email="$EMAIL_HOST_USER"
+            echo "::add-mask::$EMAIL_HOST_PASSWORD"
+            echo "Account email: configured"
+          else
+            echo "::warning::Account email is not fully configured; password recovery will remain unavailable."
+          fi
+
+          payload="$(jq -n             --arg name "$NF_SERVICE_NAME"             --arg db "$DATABASE_URL"             --arg secret "$DJANGO_SECRET_KEY"             --arg paystack "$PAYSTACK_SECRET_KEY"             --arg email_host "$EMAIL_HOST"             --arg email_user "$EMAIL_HOST_USER"             --arg email_password "$EMAIL_HOST_PASSWORD"             --arg from_email "$from_email"             --arg email_enabled "$email_enabled"             --arg site "$PUBLIC_SITE"             --arg media "$MEDIA_EDGE"             '{
               name:$name,
               description:"Always-on Django origin for Cane Corso Ancestry",
               billing:{
@@ -148,6 +164,12 @@ jobs:
                 DATABASE_URL:$db,
                 DJANGO_SECRET_KEY:$secret,
                 PAYSTACK_SECRET_KEY:$paystack,
+                EMAIL_HOST:$email_host,
+                EMAIL_HOST_USER:$email_user,
+                EMAIL_HOST_PASSWORD:$email_password,
+                DEFAULT_FROM_EMAIL:$from_email,
+                ACCOUNT_EMAIL_ENABLED:$email_enabled,
+                REQUIRE_EMAIL_VERIFICATION:$email_enabled,
                 DJANGO_SETTINGS_MODULE:"config.settings.northflank",
                 DJANGO_DB_SCHEMA:"django_app",
                 DJANGO_DB_SSLMODE:"require",
@@ -190,7 +212,13 @@ jobs:
             echo "Created Northflank service: $service_id"
           else
             echo "Reusing existing Northflank service: $service_id"
-            patch="$(jq -n --arg site "$PUBLIC_SITE" --arg media "$MEDIA_EDGE" --arg db "$DATABASE_URL" --arg secret "$DJANGO_SECRET_KEY" --arg paystack "$PAYSTACK_SECRET_KEY" '{runtimeEnvironment:{DATABASE_URL:$db,DJANGO_SECRET_KEY:$secret,PAYSTACK_SECRET_KEY:$paystack,DJANGO_SETTINGS_MODULE:"config.settings.northflank",DJANGO_DB_SCHEMA:"django_app",DJANGO_DB_SSLMODE:"require",DJANGO_DB_EXTRA_SCHEMAS:"extensions,public",DJANGO_DB_CONN_MAX_AGE:"300",DJANGO_DB_CONNECT_TIMEOUT:"5",DJANGO_DB_KEEPALIVES_IDLE:"30",DJANGO_DB_KEEPALIVES_INTERVAL:"10",DJANGO_DB_KEEPALIVES_COUNT:"3",DJANGO_ALLOWED_HOSTS:"canecorsoancestry-site-edge.aighewieghosa111.workers.dev,.code.run,127.0.0.1,localhost",DJANGO_CSRF_TRUSTED_ORIGINS:"https://*.code.run,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",SITE_URL:$site,R2_GATEWAY_URL:$media,MEDIA_EDGE_BASE_URL:$media,MEDIA_EDGE_URL_TTL:"300",DJANGO_HSTS_SECONDS:"3600",DJANGO_HSTS_INCLUDE_SUBDOMAINS:"1",DJANGO_HSTS_PRELOAD:"0",DJANGO_LOG_LEVEL:"INFO",ANCESTRY_EMAIL_NOTIFICATIONS:"0",GUNICORN_WORKERS:"1",GUNICORN_THREADS:"4",GUNICORN_TIMEOUT:"60",GUNICORN_KEEPALIVE:"5",GUNICORN_MAX_REQUESTS:"1000",GUNICORN_MAX_REQUESTS_JITTER:"100"}}')"
+            patch="$(jq -n --arg site "$PUBLIC_SITE" --arg media "$MEDIA_EDGE" --arg db "$DATABASE_URL" --arg secret "$DJANGO_SECRET_KEY" --arg paystack "$PAYSTACK_SECRET_KEY" '{runtimeEnvironment:{DATABASE_URL:$db,DJANGO_SECRET_KEY:$secret,PAYSTACK_SECRET_KEY:$paystack,
+                EMAIL_HOST:$email_host,
+                EMAIL_HOST_USER:$email_user,
+                EMAIL_HOST_PASSWORD:$email_password,
+                DEFAULT_FROM_EMAIL:$from_email,
+                ACCOUNT_EMAIL_ENABLED:$email_enabled,
+                REQUIRE_EMAIL_VERIFICATION:$email_enabled,DJANGO_SETTINGS_MODULE:"config.settings.northflank",DJANGO_DB_SCHEMA:"django_app",DJANGO_DB_SSLMODE:"require",DJANGO_DB_EXTRA_SCHEMAS:"extensions,public",DJANGO_DB_CONN_MAX_AGE:"300",DJANGO_DB_CONNECT_TIMEOUT:"5",DJANGO_DB_KEEPALIVES_IDLE:"30",DJANGO_DB_KEEPALIVES_INTERVAL:"10",DJANGO_DB_KEEPALIVES_COUNT:"3",DJANGO_ALLOWED_HOSTS:"canecorsoancestry-site-edge.aighewieghosa111.workers.dev,.code.run,127.0.0.1,localhost",DJANGO_CSRF_TRUSTED_ORIGINS:"https://*.code.run,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",SITE_URL:$site,R2_GATEWAY_URL:$media,MEDIA_EDGE_BASE_URL:$media,MEDIA_EDGE_URL_TTL:"300",DJANGO_HSTS_SECONDS:"3600",DJANGO_HSTS_INCLUDE_SUBDOMAINS:"1",DJANGO_HSTS_PRELOAD:"0",DJANGO_LOG_LEVEL:"INFO",ANCESTRY_EMAIL_NOTIFICATIONS:"0",GUNICORN_WORKERS:"1",GUNICORN_THREADS:"4",GUNICORN_TIMEOUT:"60",GUNICORN_KEEPALIVE:"5",GUNICORN_MAX_REQUESTS:"1000",GUNICORN_MAX_REQUESTS_JITTER:"100"}}')"
             curl -sS --fail-with-body "${auth[@]}" -X PATCH --data "$patch" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/combined/$service_id" >/tmp/nf-service-patch.json
             echo "Synced Northflank runtime environment to the workers.dev public site."
           fi
