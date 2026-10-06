@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
@@ -204,6 +206,52 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "COI")
         self.assertContains(response, "12.50%")
+
+    def test_public_dog_profile_bounds_large_relationship_previews(self):
+        sire = Dog.objects.create(
+            name="Preview Sire",
+            slug="preview-sire",
+            sex=Dog.Sex.MALE,
+            is_public=True,
+        )
+        dog = Dog.objects.create(
+            name="Preview Dog",
+            slug="preview-dog",
+            sire=sire,
+            sex=Dog.Sex.MALE,
+            is_public=True,
+        )
+        for index in range(3):
+            Dog.objects.create(
+                name=f"Preview Sibling {index}",
+                slug=f"preview-sibling-{index}",
+                sire=sire,
+                is_public=True,
+            )
+            dam = Dog.objects.create(
+                name=f"Preview Dam {index}",
+                slug=f"preview-dam-{index}",
+                sex=Dog.Sex.FEMALE,
+                is_public=True,
+            )
+            Dog.objects.create(
+                name=f"Preview Child {index}",
+                slug=f"preview-child-{index}",
+                sire=dog,
+                dam=dam,
+                is_public=True,
+            )
+
+        with patch("registry.views.PROFILE_RELATION_PREVIEW_LIMIT", 2):
+            response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["siblings"]), 2)
+        self.assertEqual(len(response.context["offspring"]), 2)
+        self.assertEqual(len(response.context["mates"]), 2)
+        self.assertTrue(response.context["siblings_truncated"])
+        self.assertTrue(response.context["offspring_truncated"])
+        self.assertTrue(response.context["mates_truncated"])
 
     def test_public_search_finds_external_registration_number(self):
         dog = Dog.objects.create(name="Branco", slug="branco", is_public=True)
