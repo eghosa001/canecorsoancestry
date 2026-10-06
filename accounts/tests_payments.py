@@ -83,6 +83,7 @@ class PaidSubmissionTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Paystack is not configured on the server yet.")
+        self.assertContains(response, "₦1,000")
         self.assertEqual(SubmissionPayment.objects.filter(user=self.user).count(), 0)
 
     def test_paid_submission_cannot_be_approved_without_paid_link(self):
