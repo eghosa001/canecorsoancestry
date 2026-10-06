@@ -84,6 +84,36 @@ jobs:
           done
           exit "$missing"
 
+      - name: Wait for current Northflank UI before edge cutover
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin="https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
+          expected_version="$(grep "core/site.css" templates/base.html | sed -E 's/.*\?v=([^"]+).*/\1/' | head -n1)"
+          test -n "$expected_version"
+          expected_marker="site.css?v=$expected_version"
+          echo "Waiting for origin UI marker: $expected_marker"
+
+          status=""
+          for attempt in $(seq 1 48); do
+            status="$(curl --connect-timeout 5 --max-time 15 -sS \
+              -H 'X-CCA-Edge: 1' \
+              -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
+              -H 'Accept: text/html' \
+              -o /tmp/origin-current.html \
+              -w '%{http_code}' "$origin/" || true)"
+            if [ "$status" = "200" ] && grep -q "$expected_marker" /tmp/origin-current.html; then
+              echo "Origin is on the current UI release."
+              break
+            fi
+            if [ "$attempt" = "48" ]; then
+              echo "::error::Northflank origin did not reach $expected_marker before edge cutover; HTTP $status"
+              grep -o 'site.css?v=[^"]*' /tmp/origin-current.html 2>/dev/null | head -n1 || true
+              exit 1
+            fi
+            sleep 5
+          done
+
       - name: Build Worker secret file
         run: |
           python -c 'import json, os; open("/tmp/site-edge-secrets.json", "w", encoding="utf-8").write(json.dumps({"ORIGIN_EDGE_SECRET": os.environ["DJANGO_SECRET_KEY"]}))'
@@ -365,4 +395,4 @@ jobs:
 
       - name: Clean temporary files
         if: always()
-        run: rm -f /tmp/site-edge-secrets.json /tmp/edge-health.json /tmp/edge-page.html /tmp/auth-headers.txt /tmp/auth-page.html /tmp/auth-ready.json /tmp/live-logo.webp /tmp/kennels-page.html /tmp/virtual-mating.html /tmp/male-suggestions.json /tmp/female-suggestions.json
+        run: rm -f /tmp/site-edge-secrets.json /tmp/origin-current.html /tmp/edge-health.json /tmp/edge-page.html /tmp/auth-headers.txt /tmp/auth-page.html /tmp/auth-ready.json /tmp/live-logo.webp /tmp/kennels-page.html /tmp/virtual-mating.html /tmp/male-suggestions.json /tmp/female-suggestions.json
