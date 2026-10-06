@@ -58,5 +58,4 @@ class ProductionSurfaceTests(TestCase):
         user = get_user_model().objects.create_user(username="ordinary", password="test-pass-123")
         self.client.force_login(user)
         response = self.client.get(reverse("accounts:moderation"))
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/admin/login/", response.url)
+        self.assertEqual(response.status_code, 403)
