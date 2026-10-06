@@ -10,13 +10,11 @@
   {% if dog %}
     <section class="member-form-target" aria-label="Dog being managed">
       <div class="member-form-target-media">
-        {% with current_image=dog.images.first %}
-          {% if current_image %}
-            <img src="{{ current_image.image.url }}" alt="{{ dog.name }}" loading="eager" decoding="async">
-          {% else %}
-            <div class="media-placeholder"><span>CCA</span><small>No approved photo yet</small></div>
-          {% endif %}
-        {% endwith %}
+        {% if current_photo_url %}
+          <img src="{{ current_photo_url }}" alt="{{ dog.name }}" loading="eager" decoding="async"{% if "canecorsopedigree.com" in current_photo_url %} referrerpolicy="no-referrer"{% endif %}>
+        {% else %}
+          <div class="media-placeholder"><span>CCA</span><small>No approved photo yet</small></div>
+        {% endif %}
       </div>
       <div class="member-form-target-copy">
         <p class="eyebrow">You are updating</p>
