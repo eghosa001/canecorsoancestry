@@ -132,6 +132,7 @@
           <p class="muted">No public full or half siblings are currently connected.</p>
         {% endfor %}
       </div>
+      {% if siblings_truncated %}<p class="muted">Showing the first 100 connected siblings to keep this profile fast.</p>{% endif %}
     </article>
 
     <article class="panel" id="offspring">
@@ -143,6 +144,7 @@
           <p class="muted">No public offspring are currently connected.</p>
         {% endfor %}
       </div>
+      {% if offspring_truncated %}<p class="muted">Showing the first 100 offspring. <a class="text-link" href="{% url 'pedigrees:reverse' dog.slug %}">Explore all descendants →</a></p>{% endif %}
     </article>
   </div>
 
@@ -162,6 +164,7 @@
         <p class="muted">No mating relationships are currently available from public offspring.</p>
       {% endfor %}
     </div>
+    {% if mates_truncated %}<p class="muted">Showing the first 100 mate groups. <a class="text-link" href="{% url 'pedigrees:reverse' dog.slug %}">Explore all descendants →</a></p>{% endif %}
   </article>
 
   {% if relative_health %}
