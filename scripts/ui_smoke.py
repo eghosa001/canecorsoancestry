@@ -311,6 +311,15 @@ def main():
         capture(tablet, "/member/moderation/", "moderation-tablet")
         tablet.close()
 
+        narrow = browser.new_page(viewport={"width": 320, "height": 720})
+        capture(narrow, "/", "home-narrow")
+        capture(narrow, "/dogs/?q=", "dogs-narrow")
+        capture(narrow, "/pedigrees/virtual-mating/", "virtual-mating-narrow")
+        login(narrow)
+        screenshot(narrow, "dashboard-narrow")
+        capture(narrow, "/member/moderation/", "moderation-narrow")
+        narrow.close()
+
         browser.close()
 
 
