@@ -498,6 +498,15 @@ def approve_submission(
                 defaults={"value": microchip},
             )
 
+        if submission.attachment:
+            DogImage.objects.create(
+                dog=dog,
+                image=submission.attachment.name,
+                caption=str(payload.get("photo_caption") or "").strip(),
+                content_sha256=str(payload.get("photo_sha256") or "").strip(),
+                is_primary=True,
+            )
+
     elif submission.kind == Submission.Kind.CORRECTION:
         dog = submission.dog
         if dog is None:
