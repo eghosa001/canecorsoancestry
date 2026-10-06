@@ -4,6 +4,7 @@ import {
   hasPrivateCookie,
   isCacheablePublicPath,
   originRequest,
+  timedOriginGet,
 } from "../src/site-edge.js";
 
 const publicUrl = new URL("https://example.test/dogs/example-dog/");
@@ -53,3 +54,27 @@ const proxied = originRequest(
 assert.equal(new URL(proxied.url).host, "origin.example");
 assert.equal(proxied.headers.get("x-forwarded-host"), "example.test");
 assert.equal(proxied.headers.get("x-cca-edge"), "1");
+
+
+const realFetch = globalThis.fetch;
+let warmupRequest = null;
+globalThis.fetch = async (url, init) => {
+  warmupRequest = { url: String(url), init };
+  return new Response("ok", {
+    status: 200,
+    headers: { "x-request-id": "edge-readiness-test" },
+  });
+};
+try {
+  await timedOriginGet(
+    { ORIGIN_URL: "https://origin.example" },
+    "/accounts/login/",
+    1000,
+    "edge-readiness-test",
+    "text/html",
+  );
+  assert.equal(warmupRequest.url, "https://origin.example/accounts/login/");
+  assert.equal(warmupRequest.init.headers["x-cca-edge"], "1");
+} finally {
+  globalThis.fetch = realFetch;
+}
