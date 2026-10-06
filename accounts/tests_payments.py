@@ -3,6 +3,7 @@ import hmac
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from registry.models import Dog, Kennel, KennelMembership, Submission
@@ -67,6 +68,22 @@ class PaidSubmissionTests(TestCase):
         )
         self.assertTrue(litter_form.is_valid(), litter_form.errors)
         self.assertEqual(litter_form.cleaned_data["amount_kobo"], 20000)
+
+    def test_payment_start_fails_safely_without_paystack_configuration(self):
+        self.client.force_login(self.user)
+        with self.settings(PAYSTACK_SECRET_KEY=""):
+            response = self.client.post(
+                reverse("accounts:new-payment"),
+                {
+                    "kennel": self.kennel.pk,
+                    "package": SubmissionPayment.Package.SINGLE_DOG,
+                    "dog_count": 1,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Paystack is not configured on the server yet.")
+        self.assertEqual(SubmissionPayment.objects.filter(user=self.user).count(), 0)
 
     def test_paid_submission_cannot_be_approved_without_paid_link(self):
         submission = Submission.objects.create(

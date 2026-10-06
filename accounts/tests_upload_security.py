@@ -1,7 +1,15 @@
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase
 
-from accounts.forms import DogDocumentSubmissionForm, DogImageSubmissionForm
+from accounts.forms import (
+    DOCUMENT_MAX_BYTES,
+    IMAGE_MAX_BYTES,
+    DogDocumentSubmissionForm,
+    DogImageSubmissionForm,
+    validate_document_upload,
+    validate_image_upload,
+)
 from registry.models import DogDocument
 
 
@@ -19,6 +27,18 @@ class UploadValidationTests(SimpleTestCase):
         )
         self.assertFalse(form.is_valid())
         self.assertIn("attachment", form.errors)
+
+    def test_image_size_limit_is_enforced_before_decoding(self):
+        upload = SimpleUploadedFile("dog.jpg", b"\xff\xd8\xff")
+        upload.size = IMAGE_MAX_BYTES + 1
+        with self.assertRaisesRegex(ValidationError, "10 MB or smaller"):
+            validate_image_upload(upload)
+
+    def test_document_size_limit_is_enforced_before_signature_check(self):
+        upload = SimpleUploadedFile("evidence.pdf", b"%PDF-1.7")
+        upload.size = DOCUMENT_MAX_BYTES + 1
+        with self.assertRaisesRegex(ValidationError, "20 MB or smaller"):
+            validate_document_upload(upload)
 
     def test_document_extension_cannot_hide_invalid_content(self):
         form = DogDocumentSubmissionForm(

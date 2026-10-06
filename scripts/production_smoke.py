@@ -118,6 +118,62 @@ def visit(page, path, label, *, mobile=False):
     }
 
 
+def live_virtual_mating_probe():
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "CCA-Production-Smoke/1.0",
+    }
+    male = requests.get(
+        f"{BASE_URL}/dogs/suggestions/?q=&browse=1&sex=male",
+        headers=headers,
+        timeout=15,
+    )
+    female = requests.get(
+        f"{BASE_URL}/dogs/suggestions/?q=&browse=1&sex=female",
+        headers=headers,
+        timeout=15,
+    )
+    male.raise_for_status()
+    female.raise_for_status()
+    male_rows = male.json().get("results") or []
+    female_rows = female.json().get("results") or []
+    if not male_rows or not female_rows:
+        raise AssertionError("Virtual mating suggestions did not return both sexes")
+
+    sire = male_rows[0]
+    dam = next(
+        (row for row in female_rows if row.get("id") != sire.get("id")),
+        female_rows[0],
+    )
+    started = time.perf_counter()
+    response = requests.get(
+        f"{BASE_URL}/pedigrees/virtual-mating/",
+        params={
+            "sire": sire["id"],
+            "sire_q": sire["name"],
+            "dam": dam["id"],
+            "dam_q": dam["name"],
+            "generations": "4",
+            "smoke": "pairing",
+        },
+        headers={"Accept": "text/html", "User-Agent": "CCA-Production-Smoke/1.0"},
+        timeout=20,
+    )
+    elapsed = time.perf_counter() - started
+    if response.status_code != 200:
+        raise AssertionError(f"Virtual mating returned HTTP {response.status_code}")
+    body = response.text
+    if "Projected offspring COI" not in body or "Virtual mating result" not in body:
+        raise AssertionError("Virtual mating did not render a completed analysis")
+    if 'class="notice error"' in body:
+        raise AssertionError("Virtual mating rendered an application error")
+    return {
+        "sire": sire["name"],
+        "dam": dam["name"],
+        "seconds": round(elapsed, 3),
+    }
+
+
 def concurrent_health_probe(total=16, workers=8):
     def one(_):
         started = time.perf_counter()
@@ -475,6 +531,7 @@ def main():
 
         browser.close()
 
+    report["virtual_mating"] = live_virtual_mating_probe()
     report["concurrency"] = {
         "health": concurrent_health_probe(),
         "dog_profile": concurrent_profile_probe(dog_load_path),
