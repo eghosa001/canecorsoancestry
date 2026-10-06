@@ -7,6 +7,7 @@ from registry.models import Dog, HealthRecord
 from .services import (
     descendant_generations,
     direct_relative_health,
+    inbreeding_coefficient,
     mate_relationships,
     pedigree_analysis,
     pedigree_generations,
@@ -333,6 +334,59 @@ class PedigreeServiceTests(TestCase):
 
         self.assertEqual(groups[0]["mate"], dam)
         self.assertEqual(groups[0]["offspring_count"], 1)
+
+    def test_mate_counts_stay_exact_with_a_bounded_offspring_preview(self):
+        sire = Dog.objects.create(
+            name="Popular Sire", slug="popular-sire", sex=Dog.Sex.MALE, is_public=True
+        )
+        first_dam = Dog.objects.create(
+            name="First Dam", slug="first-dam", sex=Dog.Sex.FEMALE, is_public=True
+        )
+        second_dam = Dog.objects.create(
+            name="Second Dam", slug="second-dam", sex=Dog.Sex.FEMALE, is_public=True
+        )
+        preview = []
+        for index in range(4):
+            child = Dog.objects.create(
+                name=f"A Child {index}",
+                slug=f"a-child-{index}",
+                sire=sire,
+                dam=first_dam,
+                is_public=True,
+            )
+            if index < 2:
+                preview.append(child)
+        for index in range(2):
+            Dog.objects.create(
+                name=f"Z Child {index}",
+                slug=f"z-child-{index}",
+                sire=sire,
+                dam=second_dam,
+                is_public=True,
+            )
+
+        groups = mate_relationships(
+            sire,
+            children=preview,
+            exact_counts=True,
+        )
+        counts = {group["mate"].name: group["offspring_count"] for group in groups}
+
+        self.assertEqual(counts, {"First Dam": 4, "Second Dam": 2})
+        self.assertEqual(len(groups[0]["offspring"]), 2)
+
+    def test_inbreeding_coefficient_uses_kinship_without_full_matrix(self):
+        common = Dog.objects.create(name="COI Common", slug="coi-common-fast")
+        sire = Dog.objects.create(name="COI Sire", slug="coi-sire-fast", sire=common)
+        dam = Dog.objects.create(name="COI Dam", slug="coi-dam-fast", sire=common)
+        child = Dog.objects.create(
+            name="COI Child",
+            slug="coi-child-fast",
+            sire=sire,
+            dam=dam,
+        )
+
+        self.assertAlmostEqual(inbreeding_coefficient(child), 0.125)
 
     def test_analysis_reports_contribution_and_linebreeding_paths(self):
         common = Dog.objects.create(name="Common", slug="analysis-common")
