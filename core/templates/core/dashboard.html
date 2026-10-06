@@ -136,12 +136,17 @@
                     {% if dog.is_public %}
                       <a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">View profile</a>
                     {% else %}
-                      <a class="btn btn-outline" href="{% url 'accounts:member-pedigree' dog.pk %}">Open private record</a>
+                      <a class="btn btn-outline" href="{% url 'accounts:member-pedigree' dog.pk %}">Open record</a>
                     {% endif %}
-                    <a class="btn btn-outline" href="{% url 'accounts:member-pedigree' dog.pk %}">Pedigree</a>
-                    <a class="btn btn-outline" href="{% url 'accounts:submit-image' dog.pk %}">{% if dog.display_images or dog.source_image_url %}Add photo{% else %}Add first photo{% endif %}</a>
-                    <a class="btn btn-outline" href="{% url 'accounts:submit-correction' dog.pk %}">Correct details</a>
-                    <a class="btn btn-outline" href="{% url 'accounts:submit-document' dog.pk %}">Add document</a>
+                    <a class="btn btn-outline" href="{% url 'accounts:submit-image' dog.pk %}">{% if dog.display_images or dog.source_image_url %}Update photo{% else %}Add photo{% endif %}</a>
+                    <details class="dashboard-record-more">
+                      <summary>More actions</summary>
+                      <div class="dashboard-record-more-menu">
+                        <a href="{% url 'accounts:member-pedigree' dog.pk %}">Open pedigree</a>
+                        <a href="{% url 'accounts:submit-correction' dog.pk %}">Correct details</a>
+                        <a href="{% url 'accounts:submit-document' dog.pk %}">Add document</a>
+                      </div>
+                    </details>
                   </div>
                 </div>
               </article>
