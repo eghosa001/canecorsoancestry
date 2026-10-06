@@ -642,7 +642,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
 .review-actions textarea {
   width: 100%;
   border: 1px solid var(--line-soft);
-  background: #090b0a;
+  background: var(--field-bg);
   color: var(--text);
   padding: 10px 12px;
   outline: none;
@@ -787,7 +787,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--line-soft);
-  background: #090b0a;
+  background: var(--field-bg);
   color: var(--text);
   padding: 9px 10px;
 }
@@ -941,7 +941,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--line-soft);
-  background: #090b0a;
+  background: var(--field-bg);
   color: var(--text);
   padding: 0 10px;
 }
@@ -997,7 +997,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--line-soft);
-  background: #090b0a;
+  background: var(--field-bg);
   color: var(--text);
   padding: 9px 10px;
 }
@@ -4341,6 +4341,39 @@ textarea {
   outline: 0;
 }
 textarea { padding-top: 10px; padding-bottom: 10px; }
+
+/* Keep native form controls legible in both themes, including Windows/Chromium menus. */
+select,
+select option,
+select optgroup {
+  background-color: var(--field-bg);
+  color: var(--text);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: .9;
+}
+input[type="file"] {
+  padding: 6px 8px;
+  color: var(--text);
+}
+input[type="file"]::file-selector-button {
+  min-height: 32px;
+  margin-right: 10px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+input[type="file"]::file-selector-button:hover {
+  border-color: var(--gold);
+  background: var(--surface-3);
+}
 input:focus,
 select:focus,
 textarea:focus {
