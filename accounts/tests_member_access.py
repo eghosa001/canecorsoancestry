@@ -1,7 +1,12 @@
+from io import BytesIO
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from registry.models import Dog, DogImage, Kennel, KennelMembership, Submission
 
@@ -79,7 +84,10 @@ class MemberAccessFlowTests(TestCase):
                 "_paid_submission": True,
                 "name": "Member Dog",
                 "sex": Dog.Sex.MALE,
+                "photo_caption": "Stacked portrait",
+                "photo_sha256": "abc123",
             },
+            attachment="submissions/2026/10/member-dog.jpg",
         )
         PaymentSubmissionLink.objects.create(
             payment=payment,
@@ -93,12 +101,142 @@ class MemberAccessFlowTests(TestCase):
         approve_submission(submission, self.reviewer, "Facts checked.")
         submission.refresh_from_db()
         self.assertTrue(submission.dog.is_public)
+        image = DogImage.objects.get(dog=submission.dog)
+        self.assertEqual(image.image.name, "submissions/2026/10/member-dog.jpg")
+        self.assertEqual(image.caption, "Stacked portrait")
+        self.assertTrue(image.is_primary)
 
         self.client.force_login(member)
         pedigree = self.client.get(
             reverse("accounts:member-pedigree", args=[submission.dog.pk])
         )
         self.assertContains(pedigree, "Member Dog")
+
+
+    def test_paid_dog_form_accepts_first_profile_photo_in_same_submission(self):
+        member = get_user_model().objects.create_user(
+            username="photo-form-member",
+            email="photo-form@example.com",
+            password="test-pass-123",
+        )
+        kennel = Kennel.objects.create(
+            name="Photo Form Kennel",
+            slug="photo-form-kennel",
+            verified_at=timezone.now(),
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        payment = SubmissionPayment.objects.create(
+            user=member,
+            kennel=kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1,
+            amount_kobo=50000,
+            reference="CCA-photo-form",
+            status=SubmissionPayment.Status.PAID,
+            paid_at=timezone.now(),
+        )
+        self.client.force_login(member)
+
+        response = self.client.get(
+            reverse("accounts:payment-submit-dog", args=[payment.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'enctype="multipart/form-data"')
+        self.assertContains(response, 'name="primary_photo"')
+        self.assertContains(response, "first profile photo")
+
+
+    def test_existing_dog_photo_form_shows_target_profile_and_current_photo(self):
+        member = get_user_model().objects.create_user(
+            username="target-photo-member",
+            password="test-pass-123",
+        )
+        kennel = Kennel.objects.create(
+            name="Target Photo Kennel",
+            slug="target-photo-kennel",
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        dog = Dog.objects.create(
+            name="Target Photo Dog",
+            slug="target-photo-dog",
+            kennel=kennel,
+            is_public=True,
+        )
+        DogImage.objects.create(
+            dog=dog,
+            image="dogs/target-photo-dog.jpg",
+            is_primary=True,
+        )
+        self.client.force_login(member)
+
+        response = self.client.get(
+            reverse("accounts:submit-image", args=[dog.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "You are updating")
+        self.assertContains(response, "Target Photo Dog")
+        self.assertContains(response, "/media/dogs/target-photo-dog.jpg")
+        self.assertContains(response, "View current profile")
+
+    def test_photo_storage_failure_returns_form_error_instead_of_500(self):
+        member = get_user_model().objects.create_user(
+            username="upload-error-member",
+            password="test-pass-123",
+        )
+        kennel = Kennel.objects.create(
+            name="Upload Error Kennel",
+            slug="upload-error-kennel",
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        dog = Dog.objects.create(
+            name="Upload Error Dog",
+            slug="upload-error-dog",
+            kennel=kennel,
+            is_public=True,
+        )
+        buffer = BytesIO()
+        Image.new("RGB", (3, 3)).save(buffer, format="JPEG")
+        photo = SimpleUploadedFile(
+            "dog.jpg",
+            buffer.getvalue(),
+            content_type="image/jpeg",
+        )
+        self.client.force_login(member)
+        storage = Submission._meta.get_field("attachment").storage
+
+        with patch.object(storage, "save", side_effect=OSError("gateway unavailable")):
+            response = self.client.post(
+                reverse("accounts:submit-image", args=[dog.pk]),
+                {
+                    "caption": "Portrait",
+                    "is_primary": "on",
+                    "notes": "",
+                    "attachment": photo,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The file could not be stored right now")
+        self.assertFalse(
+            Submission.objects.filter(
+                kind=Submission.Kind.IMAGE,
+                dog=dog,
+            ).exists()
+        )
 
 
 class PopularDogTests(TestCase):

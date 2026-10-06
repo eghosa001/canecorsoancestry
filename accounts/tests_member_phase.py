@@ -164,7 +164,7 @@ class LitterWorkflowTests(TestCase):
             kennel=self.kennel,
             package=SubmissionPayment.Package.LITTER,
             dog_count=0,
-            amount_kobo=20000,
+            amount_kobo=100000,
             reference="CCA-litter-test",
             status=SubmissionPayment.Status.PAID,
             paid_at=timezone.now(),

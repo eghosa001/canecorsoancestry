@@ -1,9 +1,10 @@
 from urllib.parse import parse_qs, urlparse
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
 from core.cloudflare_media import media_signature
-from registry.models import Dog, DogImage
+from registry.models import Dog, DogImage, Kennel, KennelMembership
 
 
 @override_settings(
@@ -52,3 +53,25 @@ class R2MediaDeliveryTests(TestCase):
         response = self.client.get(f"/media/{self.path}")
 
         self.assertEqual(response.status_code, 404)
+
+    def test_member_can_view_private_photo_for_linked_kennel_dog(self):
+        kennel = Kennel.objects.create(name="Member Media Kennel", slug="member-media")
+        self.dog.kennel = kennel
+        self.dog.is_public = False
+        self.dog.save(update_fields=["kennel", "is_public"])
+        member = get_user_model().objects.create_user(
+            username="private-media-member",
+            password="test-pass-123",
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        self.client.force_login(member)
+
+        response = self.client.get(f"/media/{self.path}")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/_media/", response["Location"])
+        self.assertEqual(response["Cache-Control"], "private, no-store")

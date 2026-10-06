@@ -2,6 +2,7 @@ import csv
 import hashlib
 import json
 import logging
+import urllib.error
 import uuid
 
 from django.contrib import messages
@@ -114,6 +115,24 @@ from .payments import (
 
 def _date_value(value):
     return value.isoformat() if value else ""
+
+
+def _upload_sha256(upload):
+    if not upload:
+        return ""
+    digest = hashlib.sha256()
+    for chunk in upload.chunks():
+        digest.update(chunk)
+    upload.seek(0)
+    return digest.hexdigest()
+
+
+def _add_upload_storage_error(form, field_name, exc):
+    logger.exception("member_upload_storage_failed field=%s error=%s", field_name, exc)
+    form.add_error(
+        field_name,
+        "The file could not be stored right now. Please try again. Your other form details have been kept.",
+    )
 
 
 def _member_dogs(user):
@@ -334,41 +353,45 @@ def submission_evidence_upload(request, pk):
             digest.update(chunk)
         upload.seek(0)
 
-        with transaction.atomic():
-            evidence = SubmissionEvidence.objects.create(
-                submission=submission,
-                evidence_request=open_request,
-                evidence_type=form.cleaned_data["evidence_type"],
-                file=upload,
-                uploaded_by=request.user,
-                note=form.cleaned_data["note"],
-                sha256=digest.hexdigest(),
+        try:
+            with transaction.atomic():
+                evidence = SubmissionEvidence.objects.create(
+                    submission=submission,
+                    evidence_request=open_request,
+                    evidence_type=form.cleaned_data["evidence_type"],
+                    file=upload,
+                    uploaded_by=request.user,
+                    note=form.cleaned_data["note"],
+                    sha256=digest.hexdigest(),
+                )
+                if open_request:
+                    open_request.status = EvidenceRequest.Status.FULFILLED
+                    open_request.fulfilled_at = timezone.now()
+                    open_request.save(update_fields=("status", "fulfilled_at"))
+                verify_submission(submission)
+                record_audit(
+                    action=ModerationAudit.Action.EVIDENCE_UPLOADED,
+                    actor=request.user,
+                    dog=submission.dog,
+                    kennel=submission.kennel,
+                    litter=submission.litter,
+                    submission=submission,
+                    summary={
+                        "evidence_id": str(evidence.pk),
+                        "evidence_type": evidence.evidence_type,
+                        "sha256": evidence.sha256,
+                        "private": True,
+                    },
+                    note=form.cleaned_data["note"],
+                )
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "file", exc)
+        else:
+            messages.success(
+                request,
+                "Verification evidence uploaded privately. It is not published on the public dog profile.",
             )
-            if open_request:
-                open_request.status = EvidenceRequest.Status.FULFILLED
-                open_request.fulfilled_at = timezone.now()
-                open_request.save(update_fields=("status", "fulfilled_at"))
-            verify_submission(submission)
-            record_audit(
-                action=ModerationAudit.Action.EVIDENCE_UPLOADED,
-                actor=request.user,
-                dog=submission.dog,
-                kennel=submission.kennel,
-                litter=submission.litter,
-                submission=submission,
-                summary={
-                    "evidence_id": str(evidence.pk),
-                    "evidence_type": evidence.evidence_type,
-                    "sha256": evidence.sha256,
-                    "private": True,
-                },
-                note=form.cleaned_data["note"],
-            )
-        messages.success(
-            request,
-            "Verification evidence uploaded privately. It is not published on the public dog profile.",
-        )
-        return redirect("accounts:submissions")
+            return redirect("accounts:submissions")
 
     return render(
         request,
@@ -557,53 +580,65 @@ def payment_submit_dog(request, pk):
 
     form = DogSubmissionForm(
         request.POST or None,
+        request.FILES or None,
         user=request.user,
         kennel=payment.kennel,
     )
     if request.method == "POST" and form.is_valid():
-        with transaction.atomic():
-            locked = SubmissionPayment.objects.select_for_update().get(pk=payment.pk)
-            used = locked.submission_links.filter(
-                slot_kind=PaymentSubmissionLink.SlotKind.DOG
-            ).count()
-            limit = 1 if locked.package == SubmissionPayment.Package.SINGLE_DOG else locked.dog_count
-            if used >= limit:
-                messages.error(request, "All dog slots in this payment package have been used.")
-                return redirect("accounts:payment-detail", pk=payment.pk)
+        cleaned = form.cleaned_data
+        photo = cleaned.get("primary_photo")
+        photo_sha256 = _upload_sha256(photo)
+        try:
+            with transaction.atomic():
+                locked = SubmissionPayment.objects.select_for_update().get(pk=payment.pk)
+                used = locked.submission_links.filter(
+                    slot_kind=PaymentSubmissionLink.SlotKind.DOG
+                ).count()
+                limit = 1 if locked.package == SubmissionPayment.Package.SINGLE_DOG else locked.dog_count
+                if used >= limit:
+                    messages.error(request, "All dog slots in this payment package have been used.")
+                    return redirect("accounts:payment-detail", pk=payment.pk)
 
-            cleaned = form.cleaned_data
-            submission = Submission.objects.create(
-                kind=Submission.Kind.DOG,
-                submitted_by=request.user,
-                kennel=payment.kennel,
-                payload={
-                    "_paid_submission": True,
-                    "name": cleaned["name"],
-                    "sex": cleaned["sex"],
-                    "date_of_birth": _date_value(cleaned["date_of_birth"]),
-                    "colour": cleaned["colour"],
-                    "country": cleaned["country"],
-                    "bloodline": cleaned["bloodline"],
-                    "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
-                    "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
-                    "registration": cleaned["registration"],
-                    "microchip_number": cleaned["microchip_number"],
-                    "litter_id": str(cleaned["litter"].pk) if cleaned["litter"] else None,
-                    "bio": cleaned["bio"],
-                },
-                notes=cleaned["notes"],
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.DOG,
+                    submitted_by=request.user,
+                    kennel=payment.kennel,
+                    payload={
+                        "_paid_submission": True,
+                        "name": cleaned["name"],
+                        "sex": cleaned["sex"],
+                        "date_of_birth": _date_value(cleaned["date_of_birth"]),
+                        "colour": cleaned["colour"],
+                        "country": cleaned["country"],
+                        "bloodline": cleaned["bloodline"],
+                        "sire_id": str(cleaned["sire"].pk) if cleaned["sire"] else None,
+                        "dam_id": str(cleaned["dam"].pk) if cleaned["dam"] else None,
+                        "registration": cleaned["registration"],
+                        "microchip_number": cleaned["microchip_number"],
+                        "litter_id": str(cleaned["litter"].pk) if cleaned["litter"] else None,
+                        "bio": cleaned["bio"],
+                        "photo_caption": cleaned.get("photo_caption", ""),
+                        "photo_sha256": photo_sha256,
+                    },
+                    attachment=photo or "",
+                    notes=cleaned["notes"],
+                )
+                PaymentSubmissionLink.objects.create(
+                    payment=locked,
+                    submission=submission,
+                    slot_kind=PaymentSubmissionLink.SlotKind.DOG,
+                )
+                verify_submission(submission)
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "primary_photo", exc)
+        else:
+            messages.success(
+                request,
+                "Dog submitted with its photo for admin verification. It remains private until approval."
+                if photo
+                else "Dog submitted for admin verification. It remains private until approval.",
             )
-            PaymentSubmissionLink.objects.create(
-                payment=locked,
-                submission=submission,
-                slot_kind=PaymentSubmissionLink.SlotKind.DOG,
-            )
-            verify_submission(submission)
-        messages.success(
-            request,
-            "Dog submitted. It remains private until an administrator verifies and approves it.",
-        )
-        return redirect("accounts:payment-detail", pk=payment.pk)
+            return redirect("accounts:payment-detail", pk=payment.pk)
 
     return render(
         request,
@@ -612,11 +647,11 @@ def payment_submit_dog(request, pk):
             "form": form,
             "eyebrow": "Paid dog submission",
             "title": f"Submit a dog · {payment.kennel.name}",
-            "intro": "This paid slot sends the dog to admin verification. Payment never publishes a record automatically.",
+            "intro": "Add the dog's details and, if available, its primary profile photo in this same submission. Nothing is published until an administrator approves it.",
             "button_label": "Submit for admin verification",
+            "multipart": True,
         },
     )
-
 
 @login_required
 def payment_submit_litter(request, pk):
@@ -705,50 +740,61 @@ def payment_submit_puppy(request, pk):
         messages.error(request, "Submit a valid litter first.")
         return redirect("accounts:payment-detail", pk=payment.pk)
 
-    form = LitterPuppySubmissionForm(request.POST or None)
+    form = LitterPuppySubmissionForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         cleaned = form.cleaned_data
+        photo = cleaned.get("primary_photo")
+        photo_sha256 = _upload_sha256(photo)
         litter_submission = litter_link.submission
         litter_payload = litter_submission.payload or {}
         canonical_litter = litter_submission.litter
         litter_code = canonical_litter.code if canonical_litter else litter_payload.get("code")
         sire_id = canonical_litter.sire_id if canonical_litter else litter_payload.get("sire_id")
         dam_id = canonical_litter.dam_id if canonical_litter else litter_payload.get("dam_id")
-        with transaction.atomic():
-            locked = SubmissionPayment.objects.select_for_update().get(pk=payment.pk)
-            submission = Submission.objects.create(
-                kind=Submission.Kind.DOG,
-                submitted_by=request.user,
-                kennel=payment.kennel,
-                payload={
-                    "_paid_submission": True,
-                    "litter_submission_id": str(litter_link.submission_id),
-                    "litter_code": litter_code or "",
-                    "sire_id": str(sire_id) if sire_id else None,
-                    "dam_id": str(dam_id) if dam_id else None,
-                    "name": cleaned["name"],
-                    "sex": cleaned["sex"],
-                    "date_of_birth": _date_value(cleaned["date_of_birth"]),
-                    "colour": cleaned["colour"],
-                    "country": cleaned["country"],
-                    "bloodline": cleaned["bloodline"],
-                    "registration": cleaned["registration"],
-                    "microchip_number": cleaned["microchip_number"],
-                    "bio": cleaned["bio"],
-                },
-                notes=cleaned["notes"],
+        try:
+            with transaction.atomic():
+                locked = SubmissionPayment.objects.select_for_update().get(pk=payment.pk)
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.DOG,
+                    submitted_by=request.user,
+                    kennel=payment.kennel,
+                    payload={
+                        "_paid_submission": True,
+                        "litter_submission_id": str(litter_link.submission_id),
+                        "litter_code": litter_code or "",
+                        "sire_id": str(sire_id) if sire_id else None,
+                        "dam_id": str(dam_id) if dam_id else None,
+                        "name": cleaned["name"],
+                        "sex": cleaned["sex"],
+                        "date_of_birth": _date_value(cleaned["date_of_birth"]),
+                        "colour": cleaned["colour"],
+                        "country": cleaned["country"],
+                        "bloodline": cleaned["bloodline"],
+                        "registration": cleaned["registration"],
+                        "microchip_number": cleaned["microchip_number"],
+                        "bio": cleaned["bio"],
+                        "photo_caption": cleaned.get("photo_caption", ""),
+                        "photo_sha256": photo_sha256,
+                    },
+                    attachment=photo or "",
+                    notes=cleaned["notes"],
+                )
+                PaymentSubmissionLink.objects.create(
+                    payment=locked,
+                    submission=submission,
+                    slot_kind=PaymentSubmissionLink.SlotKind.PUPPY,
+                )
+                verify_submission(submission)
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "primary_photo", exc)
+        else:
+            messages.success(
+                request,
+                "Puppy submitted with its photo for admin verification under this litter package."
+                if photo
+                else "Puppy submitted for admin verification under this litter package.",
             )
-            PaymentSubmissionLink.objects.create(
-                payment=locked,
-                submission=submission,
-                slot_kind=PaymentSubmissionLink.SlotKind.PUPPY,
-            )
-            verify_submission(submission)
-        messages.success(
-            request,
-            "Puppy submitted for admin verification under this litter package.",
-        )
-        return redirect("accounts:payment-detail", pk=payment.pk)
+            return redirect("accounts:payment-detail", pk=payment.pk)
 
     return render(
         request,
@@ -757,11 +803,11 @@ def payment_submit_puppy(request, pk):
             "form": form,
             "eyebrow": "Litter puppy",
             "title": "Add a puppy from this litter",
-            "intro": "Parentage, kennel and litter date are inherited from the litter record during admin approval.",
+            "intro": "Parentage, kennel and litter date are inherited from the litter. You can include the puppy's first profile photo now.",
             "button_label": "Submit puppy for admin verification",
+            "multipart": True,
         },
     )
-
 
 def paystack_callback(request):
     reference = (request.GET.get("reference") or request.GET.get("trxref") or "").strip()
@@ -875,22 +921,27 @@ def submit_image(request, pk):
         for chunk in upload.chunks():
             digest.update(chunk)
         upload.seek(0)
-        submission = Submission.objects.create(
-            kind=Submission.Kind.IMAGE,
-            submitted_by=request.user,
-            dog=dog,
-            kennel=dog.kennel,
-            payload={
-                "caption": form.cleaned_data["caption"],
-                "is_primary": form.cleaned_data["is_primary"],
-                "sha256": digest.hexdigest(),
-            },
-            attachment=upload,
-            notes=form.cleaned_data["notes"],
-        )
-        verify_submission(submission)
-        messages.success(request, "Photo submitted for review.")
-        return redirect("accounts:submissions")
+        try:
+            with transaction.atomic():
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.IMAGE,
+                    submitted_by=request.user,
+                    dog=dog,
+                    kennel=dog.kennel,
+                    payload={
+                        "caption": form.cleaned_data["caption"],
+                        "is_primary": form.cleaned_data["is_primary"],
+                        "sha256": digest.hexdigest(),
+                    },
+                    attachment=upload,
+                    notes=form.cleaned_data["notes"],
+                )
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "attachment", exc)
+        else:
+            verify_submission(submission)
+            messages.success(request, "Photo submitted for review.")
+            return redirect("accounts:submissions")
 
     return render(
         request,
@@ -915,22 +966,27 @@ def submit_document(request, pk):
 
     form = DogDocumentSubmissionForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        submission = Submission.objects.create(
-            kind=Submission.Kind.DOCUMENT,
-            submitted_by=request.user,
-            dog=dog,
-            kennel=dog.kennel,
-            payload={
-                "title": form.cleaned_data["title"],
-                "document_type": form.cleaned_data["document_type"],
-                "is_public": form.cleaned_data["is_public"],
-            },
-            attachment=form.cleaned_data["attachment"],
-            notes=form.cleaned_data["notes"],
-        )
-        verify_submission(submission)
-        messages.success(request, "Document submitted for review.")
-        return redirect("accounts:submissions")
+        try:
+            with transaction.atomic():
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.DOCUMENT,
+                    submitted_by=request.user,
+                    dog=dog,
+                    kennel=dog.kennel,
+                    payload={
+                        "title": form.cleaned_data["title"],
+                        "document_type": form.cleaned_data["document_type"],
+                        "is_public": form.cleaned_data["is_public"],
+                    },
+                    attachment=form.cleaned_data["attachment"],
+                    notes=form.cleaned_data["notes"],
+                )
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "attachment", exc)
+        else:
+            verify_submission(submission)
+            messages.success(request, "Document submitted for review.")
+            return redirect("accounts:submissions")
 
     return render(
         request,
@@ -1788,17 +1844,22 @@ def claim_kennel(request, pk):
 
     form = KennelClaimForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        submission = Submission.objects.create(
-            kind=Submission.Kind.KENNEL_CLAIM,
-            submitted_by=request.user,
-            kennel=kennel,
-            payload={"relationship": form.cleaned_data["relationship"]},
-            attachment=form.cleaned_data["evidence"] or "",
-            notes=form.cleaned_data["notes"],
-        )
-        verify_submission(submission)
-        messages.success(request, "Kennel ownership claim submitted for review.")
-        return redirect("accounts:submissions")
+        try:
+            with transaction.atomic():
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.KENNEL_CLAIM,
+                    submitted_by=request.user,
+                    kennel=kennel,
+                    payload={"relationship": form.cleaned_data["relationship"]},
+                    attachment=form.cleaned_data["evidence"] or "",
+                    notes=form.cleaned_data["notes"],
+                )
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "evidence", exc)
+        else:
+            verify_submission(submission)
+            messages.success(request, "Kennel ownership claim submitted for review.")
+            return redirect("accounts:submissions")
 
     return render(
         request,
@@ -1875,23 +1936,28 @@ def open_dispute(request, pk):
     )
     form = DisputeForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
-        dispute = DisputeCase.objects.create(
-            dog=dog,
-            opened_by=request.user,
-            reason=form.cleaned_data["reason"],
-            details=form.cleaned_data["details"],
-            attachment=form.cleaned_data["attachment"] or "",
-        )
-        record_audit(
-            action=ModerationAudit.Action.DISPUTE_OPENED,
-            actor=request.user,
-            dog=dog,
-            kennel=dog.kennel,
-            dispute=dispute,
-            summary={"reason": dispute.reason},
-        )
-        messages.success(request, "Review case opened. A moderator can now investigate it.")
-        return redirect("accounts:my-disputes")
+        try:
+            with transaction.atomic():
+                dispute = DisputeCase.objects.create(
+                    dog=dog,
+                    opened_by=request.user,
+                    reason=form.cleaned_data["reason"],
+                    details=form.cleaned_data["details"],
+                    attachment=form.cleaned_data["attachment"] or "",
+                )
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "attachment", exc)
+        else:
+            record_audit(
+                action=ModerationAudit.Action.DISPUTE_OPENED,
+                actor=request.user,
+                dog=dog,
+                kennel=dog.kennel,
+                dispute=dispute,
+                summary={"reason": dispute.reason},
+            )
+            messages.success(request, "Review case opened. A moderator can now investigate it.")
+            return redirect("accounts:my-disputes")
 
     return render(
         request,

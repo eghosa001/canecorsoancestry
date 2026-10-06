@@ -126,6 +126,54 @@ jobs:
             fi
           done
 
+      - name: Verify R2 upload round trip
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
+          key="smoke/uploads/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.txt"
+          body="cca-r2-write-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          digest="$(printf '%s' "$body" | sha256sum | awk '{print $1}')"
+          timestamp="$(date +%s)"
+          signature="$(R2_METHOD="PUT" R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$digest" python -c 'import hashlib,hmac,os; m=os.environ["R2_METHOD"]; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["DJANGO_SECRET_KEY"].encode(), chr(10).join([m,k,t,d]).encode(), hashlib.sha256).hexdigest())')"
+          put_status="$(curl --connect-timeout 8 --max-time 30 -sS -o /tmp/r2-put.json -w '%{http_code}' -X PUT \
+            -H "content-type: text/plain" \
+            -H "x-r2-timestamp: $timestamp" \
+            -H "x-r2-content-sha256: $digest" \
+            -H "x-r2-signature: $signature" \
+            --data-binary "$body" "$base/_r2/$key" || true)"
+          if [ "$put_status" != "201" ]; then
+            echo "::error::Signed R2 upload failed; HTTP $put_status"
+            cat /tmp/r2-put.json 2>/dev/null || true
+            exit 1
+          fi
+
+          empty_digest="$(printf '' | sha256sum | awk '{print $1}')"
+          timestamp="$(date +%s)"
+          signature="$(R2_METHOD="HEAD" R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$empty_digest" python -c 'import hashlib,hmac,os; m=os.environ["R2_METHOD"]; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["DJANGO_SECRET_KEY"].encode(), chr(10).join([m,k,t,d]).encode(), hashlib.sha256).hexdigest())')"
+          head_status="$(curl --connect-timeout 8 --max-time 20 -sS -o /dev/null -w '%{http_code}' -X HEAD \
+            -H "x-r2-timestamp: $timestamp" \
+            -H "x-r2-content-sha256: $empty_digest" \
+            -H "x-r2-signature: $signature" \
+            "$base/_r2/$key" || true)"
+          if [ "$head_status" != "200" ]; then
+            echo "::error::Uploaded R2 object could not be read back; HTTP $head_status"
+            exit 1
+          fi
+
+          timestamp="$(date +%s)"
+          signature="$(R2_METHOD="DELETE" R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$empty_digest" python -c 'import hashlib,hmac,os; m=os.environ["R2_METHOD"]; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["DJANGO_SECRET_KEY"].encode(), chr(10).join([m,k,t,d]).encode(), hashlib.sha256).hexdigest())')"
+          delete_status="$(curl --connect-timeout 8 --max-time 20 -sS -o /dev/null -w '%{http_code}' -X DELETE \
+            -H "x-r2-timestamp: $timestamp" \
+            -H "x-r2-content-sha256: $empty_digest" \
+            -H "x-r2-signature: $signature" \
+            "$base/_r2/$key" || true)"
+          if [ "$delete_status" != "204" ]; then
+            echo "::error::R2 smoke object cleanup failed; HTTP $delete_status"
+            exit 1
+          fi
+          echo "Signed R2 upload, verification, and cleanup all succeeded."
+
       - name: Clean temporary files
         if: always()
-        run: rm -f /tmp/r2-secrets.json /tmp/r2-health.json /tmp/r2-denied.txt
+        run: rm -f /tmp/r2-secrets.json /tmp/r2-health.json /tmp/r2-denied.txt /tmp/r2-put.json

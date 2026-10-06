@@ -68,6 +68,7 @@ jobs:
           elif grep -Eq '^registry/(services|verification)\.py$' <<<"$changed"; then
             targets+=(
               "accounts.tests_admin_surfaces"
+              "accounts.tests_member_access.MemberAccessFlowTests"
               "accounts.tests_verification.VerificationGovernanceTests"
               "accounts.tests_moderation_intelligence.DuplicateIntelligenceTests"
             )
@@ -117,6 +118,11 @@ jobs:
             fi
             if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
               targets+=("accounts.tests_payments")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(forms\.py|views\.py|tests_member_access\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_member_access.MemberAccessFlowTests")
               scoped_accounts=true
             fi
             if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then

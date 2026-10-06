@@ -7,6 +7,31 @@
     <h1>{{ title }}</h1>
     <p>{{ intro }}</p>
   </header>
+  {% if dog %}
+    <section class="member-form-target" aria-label="Dog being managed">
+      <div class="member-form-target-media">
+        {% with current_image=dog.images.first %}
+          {% if current_image %}
+            <img src="{{ current_image.image.url }}" alt="{{ dog.name }}" loading="eager" decoding="async">
+          {% else %}
+            <div class="media-placeholder"><span>CCA</span><small>No approved photo yet</small></div>
+          {% endif %}
+        {% endwith %}
+      </div>
+      <div class="member-form-target-copy">
+        <p class="eyebrow">You are updating</p>
+        <h2>{{ dog.name }}</h2>
+        <p>{% if dog.kennel %}{{ dog.kennel.name }}{% else %}Kennel not recorded{% endif %}{% if dog.registration %} · {{ dog.registration }}{% endif %}</p>
+        <div class="button-row">
+          {% if dog.is_public %}
+            <a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">View current profile</a>
+          {% else %}
+            <a class="btn btn-outline" href="{% url 'accounts:member-pedigree' dog.pk %}">Open private record</a>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  {% endif %}
   <form class="member-form" method="post" {% if multipart %}enctype="multipart/form-data"{% endif %}>
     {% csrf_token %}
     {% if form.non_field_errors %}<div class="notice error">{{ form.non_field_errors }}</div>{% endif %}

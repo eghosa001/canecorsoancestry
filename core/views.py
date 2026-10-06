@@ -138,8 +138,30 @@ def home(request):
 
 @login_required
 def dashboard(request):
-    memberships = list(request.user.kennel_memberships.select_related("kennel").order_by("created_at"))
+    memberships = list(
+        request.user.kennel_memberships.select_related("kennel").order_by("created_at")
+    )
     kennel_ids = [membership.kennel_id for membership in memberships]
+    editable_memberships = [
+        membership
+        for membership in memberships
+        if membership.role in {"owner", "editor"}
+    ]
+    verified_editable_memberships = [
+        membership
+        for membership in editable_memberships
+        if membership.kennel.verified_at
+    ]
+    primary_membership = (
+        verified_editable_memberships[0]
+        if verified_editable_memberships
+        else editable_memberships[0]
+        if editable_memberships
+        else memberships[0]
+        if memberships
+        else None
+    )
+
     member_dogs = Dog.objects.filter(
         Q(kennel_id__in=kennel_ids)
         | Q(
@@ -150,13 +172,45 @@ def dashboard(request):
     ).distinct()
     dogs = list(_display_dogs(member_dogs.order_by("-updated_at"))[:8])
     _attach_source_image_urls(dogs)
-    litters = Litter.objects.filter(kennel_id__in=kennel_ids).select_related("kennel", "sire", "dam").order_by("-date_of_birth", "code")[:6]
-    health_records = HealthRecord.objects.filter(dog__in=member_dogs).select_related("dog").order_by("-created_at")[:8]
-    return render(request, "core/dashboard.html", {
-        "memberships": memberships,
-        "primary_kennel": memberships[0].kennel if memberships else None,
-        "dogs": dogs, "litters": litters, "health_records": health_records,
-        "dog_total": member_dogs.count(),
-        "public_dog_total": member_dogs.filter(is_public=True).count(),
-        "litter_total": Litter.objects.filter(kennel_id__in=kennel_ids).count(),
-    })
+
+    litters_qs = Litter.objects.filter(kennel_id__in=kennel_ids)
+    litters = list(
+        litters_qs.select_related("kennel", "sire", "dam")
+        .order_by("-date_of_birth", "code")[:5]
+    )
+    health_records = list(
+        HealthRecord.objects.filter(dog__in=member_dogs)
+        .select_related("dog")
+        .order_by("-created_at")[:6]
+    )
+    recent_submissions = list(
+        request.user.ancestry_submissions.select_related(
+            "dog", "kennel", "litter", "document"
+        )[:5]
+    )
+    pending_submission_count = request.user.ancestry_submissions.filter(
+        status=Submission.Status.PENDING
+    ).count()
+    recent_payments = list(
+        request.user.ancestry_submission_payments.select_related("kennel")[:4]
+    )
+
+    return render(
+        request,
+        "core/dashboard.html",
+        {
+            "memberships": memberships,
+            "primary_membership": primary_membership,
+            "primary_kennel": primary_membership.kennel if primary_membership else None,
+            "can_purchase_records": bool(verified_editable_memberships),
+            "dogs": dogs,
+            "litters": litters,
+            "health_records": health_records,
+            "recent_submissions": recent_submissions,
+            "recent_payments": recent_payments,
+            "pending_submission_count": pending_submission_count,
+            "dog_total": member_dogs.count(),
+            "public_dog_total": member_dogs.filter(is_public=True).count(),
+            "litter_total": litters_qs.count(),
+        },
+    )
