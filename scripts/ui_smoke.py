@@ -302,6 +302,15 @@ def main():
         capture(mobile, "/member/disputes/", "my-disputes-mobile")
         capture(mobile, "/member/submit/dog/", "submit-dog-mobile")
 
+        tablet = browser.new_page(viewport={"width": 768, "height": 1024})
+        capture(tablet, "/", "home-tablet")
+        capture(tablet, "/dogs/?q=", "dogs-tablet")
+        capture(tablet, "/pedigrees/virtual-mating/", "virtual-mating-tablet")
+        login(tablet)
+        screenshot(tablet, "dashboard-tablet")
+        capture(tablet, "/member/moderation/", "moderation-tablet")
+        tablet.close()
+
         browser.close()
 
 
