@@ -107,8 +107,88 @@ jobs:
               scoped_accounts=true
             fi
 
-            if grep -Eq '^accounts/(forms\.py|tests_account_recovery\.py)$' <<<"$changed"; then
+            if grep -Eq '^accounts/(forms\.py|tests_account_recovery\.py)            if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_payments")
+              scoped_accounts=true
+            fi
+            if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
+              targets+=("accounts.tests_moderation_intelligence")
+              scoped_accounts=true
+            fi
+            if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
+              targets+=("accounts.tests_verification")
+              scoped_accounts=true
+            fi
+
+            if [ "$scoped_accounts" != "true" ]; then
+              echo "::error::Accounts Python changes require an explicit change-scoped test mapping. Do not fall back to the full accounts suite."
+              exit 1
+            fi
+          fi
+
+          grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
+
+          if [ ${#targets[@]} -eq 0 ]; then
+            echo "No changed Python app requires tests."
+            exit 0
+          fi
+
+          unique_targets=()
+          declare -A seen_targets=()
+          for target in "${targets[@]}"; do
+            if [ -z "${seen_targets[$target]+x}" ]; then
+              unique_targets+=("$target")
+              seen_targets["$target"]=1
+            fi
+          done
+          targets=("${unique_targets[@]}")
+
+          printf 'Running scoped tests: %s\n' "${targets[*]}"
+          python manage.py test "${targets[@]}" --verbosity 1
+ <<<"$changed"; then
               targets+=("accounts.tests_account_recovery")
+              scoped_accounts=true
+            fi
+            if grep -Eq '^accounts/(forms\.py|tests_upload_security\.py)            if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_payments")
+              scoped_accounts=true
+            fi
+            if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
+              targets+=("accounts.tests_moderation_intelligence")
+              scoped_accounts=true
+            fi
+            if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
+              targets+=("accounts.tests_verification")
+              scoped_accounts=true
+            fi
+
+            if [ "$scoped_accounts" != "true" ]; then
+              echo "::error::Accounts Python changes require an explicit change-scoped test mapping. Do not fall back to the full accounts suite."
+              exit 1
+            fi
+          fi
+
+          grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
+
+          if [ ${#targets[@]} -eq 0 ]; then
+            echo "No changed Python app requires tests."
+            exit 0
+          fi
+
+          unique_targets=()
+          declare -A seen_targets=()
+          for target in "${targets[@]}"; do
+            if [ -z "${seen_targets[$target]+x}" ]; then
+              unique_targets+=("$target")
+              seen_targets["$target"]=1
+            fi
+          done
+          targets=("${unique_targets[@]}")
+
+          printf 'Running scoped tests: %s\n' "${targets[*]}"
+          python manage.py test "${targets[@]}" --verbosity 1
+ <<<"$changed"; then
+              targets+=("accounts.tests_upload_security")
               scoped_accounts=true
             fi
             if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
