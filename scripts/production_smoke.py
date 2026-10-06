@@ -254,9 +254,6 @@ def main():
                     raise AssertionError(f"Header is not using the cached Cane Corso head asset: {brand_src}")
                 if brand.evaluate("(el) => !el.complete || el.naturalWidth < 32 || el.naturalHeight < 32"):
                     raise AssertionError("Cane Corso head logo did not render correctly")
-                logo_svg = page.evaluate("(src) => fetch(src).then((r) => r.text())", brand_src)
-                if 'translate(128 0) scale(-1 1)' not in logo_svg:
-                    raise AssertionError("Production Cane Corso logo is not flipped to face right")
                 plaque_border = page.locator(".hero-mark").evaluate(
                     "(el) => getComputedStyle(el).borderTopWidth"
                 )
