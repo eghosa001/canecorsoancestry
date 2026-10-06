@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.http import HttpResponse
 
@@ -32,6 +33,7 @@ class CanonicalPublicSiteTests(SimpleTestCase):
             "/dogs/example/",
             HTTP_HOST="canecorsoancestry.onrender.com",
             HTTP_X_CCA_EDGE="1",
+            HTTP_X_CCA_ORIGIN_SECRET=settings.SECRET_KEY,
         )
 
         response = self.middleware(request)
