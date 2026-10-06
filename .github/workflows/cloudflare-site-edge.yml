@@ -146,7 +146,7 @@ jobs:
                grep -q 'cane-corso-head-logo-right.webp' /tmp/edge-page.html &&
                grep -q '20261004-headlogo-v64' /tmp/edge-page.html &&
                grep -q 'premium-polish.css?v=20261004-interaction-v49' /tmp/edge-page.html &&
-               grep -q 'site.css?v=20261006-member-flow-v71' /tmp/edge-page.html; then
+               grep -q 'site.css?v=20261006-member-flow-v72' /tmp/edge-page.html; then
               break
             fi
             if [ "$attempt" = "30" ]; then
