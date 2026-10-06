@@ -134,14 +134,10 @@
       window.addEventListener("scroll", function () {
         closeMobileMenus();
 
-        // Keep an open picker stable while the user is typing or scrolling its
-        // own results. This also avoids iOS visual-viewport scroll dismissals.
-        var active = document.activeElement;
-        if (
-          pickerInteracting ||
-          Date.now() - lastPanelScrollAt < 180 ||
-          (active && active.matches && active.matches("[data-dog-autocomplete]"))
-        ) {
+        // Keep the picker stable only while its own suggestion panel is being
+        // manipulated. A real page scroll should dismiss autocomplete and blur
+        // the field so mobile keyboards do not remain pinned over the page.
+        if (pickerInteracting || Date.now() - lastPanelScrollAt < 180) {
           return;
         }
         dismissSearchUI();
