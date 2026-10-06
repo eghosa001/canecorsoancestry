@@ -1914,11 +1914,29 @@ def my_disputes(request):
     )
     paginator = Paginator(disputes, 50)
     page_obj = paginator.get_page(request.GET.get("page"))
+    visible_disputes = list(page_obj.object_list)
+    assignee_ids = {
+        dispute.assigned_to_id
+        for dispute in visible_disputes
+        if dispute.assigned_to_id
+    }
+    assignee_labels = {
+        assignment.user_id: assignment.public_label
+        for assignment in ModerationRoleAssignment.objects.filter(
+            user_id__in=assignee_ids
+        ).only("user_id", "admin_number")
+    }
+    for dispute in visible_disputes:
+        dispute.member_assignee_label = (
+            assignee_labels.get(dispute.assigned_to_id, "Admin")
+            if dispute.assigned_to_id
+            else ""
+        )
     return render(
         request,
         "accounts/my_disputes.html",
         {
-            "disputes": page_obj.object_list,
+            "disputes": visible_disputes,
             "page_obj": page_obj,
         },
     )
