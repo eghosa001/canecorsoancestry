@@ -49,11 +49,15 @@ console.log("site-edge cache policy tests passed");
 
 const proxied = originRequest(
   new Request("https://example.test/media/dogs/example.jpg"),
-  { ORIGIN_URL: "https://origin.example" },
+  {
+    ORIGIN_URL: "https://origin.example",
+    ORIGIN_EDGE_SECRET: "edge-secret-test",
+  },
 );
 assert.equal(new URL(proxied.url).host, "origin.example");
 assert.equal(proxied.headers.get("x-forwarded-host"), "example.test");
 assert.equal(proxied.headers.get("x-cca-edge"), "1");
+assert.equal(proxied.headers.get("x-cca-origin-secret"), "edge-secret-test");
 
 
 const realFetch = globalThis.fetch;
@@ -67,7 +71,10 @@ globalThis.fetch = async (url, init) => {
 };
 try {
   await timedOriginGet(
-    { ORIGIN_URL: "https://origin.example" },
+    {
+      ORIGIN_URL: "https://origin.example",
+      ORIGIN_EDGE_SECRET: "edge-secret-test",
+    },
     "/accounts/login/",
     1000,
     "edge-readiness-test",
@@ -75,6 +82,10 @@ try {
   );
   assert.equal(warmupRequest.url, "https://origin.example/accounts/login/");
   assert.equal(warmupRequest.init.headers["x-cca-edge"], "1");
+  assert.equal(
+    warmupRequest.init.headers["x-cca-origin-secret"],
+    "edge-secret-test",
+  );
 } finally {
   globalThis.fetch = realFetch;
 }
