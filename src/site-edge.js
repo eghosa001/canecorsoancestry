@@ -28,6 +28,10 @@ function isPrefetchRequest(request) {
 }
 
 function shouldWaitForOrigin(request, canCache) {
+  const url = new URL(request.url);
+  if (isHtmlNavigation(request) && !isLoginPath(url.pathname)) {
+    return true;
+  }
   return (
     canCache ||
     isBot(request) ||
