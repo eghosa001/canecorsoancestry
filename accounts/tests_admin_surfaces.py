@@ -72,6 +72,32 @@ class AdminSurfaceSmokeTests(TestCase):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
 
+    def test_dog_photo_submission_is_previewed_in_moderation(self):
+        dog = Dog.objects.create(
+            name="Review Photo Dog",
+            slug="review-photo-dog",
+            is_public=True,
+        )
+        photo_submission = Submission.objects.create(
+            kind=Submission.Kind.IMAGE,
+            submitted_by=self.member,
+            dog=dog,
+            payload={"caption": "Review portrait", "is_primary": True},
+            attachment="submissions/2026/10/review-photo.jpg",
+        )
+        verify_submission(photo_submission)
+        self.client.force_login(self.owner)
+
+        response = self.client.get(
+            reverse("accounts:moderation-submission", args=[photo_submission.pk])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Submitted dog photo")
+        self.assertContains(response, "Review portrait")
+        self.assertContains(response, "/media/submissions/2026/10/review-photo.jpg")
+        self.assertContains(response, "Open original image")
+
     def test_data_health_report_uses_bounded_query_count(self):
         dog = Dog.objects.create(
             name="Health Source Dog",
