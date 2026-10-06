@@ -37,6 +37,9 @@ from .permissions import can_contribute_to_dog
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_stored_images
 
 
+PROFILE_RELATION_PREVIEW_LIMIT = 100
+
+
 def _dog_cards(queryset, *, include_parents=False, include_sources=True):
     related = ["kennel"]
     if include_parents:
@@ -329,9 +332,20 @@ def dog_detail(request, slug):
             "url": request.build_absolute_uri(reverse("registry:kennel-detail", args=[dog.kennel.slug])),
         }
 
-    siblings = sibling_relationships(dog)
-    offspring = list(offspring_for(dog))
-    mates = mate_relationships(dog, children=offspring)
+    relation_limit = PROFILE_RELATION_PREVIEW_LIMIT
+    sibling_rows = sibling_relationships(dog, limit=relation_limit + 1)
+    siblings_truncated = len(sibling_rows) > relation_limit
+    siblings = sibling_rows[:relation_limit]
+
+    offspring_queryset = offspring_for(dog)
+    offspring_rows = list(offspring_queryset[: relation_limit + 1])
+    offspring_truncated = len(offspring_rows) > relation_limit
+    offspring = offspring_rows[:relation_limit]
+
+    mate_rows = mate_relationships(dog)
+    mates_truncated = len(mate_rows) > relation_limit
+    mates = mate_rows[:relation_limit]
+
     relative_health = direct_relative_health(
         dog,
         sibling_rows=siblings,
@@ -344,8 +358,11 @@ def dog_detail(request, slug):
         {
             "dog": dog,
             "siblings": siblings,
+            "siblings_truncated": siblings_truncated,
             "offspring": offspring,
+            "offspring_truncated": offspring_truncated,
             "mates": mates,
+            "mates_truncated": mates_truncated,
             "relative_health": relative_health,
             "coi_percent": coi_percent,
             "coi_error": coi_error,
