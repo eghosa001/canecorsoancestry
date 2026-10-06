@@ -89,7 +89,7 @@ class SubmissionApprovalTests(TestCase):
         dog = submission.dog
         self.assertEqual(submission.status, Submission.Status.APPROVED)
         self.assertTrue(dog.is_public)
-        self.assertEqual(dog.verification_state, VerificationState.COMMUNITY)
+        self.assertEqual(dog.verification_state, VerificationState.IDENTITY_REVIEWED)
         self.assertTrue(Notification.objects.filter(user=user).exists())
 
 
