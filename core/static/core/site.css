@@ -4725,8 +4725,8 @@ html[data-theme="dark"] .mobile-nav-panel {
 }
 
 
-/* Mobile dashboard navigation fix v27 */
-@media (max-width: 760px) {
+/* Mobile/tablet dashboard navigation fix v66 */
+@media (max-width: 820px) {
   .dashboard-shell {
     display: block;
     min-height: 0;
@@ -4798,6 +4798,25 @@ html[data-theme="dark"] .mobile-nav-panel {
   .dashboard-sidebar .dashboard-mobile-nav .sidebar-logout {
     margin: 0;
     color: var(--danger);
+  }
+  .dashboard-main {
+    width: 100%;
+    min-width: 0;
+    padding: 16px;
+  }
+  .dashboard-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .dashboard-stats {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-wide {
+    grid-column: auto;
   }
 }
 
