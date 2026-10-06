@@ -1,6 +1,6 @@
 const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
 // Bump this whenever public HTML/static layout assets must invalidate edge cache. Image refresh 2026-10-02. Clean square logo v16.
-const EDGE_CACHE_VERSION = "public-polish-v66"; // Larger supplied dog-head logo and tighter top spacing
+const EDGE_CACHE_VERSION = "search-nav-v67"; // Reliable suggestion navigation and public-profile loading
 const CACHE_FRESH_SECONDS = 900;
 const CACHE_RETENTION_SECONDS = 604800;
 const ORIGIN_GRACE_MS = 3500;
@@ -25,6 +25,15 @@ function isPrefetchRequest(request) {
     request.headers.get("sec-purpose") || "",
   ].join(" ");
   return /prefetch/i.test(purpose);
+}
+
+function shouldWaitForOrigin(request, canCache) {
+  return (
+    canCache ||
+    isBot(request) ||
+    !isHtmlNavigation(request) ||
+    isPrefetchRequest(request)
+  );
 }
 
 function randomCsrfString(length = 32) {
@@ -509,8 +518,7 @@ async function handleRequest(request, env, ctx) {
 
   const originPromise = fetchOrigin(request, env);
   const loginRequest = isLoginPath(url.pathname) && request.method === "GET";
-  const mustWaitForOrigin =
-    isBot(request) || !isHtmlNavigation(request) || isPrefetchRequest(request);
+  const mustWaitForOrigin = shouldWaitForOrigin(request, canCache);
 
   if (mustWaitForOrigin) {
     const response = await originPromise;
@@ -543,7 +551,7 @@ async function handleRequest(request, env, ctx) {
   return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
 
-export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, cacheKey, originRequest, timedOriginGet, authWarmingPage };
+export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, shouldWaitForOrigin, cacheKey, originRequest, timedOriginGet, authWarmingPage };
 
 export default {
   fetch(request, env, ctx) {
