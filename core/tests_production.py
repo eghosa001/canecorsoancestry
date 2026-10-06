@@ -54,7 +54,10 @@ class ProductionSurfaceTests(TestCase):
         self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow, noarchive")
         self.assertIn("no-store", response["Cache-Control"])
 
-    @override_settings(SITE_URL="https://canecorsoancestry.example")
+    @override_settings(
+        SITE_URL="https://canecorsoancestry.example",
+        ALLOWED_HOSTS=["testserver", "origin.code.run"],
+    )
     def test_direct_origin_rejects_spoofed_edge_marker(self):
         response = self.client.get(
             reverse("home"),
@@ -64,7 +67,10 @@ class ProductionSurfaceTests(TestCase):
         self.assertEqual(response.status_code, 308)
         self.assertTrue(response["Location"].startswith("https://canecorsoancestry.example/"))
 
-    @override_settings(SITE_URL="https://canecorsoancestry.example")
+    @override_settings(
+        SITE_URL="https://canecorsoancestry.example",
+        ALLOWED_HOSTS=["testserver", "origin.code.run"],
+    )
     def test_direct_origin_accepts_authenticated_edge_request(self):
         from django.conf import settings
 
