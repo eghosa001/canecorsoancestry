@@ -114,8 +114,13 @@ def main():
         desktop.locator("[data-theme-toggle]").first.click()
         if desktop.locator("html").get_attribute("data-theme") != "dark":
             raise AssertionError("desktop theme toggle did not switch back to dark mode")
-        capture(desktop, "/dogs/?q=", "dogs-desktop")
+        capture(desktop, "/accounts/login/", "login-desktop")
+        capture(desktop, "/member/signup/", "signup-desktop")
         capture(desktop, "/accounts/password_reset/", "password-reset-desktop")
+        capture(desktop, "/dogs/?q=", "dogs-desktop")
+        capture(desktop, "/kennels/", "kennels-desktop")
+        capture(desktop, "/pedigrees/virtual-mating/", "virtual-mating-desktop")
+        capture(desktop, "/statistics/", "statistics-desktop")
 
         dog_cards = desktop.locator(".search-result-card")
         if dog_cards.count():
@@ -134,6 +139,17 @@ def main():
 
         login(desktop)
         screenshot(desktop, "dashboard-desktop")
+        kennel_edit = desktop.locator('a[href*="/member/kennels/"][href$="/edit/"]')
+        if kennel_edit.count():
+            kennel_edit.first.click()
+            desktop.wait_for_load_state("networkidle")
+            screenshot(desktop, "kennel-edit-desktop")
+            desktop.goto(f"{BASE_URL}/dashboard/", wait_until="networkidle")
+
+        capture(desktop, "/member/submissions/", "submissions-desktop")
+        capture(desktop, "/member/notifications/", "notifications-desktop")
+        capture(desktop, "/member/payments/new/?package=single_dog", "payment-new-desktop")
+        capture(desktop, "/member/submit/kennel/", "submit-kennel-desktop")
         capture(desktop, "/member/pedigrees/", "my-pedigrees-desktop")
         member_pedigrees = desktop.locator(".pedigree-workspace-card .btn-gold")
         if member_pedigrees.count():
@@ -142,8 +158,25 @@ def main():
             screenshot(desktop, "member-pedigree-detail-desktop", overflow=False)
 
         capture(desktop, "/member/litters/", "my-litters-desktop")
+        litter_edit = desktop.locator('a[href*="/member/litters/"][href$="/edit/"]')
+        if litter_edit.count():
+            litter_edit.first.click()
+            desktop.wait_for_load_state("networkidle")
+            screenshot(desktop, "litter-edit-desktop")
+
         capture(desktop, "/member/documents/", "documents-desktop")
+        visibility = desktop.locator('a[href*="/member/documents/"][href$="/visibility/"]')
+        if visibility.count():
+            visibility.first.click()
+            desktop.wait_for_load_state("networkidle")
+            screenshot(desktop, "document-visibility-desktop")
+
         capture(desktop, "/member/moderation/", "moderation-desktop")
+        review_link = desktop.locator('a[href*="/member/moderation/submissions/"]').first
+        if review_link.count():
+            review_link.click()
+            desktop.wait_for_load_state("networkidle")
+            screenshot(desktop, "moderation-submission-desktop")
         capture(desktop, "/member/moderation/audit/", "moderation-audit-desktop")
         capture(desktop, "/member/moderation/data-health/", "data-health-desktop")
         capture(desktop, "/member/disputes/", "my-disputes-desktop")
@@ -262,6 +295,10 @@ def main():
             screenshot(mobile, "member-pedigree-detail-mobile", overflow=False)
         capture(mobile, "/member/litters/", "my-litters-mobile")
         capture(mobile, "/member/documents/", "documents-mobile")
+        capture(mobile, "/member/submissions/", "submissions-mobile")
+        capture(mobile, "/member/notifications/", "notifications-mobile")
+        capture(mobile, "/member/moderation/", "moderation-mobile")
+        capture(mobile, "/member/moderation/data-health/", "data-health-mobile")
         capture(mobile, "/member/disputes/", "my-disputes-mobile")
         capture(mobile, "/member/submit/dog/", "submit-dog-mobile")
 
