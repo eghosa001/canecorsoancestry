@@ -14,7 +14,7 @@
           <span class="eyebrow">{{ item.get_reason_display }}</span>
           <h2>{{ item.dog.name }}</h2>
           <p>{{ item.details }}</p>
-          <small>{{ item.created_at|date:"d M Y, H:i" }}{% if item.assigned_to %} · assigned to {{ item.assigned_to_admin_label }}{% endif %}</small>
+          <small>{{ item.created_at|date:"d M Y, H:i" }}{% if item.assigned_to %} · assigned to {{ item.member_assignee_label }}{% endif %}</small>
         </div>
         <div class="dispute-status-block">
           <span class="submission-state {{ item.status }}">{{ item.get_status_display }}</span>
