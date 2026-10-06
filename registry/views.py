@@ -342,7 +342,11 @@ def dog_detail(request, slug):
     offspring_truncated = len(offspring_rows) > relation_limit
     offspring = offspring_rows[:relation_limit]
 
-    mate_rows = mate_relationships(dog)
+    mate_rows = mate_relationships(
+        dog,
+        children=offspring_rows,
+        exact_counts=offspring_truncated,
+    )
     mates_truncated = len(mate_rows) > relation_limit
     mates = mate_rows[:relation_limit]
 
