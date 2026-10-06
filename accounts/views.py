@@ -15,7 +15,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -1085,16 +1085,24 @@ def moderation_queue(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
 
-    pending = Submission.objects.filter(
-        status=Submission.Status.PENDING
-    ).select_related(
-        "submitted_by",
-        "dog",
-        "kennel",
-        "litter",
-        "document",
-        "assigned_to",
-        "payment_link__payment",
+    pending = (
+        Submission.objects.filter(status=Submission.Status.PENDING)
+        .select_related(
+            "submitted_by",
+            "dog",
+            "kennel",
+            "litter",
+            "document",
+            "assigned_to",
+            "payment_link__payment",
+        )
+        .prefetch_related(
+            Prefetch(
+                "verification_findings",
+                queryset=VerificationFinding.objects.filter(is_current=True).select_related("rule"),
+                to_attr="current_verification_findings",
+            )
+        )
     )
 
     query = request.GET.get("q", "").strip()
@@ -1130,11 +1138,43 @@ def moderation_queue(request):
     query_params = request.GET.copy()
     query_params.pop("page", None)
 
+    dog_reference_ids = set()
+    litter_reference_ids = set()
     for item in pending_items:
-        item.review_diff = submission_diff(item)
+        payload = item.payload or {}
+        for key in ("sire_id", "dam_id"):
+            value = payload.get(key)
+            if not value:
+                continue
+            try:
+                dog_reference_ids.add(uuid.UUID(str(value)))
+            except (TypeError, ValueError, AttributeError):
+                pass
+        value = payload.get("litter_id")
+        if value:
+            try:
+                litter_reference_ids.add(uuid.UUID(str(value)))
+            except (TypeError, ValueError, AttributeError):
+                pass
+
+    dog_names = {
+        str(pk): name
+        for pk, name in Dog.objects.filter(pk__in=dog_reference_ids).values_list("pk", "name")
+    }
+    litter_names = {
+        str(pk): code
+        for pk, code in Litter.objects.filter(pk__in=litter_reference_ids).values_list("pk", "code")
+    }
+
+    for item in pending_items:
+        item.review_diff = submission_diff(
+            item,
+            dog_names=dog_names,
+            litter_names=litter_names,
+        )
         item.current_findings = [
             finding
-            for finding in current_findings(item)
+            for finding in getattr(item, "current_verification_findings", ())
             if finding.risk_level != SubmissionRiskLevel.GREEN
         ]
         age_days = max(0, (timezone.now() - item.created_at).days)
