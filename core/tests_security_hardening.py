@@ -34,6 +34,24 @@ class SecurityHardeningTests(TestCase):
         self.assertEqual(blocked.status_code, 429)
         self.assertEqual(blocked["Retry-After"], "600")
 
+    def test_password_reset_attempts_are_rate_limited(self):
+        url = reverse("password_reset")
+        for _ in range(5):
+            response = self.client.post(
+                url,
+                {"email": "nobody@example.com"},
+                REMOTE_ADDR="203.0.113.8",
+            )
+            self.assertNotEqual(response.status_code, 429)
+
+        blocked = self.client.post(
+            url,
+            {"email": "nobody@example.com"},
+            REMOTE_ADDR="203.0.113.8",
+        )
+        self.assertEqual(blocked.status_code, 429)
+        self.assertEqual(blocked["Retry-After"], "3600")
+
     def test_signup_attempts_are_rate_limited(self):
         url = reverse("accounts:signup")
         payload = {
