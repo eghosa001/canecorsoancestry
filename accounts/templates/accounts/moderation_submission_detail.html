@@ -161,7 +161,18 @@
       <p class="muted">No private verification evidence has been uploaded yet.</p>
     {% endfor %}
     {% if submission.attachment %}
-      <p><a class="text-link" href="{{ submission.attachment.url }}">Open original submission attachment →</a></p>
+      {% if submission.kind == "dog" or submission.kind == "image" %}
+        <div class="review-attachment-preview">
+          <img src="{{ submission.attachment.url }}" alt="Submitted photo for review" loading="eager" decoding="async">
+          <div>
+            <p class="eyebrow">{% if submission.kind == "dog" %}Proposed first profile photo{% else %}Submitted dog photo{% endif %}</p>
+            {% if submission.payload.photo_caption %}<p>{{ submission.payload.photo_caption }}</p>{% endif %}
+            <a class="text-link" href="{{ submission.attachment.url }}">Open original image →</a>
+          </div>
+        </div>
+      {% else %}
+        <p><a class="text-link" href="{{ submission.attachment.url }}">Open original submission attachment →</a></p>
+      {% endif %}
     {% endif %}
   </section>
 
