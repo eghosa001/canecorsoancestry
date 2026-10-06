@@ -922,19 +922,20 @@ def submit_image(request, pk):
             digest.update(chunk)
         upload.seek(0)
         try:
-            submission = Submission.objects.create(
-                kind=Submission.Kind.IMAGE,
-                submitted_by=request.user,
-                dog=dog,
-                kennel=dog.kennel,
-                payload={
-                    "caption": form.cleaned_data["caption"],
-                    "is_primary": form.cleaned_data["is_primary"],
-                    "sha256": digest.hexdigest(),
-                },
-                attachment=upload,
-                notes=form.cleaned_data["notes"],
-            )
+            with transaction.atomic():
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.IMAGE,
+                    submitted_by=request.user,
+                    dog=dog,
+                    kennel=dog.kennel,
+                    payload={
+                        "caption": form.cleaned_data["caption"],
+                        "is_primary": form.cleaned_data["is_primary"],
+                        "sha256": digest.hexdigest(),
+                    },
+                    attachment=upload,
+                    notes=form.cleaned_data["notes"],
+                )
         except (OSError, urllib.error.URLError) as exc:
             _add_upload_storage_error(form, "attachment", exc)
         else:
@@ -966,19 +967,20 @@ def submit_document(request, pk):
     form = DogDocumentSubmissionForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         try:
-            submission = Submission.objects.create(
-                kind=Submission.Kind.DOCUMENT,
-                submitted_by=request.user,
-                dog=dog,
-                kennel=dog.kennel,
-                payload={
-                    "title": form.cleaned_data["title"],
-                    "document_type": form.cleaned_data["document_type"],
-                    "is_public": form.cleaned_data["is_public"],
-                },
-                attachment=form.cleaned_data["attachment"],
-                notes=form.cleaned_data["notes"],
-            )
+            with transaction.atomic():
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.DOCUMENT,
+                    submitted_by=request.user,
+                    dog=dog,
+                    kennel=dog.kennel,
+                    payload={
+                        "title": form.cleaned_data["title"],
+                        "document_type": form.cleaned_data["document_type"],
+                        "is_public": form.cleaned_data["is_public"],
+                    },
+                    attachment=form.cleaned_data["attachment"],
+                    notes=form.cleaned_data["notes"],
+                )
         except (OSError, urllib.error.URLError) as exc:
             _add_upload_storage_error(form, "attachment", exc)
         else:
@@ -1843,14 +1845,15 @@ def claim_kennel(request, pk):
     form = KennelClaimForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         try:
-            submission = Submission.objects.create(
-                kind=Submission.Kind.KENNEL_CLAIM,
-                submitted_by=request.user,
-                kennel=kennel,
-                payload={"relationship": form.cleaned_data["relationship"]},
-                attachment=form.cleaned_data["evidence"] or "",
-                notes=form.cleaned_data["notes"],
-            )
+            with transaction.atomic():
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.KENNEL_CLAIM,
+                    submitted_by=request.user,
+                    kennel=kennel,
+                    payload={"relationship": form.cleaned_data["relationship"]},
+                    attachment=form.cleaned_data["evidence"] or "",
+                    notes=form.cleaned_data["notes"],
+                )
         except (OSError, urllib.error.URLError) as exc:
             _add_upload_storage_error(form, "evidence", exc)
         else:
@@ -1934,13 +1937,14 @@ def open_dispute(request, pk):
     form = DisputeForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         try:
-            dispute = DisputeCase.objects.create(
-                dog=dog,
-                opened_by=request.user,
-                reason=form.cleaned_data["reason"],
-                details=form.cleaned_data["details"],
-                attachment=form.cleaned_data["attachment"] or "",
-            )
+            with transaction.atomic():
+                dispute = DisputeCase.objects.create(
+                    dog=dog,
+                    opened_by=request.user,
+                    reason=form.cleaned_data["reason"],
+                    details=form.cleaned_data["details"],
+                    attachment=form.cleaned_data["attachment"] or "",
+                )
         except (OSError, urllib.error.URLError) as exc:
             _add_upload_storage_error(form, "attachment", exc)
         else:
