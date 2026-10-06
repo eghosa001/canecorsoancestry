@@ -7,6 +7,7 @@ from registry.models import (
     Dog,
     Kennel,
     KennelMembership,
+    Litter,
     ModerationAudit,
     Submission,
 )
