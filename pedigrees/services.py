@@ -4,7 +4,7 @@ from time import perf_counter
 
 from django.core.cache import cache
 from django.db import connection
-from django.db.models import Q
+from django.db.models import Count, Q
 
 from registry.models import Dog, HealthRecord
 
@@ -251,11 +251,50 @@ def offspring_for(dog, public_only=True):
     return queryset.select_related("kennel", "sire", "dam").distinct().order_by("name")
 
 
-def mate_relationships(dog, public_only=True, preview_limit=5, children=None):
-    """Group mating partners while retaining only a small offspring preview per mate."""
+def mate_relationships(
+    dog,
+    public_only=True,
+    preview_limit=5,
+    children=None,
+    exact_counts=False,
+):
+    """Group mates without materializing every offspring on large public profiles."""
     groups = {}
+
     if children is None:
         children = offspring_for(dog, public_only=public_only)
+
+    if exact_counts:
+        all_children = Dog.objects.filter(
+            Q(sire_id=dog.pk) | Q(dam_id=dog.pk)
+        )
+        if public_only:
+            all_children = all_children.filter(is_public=True)
+
+        counts_by_mate_id = defaultdict(int)
+        for row in (
+            all_children.filter(sire_id=dog.pk)
+            .values("dam_id")
+            .annotate(total=Count("id"))
+        ):
+            counts_by_mate_id[row["dam_id"]] += row["total"]
+        for row in (
+            all_children.filter(dam_id=dog.pk)
+            .values("sire_id")
+            .annotate(total=Count("id"))
+        ):
+            counts_by_mate_id[row["sire_id"]] += row["total"]
+
+        mate_ids = {mate_id for mate_id in counts_by_mate_id if mate_id}
+        mates_by_id = Dog.objects.in_bulk(mate_ids)
+        for mate_id, total in counts_by_mate_id.items():
+            key = str(mate_id) if mate_id else "unknown"
+            groups[key] = {
+                "mate": mates_by_id.get(mate_id) if mate_id else None,
+                "offspring": [],
+                "offspring_count": total,
+            }
+
     child_rows = (
         children.iterator(chunk_size=500)
         if hasattr(children, "iterator")
@@ -273,7 +312,9 @@ def mate_relationships(dog, public_only=True, preview_limit=5, children=None):
         )
         if len(group["offspring"]) < preview_limit:
             group["offspring"].append(child)
-        group["offspring_count"] += 1
+        if not exact_counts:
+            group["offspring_count"] += 1
+
     return sorted(
         groups.values(),
         key=lambda item: (
@@ -573,10 +614,17 @@ def _relationship_matrix(*dogs, public_only=False):
 
 
 def inbreeding_coefficient(dog, public_only=False):
-    """Return Wright's inbreeding coefficient as a 0..1 float."""
-    _, index, matrix = _relationship_matrix(dog, public_only=public_only)
-    dog_index = index[dog.pk]
-    return max(0.0, matrix[dog_index][dog_index] - 1.0)
+    """Return Wright's inbreeding coefficient without allocating a full NxN matrix."""
+    ordered, links = _pedigree_order(dog, public_only=public_only)
+    if dog.pk not in links:
+        return 0.0
+    sire_id, dam_id = links[dog.pk]
+    if sire_id not in links or dam_id not in links:
+        return 0.0
+    return max(
+        0.0,
+        _kinship_from_links(sire_id, dam_id, ordered, links),
+    )
 
 
 def _kinship_calculator(ordered, links):
