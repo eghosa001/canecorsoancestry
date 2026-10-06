@@ -416,8 +416,8 @@ def main():
                       };
                     }"""
                 )
-                if restored_mobile["heroOffset"] < 90:
-                    raise AssertionError(f"Customer mobile hero is still too high: {restored_mobile}")
+                if not 68 <= restored_mobile["heroOffset"] <= 82:
+                    raise AssertionError(f"Customer mobile hero moved away from the restored position: {restored_mobile}")
                 if abs(restored_mobile["firstY"] - restored_mobile["secondY"]) > 3 or restored_mobile["thirdY"] <= restored_mobile["firstY"]:
                     raise AssertionError(f"Customer mobile stats are not restored to a 2x2 grid: {restored_mobile}")
                 if not restored_mobile["themeVisible"]:
