@@ -300,10 +300,15 @@ def submission_list(request):
     submissions = request.user.ancestry_submissions.select_related(
         "dog", "kennel", "litter", "document", "reviewed_by", "payment_link__payment"
     )
+    paginator = Paginator(submissions, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
     return render(
         request,
         "accounts/submission_list.html",
-        {"submissions": submissions},
+        {
+            "submissions": page_obj.object_list,
+            "page_obj": page_obj,
+        },
     )
 
 
@@ -1048,18 +1053,25 @@ def documents(request):
     elif visibility == "private":
         items = items.filter(is_public=False)
 
+    paginator = Paginator(items, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    visible_items = page_obj.object_list
     pending_visibility_ids = set(
         Submission.objects.filter(
             kind=Submission.Kind.DOCUMENT_VISIBILITY,
             status=Submission.Status.PENDING,
-            document__in=items,
+            document__in=visible_items,
         ).values_list("document_id", flat=True)
     )
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
     return render(
         request,
         "accounts/documents.html",
         {
-            "documents": items,
+            "documents": visible_items,
+            "page_obj": page_obj,
+            "querystring": query_params.urlencode(),
             "document_types": DogDocument.DocumentType.choices,
             "selected_type": document_type,
             "selected_visibility": visibility,
@@ -1077,7 +1089,16 @@ def notifications(request):
         )
         return redirect("accounts:notifications")
     items = request.user.ancestry_notifications.all()
-    return render(request, "accounts/notifications.html", {"notifications": items})
+    paginator = Paginator(items, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(
+        request,
+        "accounts/notifications.html",
+        {
+            "notifications": page_obj.object_list,
+            "page_obj": page_obj,
+        },
+    )
 
 
 @login_required
@@ -1571,17 +1592,19 @@ def my_pedigrees(request):
     dogs = _member_dogs(request.user).select_related(
         "kennel", "sire", "dam"
     ).order_by("name")
+    paginator = Paginator(dogs, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
     rows = [
         {
             "dog": dog,
             "parent_count": int(bool(dog.sire_id)) + int(bool(dog.dam_id)),
         }
-        for dog in dogs
+        for dog in page_obj.object_list
     ]
     return render(
         request,
         "accounts/my_pedigrees.html",
-        {"rows": rows},
+        {"rows": rows, "page_obj": page_obj},
     )
 
 
@@ -1666,11 +1689,14 @@ def my_litters(request):
         .select_related("kennel", "sire", "dam")
         .order_by("-date_of_birth", "code")
     )
+    paginator = Paginator(litters, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
     return render(
         request,
         "accounts/my_litters.html",
         {
-            "litters": litters,
+            "litters": page_obj.object_list,
+            "page_obj": page_obj,
             "editable_kennel_ids": editable_kennel_ids,
             "can_create_litter": bool(editable_kennel_ids),
         },
@@ -1886,10 +1912,15 @@ def my_disputes(request):
     disputes = request.user.opened_ancestry_disputes.select_related(
         "dog", "assigned_to", "closed_by"
     )
+    paginator = Paginator(disputes, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
     return render(
         request,
         "accounts/my_disputes.html",
-        {"disputes": disputes},
+        {
+            "disputes": page_obj.object_list,
+            "page_obj": page_obj,
+        },
     )
 
 
