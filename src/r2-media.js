@@ -48,6 +48,50 @@ function safeKey(url, prefix) {
   return key;
 }
 
+function isAllowedSourceUrl(source) {
+  return (
+    source instanceof URL &&
+    (source.hostname === "www.canecorsopedigree.com" ||
+      source.hostname === "canecorsopedigree.com") &&
+    source.pathname.startsWith("/static/images/animal/") &&
+    source.protocol === "https:" &&
+    (!source.port || source.port === "443") &&
+    !source.username &&
+    !source.password
+  );
+}
+
+async function fetchAllowedSource(source, options, maxRedirects = 3) {
+  let current = source;
+  for (let redirects = 0; redirects <= maxRedirects; redirects += 1) {
+    const response = await fetch(current.toString(), {
+      ...options,
+      redirect: "manual",
+    });
+    if (![301, 302, 303, 307, 308].includes(response.status)) {
+      return response;
+    }
+    if (redirects === maxRedirects) {
+      throw new Error("Too many source redirects");
+    }
+    const location = response.headers.get("location");
+    if (!location) {
+      throw new Error("Source redirect did not include a location");
+    }
+    let next;
+    try {
+      next = new URL(location, current);
+    } catch {
+      throw new Error("Source redirect location is invalid");
+    }
+    if (!isAllowedSourceUrl(next)) {
+      throw new Error("Source redirect is outside the allowed image host/path");
+    }
+    current = next;
+  }
+  throw new Error("Source redirect limit exceeded");
+}
+
 function r2Headers(object, cacheControl = "private, no-store") {
   const headers = new Headers();
   if (object.writeHttpMetadata) object.writeHttpMetadata(headers);
@@ -175,20 +219,7 @@ async function handleR2Ingest(request, env, url) {
     return new Response("Invalid source URL", { status: 400 });
   }
 
-  const allowedHost =
-    source.hostname === "www.canecorsopedigree.com" ||
-    source.hostname === "canecorsopedigree.com";
-  const allowedPath = source.pathname.startsWith("/static/images/animal/");
-  const allowedProtocol = source.protocol === "https:";
-  const allowedPort = !source.port || source.port === "443";
-  if (
-    !allowedHost ||
-    !allowedPath ||
-    !allowedProtocol ||
-    !allowedPort ||
-    source.username ||
-    source.password
-  ) {
+  if (!isAllowedSourceUrl(source)) {
     return new Response("Source URL not allowed", { status: 400 });
   }
 
@@ -199,8 +230,7 @@ async function handleR2Ingest(request, env, url) {
 
   let upstream;
   try {
-    upstream = await fetch(source.toString(), {
-      redirect: "follow",
+    upstream = await fetchAllowedSource(source, {
       headers: {
         "user-agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -317,6 +347,8 @@ async function handleSignedMedia(request, env, url) {
     headers: r2Headers(object),
   });
 }
+
+export { isAllowedSourceUrl };
 
 export default {
   async fetch(request, env) {
