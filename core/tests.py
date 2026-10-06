@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.contrib.staticfiles import finders
 from django.test import TestCase
 from django.urls import reverse
 
@@ -39,3 +42,19 @@ class PublicThemeRegressionTests(TestCase):
         self.assertContains(response, "hero-mobile-break")
         self.assertContains(response, '<button class="theme-toggle', count=3)
         self.assertContains(response, "Countries")
+
+
+class FormControlContrastTests(TestCase):
+    def test_member_form_controls_follow_theme_and_native_choices_stay_legible(self):
+        css_path = finders.find("core/site.css")
+        self.assertIsNotNone(css_path)
+        css = Path(css_path).read_text(encoding="utf-8")
+
+        self.assertNotIn(
+            ".form-field textarea,\n.merge-form select,\n.review-actions textarea {\n"
+            "  width: 100%;\n  border: 1px solid var(--line-soft);\n"
+            "  background: #090b0a;",
+            css,
+        )
+        self.assertIn('input[type="file"]::file-selector-button', css)
+        self.assertIn("select option,", css)
