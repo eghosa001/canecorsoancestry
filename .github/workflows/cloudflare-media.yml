@@ -174,6 +174,59 @@ jobs:
           fi
           echo "Signed R2 upload, verification, and cleanup all succeeded."
 
+      - name: Verify binary image upload round trip
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
+          key="smoke/uploads/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.jpg"
+          python - <<'PY'
+          import base64
+          from pathlib import Path
+          payload = (
+              "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////"
+              "2wBDAf//////////////////////////////////////////////////////////////////////////////////////"
+              "wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/"
+              "9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAA"
+              "AAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAA"
+              "AAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAA"
+              "wAAABAf/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAA"
+              "gBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k="
+          )
+          Path("/tmp/r2-smoke.jpg").write_bytes(base64.b64decode(payload))
+          PY
+          digest="$(sha256sum /tmp/r2-smoke.jpg | awk '{print $1}')"
+          timestamp="$(date +%s)"
+          signature="$(R2_METHOD="PUT" R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$digest" python -c 'import hashlib,hmac,os; m=os.environ["R2_METHOD"]; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["DJANGO_SECRET_KEY"].encode(), chr(10).join([m,k,t,d]).encode(), hashlib.sha256).hexdigest())')"
+          put_status="$(curl --connect-timeout 8 --max-time 30 -sS -o /tmp/r2-image-put.json -w '%{http_code}' -X PUT \
+            -H "content-type: image/jpeg" \
+            -H "x-r2-timestamp: $timestamp" \
+            -H "x-r2-content-sha256: $digest" \
+            -H "x-r2-signature: $signature" \
+            --data-binary @/tmp/r2-smoke.jpg "$base/_r2/$key" || true)"
+          test "$put_status" = "201"
+
+          empty_digest="$(printf '' | sha256sum | awk '{print $1}')"
+          timestamp="$(date +%s)"
+          signature="$(R2_METHOD="GET" R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$empty_digest" python -c 'import hashlib,hmac,os; m=os.environ["R2_METHOD"]; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["DJANGO_SECRET_KEY"].encode(), chr(10).join([m,k,t,d]).encode(), hashlib.sha256).hexdigest())')"
+          get_status="$(curl --connect-timeout 8 --max-time 20 -sS -o /tmp/r2-smoke-read.jpg -w '%{http_code}' \
+            -H "x-r2-timestamp: $timestamp" \
+            -H "x-r2-content-sha256: $empty_digest" \
+            -H "x-r2-signature: $signature" \
+            "$base/_r2/$key" || true)"
+          test "$get_status" = "200"
+          test "$(sha256sum /tmp/r2-smoke-read.jpg | awk '{print $1}')" = "$digest"
+
+          timestamp="$(date +%s)"
+          signature="$(R2_METHOD="DELETE" R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$empty_digest" python -c 'import hashlib,hmac,os; m=os.environ["R2_METHOD"]; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["DJANGO_SECRET_KEY"].encode(), chr(10).join([m,k,t,d]).encode(), hashlib.sha256).hexdigest())')"
+          delete_status="$(curl --connect-timeout 8 --max-time 20 -sS -o /dev/null -w '%{http_code}' -X DELETE \
+            -H "x-r2-timestamp: $timestamp" \
+            -H "x-r2-content-sha256: $empty_digest" \
+            -H "x-r2-signature: $signature" \
+            "$base/_r2/$key" || true)"
+          test "$delete_status" = "204"
+          echo "Binary JPEG upload, read-back, hash verification, and cleanup succeeded."
+
       - name: Clean temporary files
         if: always()
-        run: rm -f /tmp/r2-secrets.json /tmp/r2-health.json /tmp/r2-denied.txt /tmp/r2-put.json
+        run: rm -f /tmp/r2-secrets.json /tmp/r2-health.json /tmp/r2-denied.txt /tmp/r2-put.json /tmp/r2-image-put.json /tmp/r2-smoke.jpg /tmp/r2-smoke-read.jpg
