@@ -12,7 +12,7 @@ from django.shortcuts import render
 from django.urls import reverse
 
 from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
-from registry.querysets import with_stored_images
+from registry.querysets import one_dog_per_kennel, with_stored_images
 
 from .seo import json_ld
 
@@ -124,6 +124,18 @@ def _load_featured_dogs():
         featured_ids.append(dog_id)
         if len(featured_ids) == 4:
             break
+
+    if len(featured_ids) < 4 and len(candidate_rows) == 96:
+        # The fast candidate set normally finds four kennel-diverse cards.
+        # If one kennel dominates that entire slice, preserve correctness with
+        # the exact per-kennel query rather than showing a short homepage row.
+        featured_ids = list(
+            one_dog_per_kennel(
+                with_stored_images(Dog.objects.filter(is_public=True))
+            )
+            .order_by("-search_count", "-updated_at", "name")
+            .values_list("pk", flat=True)[:4]
+        )
 
     cache.set(cache_key, featured_ids, 300)
     return load(featured_ids)
