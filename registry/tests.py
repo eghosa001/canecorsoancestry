@@ -374,6 +374,12 @@ class DogModelTests(TestCase):
             kennel=kennel,
             is_public=True,
         )
+        source_backed = Dog.objects.create(
+            name="Source Photo Dog",
+            slug="source-photo-dog",
+            kennel=kennel,
+            is_public=True,
+        )
         Dog.objects.create(
             name="Pedigree Only Dog",
             slug="pedigree-only-dog",
@@ -385,14 +391,24 @@ class DogModelTests(TestCase):
             image="dogs/photo-kennel/photographed.jpg",
             is_primary=True,
         )
+        DogSource.objects.create(
+            dog=source_backed,
+            source_type=DogSource.SourceType.REGISTRY,
+            title="Source photo",
+            source_url="https://www.canecorsopedigree.com/dog/source-photo-dog",
+            raw_payload={
+                "image_url": "https://www.canecorsopedigree.com/static/images/animal/source-photo.jpg"
+            },
+        )
 
         response = self.client.get(reverse("registry:kennel-detail", args=[kennel.slug]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["dog_total"], 1)
-        self.assertEqual(response.context["public_dog_total"], 2)
+        self.assertEqual(response.context["dog_total"], 2)
+        self.assertEqual(response.context["public_dog_total"], 3)
         self.assertContains(response, "Dogs with photos")
         self.assertContains(response, "Photographed Dog")
+        self.assertContains(response, "Source Photo Dog")
         self.assertNotContains(response, "Pedigree Only Dog")
 
     def test_litter_keeps_image_less_offspring_as_linked_text_records(self):
