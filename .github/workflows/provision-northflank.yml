@@ -33,6 +33,7 @@ jobs:
       SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
       PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
+      PAYSTACK_SUBACCOUNT_CODE: ${{ secrets.PAYSTACK_SUBACCOUNT_CODE }}
       EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
       EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
       EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
@@ -126,7 +127,7 @@ jobs:
             echo "::warning::Account email is not fully configured; password recovery will remain unavailable."
           fi
 
-          payload="$(jq -n             --arg name "$NF_SERVICE_NAME"             --arg db "$DATABASE_URL"             --arg secret "$DJANGO_SECRET_KEY"             --arg paystack "$PAYSTACK_SECRET_KEY"             --arg email_host "$EMAIL_HOST"             --arg email_user "$EMAIL_HOST_USER"             --arg email_password "$EMAIL_HOST_PASSWORD"             --arg from_email "$from_email"             --arg email_enabled "$email_enabled"             --arg site "$PUBLIC_SITE"             --arg media "$MEDIA_EDGE"             '{
+          payload="$(jq -n             --arg name "$NF_SERVICE_NAME"             --arg db "$DATABASE_URL"             --arg secret "$DJANGO_SECRET_KEY"             --arg paystack "$PAYSTACK_SECRET_KEY"             --arg paystack_subaccount "$PAYSTACK_SUBACCOUNT_CODE"             --arg email_host "$EMAIL_HOST"             --arg email_user "$EMAIL_HOST_USER"             --arg email_password "$EMAIL_HOST_PASSWORD"             --arg from_email "$from_email"             --arg email_enabled "$email_enabled"             --arg site "$PUBLIC_SITE"             --arg media "$MEDIA_EDGE"             '{
               name:$name,
               description:"Always-on Django origin for Cane Corso Ancestry",
               billing:{
@@ -164,6 +165,7 @@ jobs:
                 DATABASE_URL:$db,
                 DJANGO_SECRET_KEY:$secret,
                 PAYSTACK_SECRET_KEY:$paystack,
+                PAYSTACK_SUBACCOUNT_CODE:$paystack_subaccount,
                 EMAIL_HOST:$email_host,
                 EMAIL_HOST_USER:$email_user,
                 EMAIL_HOST_PASSWORD:$email_password,
@@ -212,7 +214,7 @@ jobs:
             echo "Created Northflank service: $service_id"
           else
             echo "Reusing existing Northflank service: $service_id"
-            patch="$(jq -n --arg site "$PUBLIC_SITE" --arg media "$MEDIA_EDGE" --arg db "$DATABASE_URL" --arg secret "$DJANGO_SECRET_KEY" --arg paystack "$PAYSTACK_SECRET_KEY" --arg email_host "$EMAIL_HOST" --arg email_user "$EMAIL_HOST_USER" --arg email_password "$EMAIL_HOST_PASSWORD" --arg from_email "$from_email" --arg email_enabled "$email_enabled" '{runtimeEnvironment:{DATABASE_URL:$db,DJANGO_SECRET_KEY:$secret,PAYSTACK_SECRET_KEY:$paystack,
+            patch="$(jq -n --arg site "$PUBLIC_SITE" --arg media "$MEDIA_EDGE" --arg db "$DATABASE_URL" --arg secret "$DJANGO_SECRET_KEY" --arg paystack "$PAYSTACK_SECRET_KEY" --arg paystack_subaccount "$PAYSTACK_SUBACCOUNT_CODE" --arg email_host "$EMAIL_HOST" --arg email_user "$EMAIL_HOST_USER" --arg email_password "$EMAIL_HOST_PASSWORD" --arg from_email "$from_email" --arg email_enabled "$email_enabled" '{runtimeEnvironment:{DATABASE_URL:$db,DJANGO_SECRET_KEY:$secret,PAYSTACK_SECRET_KEY:$paystack,PAYSTACK_SUBACCOUNT_CODE:$paystack_subaccount,
                 EMAIL_HOST:$email_host,
                 EMAIL_HOST_USER:$email_user,
                 EMAIL_HOST_PASSWORD:$email_password,
