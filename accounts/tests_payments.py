@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from registry.models import Dog, Kennel, KennelMembership, Submission
+from registry.models import Dog, Kennel, KennelMembership, ModerationRoleAssignment, Submission
 from registry.services import approve_submission
 
 from .forms import PaymentPackageForm
@@ -24,7 +24,10 @@ class PaidSubmissionTests(TestCase):
         self.reviewer = get_user_model().objects.create_user(
             username="reviewer",
             password="test-pass-123",
-            is_staff=True,
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.reviewer,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         self.kennel = Kennel.objects.create(
             name="Paid Kennel",

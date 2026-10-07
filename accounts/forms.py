@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.utils.text import slugify
 from PIL import Image, UnidentifiedImageError
 
-from registry.models import DisputeCase, Dog, DogDocument, DogIdentityNumber, DogRegistration, DogSource, Kennel, KennelMembership, Litter, Submission, SubmissionEvidence, VerificationState
+from registry.models import DisputeCase, Dog, DogDocument, DogIdentityNumber, DogRegistration, DogSource, Kennel, KennelMembership, Litter, ModerationRoleAssignment, Submission, SubmissionEvidence, VerificationState
 
 from .models import Profile, SubmissionPayment
 
@@ -170,6 +170,42 @@ class MemberSignUpForm(UserCreationForm):
         user = super().save(commit=False)
         user.username = slugify(self.cleaned_data["kennel_name"])[:150]
         user.email = self.cleaned_data["email"]
+        user.is_staff = False
+        user.is_superuser = False
+        if commit:
+            user.save()
+        return user
+
+
+class ModeratorAccountCreateForm(UserCreationForm):
+    email = forms.EmailField(
+        required=True,
+        label="Staff email",
+        widget=forms.EmailInput(attrs={"autocomplete": "email"}),
+    )
+    role = forms.ChoiceField(
+        choices=(
+            (ModerationRoleAssignment.Role.REVIEWER, "Moderator"),
+            (ModerationRoleAssignment.Role.SENIOR, "Senior Moderator"),
+        ),
+        help_text="Super Admin accounts are created separately as Django superusers.",
+    )
+
+    class Meta(UserCreationForm.Meta):
+        model = get_user_model()
+        fields = ("username", "email")
+
+    def clean_email(self):
+        email = self.cleaned_data["email"].strip().lower()
+        if get_user_model().objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("An account already uses this email address.")
+        return email
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = self.cleaned_data["email"].strip().lower()
+        user.is_staff = False
+        user.is_superuser = False
         if commit:
             user.save()
         return user

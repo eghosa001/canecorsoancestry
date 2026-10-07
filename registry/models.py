@@ -85,6 +85,21 @@ class KennelMembership(models.Model):
             models.UniqueConstraint(fields=("kennel", "user"), name="unique_kennel_member")
         ]
 
+    def clean(self):
+        super().clean()
+        if not self.user_id:
+            return
+        if self.user.is_superuser or ModerationRoleAssignment.objects.filter(
+            user_id=self.user_id
+        ).exists():
+            raise ValidationError(
+                {"user": "Staff accounts cannot hold kennel membership. Use the separate member account."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
 
 class Dog(models.Model):
     class Sex(models.TextChoices):
@@ -646,6 +661,21 @@ class Submission(models.Model):
             ),
         ]
 
+    def clean(self):
+        super().clean()
+        if not self.submitted_by_id:
+            return
+        if self.submitted_by.is_superuser or ModerationRoleAssignment.objects.filter(
+            user_id=self.submitted_by_id
+        ).exists():
+            raise ValidationError(
+                {"submitted_by": "Staff accounts cannot submit member records. Use the separate member account."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
     @property
     def assigned_to_admin_label(self):
         if not self.assigned_to_id:
@@ -670,10 +700,10 @@ class Submission(models.Model):
 
 class ModerationRoleAssignment(models.Model):
     class Role(models.TextChoices):
-        NONE = "none", "No verification role"
-        OWNER = "owner", "Owner / Super Admin"
-        SENIOR = "senior", "Senior Reviewer"
-        REVIEWER = "reviewer", "Reviewer"
+        NONE = "none", "Suspended staff"
+        OWNER = "owner", "Super Admin"
+        SENIOR = "senior", "Senior Moderator"
+        REVIEWER = "reviewer", "Moderator"
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -701,7 +731,31 @@ class ModerationRoleAssignment(models.Model):
     def public_label(self):
         return f"Admin #{self.admin_number}" if self.admin_number else "Admin"
 
+    def clean(self):
+        super().clean()
+        if not self.user_id:
+            return
+        if KennelMembership.objects.filter(user_id=self.user_id).exists() or Submission.objects.filter(
+            submitted_by_id=self.user_id
+        ).exists():
+            raise ValidationError(
+                {"user": "Member accounts cannot receive moderator or administrator authority. Create a separate staff account."}
+            )
+        if not self.user.is_superuser and self.user.is_staff:
+            raise ValidationError(
+                {"user": "Moderator accounts cannot have Django staff/admin access."}
+            )
+        if self.role == self.Role.OWNER and not self.user.is_superuser:
+            raise ValidationError(
+                {"role": "Super Admin authority is reserved for Django superuser accounts."}
+            )
+        if self.user.is_superuser and self.role != self.Role.OWNER:
+            raise ValidationError(
+                {"role": "A Django superuser must use the Super Admin moderation role."}
+            )
+
     def save(self, *args, **kwargs):
+        self.full_clean()
         super().save(*args, **kwargs)
         if self.admin_number is None and self.pk:
             number = 10000 + self.pk

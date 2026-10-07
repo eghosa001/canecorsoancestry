@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
-from registry.models import Dog, DogImage, DogSource, Kennel, KennelMembership, Submission
+from registry.models import Dog, DogImage, DogSource, Kennel, KennelMembership, ModerationRoleAssignment, Submission
 
 from .models import PaymentSubmissionLink, SubmissionPayment
 from registry.services import approve_submission
@@ -17,7 +17,11 @@ from registry.services import approve_submission
 class MemberAccessFlowTests(TestCase):
     def setUp(self):
         self.reviewer = get_user_model().objects.create_user(
-            username="reviewer", is_staff=True
+            username="reviewer"
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.reviewer,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
 
     def test_signup_uses_kennel_identity_and_email_login(self):

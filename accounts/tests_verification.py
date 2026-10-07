@@ -43,17 +43,18 @@ class VerificationGovernanceTests(TestCase):
         self.reviewer = User.objects.create_user(
             username="normal-reviewer",
             password="test-pass-123",
-            is_staff=True,
         )
         self.senior_one = User.objects.create_user(
             username="senior-one",
             password="test-pass-123",
-            is_staff=True,
         )
         self.senior_two = User.objects.create_user(
             username="senior-two",
             password="test-pass-123",
-            is_staff=True,
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.reviewer,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         ModerationRoleAssignment.objects.create(
             user=self.senior_one,
@@ -189,7 +190,7 @@ class VerificationGovernanceTests(TestCase):
             SubmissionVerificationStatus.AWAITING_SECOND,
         )
 
-        with self.assertRaisesRegex(ValueError, "different administrator"):
+        with self.assertRaisesRegex(ValueError, "different Senior Moderator or Super Admin"):
             approve_submission(
                 submission,
                 self.senior_one,
@@ -236,7 +237,7 @@ class VerificationGovernanceTests(TestCase):
 
     def test_normal_reviewer_cannot_override_red_finding(self):
         submission = self._puppy_submission()
-        with self.assertRaisesRegex(ValueError, "senior reviewer or owner"):
+        with self.assertRaisesRegex(ValueError, "Senior Moderator or Super Admin"):
             request_high_risk_override(
                 submission,
                 self.reviewer,

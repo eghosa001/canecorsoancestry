@@ -5,6 +5,7 @@ import logging
 import urllib.error
 from urllib.parse import urlparse
 import uuid
+from functools import wraps
 
 from django.contrib import messages
 from django.conf import settings
@@ -59,6 +60,9 @@ from registry.permissions import (
     can_review_flagged_submissions,
     can_review_submissions,
     can_second_approve,
+    can_use_member_features,
+    has_member_identity,
+    is_staff_identity,
     admin_public_label,
     moderation_role,
 )
@@ -83,6 +87,16 @@ from pedigrees.services import pedigree_analysis, pedigree_export_rows
 logger = logging.getLogger(__name__)
 
 
+def member_account_only(view_func):
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if request.user.is_authenticated and not can_use_member_features(request.user):
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+
+    return wrapped
+
+
 from .models import PaymentSubmissionLink, Profile, SubmissionPayment
 
 from .forms import (
@@ -102,6 +116,7 @@ from .forms import (
     HealthRecordSubmissionForm,
     MemberProfileForm,
     MemberSignUpForm,
+    ModeratorAccountCreateForm,
     PaymentPackageForm,
     MergeDogsForm,
     ReviewSubmissionForm,
@@ -709,7 +724,7 @@ def payment_submit_dog(request, pk):
             "form": form,
             "eyebrow": "Paid dog submission",
             "title": f"Submit a dog · {payment.kennel.name}",
-            "intro": "Add the dog's details and, if available, its primary profile photo in this same submission. Nothing is published until an administrator approves it.",
+            "intro": "Add the dog's details and, if available, its primary profile photo in this same submission. Nothing is published until an authorized Moderator approves it.",
             "button_label": "Submit for admin verification",
             "multipart": True,
         },
@@ -781,7 +796,7 @@ def payment_submit_litter(request, pk):
             "form": form,
             "eyebrow": "Paid litter submission",
             "title": f"Submit a litter · {payment.kennel.name}",
-            "intro": "The litter and its puppies remain private until an administrator verifies and approves the records.",
+            "intro": "The litter and its puppies remain private until an authorized Moderator verifies and approves the records.",
             "button_label": "Submit litter for admin verification",
         },
     )
@@ -1053,7 +1068,7 @@ def submit_health_record(request, pk):
             verify_submission(submission)
             messages.success(
                 request,
-                "Health/DNA result submitted for administrator verification.",
+                "Health/DNA result submitted for Moderator verification.",
             )
             return redirect("accounts:submissions")
 
@@ -1066,7 +1081,7 @@ def submit_health_record(request, pk):
             "title": f"Submit a health/DNA result for {dog.name}",
             "current_photo_url": _current_dog_photo_url(dog),
             "intro": (
-                "Structured results remain pending until an administrator checks "
+                "Structured results remain pending until an authorized Moderator checks "
                 "the supporting evidence. The uploaded certificate stays private "
                 "unless its visibility is separately approved."
             ),
@@ -1620,7 +1635,7 @@ def review_submission(request, pk, decision):
         elif decision == "reject":
             if flagged and not can_review_flagged_submissions(request.user):
                 raise ValueError(
-                    "A senior reviewer or owner must decide a flagged submission."
+                    "A Senior Moderator or Super Admin must decide a flagged submission."
                 )
             reject_submission(submission, request.user, notes)
             messages.success(request, "Submission rejected.")
@@ -1632,7 +1647,7 @@ def review_submission(request, pk, decision):
         elif decision == "override":
             if not can_review_flagged_submissions(request.user):
                 raise ValueError(
-                    "Only a senior reviewer or owner can override an automated warning."
+                    "Only a Senior Moderator or Super Admin can override an automated warning."
                 )
             if not flagged:
                 raise ValueError("There is no current warning to override.")
@@ -1640,7 +1655,7 @@ def review_submission(request, pk, decision):
                 request_high_risk_override(submission, request.user, notes)
                 messages.success(
                     request,
-                    "High-risk override recorded. A different senior reviewer or owner must approve it before publication.",
+                    "High-risk override recorded. A different Senior Moderator or Super Admin must approve it before publication.",
                 )
             else:
                 approve_submission(
@@ -1654,7 +1669,7 @@ def review_submission(request, pk, decision):
         elif decision == "second_approve":
             if not can_second_approve(request.user):
                 raise ValueError(
-                    "Only a senior reviewer or owner can complete second review."
+                    "Only a Senior Moderator or Super Admin can complete second review."
                 )
             override_review = (
                 submission.review_decisions.filter(
@@ -2284,8 +2299,16 @@ def verification_dashboard(request):
     ).count()
 
     reviewer_rows = []
+    staff_user_ids = set(
+        ModerationRoleAssignment.objects.values_list("user_id", flat=True)
+    )
+    staff_user_ids.update(
+        get_user_model().objects.filter(is_superuser=True).values_list("pk", flat=True)
+    )
     staff_users = list(
-        get_user_model().objects.filter(is_staff=True).order_by("username")
+        get_user_model().objects.filter(pk__in=staff_user_ids).order_by(
+            "-is_superuser", "username"
+        )
     )
     decision_actions = {
         SubmissionReview.Action.APPROVED,
@@ -2347,6 +2370,11 @@ def verification_dashboard(request):
                 "user": user,
                 "admin_label": admin_public_label(user),
                 "role": moderation_role(user),
+                "role_label": {
+                    ModerationRoleAssignment.Role.OWNER: "Super Admin",
+                    ModerationRoleAssignment.Role.SENIOR: "Senior Moderator",
+                    ModerationRoleAssignment.Role.REVIEWER: "Moderator",
+                }.get(moderation_role(user), "Suspended staff"),
                 "reviews": len(decision_rows),
                 "approved": approved,
                 "rejected": rejected,
@@ -2462,10 +2490,59 @@ def verification_dashboard(request):
             "locked_litters": locked_litters,
             "rules": rules,
             "staff_users": staff_users,
-            "role_choices": ModerationRoleAssignment.Role.choices,
+            "staff_account_form": ModeratorAccountCreateForm(),
+            "role_choices": (
+                (ModerationRoleAssignment.Role.NONE, "Suspended staff"),
+                (ModerationRoleAssignment.Role.REVIEWER, "Moderator"),
+                (ModerationRoleAssignment.Role.SENIOR, "Senior Moderator"),
+            ),
             "risk_choices": SubmissionRiskLevel.choices,
         },
     )
+
+
+@login_required
+@require_POST
+def moderation_create_account(request):
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+
+    form = ModeratorAccountCreateForm(request.POST)
+    if not form.is_valid():
+        message = next(
+            (
+                str(error)
+                for errors in form.errors.values()
+                for error in errors
+            ),
+            "Moderator account details were invalid.",
+        )
+        messages.error(request, message)
+        return redirect("accounts:verification-dashboard")
+
+    with transaction.atomic():
+        user = form.save()
+        assignment = ModerationRoleAssignment.objects.create(
+            user=user,
+            role=form.cleaned_data["role"],
+            assigned_by=request.user,
+        )
+        record_audit(
+            action=ModerationAudit.Action.VERIFICATION,
+            actor=request.user,
+            summary={
+                "type": "moderator_account_created",
+                "target_admin_number": assignment.admin_number,
+                "new_role": assignment.role,
+            },
+            note="Super Admin created a dedicated moderation account.",
+        )
+
+    messages.success(
+        request,
+        f"{assignment.get_role_display()} account created as {assignment.public_label}.",
+    )
+    return redirect("accounts:verification-dashboard")
 
 
 @login_required
@@ -2475,44 +2552,50 @@ def moderation_set_role(request):
         raise PermissionDenied
 
     user_id = request.POST.get("user_id", "").strip()
-    user_lookup = request.POST.get("user_lookup", "").strip()
-    if user_id:
-        if not user_id.isdigit():
-            messages.error(request, "Invalid administrator account ID.")
-            return redirect("accounts:verification-dashboard")
-        target = get_object_or_404(get_user_model(), pk=int(user_id))
-    elif user_lookup:
-        target = get_user_model().objects.filter(
-            Q(username__iexact=user_lookup) | Q(email__iexact=user_lookup)
-        ).first()
-        if target is None:
-            messages.error(request, "No user matches that username or email.")
-            return redirect("accounts:verification-dashboard")
-    else:
-        messages.error(request, "Choose a user or enter a username/email.")
-        return redirect("accounts:verification-dashboard")
-    requested_role = request.POST.get("role", "").strip()
-    if target.is_superuser:
-        messages.info(request, "Superusers always have owner-level verification authority.")
+    if not user_id.isdigit():
+        messages.error(request, "Invalid staff account ID.")
         return redirect("accounts:verification-dashboard")
 
-    current = ModerationRoleAssignment.objects.filter(user=target).first()
-    before = current.role if current else ""
-    if not requested_role:
-        requested_role = ModerationRoleAssignment.Role.NONE
-    if requested_role not in dict(ModerationRoleAssignment.Role.choices):
-        messages.error(request, "Unknown moderation role.")
+    target = get_object_or_404(get_user_model(), pk=int(user_id))
+    if target.is_superuser:
+        messages.info(request, "Super Admin accounts keep Super Admin authority.")
         return redirect("accounts:verification-dashboard")
-    assignment, _ = ModerationRoleAssignment.objects.update_or_create(
-        user=target,
-        defaults={
-            "role": requested_role,
-            "assigned_by": request.user,
-        },
-    )
-    should_be_staff = requested_role != ModerationRoleAssignment.Role.NONE
-    if target.is_staff != should_be_staff:
-        target.is_staff = should_be_staff
+    if has_member_identity(target):
+        ModerationRoleAssignment.objects.filter(user=target).delete()
+        if target.is_staff:
+            target.is_staff = False
+            target.save(update_fields=("is_staff",))
+        messages.error(
+            request,
+            "That is a member account. Member identities cannot be moderators; create a separate staff account.",
+        )
+        return redirect("accounts:verification-dashboard")
+
+    assignment = ModerationRoleAssignment.objects.filter(user=target).first()
+    if assignment is None:
+        messages.error(
+            request,
+            "Only dedicated staff accounts can receive moderation roles. Create a separate moderator account first.",
+        )
+        return redirect("accounts:verification-dashboard")
+
+    requested_role = request.POST.get("role", "").strip() or ModerationRoleAssignment.Role.NONE
+    allowed_roles = {
+        ModerationRoleAssignment.Role.NONE,
+        ModerationRoleAssignment.Role.REVIEWER,
+        ModerationRoleAssignment.Role.SENIOR,
+    }
+    if requested_role not in allowed_roles:
+        messages.error(request, "That role can only be assigned to a Super Admin account.")
+        return redirect("accounts:verification-dashboard")
+
+    before = assignment.role
+    assignment.role = requested_role
+    assignment.assigned_by = request.user
+    assignment.save(update_fields=("role", "assigned_by"))
+
+    if target.is_staff:
+        target.is_staff = False
         target.save(update_fields=("is_staff",))
 
     record_audit(
@@ -2524,9 +2607,9 @@ def moderation_set_role(request):
             "previous_role": before,
             "new_role": requested_role,
         },
-        note="Owner updated moderation authority.",
+        note="Super Admin updated dedicated staff authority.",
     )
-    messages.success(request, "Moderator authority updated.")
+    messages.success(request, "Staff authority updated.")
     return redirect("accounts:verification-dashboard")
 
 

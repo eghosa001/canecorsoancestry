@@ -1,5 +1,21 @@
 from django.contrib import admin
 
+from .permissions import has_member_identity
+
+def _super_admin_has_permission(request):
+    """Django Admin is reserved for clean, dedicated Super Admin identities only."""
+    user = getattr(request, "user", None)
+    return bool(
+        user
+        and user.is_active
+        and user.is_superuser
+        and not has_member_identity(user)
+    )
+
+
+admin.site.has_permission = _super_admin_has_permission
+
+
 from .models import (
     DisputeCase,
     EvidenceRequest,

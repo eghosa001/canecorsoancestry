@@ -10,6 +10,7 @@ from registry.models import (
     HealthRecord,
     Kennel,
     KennelMembership,
+    ModerationRoleAssignment,
     Submission,
     VerificationEvent,
     VerificationState,
@@ -61,7 +62,10 @@ class HealthRecordSubmissionTests(TestCase):
         )
         self.reviewer = get_user_model().objects.create_user(
             username="health-reviewer",
-            is_staff=True,
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.reviewer,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         self.kennel = Kennel.objects.create(
             name="Health Kennel",

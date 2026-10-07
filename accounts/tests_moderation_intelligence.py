@@ -9,6 +9,7 @@ from registry.models import (
     KennelMembership,
     Litter,
     ModerationAudit,
+    ModerationRoleAssignment,
     Submission,
 )
 from registry.services import (
@@ -80,7 +81,11 @@ class AuditTrailTests(TestCase):
     def test_approval_creates_audit_event_with_review_diff(self):
         submitter = get_user_model().objects.create_user(username="audit-member")
         reviewer = get_user_model().objects.create_user(
-            username="audit-reviewer", is_staff=True
+            username="audit-reviewer"
+        )
+        ModerationRoleAssignment.objects.create(
+            user=reviewer,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         kennel = Kennel.objects.create(name="Audit Kennel", slug="audit-kennel")
         submission = Submission.objects.create(
@@ -106,7 +111,10 @@ class BulkModerationTests(TestCase):
         self.staff = get_user_model().objects.create_user(
             username="bulk-reviewer",
             password="test-pass-123",
-            is_staff=True,
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.staff,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         submitter = get_user_model().objects.create_user(username="bulk-member")
         self.first = Submission.objects.create(
@@ -163,7 +171,11 @@ class DisputeWorkflowTests(TestCase):
             username="case-member", password="test-pass-123"
         )
         self.staff = get_user_model().objects.create_user(
-            username="case-reviewer", password="test-pass-123", is_staff=True
+            username="case-reviewer", password="test-pass-123"
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.staff,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         self.dog = Dog.objects.create(
             name="Contested Dog",
@@ -225,7 +237,10 @@ class ModerationQueueTests(TestCase):
     def test_queue_batches_reference_labels(self):
         staff = get_user_model().objects.create_user(
             username="queue-batch-reviewer",
-            is_staff=True,
+        )
+        ModerationRoleAssignment.objects.create(
+            user=staff,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         member = get_user_model().objects.create_user(username="queue-batch-member")
         kennel = Kennel.objects.create(name="Queue Kennel", slug="queue-kennel")
@@ -263,7 +278,11 @@ class ModerationQueueTests(TestCase):
 
     def test_queue_prioritises_urgent_items(self):
         staff = get_user_model().objects.create_user(
-            username="queue-reviewer", password="test-pass-123", is_staff=True
+            username="queue-reviewer", password="test-pass-123"
+        )
+        ModerationRoleAssignment.objects.create(
+            user=staff,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         member = get_user_model().objects.create_user(username="queue-member")
         normal = Submission.objects.create(

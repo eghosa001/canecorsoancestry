@@ -24,7 +24,11 @@ class KennelClaimTests(TestCase):
             username="claimant", password="test-pass-123"
         )
         self.reviewer = get_user_model().objects.create_user(
-            username="claim-reviewer", is_staff=True
+            username="claim-reviewer"
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.reviewer,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         self.kennel = Kennel.objects.create(name="Unlinked Kennel", slug="unlinked-kennel")
 
@@ -129,7 +133,7 @@ class LitterWorkflowTests(TestCase):
             username="litter-owner", password="test-pass-123"
         )
         self.reviewer = get_user_model().objects.create_user(
-            username="litter-reviewer", is_staff=True
+            username="litter-reviewer"
         )
         ModerationRoleAssignment.objects.create(
             user=self.reviewer,
@@ -263,7 +267,11 @@ class DocumentVisibilityTests(TestCase):
             username="document-owner", password="test-pass-123"
         )
         self.reviewer = get_user_model().objects.create_user(
-            username="document-reviewer", is_staff=True
+            username="document-reviewer"
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.reviewer,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         self.kennel = Kennel.objects.create(name="Document Kennel", slug="document-kennel")
         KennelMembership.objects.create(
@@ -316,7 +324,11 @@ class OptionalEmailNotificationTests(TestCase):
             email="member@example.com",
         )
         reviewer = get_user_model().objects.create_user(
-            username="mail-reviewer", is_staff=True
+            username="mail-reviewer"
+        )
+        ModerationRoleAssignment.objects.create(
+            user=reviewer,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         kennel = Kennel.objects.create(name="Mail Kennel", slug="mail-kennel")
         submission = Submission.objects.create(
@@ -342,7 +354,11 @@ class KennelIdentityProtectionTests(TestCase):
             username="brand-second", password="test-pass-123"
         )
         self.reviewer = get_user_model().objects.create_user(
-            username="brand-reviewer", is_staff=True
+            username="brand-reviewer"
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.reviewer,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
 
     def test_new_kennel_name_is_reserved_then_approved_to_owner(self):

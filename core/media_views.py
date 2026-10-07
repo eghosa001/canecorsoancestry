@@ -5,6 +5,7 @@ from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponseRedirect
 
 from core.cloudflare_media import signed_media_url
+from registry.permissions import can_review_submissions
 from registry.models import DisputeCase, DogDocument, DogImage, DogSource, Submission, SubmissionEvidence
 
 
@@ -28,7 +29,7 @@ def _can_read_media(user, path):
 
     if not user.is_authenticated:
         return False, False
-    if user.is_staff:
+    if can_review_submissions(user):
         return True, False
 
     kennel_ids = _member_kennel_ids(user)

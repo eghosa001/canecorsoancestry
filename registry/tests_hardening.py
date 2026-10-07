@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from registry.data_quality import full_quality_report
-from registry.models import Dog
+from registry.models import Dog, ModerationRoleAssignment
 
 
 class PedigreeIntegrityHardeningTests(TestCase):
@@ -86,11 +86,14 @@ class DataQualityAuditTests(TestCase):
 
 
 class DataHealthDashboardTests(TestCase):
-    def test_staff_can_open_data_health_dashboard(self):
+    def test_moderator_can_open_data_health_dashboard(self):
         staff = get_user_model().objects.create_user(
             username="data-health-staff",
             password="test-pass-123",
-            is_staff=True,
+        )
+        ModerationRoleAssignment.objects.create(
+            user=staff,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         self.client.force_login(staff)
         response = self.client.get(reverse("accounts:data-health"))

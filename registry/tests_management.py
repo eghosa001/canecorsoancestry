@@ -8,6 +8,7 @@ from .models import (
     DogRedirect,
     Kennel,
     MergeHistory,
+    ModerationRoleAssignment,
     Notification,
     Submission,
     VerificationState,
@@ -74,7 +75,11 @@ class DogMergeTests(TestCase):
 class SubmissionApprovalTests(TestCase):
     def test_approved_new_dog_is_published_and_notifies_submitter(self):
         user = get_user_model().objects.create_user(username="breeder")
-        reviewer = get_user_model().objects.create_user(username="mod", is_staff=True)
+        reviewer = get_user_model().objects.create_user(username="mod")
+        ModerationRoleAssignment.objects.create(
+            user=reviewer,
+            role=ModerationRoleAssignment.Role.REVIEWER,
+        )
         kennel = Kennel.objects.create(name="Test Kennel", slug="test-kennel")
         submission = Submission.objects.create(
             kind=Submission.Kind.DOG,
