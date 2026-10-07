@@ -6948,3 +6948,10 @@ html[data-theme="light"] .hero-search input {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Natural header dog-head crop v83. */
+.brand-mark {
+  clip-path: inset(0 0 13% 0);
+  transform: translateY(2px) scale(1.055);
+  transform-origin: center 42%;
+}
