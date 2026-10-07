@@ -306,6 +306,8 @@ def main():
     report = {"base_url": BASE_URL, "desktop": [], "mobile": [], "details": []}
     dog_load_path = None
     pedigree_load_path = None
+    kennel_detail_path = None
+    litter_detail_path = None
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -378,7 +380,56 @@ def main():
                 if canonical != BASE_URL + "/":
                     raise AssertionError(f"Production canonical host is wrong: {canonical}")
                 verify_featured_images(page, "home-desktop")
+            if label == "kennels":
+                kennel_detail_path = page.evaluate(
+                    """() => {
+                      const cards = [...document.querySelectorAll(".kennel-card")];
+                      const withLitters = cards.find((card) => {
+                        const stats = [...card.querySelectorAll(".mini-stats strong")].map((node) =>
+                          Number((node.textContent || "0").replace(/[^0-9]/g, "")) || 0
+                        );
+                        return (stats[1] || 0) > 0;
+                      });
+                      return (withLitters || cards[0])?.getAttribute("href") || null;
+                    }"""
+                )
+                if not kennel_detail_path:
+                    raise AssertionError("Kennel directory did not expose a navigable kennel profile")
             page.close()
+
+        if kennel_detail_path:
+            kennel_page = browser.new_page(viewport={"width": 1440, "height": 1000})
+            kennel_response, kennel_elapsed = wait_for_real_app(kennel_page, kennel_detail_path)
+            assert_page(kennel_page, "kennel-detail-desktop")
+            if kennel_page.locator(".dog-card").count() > 24:
+                raise AssertionError("Kennel detail renders more than 24 dog cards at once")
+            if kennel_page.locator(".litter-row").count() > 20:
+                raise AssertionError("Kennel detail renders more than 20 litters at once")
+            if kennel_page.locator(".litter-row").count():
+                litter_detail_path = kennel_page.locator(".litter-row").first.get_attribute("href")
+            kennel_page.screenshot(path=OUT / "kennel-detail-desktop.png", full_page=True)
+            report["details"].append({
+                "kennel_detail": kennel_page.url,
+                "seconds": round(kennel_elapsed, 3),
+                "server_timing": kennel_response.headers.get("server-timing") if kennel_response else None,
+                "edge_cache": kennel_response.headers.get("x-cca-edge-cache") if kennel_response else None,
+            })
+            kennel_page.close()
+
+        if litter_detail_path:
+            litter_page = browser.new_page(viewport={"width": 1440, "height": 1000})
+            litter_response, litter_elapsed = wait_for_real_app(litter_page, litter_detail_path)
+            assert_page(litter_page, "litter-detail-desktop")
+            if not litter_page.locator(".dog-card").count():
+                raise AssertionError("Public litter detail has no navigable offspring cards")
+            litter_page.screenshot(path=OUT / "litter-detail-desktop.png", full_page=True)
+            report["details"].append({
+                "litter_detail": litter_page.url,
+                "seconds": round(litter_elapsed, 3),
+                "server_timing": litter_response.headers.get("server-timing") if litter_response else None,
+                "edge_cache": litter_response.headers.get("x-cca-edge-cache") if litter_response else None,
+            })
+            litter_page.close()
 
         detail_page = browser.new_page(viewport={"width": 1440, "height": 1000})
         wait_for_real_app(detail_page, "/dogs/?q=Branco")
@@ -434,6 +485,7 @@ def main():
             ("/statistics/", "statistics"),
             ("/accounts/login/", "login"),
             ("/member/signup/", "signup"),
+            ("/accounts/password_reset/", "password-reset"),
         ):
             page = browser.new_page(viewport={"width": 390, "height": 844})
             report["mobile"].append(visit(page, path, f"{label}-mobile", mobile=True))
@@ -542,7 +594,45 @@ def main():
                 page.locator(".dog-suggestion").first.wait_for(state="visible", timeout=10_000)
                 if "BRAN" not in page.locator(".dog-suggestion").first.inner_text().upper():
                     raise AssertionError("Production dog autocomplete returned an unexpected suggestion")
+            if label in {"login", "signup", "password-reset"}:
+                auth_offset = page.evaluate(
+                    """() => {
+                      const header = document.querySelector(".site-header").getBoundingClientRect();
+                      const card = document.querySelector(".auth-card").getBoundingClientRect();
+                      return card.top - header.bottom;
+                    }"""
+                )
+                if not 16 <= auth_offset <= 90:
+                    raise AssertionError(f"{label} mobile auth card spacing is unreasonable: {auth_offset}")
             page.close()
+
+        if kennel_detail_path:
+            kennel_mobile = browser.new_page(viewport={"width": 390, "height": 844})
+            kennel_response, kennel_elapsed = wait_for_real_app(
+                kennel_mobile, kennel_detail_path + "?smoke=mobile"
+            )
+            assert_page(kennel_mobile, "kennel-detail-mobile", mobile=True)
+            kennel_mobile.screenshot(path=OUT / "kennel-detail-mobile.png", full_page=True)
+            report["details"].append({
+                "kennel_detail_mobile": kennel_mobile.url,
+                "seconds": round(kennel_elapsed, 3),
+                "server_timing": kennel_response.headers.get("server-timing") if kennel_response else None,
+            })
+            kennel_mobile.close()
+
+        if litter_detail_path:
+            litter_mobile = browser.new_page(viewport={"width": 390, "height": 844})
+            litter_response, litter_elapsed = wait_for_real_app(
+                litter_mobile, litter_detail_path + "?smoke=mobile"
+            )
+            assert_page(litter_mobile, "litter-detail-mobile", mobile=True)
+            litter_mobile.screenshot(path=OUT / "litter-detail-mobile.png", full_page=True)
+            report["details"].append({
+                "litter_detail_mobile": litter_mobile.url,
+                "seconds": round(litter_elapsed, 3),
+                "server_timing": litter_response.headers.get("server-timing") if litter_response else None,
+            })
+            litter_mobile.close()
 
         touch_search = browser.new_page(
             viewport={"width": 390, "height": 844},
