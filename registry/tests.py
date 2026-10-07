@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, RegistrationAuthority, VerificationState
+from .models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, RegistrationAuthority, VerificationState
 from .services import duplicate_candidates
 
 
@@ -365,6 +365,45 @@ class DogModelTests(TestCase):
 
         self.assertEqual(len(response.context["kennels"]), 18)
         self.assertTrue(response.context["page_obj"].has_next())
+
+    def test_generated_litter_uses_parent_pair_as_public_label(self):
+        sire = Dog.objects.create(name="Atlas", slug="atlas-litter-label", sex=Dog.Sex.MALE)
+        dam = Dog.objects.create(name="Hera", slug="hera-litter-label", sex=Dog.Sex.FEMALE)
+        litter = Litter.objects.create(
+            code="AUTO-20261007-1234567890abcdef",
+            sire=sire,
+            dam=dam,
+            date_of_birth="2026-10-07",
+            is_public=True,
+        )
+
+        self.assertEqual(litter.public_label, "Atlas × Hera")
+
+    def test_manual_litter_code_remains_public_label(self):
+        litter = Litter.objects.create(code="BELLISSIMO-A-2026", is_public=True)
+
+        self.assertEqual(litter.public_label, "BELLISSIMO-A-2026")
+
+    def test_public_kennel_and_litter_pages_hide_generated_internal_code(self):
+        kennel = Kennel.objects.create(name="Label Kennel", slug="label-kennel")
+        sire = Dog.objects.create(name="Label Sire", slug="label-sire", sex=Dog.Sex.MALE, is_public=True)
+        dam = Dog.objects.create(name="Label Dam", slug="label-dam", sex=Dog.Sex.FEMALE, is_public=True)
+        litter = Litter.objects.create(
+            code="AUTO-20261007-feedfacefeedface",
+            kennel=kennel,
+            sire=sire,
+            dam=dam,
+            date_of_birth="2026-10-07",
+            is_public=True,
+        )
+
+        kennel_response = self.client.get(reverse("registry:kennel-detail", args=[kennel.slug]))
+        litter_response = self.client.get(reverse("registry:litter-detail", args=[litter.pk]))
+
+        self.assertContains(kennel_response, "Label Sire × Label Dam")
+        self.assertNotContains(kennel_response, "AUTO-20261007")
+        self.assertContains(litter_response, "Label Sire × Label Dam")
+        self.assertNotContains(litter_response, "AUTO-20261007")
 
     def test_dog_profile_collapses_secondary_relationships_after_six(self):
         sire = Dog.objects.create(

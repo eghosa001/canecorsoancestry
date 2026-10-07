@@ -233,7 +233,7 @@
           <div class="moderation-meta">
             <div>
               <span class="eyebrow">{{ item.get_kind_display }}</span>
-              <h2>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.code }}{% elif item.document %}{{ item.document.title }}{% elif item.kennel %}{{ item.kennel.name }}{% else %}New record{% endif %}</h2>
+              <h2>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.public_label }}{% elif item.document %}{{ item.document.title }}{% elif item.kennel %}{{ item.kennel.name }}{% else %}New record{% endif %}</h2>
               <p>Submitted by {{ item.submitted_by }} · {{ item.created_at|date:"d M Y, H:i" }}{% if item.age_days %} · {{ item.age_days }} day{{ item.age_days|pluralize }} waiting{% endif %}</p>
             </div>
             <div class="queue-badges">

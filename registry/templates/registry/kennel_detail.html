@@ -37,7 +37,7 @@
   <div class="litter-list">
     {% for litter in litters %}
       <a class="litter-row" href="{% url 'registry:litter-detail' litter.pk %}">
-        <strong>{{ litter.code }}</strong>
+        <strong>{{ litter.public_label }}</strong>
         <span>{{ litter.date_of_birth|default:"Date not recorded" }}</span>
         <span>{% if litter.sire %}{{ litter.sire.name }}{% else %}Unknown sire{% endif %} × {% if litter.dam %}{{ litter.dam.name }}{% else %}Unknown dam{% endif %}</span>
       </a>
