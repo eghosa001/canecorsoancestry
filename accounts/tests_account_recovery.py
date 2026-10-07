@@ -6,6 +6,15 @@ from urllib.parse import urlparse
 
 
 class AccountRecoveryTests(TestCase):
+    @override_settings(ACCOUNT_EMAIL_ENABLED=False)
+    def test_login_keeps_password_recovery_discoverable_when_email_is_disabled(self):
+        response = self.client.get(reverse("login"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("password_reset"))
+        self.assertContains(response, "Forgot your password?")
+        self.assertNotContains(response, "Resend verification")
+
     @override_settings(
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
         ACCOUNT_EMAIL_ENABLED=True,

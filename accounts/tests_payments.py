@@ -48,18 +48,18 @@ class PaidSubmissionTests(TestCase):
             {
                 "kennel": self.kennel.pk,
                 "package": SubmissionPayment.Package.MULTI_DOG,
-                "dog_count": 4,
+                "dog_count": 6,
             },
             user=self.user,
         )
         self.assertTrue(batch_form.is_valid(), batch_form.errors)
-        self.assertEqual(batch_form.cleaned_data["amount_kobo"], 150000)
+        self.assertEqual(batch_form.cleaned_data["amount_kobo"], 100000)
 
         oversized_form = PaymentPackageForm(
             {
                 "kennel": self.kennel.pk,
                 "package": SubmissionPayment.Package.MULTI_DOG,
-                "dog_count": 5,
+                "dog_count": 7,
             },
             user=self.user,
         )
@@ -160,6 +160,30 @@ class PaidSubmissionTests(TestCase):
         self.assertRedirects(response, expected, fetch_redirect_response=False)
         initialize.assert_not_called()
         self.assertEqual(SubmissionPayment.objects.filter(user=self.user).count(), 1)
+
+    def test_outdated_pending_checkout_cannot_be_resumed(self):
+        payment = SubmissionPayment.objects.create(
+            user=self.user,
+            kennel=self.kennel,
+            package=SubmissionPayment.Package.MULTI_DOG,
+            dog_count=4,
+            amount_kobo=150000,
+            reference="CCA-retired-price",
+            status=SubmissionPayment.Status.PENDING,
+            access_code="retired-access",
+            authorization_url="https://checkout.paystack.com/retired-access",
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            f"{reverse('accounts:payment-detail', args=[payment.pk])}?checkout=1"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This checkout uses retired pricing.")
+        self.assertContains(response, "₦1000")
+        self.assertNotContains(response, 'data-paystack-checkout-link')
+        self.assertNotContains(response, "window.location.replace")
 
     def test_payment_start_shows_immediate_checkout_feedback(self):
         self.client.force_login(self.user)

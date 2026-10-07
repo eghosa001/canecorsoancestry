@@ -636,6 +636,8 @@ def payment_detail(request, pk):
         None,
     )
     paid = payment.status == SubmissionPayment.Status.PAID
+    current_price_kobo = SubmissionPayment.price_for(payment.package, payment.dog_count)
+    pricing_current = payment.amount_kobo == current_price_kobo
     dog_limit = 1 if payment.package == SubmissionPayment.Package.SINGLE_DOG else payment.dog_count
     can_submit_dog = (
         paid
@@ -665,9 +667,12 @@ def payment_detail(request, pk):
             "can_submit_dog": can_submit_dog,
             "can_submit_litter": can_submit_litter,
             "can_submit_puppy": can_submit_puppy,
+            "pricing_current": pricing_current,
+            "current_price_naira": current_price_kobo // 100,
             "auto_checkout": (
                 request.GET.get("checkout") == "1"
                 and payment.status == SubmissionPayment.Status.PENDING
+                and pricing_current
                 and bool(payment.authorization_url)
             ),
         },

@@ -12,6 +12,14 @@
     <a class="btn btn-outline" href="{% url 'dashboard' %}">Dashboard</a>
   </div>
 
+  {% if payment.status == "pending" and not pricing_current %}
+    <div class="notice warning" role="status">
+      <strong>This checkout uses retired pricing.</strong>
+      <p>The current price for this package is ₦{{ current_price_naira }}. Start a new checkout so Paystack charges the correct amount.</p>
+      <div class="button-row"><a class="btn btn-gold" href="{% url 'accounts:new-payment' %}?package={{ payment.package }}">Start a new payment</a></div>
+    </div>
+  {% endif %}
+
   {% if auto_checkout %}
     <div class="notice" role="status" aria-live="polite">
       <strong>Opening secure Paystack checkout…</strong>
@@ -21,8 +29,8 @@
 
   <div class="panel">
     <p><strong>Reference:</strong> {{ payment.reference }}</p>
-    <p><strong>Important:</strong> payment does not publish records. Every submitted record remains pending until an moderator verifies and approves it.</p>
-    {% if payment.status == "pending" and payment.authorization_url %}
+    <p><strong>Important:</strong> payment does not publish records. Every submitted record remains pending until a moderator verifies and approves it.</p>
+    {% if payment.status == "pending" and pricing_current and payment.authorization_url %}
       <div class="button-row"><a class="btn btn-gold" data-paystack-checkout-link href="{{ payment.authorization_url }}">Continue payment on Paystack</a></div>
     {% endif %}
   </div>
