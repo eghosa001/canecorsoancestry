@@ -1,4 +1,4 @@
-/* Shared interaction polish v49.
+/* Shared interaction polish v50.
    Keep the owner-approved visual theme intact; improve touch, focus and picker behavior. */
 
 .dog-autocomplete-host {
@@ -69,7 +69,7 @@
   .search-result-card,
   .pedigree-index-card,
   .dog-suggestion {
-    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+    transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
   }
 
   .action-card:hover,
