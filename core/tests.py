@@ -172,13 +172,15 @@ class PublicThemeRegressionTests(TestCase):
         for name in expected:
             self.assertIn(name, names)
 
-    def test_home_restores_cca_plaque_and_theme_controls(self):
+    def test_home_uses_simplified_hero_and_current_theme_assets(self):
         response = self.client.get(reverse("home"))
 
-        self.assertContains(response, "CANECORSOANCESTRY.COM")
+        self.assertNotContains(response, 'class="hero-mark"')
+        self.assertNotContains(response, "CANECORSOANCESTRY.COM")
         self.assertContains(response, "hero-mobile-break")
         self.assertContains(response, '<button class="theme-toggle', count=3)
         self.assertContains(response, "Countries")
+        self.assertContains(response, "site.css?v=20261007-final-ux-v73")
 
 
 class FormControlContrastTests(TestCase):
