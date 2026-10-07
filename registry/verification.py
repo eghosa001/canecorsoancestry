@@ -10,6 +10,7 @@ from .models import (
     DogImage,
     DogRegistration,
     EvidenceRequest,
+    HealthRecord,
     Litter,
     ModerationAudit,
     Submission,
@@ -139,6 +140,21 @@ DEFAULT_RULES = {
         "Published ancestry field change",
         SubmissionRiskLevel.RED,
         True,
+    ),
+    "health_record_incomplete": (
+        "Incomplete health/DNA result",
+        SubmissionRiskLevel.RED,
+        True,
+    ),
+    "health_evidence_missing": (
+        "Missing health/DNA evidence",
+        SubmissionRiskLevel.RED,
+        True,
+    ),
+    "duplicate_health_record": (
+        "Possible duplicate health/DNA result",
+        SubmissionRiskLevel.YELLOW,
+        False,
     ),
 }
 
@@ -510,6 +526,41 @@ def _pending_duplicate_checks(findings, submission, run_id, payload):
 
 
 def _litter_puppy_checks(findings, submission, run_id, payload):
+    if submission.kind == Submission.Kind.HEALTH:
+        add(
+            "Target dog",
+            "pass" if submission.dog_id else "fail",
+            "Health/DNA result is linked to a canonical dog." if submission.dog_id else "No target dog is linked.",
+        )
+        add(
+            "Structured result",
+            "fail" if "health_record_incomplete" in finding_codes else "pass",
+            (
+                "Test name or result is incomplete."
+                if "health_record_incomplete" in finding_codes
+                else f"{payload.get('test_type') or 'Test'}: {payload.get('result') or 'Result'}."
+            ),
+        )
+        add(
+            "Supporting evidence",
+            "fail" if "health_evidence_missing" in finding_codes else "pass",
+            (
+                "Supporting evidence is missing."
+                if "health_evidence_missing" in finding_codes
+                else "A private supporting result/certificate is attached for administrator review."
+            ),
+        )
+        add(
+            "Existing health/DNA result",
+            "fail" if "duplicate_health_record" in finding_codes else "pass",
+            (
+                "An equivalent result already exists and should be reconciled before approval."
+                if "duplicate_health_record" in finding_codes
+                else "No equivalent structured result is already recorded."
+            ),
+        )
+        return rows
+
     litter_submission_id = payload.get("litter_submission_id")
     if not litter_submission_id:
         return
@@ -883,6 +934,56 @@ def _correction_checks(findings, submission, run_id, payload):
         )
 
 
+def _health_checks(findings, submission, run_id, payload):
+    if submission.kind != Submission.Kind.HEALTH:
+        return
+
+    test_type = str(payload.get("test_type") or "").strip()
+    result = str(payload.get("result") or "").strip()
+    tested_on = _date_value(payload.get("tested_on"))
+
+    if submission.dog_id is None or not test_type or not result:
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="health_record_incomplete",
+            message="The health/DNA submission is missing its target dog, test name or result.",
+            expected="Target dog, test name and result",
+            submitted=f"dog={submission.dog_id or 'missing'}, test={test_type or 'missing'}, result={result or 'missing'}",
+        )
+
+    if not submission.attachment:
+        _add_finding(
+            findings,
+            submission=submission,
+            run_id=run_id,
+            code="health_evidence_missing",
+            message="A health/DNA result cannot be verified without its supporting result or certificate.",
+            expected="Supporting PDF or image evidence",
+            submitted="No supporting file",
+        )
+
+    if submission.dog_id and test_type and result:
+        duplicate = HealthRecord.objects.filter(
+            dog_id=submission.dog_id,
+            test_type__iexact=test_type,
+            result__iexact=result,
+            tested_on=tested_on,
+        ).first()
+        if duplicate:
+            _add_finding(
+                findings,
+                submission=submission,
+                run_id=run_id,
+                code="duplicate_health_record",
+                message="An equivalent health/DNA result is already recorded for this dog.",
+                expected=f"Existing health record {duplicate.pk}",
+                submitted=f"{test_type}: {result}",
+                metadata={"existing_health_record_id": duplicate.pk},
+            )
+
+
 def _photo_checks(findings, submission, run_id):
     hashes = list(
         submission.verification_evidence.filter(
@@ -1178,6 +1279,7 @@ def verify_submission(submission, *, audit=True):
     if submission.kind in {Submission.Kind.LITTER_CREATE, Submission.Kind.LITTER_EDIT}:
         _litter_checks(findings, submission, run_id, payload)
 
+    _health_checks(findings, submission, run_id, payload)
     _photo_checks(findings, submission, run_id)
 
     if findings:
