@@ -6693,3 +6693,75 @@ html[data-theme="light"] .hero-search input {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Final UX audit: progressive disclosure for secondary data and governance tools. */
+.relationship-more {
+  margin-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 8px;
+}
+.relationship-more > summary,
+.ux-disclosure > summary {
+  cursor: pointer;
+  color: var(--gold);
+  font-weight: 750;
+  list-style: none;
+}
+.relationship-more > summary::-webkit-details-marker,
+.ux-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.relationship-more > summary::after,
+.ux-disclosure > summary::after {
+  content: "＋";
+  float: right;
+  color: var(--muted);
+}
+.relationship-more[open] > summary::after,
+.ux-disclosure[open] > summary::after {
+  content: "−";
+}
+.relationship-more > .relationship-list,
+.relationship-more > .table-scroll {
+  margin-top: 10px;
+}
+.ux-disclosure {
+  margin-top: 16px;
+}
+.ux-disclosure > summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.ux-disclosure > summary > span {
+  display: grid;
+  gap: 3px;
+}
+.ux-disclosure > summary strong {
+  color: var(--text);
+  font-family: var(--serif);
+  font-size: 1.15rem;
+}
+.ux-disclosure > summary small {
+  color: var(--muted);
+  font-weight: 500;
+}
+.ux-disclosure-body {
+  margin-top: 16px;
+}
+.moderation-toolbox .ux-disclosure-body > .panel:first-child {
+  margin-top: 0;
+}
+@media (max-width: 760px) {
+  .ux-disclosure > summary {
+    align-items: flex-start;
+  }
+  .relationship-more > summary,
+  .ux-disclosure > summary {
+    min-height: 44px;
+    padding: 8px 0;
+  }
+}
