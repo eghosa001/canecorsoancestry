@@ -8,10 +8,10 @@
     <p>Search Cane Corso dogs by name, kennel, alias or external registration number.</p>
   </header>
 
-  <form class="filter-panel" method="get">
+  <form class="filter-panel" method="get" role="search" aria-label="Search Cane Corso dogs">
     <div class="filter-search">
       <label for="q">Search</label>
-      <input id="q" name="q" value="{{ query }}" data-dog-autocomplete placeholder="Dog name, kennel or registration number" autocomplete="off">
+      <input id="q" name="q" type="search" value="{{ query }}" data-dog-autocomplete placeholder="Dog name, kennel or registration number" autocomplete="off" enterkeyhint="search">
     </div>
     <div>
       <label for="exact">Match</label>
@@ -49,6 +49,7 @@
   <div class="result-summary">
     <strong>{{ result_count }} result{{ result_count|pluralize }}</strong>
     {% if query %}<span>for “{{ query }}”</span>{% endif %}
+    {% if query or exact or sex or country or kennel_slug %}<a class="text-link result-clear" href="{% url 'registry:dog-search' %}">Clear filters</a>{% endif %}
   </div>
 
   <div class="search-results">
