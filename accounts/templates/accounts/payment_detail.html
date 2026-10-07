@@ -30,8 +30,14 @@
   <div class="panel">
     <p><strong>Reference:</strong> {{ payment.reference }}</p>
     <p><strong>Important:</strong> payment does not publish records. Every submitted record remains pending until a moderator verifies and approves it.</p>
-    {% if payment.status == "pending" and pricing_current and payment.authorization_url %}
-      <div class="button-row"><a class="btn btn-gold" data-paystack-checkout-link href="{{ payment.authorization_url }}">Continue payment on Paystack</a></div>
+    {% if payment.status == "pending" and pricing_current %}
+      <div class="button-row">
+        {% if payment.authorization_url %}<a class="btn btn-gold" data-paystack-checkout-link href="{{ payment.authorization_url }}">Continue payment on Paystack</a>{% endif %}
+        <form method="post" action="{% url 'accounts:payment-verify' payment.pk %}">
+          {% csrf_token %}
+          <button class="btn btn-outline" type="submit">Already paid? Check payment status</button>
+        </form>
+      </div>
     {% endif %}
   </div>
 
@@ -49,6 +55,10 @@
   {% endif %}
 
   {% if payment.status == "paid" %}
+    <div class="notice section-spacer-tight" role="status">
+      <strong>Payment confirmed — your package is ready.</strong>
+      <p>{% if can_submit_dog %}Next, enter the dog details and add the first profile photo if available.{% elif can_submit_litter %}Next, enter the litter details. Puppies can be added after the litter record is submitted.{% elif can_submit_puppy %}This litter package is active. Add another puppy belonging to the same litter.{% else %}All available submission slots in this package have been used.{% endif %}</p>
+    </div>
     <div class="button-row section-spacer-tight">
       {% if can_submit_dog %}
         <a class="btn btn-gold" href="{% url 'accounts:payment-submit-dog' payment.pk %}">Submit dog</a>
