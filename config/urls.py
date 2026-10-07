@@ -9,11 +9,12 @@ from accounts.forms import EmailAuthenticationForm
 from accounts.views import AccountPasswordResetView
 from core.media_views import media_file
 from core.sitemaps import SITEMAPS
-from core.views import dashboard, healthz, home, robots_txt
+from core.views import dashboard, healthz, home, robots_txt, storage_probe
 
 urlpatterns = [
     path("", home, name="home"),
     path("healthz/", healthz, name="healthz"),
+    path("__internal/storage-probe/", storage_probe, name="storage-probe"),
     path("robots.txt", robots_txt, name="robots"),
     path(
         "sitemap.xml",

@@ -326,6 +326,21 @@ jobs:
           echo "NORTHFLANK_ORIGIN=$origin" >> "$GITHUB_ENV"
           echo "Northflank origin: $origin"
 
+          storage_status=""
+          for attempt in $(seq 1 6); do
+            storage_status="$(curl --connect-timeout 10 --max-time 30 -sS -X POST               -H 'X-CCA-Edge: 1'               -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY"               -H "X-CCA-Storage-Probe: $DJANGO_SECRET_KEY"               -o /tmp/nf-storage-probe.json               -w '%{http_code}' "$origin/__internal/storage-probe/" || true)"
+            if [ "$storage_status" = "200" ] &&
+               grep -q '"storage"[[:space:]]*:[[:space:]]*"r2"' /tmp/nf-storage-probe.json; then
+              break
+            fi
+            sleep 3
+          done
+          echo "runtime R2 storage probe -> HTTP $storage_status"
+          if [ "$storage_status" != "200" ]; then
+            cat /tmp/nf-storage-probe.json 2>/dev/null || true
+            exit 1
+          fi
+
           for path in "/healthz/" "/dogs/?q=Branco+Custodi+Nos" "/statistics/"; do
             status=""
             for attempt in $(seq 1 18); do
