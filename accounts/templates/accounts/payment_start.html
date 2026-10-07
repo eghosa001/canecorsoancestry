@@ -5,7 +5,7 @@
   <header class="page-heading">
     <p class="eyebrow">Verified submissions</p>
     <h1>Choose a submission package</h1>
-    <p>Payment opens a submission slot only. Every kennel, owner, dog and litter record is still reviewed by an moderator before publication.</p>
+    <p>Payment opens a submission slot only. Every kennel, owner, dog and litter record is still reviewed by a moderator before publication.</p>
   </header>
   <div class="button-row section-spacer-tight">
     <a class="btn btn-outline" href="{% url 'dashboard' %}">Back to dashboard</a>
@@ -19,8 +19,8 @@
     </article>
     <article class="panel">
       <p class="eyebrow">Dog batch</p>
-      <h2>₦1,500</h2>
-      <p>Submit 2–4 dogs from the same verified kennel.</p>
+      <h2>₦1,000</h2>
+      <p>Submit 2–6 dogs from the same verified kennel.</p>
     </article>
     <article class="panel">
       <p class="eyebrow">Litter batch</p>
@@ -30,11 +30,11 @@
   </div>
 
   {% if not paystack_configured %}
-    <div class="notice error">Paystack is not configured on the server yet. An moderator must add the Paystack secret key before live payment can start.</div>
+    <div class="notice error">Paystack is not configured on the server yet. A moderator must add the Paystack secret key before live payment can start.</div>
   {% endif %}
 
   {% if not has_verified_kennel %}
-    <div class="notice">Your kennel and ownership must be approved by an moderator before you can buy a submission package.</div>
+    <div class="notice">Your kennel and ownership must be approved by a moderator before you can buy a submission package.</div>
   {% else %}
     <form class="member-form" method="post" data-paystack-start-form>
       {% csrf_token %}
