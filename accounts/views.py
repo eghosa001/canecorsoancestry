@@ -395,7 +395,7 @@ def profile(request):
 @login_required
 def submission_list(request):
     submissions = request.user.ancestry_submissions.select_related(
-        "dog", "kennel", "litter", "document", "reviewed_by", "payment_link__payment"
+        "dog", "kennel", "litter", "litter__sire", "litter__dam", "document", "reviewed_by", "payment_link__payment"
     )
     paginator = Paginator(submissions, 50)
     page_obj = paginator.get_page(request.GET.get("page"))
@@ -1340,6 +1340,8 @@ def moderation_queue(request):
             "dog",
             "kennel",
             "litter",
+            "litter__sire",
+            "litter__dam",
             "document",
             "assigned_to",
             "payment_link__payment",
@@ -1937,7 +1939,7 @@ def submit_litter(request):
 
 @login_required
 def edit_litter(request, pk):
-    litter = get_object_or_404(Litter.objects.select_related("kennel"), pk=pk)
+    litter = get_object_or_404(Litter.objects.select_related("kennel", "sire", "dam"), pk=pk)
     if not can_edit_kennel(request.user, litter.kennel):
         raise PermissionDenied
 
@@ -1978,7 +1980,7 @@ def edit_litter(request, pk):
         {
             "form": form,
             "eyebrow": "Litter management",
-            "title": f"Suggest changes to {litter.code}",
+            "title": f"Suggest changes to {litter.public_label}",
             "intro": "The public/canonical litter stays unchanged until a moderator approves the correction.",
             "button_label": "Submit litter changes",
         },
@@ -2451,7 +2453,7 @@ def verification_dashboard(request):
 
     flagged_queue = list(
         pending.exclude(risk_level=SubmissionRiskLevel.GREEN)
-        .select_related("submitted_by", "kennel", "dog", "litter")
+        .select_related("submitted_by", "kennel", "dog", "litter", "litter__sire", "litter__dam")
         .order_by("-requires_second_review", "created_at")[:50]
     )
     high_risk_queue = [
@@ -2484,7 +2486,7 @@ def verification_dashboard(request):
                 ModerationAudit.Action.RECORD_LOCK_CHANGED,
             ]
         )
-        .select_related("actor", "dog", "litter", "submission")
+        .select_related("actor", "dog", "litter", "litter__sire", "litter__dam", "submission")
         .order_by("-created_at")[:30]
     )
     locked_dogs = list(
@@ -2494,7 +2496,7 @@ def verification_dashboard(request):
     )
     locked_litters = list(
         Litter.objects.filter(is_record_locked=True)
-        .select_related("record_locked_by", "kennel")
+        .select_related("record_locked_by", "kennel", "sire", "dam")
         .order_by("-record_locked_at", "code")[:30]
     )
     rules = list(VerificationRule.objects.order_by("code"))
@@ -2801,7 +2803,7 @@ def moderation_audit(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
     events = ModerationAudit.objects.select_related(
-        "actor", "dog", "kennel", "litter", "submission", "dispute"
+        "actor", "dog", "kennel", "litter", "litter__sire", "litter__dam", "submission", "dispute"
     )
 
     query = request.GET.get("q", "").strip()
