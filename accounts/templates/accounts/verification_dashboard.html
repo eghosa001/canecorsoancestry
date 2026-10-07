@@ -120,7 +120,7 @@
     <div class="review-diff">
       {% for row in reviewer_rows %}
         <article class="review-diff-row">
-          <strong>{{ row.admin_label }} · {{ row.role|default:"No role" }}</strong>
+          <strong>{{ row.admin_label }} · {{ row.role_label }}</strong>
           <span>{{ row.reviews }} reviews · {{ row.approved }} approved · {{ row.rejected }} rejected · {{ row.flagged }} flagged</span>
           <span>{{ row.overrides }} overrides · {{ row.override_rate }}% · {{ row.high_risk_approved }} high-risk approvals · avg {{ row.average_review_hours }}h</span>
           {% if row.unusual_override %}
@@ -134,26 +134,65 @@
   </section>
 
   <section class="panel">
-    <div class="panel-heading"><h2>Administrator authority</h2><span>Owner/Super Admin can assign reviewer authority. Superusers always retain owner-level authority.</span></div>
-    <form class="review-diff-row" method="post" action="{% url 'accounts:moderation-set-role' %}">
+    <div class="panel-heading">
+      <div>
+        <h2>Account and role boundaries</h2>
+        <span>Member identities and staff identities are separate accounts. A kennel/member account can never be promoted into moderation.</span>
+      </div>
+    </div>
+    <div class="dashboard-action-grid">
+      <article class="dashboard-action-card">
+        <h3>Member</h3>
+        <p>Own/manage kennel records, dogs, litters, payments, evidence and disputes. Cannot review or administer other members.</p>
+      </article>
+      <article class="dashboard-action-card">
+        <h3>Moderator</h3>
+        <p>Dedicated staff account. Reviews normal submissions, requests evidence, handles disputes and records verification events. No member tools.</p>
+      </article>
+      <article class="dashboard-action-card">
+        <h3>Senior Moderator</h3>
+        <p>Moderator powers plus flagged/high-risk decisions, overrides, merges and second approvals. Cannot manage staff or system rules.</p>
+      </article>
+      <article class="dashboard-action-card">
+        <h3>Super Admin</h3>
+        <p>Separate superuser identity. Manages staff accounts, verification rules, protected-record locks and Django administration.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <h2>Dedicated staff accounts</h2>
+      <span>Create a separate login for every Moderator or Senior Moderator. Do not reuse a member or kennel email/account.</span>
+    </div>
+    <form class="review-diff-row" method="post" action="{% url 'accounts:moderation-create-account' %}">
       {% csrf_token %}
-      <input name="user_lookup" required placeholder="Username or email" aria-label="Username or email">
-      <select name="role" required>
-        {% for value,label in role_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
-      </select>
-      <button class="btn btn-gold" type="submit">Add / update administrator</button>
+      {{ staff_account_form.username }}
+      {{ staff_account_form.email }}
+      {{ staff_account_form.role }}
+      {{ staff_account_form.password1 }}
+      {{ staff_account_form.password2 }}
+      <button class="btn btn-gold" type="submit">Create staff account</button>
     </form>
+
     {% for user in staff_users %}
       <form class="review-diff-row" method="post" action="{% url 'accounts:moderation-set-role' %}">
         {% csrf_token %}
         <input type="hidden" name="user_id" value="{{ user.pk }}">
-        <strong>{% if user.moderation_assignment %}{{ user.moderation_assignment.public_label }}{% else %}Admin{% endif %}{% if user.is_superuser %} · Superuser{% endif %}</strong><small>Account: {{ user.username }}</small>
+        <div>
+          <strong>{% if user.moderation_assignment %}{{ user.moderation_assignment.public_label }}{% else %}Super Admin{% endif %}</strong>
+          <small>Dedicated staff account: {{ user.username }}{% if user.is_superuser %} · Super Admin{% endif %}</small>
+        </div>
         <select name="role" {% if user.is_superuser %}disabled{% endif %}>
           {% for value,label in role_choices %}
             <option value="{{ value }}"{% if user.moderation_assignment and user.moderation_assignment.role == value %} selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
-        {% if not user.is_superuser %}<button class="btn btn-outline" type="submit">Update authority</button>{% endif %}
+        {% if user.is_superuser %}
+          <span class="submission-state green">Super Admin</span>
+        {% else %}
+          <button class="btn btn-outline" type="submit">Update staff role</button>
+        {% endif %}
       </form>
     {% endfor %}
   </section>
