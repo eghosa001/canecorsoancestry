@@ -420,8 +420,11 @@ def main():
             litter_page = browser.new_page(viewport={"width": 1440, "height": 1000})
             litter_response, litter_elapsed = wait_for_real_app(litter_page, litter_detail_path)
             assert_page(litter_page, "litter-detail-desktop")
-            if not litter_page.locator(".dog-card").count():
-                raise AssertionError("Public litter detail has no navigable offspring cards")
+            offspring_links = litter_page.locator(
+                ".dog-card[href], .relationship-list a[href]"
+            )
+            if not offspring_links.count():
+                raise AssertionError("Public litter detail has no navigable offspring records")
             litter_page.screenshot(path=OUT / "litter-detail-desktop.png", full_page=True)
             report["details"].append({
                 "litter_detail": litter_page.url,
