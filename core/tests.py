@@ -23,7 +23,7 @@ class StorageProbeTests(TestCase):
         client = Client(enforce_csrf_checks=True)
         payload = b"\xff\xd8\xff\xe0cca-runtime-r2-probe\xff\xd9"
         with (
-            patch("core.views.default_storage.save_exact", return_value="smoke/runtime/probe.jpg"),
+            patch("core.views.default_storage.save", return_value="smoke/runtime/probe.jpg"),
             patch("core.views.default_storage.open", return_value=BytesIO(payload)),
             patch("core.views.default_storage.delete"),
         ):
@@ -42,7 +42,7 @@ class StorageProbeTests(TestCase):
             hdrs=None,
             fp=None,
         )
-        with patch("core.views.default_storage.save_exact", side_effect=failure):
+        with patch("core.views.default_storage.save", side_effect=failure):
             response = self.client.post(
                 reverse("storage-probe"),
                 HTTP_X_CCA_STORAGE_PROBE=settings.SECRET_KEY,
@@ -58,7 +58,7 @@ class StorageProbeTests(TestCase):
     def test_storage_probe_writes_reads_and_cleans_up(self):
         payload = b"\xff\xd8\xff\xe0cca-runtime-r2-probe\xff\xd9"
         with (
-            patch("core.views.default_storage.save_exact", return_value="smoke/runtime/probe.jpg") as save,
+            patch("core.views.default_storage.save", return_value="smoke/runtime/probe.jpg") as save,
             patch("core.views.default_storage.open", return_value=BytesIO(payload)) as open_file,
             patch("core.views.default_storage.delete") as delete,
         ):
