@@ -11,6 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 
+from core.r2_gateway_storage import CloudflareR2GatewayStorage
 from registry.models import Dog, DogImage, DogSource, Kennel, KennelMembership, ModerationRoleAssignment, Submission
 
 from .models import PaymentSubmissionLink, SubmissionPayment
@@ -157,6 +158,84 @@ class MemberAccessFlowTests(TestCase):
         self.assertContains(response, 'name="primary_photo"')
         self.assertContains(response, "first profile photo")
 
+
+    def test_paid_dog_photo_uses_verified_r2_upload_response(self):
+        member = get_user_model().objects.create_user(
+            username="paid-r2-photo-member",
+            email="paid-r2-photo@example.com",
+            password="test-pass-123",
+        )
+        kennel = Kennel.objects.create(
+            name="Paid R2 Photo Kennel",
+            slug="paid-r2-photo-kennel",
+            verified_at=timezone.now(),
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        payment = SubmissionPayment.objects.create(
+            user=member,
+            kennel=kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1,
+            amount_kobo=150000,
+            reference="CCA-paid-r2-photo",
+            status=SubmissionPayment.Status.PAID,
+            paid_at=timezone.now(),
+        )
+        buffer = BytesIO()
+        Image.new("RGB", (40, 30)).save(buffer, format="PNG")
+        photo = SimpleUploadedFile(
+            "normal-phone-photo.png",
+            buffer.getvalue(),
+            content_type="image/png",
+        )
+        self.client.force_login(member)
+
+        storage = CloudflareR2GatewayStorage(
+            base_url="https://media.example.test",
+            timeout=1,
+        )
+        verified = BytesIO(
+            b'{"status":"stored","key":"submissions/photo.jpg","size":653,"r2_verified":true}'
+        )
+        field = Submission._meta.get_field("attachment")
+
+        def verified_put(*args, **kwargs):
+            size = len(kwargs["data"])
+            return BytesIO(
+                (
+                    '{"status":"stored","key":"submissions/photo.jpg",'
+                    f'"size":{size},"r2_verified":true}}'
+                ).encode("utf-8")
+            )
+
+        with (
+            patch.object(field, "storage", storage),
+            patch.object(storage, "exists", return_value=False),
+            patch.object(storage, "_request", side_effect=verified_put) as request,
+        ):
+            response = self.client.post(
+                reverse("accounts:payment-submit-dog", args=[payment.pk]),
+                {
+                    "name": "Paid Upload Dog",
+                    "sex": Dog.Sex.MALE,
+                    "primary_photo": photo,
+                    "photo_caption": "Profile portrait",
+                    "notes": "",
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        submission = Submission.objects.get(
+            submitted_by=member,
+            kind=Submission.Kind.DOG,
+        )
+        self.assertTrue(submission.attachment.name.endswith(".jpg"))
+        self.assertTrue(submission.payload["photo_sha256"])
+        request.assert_called_once()
 
     def test_existing_dog_photo_form_shows_target_profile_and_current_photo(self):
         member = get_user_model().objects.create_user(
