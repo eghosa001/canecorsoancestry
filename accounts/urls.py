@@ -6,6 +6,7 @@ app_name = "accounts"
 
 urlpatterns = [
     path("signup/", views.signup, name="signup"),
+    path("profile/", views.profile, name="profile"),
     path("verify-email/<uidb64>/<token>/", views.verify_email, name="verify-email"),
     path("resend-verification/", views.resend_verification, name="resend-verification"),
     path("submissions/", views.submission_list, name="submissions"),
@@ -38,6 +39,7 @@ urlpatterns = [
     path("dogs/<uuid:pk>/correction/", views.submit_correction, name="submit-correction"),
     path("dogs/<uuid:pk>/photo/", views.submit_image, name="submit-image"),
     path("dogs/<uuid:pk>/document/", views.submit_document, name="submit-document"),
+    path("dogs/<uuid:pk>/health/", views.submit_health_record, name="submit-health-record"),
     path("dogs/<uuid:pk>/dispute/", views.open_dispute, name="open-dispute"),
     path("kennels/<uuid:pk>/claim/", views.claim_kennel, name="claim-kennel"),
     path("kennels/<uuid:pk>/edit/", views.edit_kennel, name="edit-kennel"),

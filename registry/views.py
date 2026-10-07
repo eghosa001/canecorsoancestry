@@ -21,7 +21,6 @@ from pedigrees.services import (
 
 from .models import (
     Dog,
-    DogAlias,
     DogDocument,
     DogImage,
     DogRedirect,
@@ -38,6 +37,7 @@ from .querysets import one_dog_per_kennel, public_dog_match_filter, with_stored_
 
 
 PROFILE_RELATION_PREVIEW_LIMIT = 100
+SEARCH_HIT_THROTTLE_SECONDS = 30
 
 
 def _dog_cards(queryset, *, include_parents=False, include_sources=True):
@@ -105,24 +105,7 @@ def dog_suggestions(request):
     dogs = Dog.objects.filter(is_public=True)
 
     if len(query) >= 3:
-        alias_match = DogAlias.objects.filter(
-            dog_id=OuterRef("pk"),
-            name__icontains=query,
-        )
-        registration_match = DogRegistration.objects.filter(
-            dog_id=OuterRef("pk"),
-            number__icontains=query,
-        )
-        dogs = dogs.annotate(
-            _alias_match=Exists(alias_match),
-            _registration_match=Exists(registration_match),
-        ).filter(
-            Q(name__icontains=query)
-            | Q(bloodline__icontains=query)
-            | Q(kennel__name__icontains=query)
-            | Q(_alias_match=True)
-            | Q(_registration_match=True)
-        )
+        dogs = dogs.filter(public_dog_match_filter(query))
     elif query:
         dogs = dogs.filter(name__istartswith=query)
     elif not browse:
@@ -241,7 +224,11 @@ def dog_search(request):
 
 
 def _record_search_hit_without_wait(dog_id):
-    """Keep popularity useful without allowing a hot counter row to stall navigation."""
+    """Keep popularity useful without allowing telemetry to slow navigation."""
+    throttle_key = f"cca:dog-search-hit:{dog_id}"
+    if not cache.add(throttle_key, 1, SEARCH_HIT_THROTTLE_SECONDS):
+        return
+
     if connection.vendor != "postgresql":
         Dog.objects.filter(pk=dog_id).update(search_count=F("search_count") + 1)
         return
@@ -250,10 +237,12 @@ def _record_search_hit_without_wait(dog_id):
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute("SET LOCAL lock_timeout = '100ms'")
+                cursor.execute("SET LOCAL statement_timeout = '200ms'")
             Dog.objects.filter(pk=dog_id).update(search_count=F("search_count") + 1)
     except DatabaseError:
-        # Search popularity is best-effort telemetry. Never hold up a page view
-        # because another request is updating the same counter row.
+        # Search popularity is best-effort telemetry. The throttle deliberately
+        # remains in place after a timeout so a hot profile cannot create a
+        # retry storm while the database is under pressure.
         return
 
 

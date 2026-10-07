@@ -1,15 +1,17 @@
-from django.db.models import Exists, F, OuterRef, Q, Window
+from django.db.models import F, Q, Subquery, Window
 from django.db.models.functions import Coalesce, RowNumber
 
-from .models import DogAlias, DogImage, DogRegistration, Kennel
+from .models import Dog, DogAlias, DogImage, DogRegistration
 
 
 def with_stored_images(queryset):
-    return queryset.annotate(
-        _has_stored_image=Exists(
-            DogImage.objects.filter(dog_id=OuterRef("pk"))
-        )
-    ).filter(_has_stored_image=True)
+    """Restrict to dogs with managed images using one deduplicated ID set.
+
+    DISTINCT encourages PostgreSQL to hash the imaged-dog IDs once instead of
+    probing DogImage for every candidate dog in popularity-ranked listings.
+    """
+    image_dog_ids = DogImage.objects.order_by().values("dog_id").distinct()
+    return queryset.filter(pk__in=Subquery(image_dog_ids))
 
 
 def one_dog_per_kennel(queryset):
@@ -30,32 +32,43 @@ def one_dog_per_kennel(queryset):
 
 
 def public_dog_match_filter(value, *, exact=False):
+    """Match public dogs through independently indexable candidate branches.
+
+    PostgreSQL can choose the trigram/relationship index for each UNION branch,
+    then rank only the small candidate set in the outer query. A single large
+    OR across dog, kennel, alias and registration fields encouraged production
+    to scan the popularity index and filter most of the dog table.
+    """
     lookup = "iexact" if exact else "icontains"
-    match = Q(**{f"name__{lookup}": value})
+
+    candidates = [
+        Dog.objects.filter(
+            is_public=True,
+            **{f"name__{lookup}": value},
+        ).order_by().values("pk"),
+        DogAlias.objects.filter(
+            dog__is_public=True,
+            **{f"name__{lookup}": value},
+        ).order_by().values("dog_id"),
+        DogRegistration.objects.filter(
+            dog__is_public=True,
+            **{f"number__{lookup}": value},
+        ).order_by().values("dog_id"),
+    ]
 
     if not exact:
-        match |= Q(**{f"bloodline__{lookup}": value})
-
-    related_ids = set(
-        DogAlias.objects.filter(**{f"name__{lookup}": value})
-        .order_by()
-        .values_list("dog_id", flat=True)
-    )
-    related_ids.update(
-        DogRegistration.objects.filter(**{f"number__{lookup}": value})
-        .order_by()
-        .values_list("dog_id", flat=True)
-    )
-    if related_ids:
-        match |= Q(pk__in=related_ids)
-
-    if not exact:
-        kennel_ids = list(
-            Kennel.objects.filter(**{f"name__{lookup}": value})
-            .order_by()
-            .values_list("pk", flat=True)
+        candidates.extend(
+            [
+                Dog.objects.filter(
+                    is_public=True,
+                    **{f"bloodline__{lookup}": value},
+                ).order_by().values("pk"),
+                Dog.objects.filter(
+                    is_public=True,
+                    **{f"kennel__name__{lookup}": value},
+                ).order_by().values("pk"),
+            ]
         )
-        if kennel_ids:
-            match |= Q(kennel_id__in=kennel_ids)
 
-    return match
+    matched_ids = candidates[0].union(*candidates[1:])
+    return Q(pk__in=Subquery(matched_ids))

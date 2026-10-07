@@ -117,9 +117,15 @@ Missing facts stay missing. Do not invent:
 
 ## Payments
 
-The member mockup contains a Payments panel. Treat that as part of the supplied visual reference only.
+The owner has confirmed a Paystack-backed paid submission model. Payment buys a submission/review slot; it never publishes or verifies a dog automatically.
 
-Payments, paid registration, or charging for dog registration are **not part of the initial product scope** unless the owner separately confirms the commercial model.
+Current packages:
+
+- **₦500** — one dog;
+- **₦1,500** — 2–4 dogs from the same verified kennel;
+- **₦1,000** — one genuine litter plus the puppies belonging to that litter.
+
+Only approved kennel owners/editors may purchase submission packages. Every paid dog or litter remains private/pending until the normal verification and administrator moderation flow approves it. Cane Corso Ancestry remains a pedigree/ancestry platform and must not describe these charges as official dog registration fees.
 
 ## Design-reference files
 

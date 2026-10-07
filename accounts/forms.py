@@ -9,7 +9,7 @@ from PIL import Image, UnidentifiedImageError
 
 from registry.models import DisputeCase, Dog, DogDocument, DogIdentityNumber, DogRegistration, DogSource, Kennel, KennelMembership, Litter, Submission, SubmissionEvidence, VerificationState
 
-from .models import SubmissionPayment
+from .models import Profile, SubmissionPayment
 
 
 IMAGE_MAX_BYTES = 10 * 1024 * 1024
@@ -50,6 +50,61 @@ def validate_document_upload(upload):
     is_webp = len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
     if not (is_pdf or is_jpeg or is_png or is_webp):
         raise ValidationError("The uploaded evidence is not a valid PDF, JPEG, PNG or WebP file.")
+
+
+class MemberProfileForm(forms.ModelForm):
+    class Meta:
+        model = Profile
+        fields = ("country", "bio")
+        widgets = {
+            "bio": forms.Textarea(attrs={"rows": 5}),
+        }
+        labels = {
+            "country": "Country",
+            "bio": "About your kennel / profile",
+        }
+
+
+class HealthRecordSubmissionForm(forms.Form):
+    EVIDENCE_TYPES = (
+        ("health", "Health test"),
+        ("dna", "DNA / parentage test"),
+    )
+
+    evidence_type = forms.ChoiceField(
+        choices=EVIDENCE_TYPES,
+        label="Record type",
+    )
+    test_type = forms.CharField(
+        max_length=100,
+        label="Test / marker",
+        help_text="For example: hip score, elbow score, cardiac exam, DM, DSRA or DNA parentage.",
+    )
+    result = forms.CharField(
+        max_length=160,
+        help_text="Enter the result exactly as shown on the supporting evidence.",
+    )
+    tested_on = forms.DateField(
+        required=False,
+        label="Test date",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    attachment = forms.FileField(
+        label="Supporting result / certificate",
+        widget=forms.ClearableFileInput(
+            attrs={"accept": "application/pdf,image/jpeg,image/png,image/webp"}
+        ),
+        validators=[
+            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            validate_document_upload,
+        ],
+        help_text="Required evidence. PDF, JPG, PNG or WebP, up to 20 MB. Kept private unless separately approved for publication.",
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="Optional context for the administrator reviewing this result.",
+    )
 
 
 class VerificationResendForm(forms.Form):

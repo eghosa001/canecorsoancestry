@@ -522,6 +522,7 @@ class Submission(models.Model):
         CORRECTION = "correction", "Dog correction"
         IMAGE = "image", "Dog image"
         DOCUMENT = "document", "Dog document"
+        HEALTH = "health", "Health/DNA record"
         KENNEL = "kennel", "Kennel update"
         KENNEL_CREATE = "kennel_create", "New kennel profile"
         KENNEL_CLAIM = "kennel_claim", "Kennel ownership claim"

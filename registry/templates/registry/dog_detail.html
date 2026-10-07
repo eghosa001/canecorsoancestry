@@ -51,6 +51,7 @@
           <a class="btn btn-outline" href="{% url 'accounts:submit-correction' dog.pk %}">Suggest correction</a>
           <a class="btn btn-outline" href="{% url 'accounts:submit-image' dog.pk %}">Submit photo</a>
           <a class="btn btn-outline" href="{% url 'accounts:submit-document' dog.pk %}">Submit document</a>
+          <a class="btn btn-outline" href="{% url 'accounts:submit-health-record' dog.pk %}">Submit health/DNA</a>
         {% endif %}
         {% if user.is_authenticated %}
           <a class="btn btn-outline" href="{% url 'accounts:open-dispute' dog.pk %}">Request profile review</a>
@@ -108,12 +109,12 @@
     <div class="panel-heading"><h2>Health & DNA</h2></div>
     <div class="table-scroll">
       <table class="data-table">
-        <thead><tr><th>Test</th><th>Result</th><th>Date</th></tr></thead>
+        <thead><tr><th>Test</th><th>Result</th><th>Date</th><th>Status</th></tr></thead>
         <tbody>
         {% for record in dog.display_health_records %}
-          <tr><td>{{ record.test_type }}</td><td>{{ record.result }}</td><td>{{ record.tested_on|default:"—" }}</td></tr>
+          <tr><td>{{ record.test_type }}</td><td>{{ record.result }}</td><td>{{ record.tested_on|default:"—" }}</td><td>{{ record.get_verification_state_display }}</td></tr>
         {% empty %}
-          <tr><td colspan="3">No health or DNA information has been published for this dog.</td></tr>
+          <tr><td colspan="4">No health or DNA information has been published for this dog.</td></tr>
         {% endfor %}
         </tbody>
       </table>

@@ -6,7 +6,8 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from pedigrees.services import descendant_generations
-from registry.models import Dog, normalize_identity_name
+from registry.models import Dog, DogImage, normalize_identity_name
+from registry.querysets import public_dog_match_filter, with_stored_images
 
 
 class Command(BaseCommand):
@@ -16,6 +17,7 @@ class Command(BaseCommand):
         parser.add_argument("--dogs", type=int, default=10000)
         parser.add_argument("--max-search-ms", type=float, default=750.0)
         parser.add_argument("--max-popular-ms", type=float, default=500.0)
+        parser.add_argument("--max-imaged-popular-ms", type=float, default=500.0)
         parser.add_argument("--allow-production", action="store_true")
 
     def handle(self, *args, **options):
@@ -65,14 +67,29 @@ class Command(BaseCommand):
             if batch:
                 Dog.objects.bulk_create(batch, batch_size=2000)
 
+            synthetic_ids = list(
+                Dog.objects.filter(name__startswith=f"{prefix} Dog ")
+                .order_by("name")
+                .values_list("pk", flat=True)[::10]
+            )
+            DogImage.objects.bulk_create(
+                [
+                    DogImage(
+                        dog_id=dog_id,
+                        image=f"dogs/scale-{index:06d}.jpg",
+                        is_primary=True,
+                    )
+                    for index, dog_id in enumerate(synthetic_ids)
+                ],
+                batch_size=2000,
+            )
+
             started = time.perf_counter()
             search_rows = list(
-                Dog.objects.filter(
-                    is_public=True,
-                    name__icontains=f"{prefix} Dog 000",
-                )
+                Dog.objects.filter(is_public=True)
+                .filter(public_dog_match_filter(f"{prefix} Dog 000"))
                 .only("id", "name", "slug")
-                .order_by("name")[:24]
+                .order_by("-search_count", "name")[:24]
             )
             search_ms = (time.perf_counter() - started) * 1000
 
@@ -83,6 +100,14 @@ class Command(BaseCommand):
                 .order_by("-search_count", "name")[:24]
             )
             popular_ms = (time.perf_counter() - started) * 1000
+
+            started = time.perf_counter()
+            imaged_popular_rows = list(
+                with_stored_images(Dog.objects.filter(is_public=True))
+                .only("id", "name", "slug", "search_count")
+                .order_by("-search_count", "-updated_at", "name")[:96]
+            )
+            imaged_popular_ms = (time.perf_counter() - started) * 1000
 
             started = time.perf_counter()
             descendants = descendant_generations(
@@ -103,6 +128,9 @@ class Command(BaseCommand):
                 f"popular: {popular_ms:.1f} ms ({len(popular_rows)} rows)"
             )
             self.stdout.write(
+                f"imaged popular: {imaged_popular_ms:.1f} ms ({len(imaged_popular_rows)} rows)"
+            )
+            self.stdout.write(
                 f"reverse pedigree: {descendant_ms:.1f} ms ({descendant_count} descendants)"
             )
 
@@ -114,6 +142,11 @@ class Command(BaseCommand):
             if popular_ms > options["max_popular_ms"]:
                 failures.append(
                     f"popular {popular_ms:.1f}ms > {options['max_popular_ms']:.1f}ms"
+                )
+            if imaged_popular_ms > options["max_imaged_popular_ms"]:
+                failures.append(
+                    f"imaged popular {imaged_popular_ms:.1f}ms > "
+                    f"{options['max_imaged_popular_ms']:.1f}ms"
                 )
 
             transaction.set_rollback(True)

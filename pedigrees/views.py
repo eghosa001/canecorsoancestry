@@ -148,34 +148,17 @@ def _resolve_mating_dog(raw_value, expected_sex, selected_id=""):
         if dog:
             return dog, ""
 
-    exact_names = list(
-        candidates.filter(name__iexact=query).order_by("name")[:2]
-    )
-    if len(exact_names) == 1:
-        return exact_names[0], ""
-    if len(exact_names) > 1:
-        return None, "More than one dog has that exact name. Select a suggestion or use a registration number."
-
-    exact_other = list(
-        candidates.filter(
-            Q(aliases__name__iexact=query)
-            | Q(registrations__number__iexact=query)
-        )
-        .distinct()
+    exact_matches = list(
+        candidates.filter(public_dog_match_filter(query, exact=True))
         .order_by("name")[:2]
     )
-    if len(exact_other) == 1:
-        return exact_other[0], ""
-    if len(exact_other) > 1:
-        return None, "More than one dog matches that value. Select a suggestion or use a registration number."
+    if len(exact_matches) == 1:
+        return exact_matches[0], ""
+    if len(exact_matches) > 1:
+        return None, "More than one dog matches that exact value. Select a suggestion or use a registration number."
 
     partial = list(
-        candidates.filter(
-            Q(name__icontains=query)
-            | Q(aliases__name__icontains=query)
-            | Q(registrations__number__icontains=query)
-        )
-        .distinct()
+        candidates.filter(public_dog_match_filter(query))
         .order_by("name")[:3]
     )
     if len(partial) == 1:
