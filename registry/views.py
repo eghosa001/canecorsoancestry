@@ -496,8 +496,21 @@ def kennel_detail(request, slug):
     kennel = get_object_or_404(Kennel, slug=slug)
     public_dogs = Dog.objects.filter(kennel=kennel, is_public=True)
     public_dog_total = public_dogs.count()
+    stored_image_ids = DogImage.objects.order_by().values("dog_id").distinct()
+    source_image_ids = (
+        DogSource.objects.filter(
+            Q(raw_payload__image_url__startswith="https://www.canecorsopedigree.com/static/images/animal/")
+            | Q(raw_payload__image_url__startswith="https://canecorsopedigree.com/static/images/animal/")
+        )
+        .order_by()
+        .values("dog_id")
+        .distinct()
+    )
     dog_queryset = _dog_cards(
-        with_stored_images(public_dogs),
+        public_dogs.filter(
+            Q(pk__in=Subquery(stored_image_ids))
+            | Q(pk__in=Subquery(source_image_ids))
+        ),
         include_sources=False,
     ).order_by("name")
     litter_queryset = (
@@ -506,6 +519,7 @@ def kennel_detail(request, slug):
         .order_by("-date_of_birth", "code")
     )
     dog_page = Paginator(dog_queryset, 24).get_page(request.GET.get("dogs_page"))
+    _attach_source_images_for_missing(dog_page.object_list)
     litter_page = Paginator(litter_queryset, 20).get_page(request.GET.get("litters_page"))
     kennel_linked = kennel.memberships.exists()
     is_member = bool(
