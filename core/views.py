@@ -144,7 +144,7 @@ def _load_featured_dogs():
 
 def home(request):
     featured_dogs = _load_featured_dogs()
-    public_stats = cache.get("cca:home:public-stats:v3")
+    public_stats = cache.get("cca:home:public-stats:v4")
     if public_stats is None:
         public_stats = {
             "dog_count": Dog.objects.filter(is_public=True).count(),
@@ -156,7 +156,7 @@ def home(request):
             .distinct()
             .count(),
         }
-        cache.set("cca:home:public-stats:v3", public_stats, 300)
+        cache.set("cca:home:public-stats:v4", public_stats, 300)
 
     public_root = request.build_absolute_uri("/").rstrip("/")
     context = {

@@ -123,12 +123,12 @@ class AuthenticatedNavigationTests(TestCase):
 
 class PublicThemeRegressionTests(TestCase):
     def test_home_caches_public_statistics_under_the_read_key(self):
-        cache.delete("cca:home:public-stats:v3")
+        cache.delete("cca:home:public-stats:v4")
 
         response = self.client.get(reverse("home"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertIsNotNone(cache.get("cca:home:public-stats:v3"))
+        self.assertIsNotNone(cache.get("cca:home:public-stats:v4"))
 
     def test_home_caches_diverse_featured_dogs(self):
         cache.delete("cca:home:featured-dog-ids:v1")

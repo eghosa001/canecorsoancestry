@@ -1,6 +1,6 @@
 const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
 // Bump this whenever public HTML/static layout assets must invalidate edge cache.
-const EDGE_CACHE_VERSION = "hero-media-v78"; // Restore mobile hero spacing and media upload compatibility
+const EDGE_CACHE_VERSION = "litter-stats-v79"; // Refresh public HTML after canonical litter reconstruction
 const CACHE_FRESH_SECONDS = 900;
 const CACHE_RETENTION_SECONDS = 604800;
 const ORIGIN_GRACE_MS = 3500;
