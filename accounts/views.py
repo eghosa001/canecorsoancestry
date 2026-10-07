@@ -563,7 +563,11 @@ def new_payment(request):
                         "updated_at",
                     )
                 )
-                return redirect(payment.authorization_url)
+                handoff_url = reverse(
+                    "accounts:payment-detail",
+                    kwargs={"pk": payment.pk},
+                )
+                return redirect(f"{handoff_url}?checkout=1")
 
     return render(
         request,
@@ -639,6 +643,11 @@ def payment_detail(request, pk):
             "can_submit_dog": can_submit_dog,
             "can_submit_litter": can_submit_litter,
             "can_submit_puppy": can_submit_puppy,
+            "auto_checkout": (
+                request.GET.get("checkout") == "1"
+                and payment.status == SubmissionPayment.Status.PENDING
+                and bool(payment.authorization_url)
+            ),
         },
     )
 
