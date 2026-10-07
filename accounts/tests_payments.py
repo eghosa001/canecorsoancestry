@@ -231,7 +231,7 @@ class PaidSubmissionTests(TestCase):
             kennel=self.kennel,
             package=SubmissionPayment.Package.MULTI_DOG,
             dog_count=4,
-            amount_kobo=150000,
+            amount_kobo=100000,
             reference="CCA-retired-price",
             status=SubmissionPayment.Status.PENDING,
             access_code="retired-access",
@@ -245,7 +245,7 @@ class PaidSubmissionTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "This checkout uses retired pricing.")
-        self.assertContains(response, "₦1000")
+        self.assertContains(response, "₦1500")
         self.assertNotContains(response, 'data-paystack-checkout-link')
         self.assertNotContains(response, "window.location.replace")
 
