@@ -5,6 +5,7 @@ import logging
 import urllib.error
 from urllib.parse import urlparse
 import uuid
+from datetime import timedelta
 from functools import wraps
 
 from django.contrib import messages
@@ -534,12 +535,33 @@ def new_payment(request):
         elif not request.user.email:
             form.add_error(None, "Add an email address to your account before paying.")
         else:
+            cleaned = form.cleaned_data
+            reusable_payment = (
+                request.user.ancestry_submission_payments.filter(
+                    kennel=cleaned["kennel"],
+                    package=cleaned["package"],
+                    dog_count=cleaned["dog_count"],
+                    amount_kobo=cleaned["amount_kobo"],
+                    status=SubmissionPayment.Status.PENDING,
+                    created_at__gte=timezone.now() - timedelta(minutes=10),
+                )
+                .exclude(authorization_url="")
+                .order_by("-created_at")
+                .first()
+            )
+            if reusable_payment:
+                handoff_url = reverse(
+                    "accounts:payment-detail",
+                    kwargs={"pk": reusable_payment.pk},
+                )
+                return redirect(f"{handoff_url}?checkout=1")
+
             payment = SubmissionPayment(
                 user=request.user,
-                kennel=form.cleaned_data["kennel"],
-                package=form.cleaned_data["package"],
-                dog_count=form.cleaned_data["dog_count"],
-                amount_kobo=form.cleaned_data["amount_kobo"],
+                kennel=cleaned["kennel"],
+                package=cleaned["package"],
+                dog_count=cleaned["dog_count"],
+                amount_kobo=cleaned["amount_kobo"],
                 reference=f"CCA{uuid.uuid4().hex}",
             )
             payment.full_clean()
@@ -563,7 +585,11 @@ def new_payment(request):
                         "updated_at",
                     )
                 )
-                return redirect(payment.authorization_url)
+                handoff_url = reverse(
+                    "accounts:payment-detail",
+                    kwargs={"pk": payment.pk},
+                )
+                return redirect(f"{handoff_url}?checkout=1")
 
     return render(
         request,
@@ -639,6 +665,11 @@ def payment_detail(request, pk):
             "can_submit_dog": can_submit_dog,
             "can_submit_litter": can_submit_litter,
             "can_submit_puppy": can_submit_puppy,
+            "auto_checkout": (
+                request.GET.get("checkout") == "1"
+                and payment.status == SubmissionPayment.Status.PENDING
+                and bool(payment.authorization_url)
+            ),
         },
     )
 

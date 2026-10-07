@@ -36,7 +36,7 @@
   {% if not has_verified_kennel %}
     <div class="notice">Your kennel and ownership must be approved by an moderator before you can buy a submission package.</div>
   {% else %}
-    <form class="member-form" method="post">
+    <form class="member-form" method="post" data-paystack-start-form>
       {% csrf_token %}
       {% if form.non_field_errors %}<div class="notice error">{{ form.non_field_errors }}</div>{% endif %}
       <div class="form-grid">
@@ -50,10 +50,33 @@
         {% endfor %}
       </div>
       <div class="button-row">
-        <button class="btn btn-gold" type="submit" {% if not paystack_configured %}disabled{% endif %}>Continue to Paystack</button>
+        <button class="btn btn-gold" type="submit" data-paystack-start-submit {% if not paystack_configured %}disabled{% endif %}>Continue to Paystack</button>
         <a class="btn btn-outline" href="{% url 'accounts:submissions' %}">Back to submissions</a>
       </div>
+      <p class="muted" data-paystack-start-status hidden role="status" aria-live="polite">Starting secure Paystack checkout…</p>
     </form>
+    <script>
+      (function () {
+        var form = document.querySelector("[data-paystack-start-form]");
+        if (!form) return;
+        var button = form.querySelector("[data-paystack-start-submit]");
+        var status = form.querySelector("[data-paystack-start-status]");
+        var submitting = false;
+        form.addEventListener("submit", function (event) {
+          if (submitting) {
+            event.preventDefault();
+            return;
+          }
+          submitting = true;
+          if (button) {
+            button.disabled = true;
+            button.textContent = "Opening Paystack…";
+            button.setAttribute("aria-busy", "true");
+          }
+          if (status) status.hidden = false;
+        });
+      })();
+    </script>
   {% endif %}
 
   {% if recent_payments %}

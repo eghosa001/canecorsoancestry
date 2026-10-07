@@ -12,13 +12,33 @@
     <a class="btn btn-outline" href="{% url 'dashboard' %}">Dashboard</a>
   </div>
 
+  {% if auto_checkout %}
+    <div class="notice" role="status" aria-live="polite">
+      <strong>Opening secure Paystack checkout…</strong>
+      <p>This fresh handoff avoids a stalled checkout. If Paystack does not open automatically, use the button below.</p>
+    </div>
+  {% endif %}
+
   <div class="panel">
     <p><strong>Reference:</strong> {{ payment.reference }}</p>
     <p><strong>Important:</strong> payment does not publish records. Every submitted record remains pending until an moderator verifies and approves it.</p>
     {% if payment.status == "pending" and payment.authorization_url %}
-      <div class="button-row"><a class="btn btn-gold" href="{{ payment.authorization_url }}">Continue payment on Paystack</a></div>
+      <div class="button-row"><a class="btn btn-gold" data-paystack-checkout-link href="{{ payment.authorization_url }}">Continue payment on Paystack</a></div>
     {% endif %}
   </div>
+
+  {% if auto_checkout %}
+    <script>
+      (function () {
+        var link = document.querySelector("[data-paystack-checkout-link]");
+        if (!link) return;
+        var target = link.href;
+        window.setTimeout(function () {
+          window.location.replace(target);
+        }, 250);
+      })();
+    </script>
+  {% endif %}
 
   {% if payment.status == "paid" %}
     <div class="button-row section-spacer-tight">

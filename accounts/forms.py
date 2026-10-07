@@ -360,10 +360,10 @@ class PaymentPackageForm(forms.Form):
     package = forms.ChoiceField(choices=SubmissionPayment.Package.choices)
     dog_count = forms.IntegerField(
         required=False,
-        min_value=2,
+        min_value=1,
         max_value=4,
         label="Number of dogs",
-        help_text="Choose 2–4 only for the ₦1,500 multi-dog package.",
+        help_text="Use 1 for a single dog, or choose 2–4 for the ₦1,500 multi-dog package.",
     )
 
     def __init__(self, *args, user=None, **kwargs):
