@@ -7,6 +7,9 @@
     <h1>My review cases</h1>
     <p>Track contested pedigree, identity, health, ownership or possible-duplicate issues you asked moderators to investigate.</p>
   </header>
+  <div class="button-row section-spacer-tight">
+    <a class="btn btn-outline" href="{% url 'dashboard' %}">Back to dashboard</a>
+  </div>
   <div class="dispute-list">
     {% for item in disputes %}
       <article class="dispute-card member-dispute-card">
