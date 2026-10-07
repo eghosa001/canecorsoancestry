@@ -198,9 +198,6 @@ class MemberAccessFlowTests(TestCase):
             base_url="https://media.example.test",
             timeout=1,
         )
-        verified = BytesIO(
-            b'{"status":"stored","key":"submissions/photo.jpg","size":653,"r2_verified":true}'
-        )
         field = Submission._meta.get_field("attachment")
 
         def verified_put(*args, **kwargs):
