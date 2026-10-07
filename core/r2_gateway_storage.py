@@ -42,8 +42,6 @@ class CloudflareR2GatewayStorage(Storage):
             digest,
         )
         headers = {
-            "User-Agent": "CaneCorsoAncestry-Media/1.0",
-            "Accept": "application/json, application/octet-stream;q=0.9, */*;q=0.8",
             "X-R2-Timestamp": timestamp,
             "X-R2-Content-SHA256": digest,
             "X-R2-Signature": signature,
