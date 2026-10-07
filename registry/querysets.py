@@ -1,7 +1,7 @@
-from django.db.models import Exists, F, OuterRef, Q, Window
+from django.db.models import Exists, F, OuterRef, Q, Subquery, Window
 from django.db.models.functions import Coalesce, RowNumber
 
-from .models import DogAlias, DogImage, DogRegistration, Kennel
+from .models import Dog, DogAlias, DogImage, DogRegistration
 
 
 def with_stored_images(queryset):
@@ -30,35 +30,43 @@ def one_dog_per_kennel(queryset):
 
 
 def public_dog_match_filter(value, *, exact=False):
-    """Build one lazy, index-friendly public search predicate.
+    """Match public dogs through independently indexable candidate branches.
 
-    Keeping aliases, registrations and kennels as SQL subqueries avoids the
-    extra application/database round trips that the previous eager ID lists
-    introduced. It also lets PostgreSQL use the trigram indexes on the main
-    dog-name and bloodline branches before ranking the small match set.
+    PostgreSQL can choose the trigram/relationship index for each UNION branch,
+    then rank only the small candidate set in the outer query. A single large
+    OR across dog, kennel, alias and registration fields encouraged production
+    to scan the popularity index and filter most of the dog table.
     """
     lookup = "iexact" if exact else "icontains"
-    match = Q(**{f"name__{lookup}": value})
+
+    candidates = [
+        Dog.objects.filter(
+            is_public=True,
+            **{f"name__{lookup}": value},
+        ).order_by().values("pk"),
+        DogAlias.objects.filter(
+            dog__is_public=True,
+            **{f"name__{lookup}": value},
+        ).order_by().values("dog_id"),
+        DogRegistration.objects.filter(
+            dog__is_public=True,
+            **{f"number__{lookup}": value},
+        ).order_by().values("dog_id"),
+    ]
 
     if not exact:
-        match |= Q(**{f"bloodline__{lookup}": value})
-
-    match |= Q(
-        pk__in=DogAlias.objects.filter(**{f"name__{lookup}": value})
-        .order_by()
-        .values("dog_id")
-    )
-    match |= Q(
-        pk__in=DogRegistration.objects.filter(**{f"number__{lookup}": value})
-        .order_by()
-        .values("dog_id")
-    )
-
-    if not exact:
-        match |= Q(
-            kennel_id__in=Kennel.objects.filter(**{f"name__{lookup}": value})
-            .order_by()
-            .values("pk")
+        candidates.extend(
+            [
+                Dog.objects.filter(
+                    is_public=True,
+                    **{f"bloodline__{lookup}": value},
+                ).order_by().values("pk"),
+                Dog.objects.filter(
+                    is_public=True,
+                    **{f"kennel__name__{lookup}": value},
+                ).order_by().values("pk"),
+            ]
         )
 
-    return match
+    matched_ids = candidates[0].union(*candidates[1:])
+    return Q(pk__in=Subquery(matched_ids))
