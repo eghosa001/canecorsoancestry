@@ -494,8 +494,10 @@ def kennel_list(request):
 
 def kennel_detail(request, slug):
     kennel = get_object_or_404(Kennel, slug=slug)
+    public_dogs = Dog.objects.filter(kennel=kennel, is_public=True)
+    public_dog_total = public_dogs.count()
     dog_queryset = _dog_cards(
-        Dog.objects.filter(kennel=kennel, is_public=True),
+        with_stored_images(public_dogs),
         include_sources=False,
     ).order_by("name")
     litter_queryset = (
@@ -504,7 +506,6 @@ def kennel_detail(request, slug):
         .order_by("-date_of_birth", "code")
     )
     dog_page = Paginator(dog_queryset, 24).get_page(request.GET.get("dogs_page"))
-    _attach_source_images_for_missing(dog_page.object_list)
     litter_page = Paginator(litter_queryset, 20).get_page(request.GET.get("litters_page"))
     kennel_linked = kennel.memberships.exists()
     is_member = bool(
@@ -532,6 +533,7 @@ def kennel_detail(request, slug):
             "dog_page": dog_page,
             "litter_page": litter_page,
             "dog_total": dog_page.paginator.count,
+            "public_dog_total": public_dog_total,
             "litter_total": litter_page.paginator.count,
             "can_claim": (
                 request.user.is_authenticated
@@ -551,11 +553,29 @@ def litter_detail(request, pk):
         pk=pk,
         is_public=True,
     )
-    offspring = _dog_cards(
-        Dog.objects.filter(litter=litter, is_public=True)
-    ).order_by("name")
+    offspring = list(
+        _dog_cards(
+            Dog.objects.filter(litter=litter, is_public=True)
+        ).order_by("name")
+    )
+    _attach_source_images_for_missing(offspring)
+    imaged_offspring = [
+        dog
+        for dog in offspring
+        if getattr(dog, "display_images", []) or getattr(dog, "source_image_url", "")
+    ]
+    other_offspring = [
+        dog
+        for dog in offspring
+        if not getattr(dog, "display_images", []) and not getattr(dog, "source_image_url", "")
+    ]
     return render(
         request,
         "registry/litter_detail.html",
-        {"litter": litter, "offspring": offspring},
+        {
+            "litter": litter,
+            "offspring_total": len(offspring),
+            "imaged_offspring": imaged_offspring,
+            "other_offspring": other_offspring,
+        },
     )
