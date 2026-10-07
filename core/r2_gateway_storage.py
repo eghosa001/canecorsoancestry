@@ -35,7 +35,7 @@ class CloudflareR2GatewayStorage(Storage):
         digest = sha256_hex(body)
         timestamp = str(int(time.time()))
         signature = gateway_signature(
-            settings.SECRET_KEY,
+            getattr(settings, "R2_GATEWAY_SIGNING_KEY", settings.SECRET_KEY),
             method,
             name,
             timestamp,

@@ -65,6 +65,41 @@ jobs:
           done
           exit "$missing"
 
+      - name: Derive dedicated R2 signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          signing_key="$(printf '%s' "$DJANGO_SECRET_KEY" | base64 -w0)"
+          test -n "$signing_key"
+          echo "::add-mask::$signing_key"
+          echo "R2_GATEWAY_SIGNING_KEY=$signing_key" >> "$GITHUB_ENV"
+
+      - name: Wait for matching R2 gateway signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$MEDIA_EDGE"
+          key="smoke/signing-key-readiness"
+          empty_digest="$(printf '' | sha256sum | awk '{print $1}')"
+          accepted="0"
+          for attempt in $(seq 1 24); do
+            timestamp="$(date +%s)"
+            signature="$(R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$empty_digest" python -c 'import hashlib,hmac,os; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["R2_GATEWAY_SIGNING_KEY"].encode(), chr(10).join(["HEAD", k, t, d]).encode(), hashlib.sha256).hexdigest())')"
+            status="$(curl --connect-timeout 8 --max-time 20 -sS -o /dev/null -w '%{http_code}' -X HEAD \
+              -H "x-r2-timestamp: $timestamp" \
+              -H "x-r2-content-sha256: $empty_digest" \
+              -H "x-r2-signature: $signature" \
+              "$base/_r2/$key" || true)"
+            if [ "$status" = "404" ] || [ "$status" = "200" ]; then
+              accepted="1"
+              break
+            fi
+            echo "R2 signing key not active yet (HTTP $status); retrying."
+            sleep 5
+          done
+          test "$accepted" = "1"
+          echo "R2 gateway accepts the dedicated signing key."
+
       - name: Discover reachable Supabase session pooler
         shell: bash
         run: |
@@ -126,7 +161,7 @@ jobs:
             echo "::warning::Account email is not fully configured; password recovery will remain unavailable."
           fi
 
-          payload="$(jq -n             --arg name "$NF_SERVICE_NAME"             --arg db "$DATABASE_URL"             --arg secret "$DJANGO_SECRET_KEY"             --arg paystack "$PAYSTACK_SECRET_KEY"             --arg email_host "$EMAIL_HOST"             --arg email_user "$EMAIL_HOST_USER"             --arg email_password "$EMAIL_HOST_PASSWORD"             --arg from_email "$from_email"             --arg email_enabled "$email_enabled"             --arg site "$PUBLIC_SITE"             --arg media "$MEDIA_EDGE"             '{
+          payload="$(jq -n             --arg name "$NF_SERVICE_NAME"             --arg db "$DATABASE_URL"             --arg secret "$DJANGO_SECRET_KEY"             --arg r2_signing "$R2_GATEWAY_SIGNING_KEY"             --arg paystack "$PAYSTACK_SECRET_KEY"             --arg email_host "$EMAIL_HOST"             --arg email_user "$EMAIL_HOST_USER"             --arg email_password "$EMAIL_HOST_PASSWORD"             --arg from_email "$from_email"             --arg email_enabled "$email_enabled"             --arg site "$PUBLIC_SITE"             --arg media "$MEDIA_EDGE"             '{
               name:$name,
               description:"Always-on Django origin for Cane Corso Ancestry",
               billing:{
@@ -162,7 +197,7 @@ jobs:
               },
               runtimeEnvironment:{
                 DATABASE_URL:$db,
-                DJANGO_SECRET_KEY:$secret,
+                DJANGO_SECRET_KEY:$secret,R2_GATEWAY_SIGNING_KEY:$r2_signing,
                 PAYSTACK_SECRET_KEY:$paystack,
                 EMAIL_HOST:$email_host,
                 EMAIL_HOST_USER:$email_user,
@@ -212,7 +247,7 @@ jobs:
             echo "Created Northflank service: $service_id"
           else
             echo "Reusing existing Northflank service: $service_id"
-            patch="$(jq -n --arg site "$PUBLIC_SITE" --arg media "$MEDIA_EDGE" --arg db "$DATABASE_URL" --arg secret "$DJANGO_SECRET_KEY" --arg paystack "$PAYSTACK_SECRET_KEY" --arg email_host "$EMAIL_HOST" --arg email_user "$EMAIL_HOST_USER" --arg email_password "$EMAIL_HOST_PASSWORD" --arg from_email "$from_email" --arg email_enabled "$email_enabled" '{runtimeEnvironment:{DATABASE_URL:$db,DJANGO_SECRET_KEY:$secret,PAYSTACK_SECRET_KEY:$paystack,
+            patch="$(jq -n --arg site "$PUBLIC_SITE" --arg media "$MEDIA_EDGE" --arg db "$DATABASE_URL" --arg secret "$DJANGO_SECRET_KEY"             --arg r2_signing "$R2_GATEWAY_SIGNING_KEY" --arg paystack "$PAYSTACK_SECRET_KEY" --arg email_host "$EMAIL_HOST" --arg email_user "$EMAIL_HOST_USER" --arg email_password "$EMAIL_HOST_PASSWORD" --arg from_email "$from_email" --arg email_enabled "$email_enabled" '{runtimeEnvironment:{DATABASE_URL:$db,DJANGO_SECRET_KEY:$secret,R2_GATEWAY_SIGNING_KEY:$r2_signing,PAYSTACK_SECRET_KEY:$paystack,
                 EMAIL_HOST:$email_host,
                 EMAIL_HOST_USER:$email_user,
                 EMAIL_HOST_PASSWORD:$email_password,

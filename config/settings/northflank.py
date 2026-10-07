@@ -14,10 +14,15 @@ MEDIA_EDGE_BASE_URL = os.getenv(
     R2_GATEWAY_URL,
 ).rstrip("/")
 MEDIA_EDGE_URL_TTL = int(os.getenv("MEDIA_EDGE_URL_TTL", "300"))
+R2_GATEWAY_SIGNING_KEY = os.getenv("R2_GATEWAY_SIGNING_KEY", "").strip()
 
 if not R2_GATEWAY_URL:
     raise ImproperlyConfigured(
         "R2_GATEWAY_URL is required for the hosted production service."
+    )
+if not R2_GATEWAY_SIGNING_KEY:
+    raise ImproperlyConfigured(
+        "R2_GATEWAY_SIGNING_KEY is required for hosted media storage."
     )
 
 # Northflank runs the Django origin while Cloudflare remains the public edge

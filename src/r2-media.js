@@ -126,7 +126,7 @@ async function verifyGatewayRequest(request, env, key, body) {
     timestamp,
     digest,
   ].join("\n");
-  const expected = await hmacHex(env.DJANGO_SECRET_KEY, message);
+  const expected = await hmacHex(env.R2_GATEWAY_SIGNING_KEY || env.DJANGO_SECRET_KEY, message);
   return constantTimeEqual(expected, signature);
 }
 
@@ -346,7 +346,7 @@ async function handleSignedMedia(request, env, url) {
   }
 
   const expected = await hmacHex(
-    env.DJANGO_SECRET_KEY,
+    env.R2_GATEWAY_SIGNING_KEY || env.DJANGO_SECRET_KEY,
     ["GET", key, expires].join("\n"),
   );
   if (!constantTimeEqual(expected, signature)) {

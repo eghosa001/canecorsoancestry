@@ -10,6 +10,26 @@ from core.r2_gateway_storage import CloudflareR2GatewayStorage
 
 @override_settings(SECRET_KEY="r2-retry-test-secret")
 class R2GatewayRetryTests(SimpleTestCase):
+    @override_settings(R2_GATEWAY_SIGNING_KEY="dedicated-r2-key")
+    def test_request_prefers_dedicated_r2_signing_key(self):
+        storage = CloudflareR2GatewayStorage(
+            base_url="https://media.example.test",
+            timeout=1,
+        )
+        with (
+            patch(
+                "core.r2_gateway_storage.gateway_signature",
+                return_value="signed",
+            ) as signature,
+            patch(
+                "core.r2_gateway_storage.urllib.request.urlopen",
+                return_value=BytesIO(b"ok"),
+            ),
+        ):
+            storage._request("dogs/test.jpg", method="HEAD")
+
+        self.assertEqual(signature.call_args.args[0], "dedicated-r2-key")
+
     def test_transient_gateway_error_is_retried(self):
         storage = CloudflareR2GatewayStorage(
             base_url="https://media.example.test",
