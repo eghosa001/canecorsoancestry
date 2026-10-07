@@ -7,11 +7,71 @@ def membership_for(user, kennel):
     return KennelMembership.objects.filter(user=user, kennel=kennel).first()
 
 
+def has_member_identity(user):
+    """Return True once an account has participated in member-owned workflows."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if KennelMembership.objects.filter(user=user).exists():
+        return True
+    return Submission.objects.filter(submitted_by=user).exists()
+
+
+def moderation_assignment(user):
+    """Return the explicit staff assignment; never infer moderation from is_staff."""
+    if not getattr(user, "is_authenticated", False):
+        return None
+    if has_member_identity(user):
+        return None
+
+    try:
+        assignment = user.ancestry_moderation_role
+    except ModerationRoleAssignment.DoesNotExist:
+        assignment = None
+
+    if getattr(user, "is_superuser", False):
+        if assignment is None:
+            assignment = ModerationRoleAssignment.objects.create(
+                user=user,
+                role=ModerationRoleAssignment.Role.OWNER,
+                assigned_by=user,
+            )
+        elif assignment.role != ModerationRoleAssignment.Role.OWNER:
+            assignment.role = ModerationRoleAssignment.Role.OWNER
+            assignment.save(update_fields=("role",))
+        return assignment
+
+    return assignment
+
+
+def is_staff_identity(user):
+    """Staff identities are permanently separate from member identities."""
+    if not getattr(user, "is_authenticated", False):
+        return False
+    if getattr(user, "is_superuser", False):
+        return True
+    try:
+        user.ancestry_moderation_role
+    except ModerationRoleAssignment.DoesNotExist:
+        return False
+    return True
+
+
+def can_use_member_features(user):
+    return bool(
+        getattr(user, "is_authenticated", False)
+        and not is_staff_identity(user)
+    )
+
+
 def can_contribute_to_kennel(user, kennel):
+    if not can_use_member_features(user):
+        return False
     return membership_for(user, kennel) is not None
 
 
 def can_edit_kennel(user, kennel):
+    if not can_use_member_features(user):
+        return False
     membership = membership_for(user, kennel)
     return bool(
         membership
@@ -21,7 +81,7 @@ def can_edit_kennel(user, kennel):
 
 
 def can_contribute_to_dog(user, dog):
-    if not user.is_authenticated or dog is None:
+    if not can_use_member_features(user) or dog is None:
         return False
     if can_contribute_to_kennel(user, dog.kennel):
         return True
@@ -33,43 +93,22 @@ def can_contribute_to_dog(user, dog):
     ).exists()
 
 
-def moderation_assignment(user):
-    if not getattr(user, "is_authenticated", False):
-        return None
-
-    assignment = getattr(user, "ancestry_moderation_role", None)
-    if assignment:
-        return assignment
-
-    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
-        default_role = (
-            ModerationRoleAssignment.Role.OWNER
-            if getattr(user, "is_superuser", False)
-            else ModerationRoleAssignment.Role.REVIEWER
-        )
-        assignment, _ = ModerationRoleAssignment.objects.get_or_create(
-            user=user,
-            defaults={"role": default_role},
-        )
-        return assignment
-    return None
-
-
 def admin_public_label(user):
     assignment = moderation_assignment(user)
     if assignment:
         return assignment.public_label
-    return "Member" if getattr(user, "is_authenticated", False) else "System"
+    return "Member" if can_use_member_features(user) else "Staff"
 
 
 def moderation_role(user):
     if not getattr(user, "is_authenticated", False):
         return None
-    if getattr(user, "is_superuser", False):
-        moderation_assignment(user)
-        return ModerationRoleAssignment.Role.OWNER
+    if has_member_identity(user):
+        return None
     assignment = moderation_assignment(user)
-    return assignment.role if assignment else None
+    if assignment is None or assignment.role == ModerationRoleAssignment.Role.NONE:
+        return None
+    return assignment.role
 
 
 def can_review_submissions(user):
