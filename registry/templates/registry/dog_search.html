@@ -54,10 +54,12 @@
 
   <div class="search-results">
     {% for dog in dogs %}
-      <a class="search-result-card" href="{% url 'registry:dog-detail' dog.slug %}?source=search">
-        <div class="search-result-media">
-          {% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}" loading="lazy" decoding="async">{% elif dog.source_image_url %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% else %}<div class="media-placeholder">CCA</div>{% endif %}
-        </div>
+      <a class="search-result-card{% if not dog.display_images and not dog.source_image_url %} no-media{% endif %}" href="{% url 'registry:dog-detail' dog.slug %}?source=search">
+        {% if dog.display_images or dog.source_image_url %}
+          <div class="search-result-media">
+            {% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}" loading="lazy" decoding="async">{% else %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% endif %}
+          </div>
+        {% endif %}
         <div class="search-result-main">
           <div class="result-title-row">
             <h2>{{ dog.name }}</h2>
@@ -66,6 +68,7 @@
           {% if dog.display_registrations %}<p class="registration-line">{{ dog.display_registrations.0.authority.code }} · {{ dog.display_registrations.0.number }}</p>{% endif %}
           <p>{{ dog.colour|default:"Colour not recorded" }}{% if dog.date_of_birth %} · Born {{ dog.date_of_birth }}{% endif %}</p>
           {% if dog.kennel %}<p class="muted">{{ dog.kennel.name }}</p>{% endif %}
+          {% if not dog.display_images and not dog.source_image_url %}<p class="muted">Pedigree record · no public photo</p>{% endif %}
         </div>
       </a>
     {% empty %}
