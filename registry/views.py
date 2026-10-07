@@ -42,7 +42,13 @@ PROFILE_RELATION_PREVIEW_LIMIT = 18
 SEARCH_HIT_THROTTLE_SECONDS = 30
 
 
-def _dog_cards(queryset, *, include_parents=False, include_sources=True):
+def _dog_cards(
+    queryset,
+    *,
+    include_parents=False,
+    include_sources=True,
+    include_registrations=True,
+):
     related = ["kennel"]
     if include_parents:
         related.extend(["sire", "dam"])
@@ -53,12 +59,15 @@ def _dog_cards(queryset, *, include_parents=False, include_sources=True):
             queryset=DogImage.objects.order_by("-is_primary", "sort_order", "created_at"),
             to_attr="display_images",
         ),
-        Prefetch(
-            "registrations",
-            queryset=DogRegistration.objects.select_related("authority"),
-            to_attr="display_registrations",
-        ),
     )
+    if include_registrations:
+        queryset = queryset.prefetch_related(
+            Prefetch(
+                "registrations",
+                queryset=DogRegistration.objects.select_related("authority"),
+                to_attr="display_registrations",
+            )
+        )
     if include_sources:
         queryset = queryset.prefetch_related(
             Prefetch(
@@ -493,9 +502,14 @@ def kennel_list(request):
 
 
 def kennel_detail(request, slug):
-    kennel = get_object_or_404(Kennel, slug=slug)
+    kennel = get_object_or_404(
+        Kennel.objects.annotate(
+            public_dog_total=Count("dogs", filter=Q(dogs__is_public=True))
+        ),
+        slug=slug,
+    )
     public_dogs = Dog.objects.filter(kennel=kennel, is_public=True)
-    public_dog_total = public_dogs.count()
+    public_dog_total = kennel.public_dog_total
     stored_image_exists = DogImage.objects.filter(dog_id=OuterRef("pk"))
     source_image_exists = DogSource.objects.filter(
         dog_id=OuterRef("pk"),
@@ -511,6 +525,7 @@ def kennel_detail(request, slug):
             Q(_has_stored_image=True) | Q(_has_source_image=True)
         ),
         include_sources=False,
+        include_registrations=False,
     ).order_by("name")
     litter_queryset = (
         Litter.objects.filter(kennel=kennel, is_public=True)
@@ -520,22 +535,26 @@ def kennel_detail(request, slug):
     dog_page = Paginator(dog_queryset, 24).get_page(request.GET.get("dogs_page"))
     _attach_source_images_for_missing(dog_page.object_list)
     litter_page = Paginator(litter_queryset, 20).get_page(request.GET.get("litters_page"))
-    kennel_linked = kennel.memberships.exists()
-    is_member = bool(
-        request.user.is_authenticated
-        and request.user.kennel_memberships.filter(kennel=kennel).exists()
-    )
-    pending_claim = Submission.objects.filter(
-        kind=Submission.Kind.KENNEL_CLAIM,
-        status=Submission.Status.PENDING,
-        kennel=kennel,
-    ).select_related("submitted_by").first()
-    claim_pending = bool(
-        request.user.is_authenticated
-        and pending_claim
-        and pending_claim.submitted_by_id == request.user.id
-    )
-    claim_in_review = pending_claim is not None
+    kennel_linked = False
+    is_member = False
+    claim_pending = False
+    claim_in_review = False
+    if request.user.is_authenticated:
+        kennel_linked = kennel.memberships.exists()
+        is_member = request.user.kennel_memberships.filter(kennel=kennel).exists()
+        pending_claim = (
+            Submission.objects.filter(
+                kind=Submission.Kind.KENNEL_CLAIM,
+                status=Submission.Status.PENDING,
+                kennel=kennel,
+            )
+            .select_related("submitted_by")
+            .first()
+        )
+        claim_pending = bool(
+            pending_claim and pending_claim.submitted_by_id == request.user.id
+        )
+        claim_in_review = pending_claim is not None
     return render(
         request,
         "registry/kennel_detail.html",
