@@ -91,6 +91,24 @@ class R2GatewayRetryTests(SimpleTestCase):
             with self.assertRaisesRegex(OSError, "could not verify"):
                 storage.save_exact("dogs/test.jpg", ContentFile(b"data"))
 
+    def test_request_uses_explicit_cloudflare_safe_client_headers(self):
+        storage = CloudflareR2GatewayStorage(
+            base_url="https://media.example.test",
+            timeout=1,
+        )
+        response = BytesIO(b"ok")
+
+        with patch(
+            "core.r2_gateway_storage.urllib.request.urlopen",
+            return_value=response,
+        ) as urlopen:
+            storage._request("dogs/test.jpg", method="HEAD")
+
+        request = urlopen.call_args.args[0]
+        self.assertIn("Mozilla/5.0", request.get_header("User-agent"))
+        self.assertIn("CaneCorsoAncestry-Media/1.0", request.get_header("User-agent"))
+        self.assertIn("application/json", request.get_header("Accept"))
+
     def test_forbidden_gateway_error_is_not_retried(self):
         storage = CloudflareR2GatewayStorage(
             base_url="https://media.example.test",
