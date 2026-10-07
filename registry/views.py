@@ -496,20 +496,19 @@ def kennel_detail(request, slug):
     kennel = get_object_or_404(Kennel, slug=slug)
     public_dogs = Dog.objects.filter(kennel=kennel, is_public=True)
     public_dog_total = public_dogs.count()
-    stored_image_ids = DogImage.objects.order_by().values("dog_id").distinct()
-    source_image_ids = (
-        DogSource.objects.filter(
-            Q(raw_payload__image_url__startswith="https://www.canecorsopedigree.com/static/images/animal/")
-            | Q(raw_payload__image_url__startswith="https://canecorsopedigree.com/static/images/animal/")
-        )
-        .order_by()
-        .values("dog_id")
-        .distinct()
+    stored_image_exists = DogImage.objects.filter(dog_id=OuterRef("pk"))
+    source_image_exists = DogSource.objects.filter(
+        dog_id=OuterRef("pk"),
+    ).filter(
+        Q(raw_payload__image_url__startswith="https://www.canecorsopedigree.com/static/images/animal/")
+        | Q(raw_payload__image_url__startswith="https://canecorsopedigree.com/static/images/animal/")
     )
     dog_queryset = _dog_cards(
-        public_dogs.filter(
-            Q(pk__in=Subquery(stored_image_ids))
-            | Q(pk__in=Subquery(source_image_ids))
+        public_dogs.annotate(
+            _has_stored_image=Exists(stored_image_exists),
+            _has_source_image=Exists(source_image_exists),
+        ).filter(
+            Q(_has_stored_image=True) | Q(_has_source_image=True)
         ),
         include_sources=False,
     ).order_by("name")
