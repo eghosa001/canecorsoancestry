@@ -531,8 +531,10 @@ def main():
                       };
                     }"""
                 )
-                if not 24 <= restored_mobile["heroOffset"] <= 110:
-                    raise AssertionError(f"Mobile hero spacing is unreasonable: {restored_mobile}")
+                if not 120 <= restored_mobile["heroOffset"] <= 170:
+                    raise AssertionError(
+                        f"Mobile hero spacing no longer matches the intentional owner-approved gap: {restored_mobile}"
+                    )
                 if (
                     abs(restored_mobile["firstY"] - restored_mobile["secondY"]) > 3
                     or abs(restored_mobile["thirdY"] - restored_mobile["fourthY"]) > 3
