@@ -1,5 +1,14 @@
 from django.contrib import admin
 
+def _super_admin_has_permission(request):
+    """Django Admin is reserved for Super Admin identities only."""
+    user = getattr(request, "user", None)
+    return bool(user and user.is_active and user.is_superuser)
+
+
+admin.site.has_permission = _super_admin_has_permission
+
+
 from .models import (
     DisputeCase,
     EvidenceRequest,
