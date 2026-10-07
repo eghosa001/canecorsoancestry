@@ -81,7 +81,9 @@ class DogModelTests(TestCase):
             slug="throttled-search-dog",
             is_public=True,
         )
-        cache.delete(f"cca:dog-search-hit:{dog.pk}")
+        throttle_key = f"cca:dog-search-hit:{dog.pk}"
+        cache.delete(throttle_key)
+        self.addCleanup(cache.delete, throttle_key)
 
         for _ in range(2):
             response = self.client.get(
