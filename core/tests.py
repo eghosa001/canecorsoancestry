@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.contrib.staticfiles import finders
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -17,6 +17,21 @@ class StorageProbeTests(TestCase):
     def test_storage_probe_is_private(self):
         response = self.client.post(reverse("storage-probe"))
         self.assertEqual(response.status_code, 404)
+
+    def test_storage_probe_allows_secret_authenticated_post_without_csrf_token(self):
+        client = Client(enforce_csrf_checks=True)
+        payload = b"\xff\xd8\xff\xe0cca-runtime-r2-probe\xff\xd9"
+        with (
+            patch("core.views.default_storage.save", return_value="smoke/runtime/probe.jpg"),
+            patch("core.views.default_storage.open", return_value=BytesIO(payload)),
+            patch("core.views.default_storage.delete"),
+        ):
+            response = client.post(
+                reverse("storage-probe"),
+                HTTP_X_CCA_STORAGE_PROBE=settings.SECRET_KEY,
+            )
+
+        self.assertEqual(response.status_code, 200)
 
     def test_storage_probe_writes_reads_and_cleans_up(self):
         payload = b"\xff\xd8\xff\xe0cca-runtime-r2-probe\xff\xd9"
