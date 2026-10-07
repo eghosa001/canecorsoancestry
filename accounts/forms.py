@@ -1,11 +1,16 @@
+from io import BytesIO
+from pathlib import Path
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.validators import FileExtensionValidator
 from django.db.models import Q
 from django.utils.text import slugify
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 
 from registry.models import DisputeCase, Dog, DogDocument, DogIdentityNumber, DogRegistration, DogSource, Kennel, KennelMembership, Litter, ModerationRoleAssignment, Submission, SubmissionEvidence, VerificationState
 
@@ -14,18 +19,29 @@ from .models import Profile, SubmissionPayment
 
 IMAGE_MAX_BYTES = 10 * 1024 * 1024
 DOCUMENT_MAX_BYTES = 20 * 1024 * 1024
+IMAGE_EXTENSIONS = ["jpg", "jpeg", "jpe", "jfif", "png", "webp", "heic", "heif", "hif"]
+IMAGE_ACCEPT = "image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp,image/heic,image/heif,.heic,.heif,.hif"
+DOCUMENT_ACCEPT = f"application/pdf,{IMAGE_ACCEPT}"
+_HEIF_BRANDS = {b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"hevm", b"hevs", b"mif1", b"msf1"}
+
+# Native iPhone photos are commonly HEIC/HEIF. Register Pillow support once so
+# validation and server-side normalization behave the same on every upload path.
+register_heif_opener(thumbnails=False)
 
 
-def validate_image_upload(upload):
-    if upload.size > IMAGE_MAX_BYTES:
-        raise ValidationError("Image files must be 10 MB or smaller.")
-    header = upload.read(16)
-    upload.seek(0)
-    is_jpeg = header.startswith(b"\xff\xd8\xff")
-    is_png = header.startswith(b"\x89PNG\r\n\x1a\n")
-    is_webp = len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
-    if not (is_jpeg or is_png or is_webp):
-        raise ValidationError("The uploaded image content is not a valid JPEG, PNG or WebP file.")
+def _image_format_from_header(header):
+    if header.startswith(b"\xff\xd8\xff"):
+        return "jpeg"
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP":
+        return "webp"
+    if len(header) >= 12 and header[4:8] == b"ftyp" and header[8:12] in _HEIF_BRANDS:
+        return "heif"
+    return ""
+
+
+def _verify_uploaded_image(upload):
     try:
         with Image.open(upload) as image:
             if image.width > 12000 or image.height > 12000:
@@ -33,10 +49,22 @@ def validate_image_upload(upload):
             if image.width * image.height > 60_000_000:
                 raise ValidationError("Image contains too many pixels.")
             image.verify()
-    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
+    except ValidationError:
+        raise
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError) as exc:
         raise ValidationError("The uploaded image is damaged or not a supported image.") from exc
     finally:
         upload.seek(0)
+
+
+def validate_image_upload(upload):
+    if upload.size > IMAGE_MAX_BYTES:
+        raise ValidationError("Image files must be 10 MB or smaller.")
+    header = upload.read(16)
+    upload.seek(0)
+    if not _image_format_from_header(header):
+        raise ValidationError("The uploaded image content is not a valid JPEG, PNG, WebP or HEIC/HEIF file.")
+    _verify_uploaded_image(upload)
 
 
 def validate_document_upload(upload):
@@ -44,12 +72,41 @@ def validate_document_upload(upload):
         raise ValidationError("Evidence files must be 20 MB or smaller.")
     header = upload.read(16)
     upload.seek(0)
-    is_pdf = header.startswith(b"%PDF-")
-    is_jpeg = header.startswith(b"\xff\xd8\xff")
-    is_png = header.startswith(b"\x89PNG\r\n\x1a\n")
-    is_webp = len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
-    if not (is_pdf or is_jpeg or is_png or is_webp):
-        raise ValidationError("The uploaded evidence is not a valid PDF, JPEG, PNG or WebP file.")
+    if header.startswith(b"%PDF-"):
+        return
+    if not _image_format_from_header(header):
+        raise ValidationError("The uploaded evidence is not a valid PDF, JPEG, PNG, WebP or HEIC/HEIF file.")
+    _verify_uploaded_image(upload)
+
+
+def normalize_image_upload(upload):
+    """Convert HEIC/HEIF uploads to browser-safe JPEG before R2 storage."""
+    if not upload:
+        return upload
+    header = upload.read(16)
+    upload.seek(0)
+    if _image_format_from_header(header) != "heif":
+        return upload
+
+    try:
+        with Image.open(upload) as source:
+            source.load()
+            image = ImageOps.exif_transpose(source)
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+            output = BytesIO()
+            image.save(output, format="JPEG", quality=92, optimize=True)
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError) as exc:
+        raise ValidationError("The iPhone HEIC/HEIF photo could not be converted. Please choose another photo.") from exc
+    finally:
+        upload.seek(0)
+
+    stem = Path(upload.name or "upload").stem or "upload"
+    return SimpleUploadedFile(
+        f"{stem}.jpg",
+        output.getvalue(),
+        content_type="image/jpeg",
+    )
 
 
 class MemberProfileForm(forms.ModelForm):
@@ -92,19 +149,22 @@ class HealthRecordSubmissionForm(forms.Form):
     attachment = forms.FileField(
         label="Supporting result / certificate",
         widget=forms.ClearableFileInput(
-            attrs={"accept": "application/pdf,image/jpeg,image/png,image/webp"}
+            attrs={"accept": DOCUMENT_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            FileExtensionValidator(["pdf", *IMAGE_EXTENSIONS]),
             validate_document_upload,
         ],
-        help_text="Required evidence. PDF, JPG, PNG or WebP, up to 20 MB. Kept private unless separately approved for publication.",
+        help_text="Required evidence. PDF, JPG, PNG, WebP or iPhone HEIC/HEIF, up to 20 MB. Kept private unless separately approved for publication.",
     )
     notes = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={"rows": 3}),
         help_text="Optional context for the administrator reviewing this result.",
     )
+
+    def clean_attachment(self):
+        return normalize_image_upload(self.cleaned_data.get("attachment"))
 
 
 class VerificationResendForm(forms.Form):
@@ -306,13 +366,13 @@ class DogSubmissionForm(forms.Form):
         required=False,
         label="Primary photo",
         widget=forms.ClearableFileInput(
-            attrs={"accept": "image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp"}
+            attrs={"accept": IMAGE_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(["jpg", "jpeg", "jpe", "jfif", "png", "webp"]),
+            FileExtensionValidator(IMAGE_EXTENSIONS),
             validate_image_upload,
         ],
-        help_text="Optional. JPEG/JPG/JFIF, PNG or WebP, up to 10 MB. This becomes the dog's first profile photo after approval.",
+        help_text="Optional. JPEG/JPG/JFIF, PNG, WebP or iPhone HEIC/HEIF, up to 10 MB. This becomes the dog's first profile photo after approval.",
     )
     photo_caption = forms.CharField(
         max_length=220,
@@ -321,6 +381,9 @@ class DogSubmissionForm(forms.Form):
         help_text="Optional caption for the submitted primary photo.",
     )
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+
+    def clean_primary_photo(self):
+        return normalize_image_upload(self.cleaned_data.get("primary_photo"))
 
     def __init__(self, *args, user=None, kennel=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -416,13 +479,13 @@ class LitterPuppySubmissionForm(forms.Form):
         required=False,
         label="Primary photo",
         widget=forms.ClearableFileInput(
-            attrs={"accept": "image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp"}
+            attrs={"accept": IMAGE_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(["jpg", "jpeg", "jpe", "jfif", "png", "webp"]),
+            FileExtensionValidator(IMAGE_EXTENSIONS),
             validate_image_upload,
         ],
-        help_text="Optional. JPEG/JPG/JFIF, PNG or WebP, up to 10 MB. It becomes the puppy's first profile photo after approval.",
+        help_text="Optional. JPEG/JPG/JFIF, PNG, WebP or iPhone HEIC/HEIF, up to 10 MB. It becomes the puppy's first profile photo after approval.",
     )
     photo_caption = forms.CharField(
         max_length=220,
@@ -434,6 +497,9 @@ class LitterPuppySubmissionForm(forms.Form):
         widget=forms.Textarea(attrs={"rows": 3}),
         help_text="Optional note for the administrator verifying this puppy.",
     )
+
+    def clean_primary_photo(self):
+        return normalize_image_upload(self.cleaned_data.get("primary_photo"))
 
     def clean_registration(self):
         # Existing numbers are allowed into moderation so the verifier can explain
@@ -519,17 +585,20 @@ class DogImageSubmissionForm(forms.Form):
     attachment = forms.FileField(
         label="Photo",
         widget=forms.ClearableFileInput(
-            attrs={"accept": "image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp"}
+            attrs={"accept": IMAGE_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(["jpg", "jpeg", "jpe", "jfif", "png", "webp"]),
+            FileExtensionValidator(IMAGE_EXTENSIONS),
             validate_image_upload,
         ],
-        help_text="JPEG/JPG/JFIF, PNG or WebP, up to 10 MB.",
+        help_text="JPEG/JPG/JFIF, PNG, WebP or iPhone HEIC/HEIF, up to 10 MB.",
     )
     caption = forms.CharField(max_length=220, required=False)
     is_primary = forms.BooleanField(required=False)
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+
+    def clean_attachment(self):
+        return normalize_image_upload(self.cleaned_data.get("attachment"))
 
 
 class DogDocumentSubmissionForm(forms.Form):
@@ -537,10 +606,10 @@ class DogDocumentSubmissionForm(forms.Form):
     document_type = forms.ChoiceField(choices=DogDocument.DocumentType.choices)
     attachment = forms.FileField(
         widget=forms.ClearableFileInput(
-            attrs={"accept": "application/pdf,image/jpeg,image/png,image/webp"}
+            attrs={"accept": DOCUMENT_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            FileExtensionValidator(["pdf", *IMAGE_EXTENSIONS]),
             validate_document_upload,
         ]
     )
@@ -549,6 +618,9 @@ class DogDocumentSubmissionForm(forms.Form):
         help_text="A moderator still controls approval and publication.",
     )
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+
+    def clean_attachment(self):
+        return normalize_image_upload(self.cleaned_data.get("attachment"))
 
 
 class KennelCreateForm(forms.Form):
@@ -620,10 +692,10 @@ class SubmissionEvidenceForm(forms.Form):
     evidence_type = forms.ChoiceField(choices=SubmissionEvidence.EvidenceType.choices)
     file = forms.FileField(
         widget=forms.ClearableFileInput(
-            attrs={"accept": "application/pdf,image/jpeg,image/png,image/webp"}
+            attrs={"accept": DOCUMENT_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            FileExtensionValidator(["pdf", *IMAGE_EXTENSIONS]),
             validate_document_upload,
         ]
     )
@@ -632,6 +704,9 @@ class SubmissionEvidenceForm(forms.Form):
         widget=forms.Textarea(attrs={"rows": 3}),
         help_text="Optional context for the reviewing administrator.",
     )
+
+    def clean_file(self):
+        return normalize_image_upload(self.cleaned_data.get("file"))
 
 
 class DogReferenceField(forms.CharField):
@@ -715,17 +790,21 @@ class KennelClaimForm(forms.Form):
     )
     evidence = forms.FileField(
         required=False,
+        widget=forms.ClearableFileInput(attrs={"accept": DOCUMENT_ACCEPT}),
         validators=[
-            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            FileExtensionValidator(["pdf", *IMAGE_EXTENSIONS]),
             validate_document_upload,
         ],
-        help_text="Optional supporting document or image.",
+        help_text="Optional supporting document or image, including iPhone HEIC/HEIF photos.",
     )
     notes = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={"rows": 4}),
         help_text="Add any information a moderator should use when checking the claim.",
     )
+
+    def clean_evidence(self):
+        return normalize_image_upload(self.cleaned_data.get("evidence"))
 
 
 class LitterSubmissionForm(forms.Form):
@@ -826,12 +905,16 @@ class DisputeForm(forms.Form):
     )
     attachment = forms.FileField(
         required=False,
+        widget=forms.ClearableFileInput(attrs={"accept": DOCUMENT_ACCEPT}),
         validators=[
-            FileExtensionValidator(["pdf", "jpg", "jpeg", "png", "webp"]),
+            FileExtensionValidator(["pdf", *IMAGE_EXTENSIONS]),
             validate_document_upload,
         ],
-        help_text="Optional pedigree, certificate, screenshot or other supporting evidence.",
+        help_text="Optional pedigree, certificate, screenshot or other supporting evidence, including iPhone HEIC/HEIF photos.",
     )
+
+    def clean_attachment(self):
+        return normalize_image_upload(self.cleaned_data.get("attachment"))
 
 
 class BulkModerationForm(forms.Form):
