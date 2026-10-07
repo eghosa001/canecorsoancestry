@@ -1,5 +1,8 @@
 import hashlib
 import hmac
+from unittest.mock import patch
+
+from django.conf import settings
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -88,6 +91,89 @@ class PaidSubmissionTests(TestCase):
         self.assertContains(response, "Paystack is not configured on the server yet.")
         self.assertContains(response, "₦1,000")
         self.assertEqual(SubmissionPayment.objects.filter(user=self.user).count(), 0)
+
+    @patch("accounts.views.initialize_transaction")
+    def test_payment_start_uses_same_origin_handoff_before_paystack(self, initialize):
+        initialize.return_value = {
+            "access_code": "test-access-code",
+            "authorization_url": "https://checkout.paystack.com/test-access-code",
+        }
+        self.client.force_login(self.user)
+
+        with self.settings(
+            PAYSTACK_SECRET_KEY="sk_test_example",
+            SITE_URL="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",
+        ):
+            response = self.client.post(
+                reverse("accounts:new-payment"),
+                {
+                    "kennel": self.kennel.pk,
+                    "package": SubmissionPayment.Package.SINGLE_DOG,
+                    "dog_count": 1,
+                },
+            )
+
+        payment = SubmissionPayment.objects.get(user=self.user)
+        expected = f"{reverse('accounts:payment-detail', args=[payment.pk])}?checkout=1"
+        self.assertRedirects(response, expected, fetch_redirect_response=False)
+        initialize.assert_called_once()
+        callback_url = initialize.call_args.args[1]
+        self.assertEqual(
+            callback_url,
+            "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+            + reverse("accounts:paystack-callback"),
+        )
+
+        detail = self.client.get(expected)
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "Opening secure Paystack checkout")
+        self.assertContains(detail, "data-paystack-checkout-link")
+        self.assertContains(detail, "https://checkout.paystack.com/test-access-code")
+        self.assertContains(detail, "window.location.replace")
+
+    @patch("accounts.views.initialize_transaction")
+    def test_retry_reuses_recent_pending_checkout_instead_of_creating_duplicates(self, initialize):
+        existing = SubmissionPayment.objects.create(
+            user=self.user,
+            kennel=self.kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1,
+            amount_kobo=50000,
+            reference="CCA-existing-pending",
+            status=SubmissionPayment.Status.PENDING,
+            access_code="existing-access",
+            authorization_url="https://checkout.paystack.com/existing-access",
+        )
+        self.client.force_login(self.user)
+
+        with self.settings(PAYSTACK_SECRET_KEY="sk_test_example"):
+            response = self.client.post(
+                reverse("accounts:new-payment"),
+                {
+                    "kennel": self.kennel.pk,
+                    "package": SubmissionPayment.Package.SINGLE_DOG,
+                    "dog_count": 1,
+                },
+            )
+
+        expected = f"{reverse('accounts:payment-detail', args=[existing.pk])}?checkout=1"
+        self.assertRedirects(response, expected, fetch_redirect_response=False)
+        initialize.assert_not_called()
+        self.assertEqual(SubmissionPayment.objects.filter(user=self.user).count(), 1)
+
+    def test_payment_start_shows_immediate_checkout_feedback(self):
+        self.client.force_login(self.user)
+        with self.settings(PAYSTACK_SECRET_KEY="sk_test_example"):
+            response = self.client.get(reverse("accounts:new-payment"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-paystack-start-form")
+        self.assertContains(response, "data-paystack-start-submit")
+        self.assertContains(response, "Starting secure Paystack checkout")
+        self.assertContains(response, "Opening Paystack…")
+
+    def test_site_uses_lagos_timezone_for_displayed_payment_times(self):
+        self.assertEqual(settings.TIME_ZONE, "Africa/Lagos")
 
     def test_paid_submission_cannot_be_approved_without_paid_link(self):
         submission = Submission.objects.create(
