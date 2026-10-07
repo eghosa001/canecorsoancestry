@@ -190,7 +190,7 @@ class VerificationGovernanceTests(TestCase):
             SubmissionVerificationStatus.AWAITING_SECOND,
         )
 
-        with self.assertRaisesRegex(ValueError, "different administrator"):
+        with self.assertRaisesRegex(ValueError, "different Senior Moderator or Super Admin"):
             approve_submission(
                 submission,
                 self.senior_one,
