@@ -711,6 +711,10 @@ class ModerationRoleAssignment(models.Model):
             raise ValidationError(
                 {"user": "Member accounts cannot receive moderator or administrator authority. Create a separate staff account."}
             )
+        if not self.user.is_superuser and self.user.is_staff:
+            raise ValidationError(
+                {"user": "Moderator accounts cannot have Django staff/admin access."}
+            )
         if self.role == self.Role.OWNER and not self.user.is_superuser:
             raise ValidationError(
                 {"role": "Super Admin authority is reserved for Django superuser accounts."}
