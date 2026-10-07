@@ -86,6 +86,47 @@ class PublicThemeRegressionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIsNotNone(cache.get("cca:home:public-stats:v3"))
 
+    def test_home_caches_diverse_featured_dogs(self):
+        cache.delete("cca:home:featured-dog-ids:v1")
+        kennel = Kennel.objects.create(name="Featured Kennel", slug="featured-kennel")
+        first = Dog.objects.create(
+            name="Featured First",
+            slug="featured-first",
+            kennel=kennel,
+            is_public=True,
+            search_count=50,
+        )
+        second = Dog.objects.create(
+            name="Featured Same Kennel",
+            slug="featured-same-kennel",
+            kennel=kennel,
+            is_public=True,
+            search_count=40,
+        )
+        other = Dog.objects.create(
+            name="Featured Other",
+            slug="featured-other",
+            is_public=True,
+            search_count=30,
+        )
+        for dog in (first, second, other):
+            DogImage.objects.create(
+                dog=dog,
+                image=f"dogs/{dog.slug}.jpg",
+                is_primary=True,
+            )
+
+        response = self.client.get(reverse("home"))
+        names = [dog.name for dog in response.context["featured_dogs"]]
+
+        self.assertIn(first.name, names)
+        self.assertIn(other.name, names)
+        self.assertNotIn(second.name, names)
+        self.assertEqual(
+            cache.get("cca:home:featured-dog-ids:v1"),
+            [first.pk, other.pk],
+        )
+
     def test_home_restores_cca_plaque_and_theme_controls(self):
         response = self.client.get(reverse("home"))
 
