@@ -36,28 +36,40 @@ class R2GatewayRetryTests(SimpleTestCase):
         self.assertEqual(urlopen.call_count, 2)
         sleep.assert_called_once_with(0.25)
 
-    def test_save_exact_verifies_uploaded_size(self):
+    def test_save_exact_uses_worker_verified_put_response(self):
         storage = CloudflareR2GatewayStorage(
             base_url="https://media.example.test",
             timeout=1,
         )
         put_response = MagicMock()
+        put_response.read.return_value = (
+            b'{"status":"stored","key":"dogs/test.jpg","size":4,"r2_verified":true}'
+        )
         put_response.__enter__.return_value = put_response
         put_response.__exit__.return_value = False
-        head_response = MagicMock()
-        head_response.headers = {"Content-Length": "4"}
-        head_response.__enter__.return_value = head_response
-        head_response.__exit__.return_value = False
 
-        with patch.object(
-            storage,
-            "_request",
-            side_effect=[put_response, head_response],
-        ) as request:
+        with patch.object(storage, "_request", return_value=put_response) as request:
             saved = storage.save_exact("dogs/test.jpg", ContentFile(b"data"))
 
         self.assertEqual(saved, "dogs/test.jpg")
-        self.assertEqual(request.call_count, 2)
+        request.assert_called_once()
+        self.assertEqual(request.call_args.kwargs["method"], "PUT")
+
+    def test_save_exact_rejects_unverified_worker_response(self):
+        storage = CloudflareR2GatewayStorage(
+            base_url="https://media.example.test",
+            timeout=1,
+        )
+        put_response = MagicMock()
+        put_response.read.return_value = (
+            b'{"status":"stored","key":"dogs/test.jpg","size":4,"r2_verified":false}'
+        )
+        put_response.__enter__.return_value = put_response
+        put_response.__exit__.return_value = False
+
+        with patch.object(storage, "_request", return_value=put_response):
+            with self.assertRaisesRegex(OSError, "could not verify"):
+                storage.save_exact("dogs/test.jpg", ContentFile(b"data"))
 
     def test_forbidden_gateway_error_is_not_retried(self):
         storage = CloudflareR2GatewayStorage(
