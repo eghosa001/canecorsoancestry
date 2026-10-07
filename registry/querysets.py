@@ -30,32 +30,35 @@ def one_dog_per_kennel(queryset):
 
 
 def public_dog_match_filter(value, *, exact=False):
+    """Build one lazy, index-friendly public search predicate.
+
+    Keeping aliases, registrations and kennels as SQL subqueries avoids the
+    extra application/database round trips that the previous eager ID lists
+    introduced. It also lets PostgreSQL use the trigram indexes on the main
+    dog-name and bloodline branches before ranking the small match set.
+    """
     lookup = "iexact" if exact else "icontains"
     match = Q(**{f"name__{lookup}": value})
 
     if not exact:
         match |= Q(**{f"bloodline__{lookup}": value})
 
-    related_ids = set(
-        DogAlias.objects.filter(**{f"name__{lookup}": value})
+    match |= Q(
+        pk__in=DogAlias.objects.filter(**{f"name__{lookup}": value})
         .order_by()
-        .values_list("dog_id", flat=True)
+        .values("dog_id")
     )
-    related_ids.update(
-        DogRegistration.objects.filter(**{f"number__{lookup}": value})
+    match |= Q(
+        pk__in=DogRegistration.objects.filter(**{f"number__{lookup}": value})
         .order_by()
-        .values_list("dog_id", flat=True)
+        .values("dog_id")
     )
-    if related_ids:
-        match |= Q(pk__in=related_ids)
 
     if not exact:
-        kennel_ids = list(
-            Kennel.objects.filter(**{f"name__{lookup}": value})
+        match |= Q(
+            kennel_id__in=Kennel.objects.filter(**{f"name__{lookup}": value})
             .order_by()
-            .values_list("pk", flat=True)
+            .values("pk")
         )
-        if kennel_ids:
-            match |= Q(kennel_id__in=kennel_ids)
 
     return match
