@@ -185,7 +185,6 @@ class AdminSurfaceSmokeTests(TestCase):
             username="reviewer-one",
             email="reviewer@example.com",
             password="Reviewer-pass-123",
-            is_staff=True,
         )
         ModerationRoleAssignment.objects.create(
             user=reviewer,
