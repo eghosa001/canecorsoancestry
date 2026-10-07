@@ -13,6 +13,7 @@ from django.db import connection
 from django.db.models import Prefetch, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.urls import reverse
 
@@ -84,6 +85,7 @@ def healthz(request):
     return response
 
 
+@csrf_exempt
 @require_POST
 def storage_probe(request):
     """Private deploy-time check of the exact Django -> R2 media path."""
