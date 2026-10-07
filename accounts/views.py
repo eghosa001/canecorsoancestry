@@ -680,6 +680,35 @@ def payment_detail(request, pk):
 
 
 @login_required
+@require_POST
+def payment_verify(request, pk):
+    payment = _payment_for_member(request, pk)
+    if payment.status == SubmissionPayment.Status.PAID:
+        messages.info(request, "This payment is already confirmed.")
+        return redirect("accounts:payment-detail", pk=payment.pk)
+
+    current_price_kobo = SubmissionPayment.price_for(payment.package, payment.dog_count)
+    if payment.amount_kobo != current_price_kobo:
+        messages.error(
+            request,
+            "This checkout uses retired pricing. Start a new payment at the current price.",
+        )
+        return redirect("accounts:payment-detail", pk=payment.pk)
+
+    try:
+        data = verify_transaction(payment.reference)
+        record_successful_payment(payment.reference, data)
+    except PaystackError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(
+            request,
+            "Payment confirmed. Continue below to submit the record you paid for.",
+        )
+    return redirect("accounts:payment-detail", pk=payment.pk)
+
+
+@login_required
 def payment_submit_dog(request, pk):
     payment = _payment_for_member(request, pk)
     if payment.status != SubmissionPayment.Status.PAID:

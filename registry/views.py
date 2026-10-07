@@ -494,8 +494,23 @@ def kennel_list(request):
 
 def kennel_detail(request, slug):
     kennel = get_object_or_404(Kennel, slug=slug)
+    public_dogs = Dog.objects.filter(kennel=kennel, is_public=True)
+    public_dog_total = public_dogs.count()
+    stored_image_ids = DogImage.objects.order_by().values("dog_id").distinct()
+    source_image_ids = (
+        DogSource.objects.filter(
+            Q(raw_payload__image_url__startswith="https://www.canecorsopedigree.com/static/images/animal/")
+            | Q(raw_payload__image_url__startswith="https://canecorsopedigree.com/static/images/animal/")
+        )
+        .order_by()
+        .values("dog_id")
+        .distinct()
+    )
     dog_queryset = _dog_cards(
-        Dog.objects.filter(kennel=kennel, is_public=True),
+        public_dogs.filter(
+            Q(pk__in=Subquery(stored_image_ids))
+            | Q(pk__in=Subquery(source_image_ids))
+        ),
         include_sources=False,
     ).order_by("name")
     litter_queryset = (
@@ -532,6 +547,7 @@ def kennel_detail(request, slug):
             "dog_page": dog_page,
             "litter_page": litter_page,
             "dog_total": dog_page.paginator.count,
+            "public_dog_total": public_dog_total,
             "litter_total": litter_page.paginator.count,
             "can_claim": (
                 request.user.is_authenticated
@@ -551,11 +567,29 @@ def litter_detail(request, pk):
         pk=pk,
         is_public=True,
     )
-    offspring = _dog_cards(
-        Dog.objects.filter(litter=litter, is_public=True)
-    ).order_by("name")
+    offspring = list(
+        _dog_cards(
+            Dog.objects.filter(litter=litter, is_public=True)
+        ).order_by("name")
+    )
+    _attach_source_image_urls(offspring)
+    imaged_offspring = [
+        dog
+        for dog in offspring
+        if getattr(dog, "display_images", []) or getattr(dog, "source_image_url", "")
+    ]
+    other_offspring = [
+        dog
+        for dog in offspring
+        if not getattr(dog, "display_images", []) and not getattr(dog, "source_image_url", "")
+    ]
     return render(
         request,
         "registry/litter_detail.html",
-        {"litter": litter, "offspring": offspring},
+        {
+            "litter": litter,
+            "offspring_total": len(offspring),
+            "imaged_offspring": imaged_offspring,
+            "other_offspring": other_offspring,
+        },
     )

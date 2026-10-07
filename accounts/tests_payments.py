@@ -14,7 +14,7 @@ from registry.services import approve_submission
 
 from .forms import PaymentPackageForm
 from .models import PaymentSubmissionLink, SubmissionPayment
-from .payments import PaystackError, record_successful_payment, webhook_signature_valid
+from .payments import PaystackError, initialize_transaction, record_successful_payment, webhook_signature_valid
 
 
 class PaidSubmissionTests(TestCase):
@@ -74,6 +74,97 @@ class PaidSubmissionTests(TestCase):
         )
         self.assertTrue(litter_form.is_valid(), litter_form.errors)
         self.assertEqual(litter_form.cleaned_data["amount_kobo"], 100000)
+
+    @patch("accounts.payments.requests.post")
+    def test_transaction_initialization_uses_configured_subaccount(self, post):
+        payment = SubmissionPayment.objects.create(
+            user=self.user,
+            kennel=self.kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1,
+            amount_kobo=50000,
+            reference="CCA-subaccount-test",
+        )
+        post.return_value.raise_for_status.return_value = None
+        post.return_value.json.return_value = {
+            "status": True,
+            "data": {
+                "authorization_url": "https://checkout.paystack.com/subaccount-test",
+                "access_code": "subaccount-test",
+            },
+        }
+
+        with self.settings(
+            PAYSTACK_SECRET_KEY="sk_test_example",
+            PAYSTACK_SUBACCOUNT_CODE="ACCT_test123",
+        ):
+            initialize_transaction(payment, "https://example.com/callback")
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["subaccount"], "ACCT_test123")
+
+    @patch("accounts.views.verify_transaction")
+    def test_member_can_recheck_pending_payment_status(self, verify):
+        payment = SubmissionPayment.objects.create(
+            user=self.user,
+            kennel=self.kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1,
+            amount_kobo=50000,
+            reference="CCA-manual-verify",
+            status=SubmissionPayment.Status.PENDING,
+        )
+        verify.return_value = {
+            "id": 12345,
+            "reference": payment.reference,
+            "status": "success",
+            "amount": 50000,
+            "currency": "NGN",
+            "metadata": {"payment_id": str(payment.pk)},
+        }
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("accounts:payment-verify", args=[payment.pk])
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("accounts:payment-detail", args=[payment.pk]),
+            fetch_redirect_response=False,
+        )
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, SubmissionPayment.Status.PAID)
+        self.assertIsNotNone(payment.paid_at)
+
+        detail = self.client.get(reverse("accounts:payment-detail", args=[payment.pk]))
+        self.assertContains(detail, "Payment confirmed — your package is ready.")
+        self.assertContains(detail, "Submit dog")
+
+    @patch("accounts.views.verify_transaction")
+    def test_member_payment_recheck_keeps_unpaid_checkout_pending(self, verify):
+        payment = SubmissionPayment.objects.create(
+            user=self.user,
+            kennel=self.kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1,
+            amount_kobo=50000,
+            reference="CCA-still-pending",
+            status=SubmissionPayment.Status.PENDING,
+            authorization_url="https://checkout.paystack.com/still-pending",
+        )
+        verify.side_effect = PaystackError("Payment has not completed successfully.")
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("accounts:payment-verify", args=[payment.pk]),
+            follow=True,
+        )
+
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, SubmissionPayment.Status.PENDING)
+        self.assertContains(response, "Payment has not completed successfully.")
+        self.assertContains(response, "Already paid? Check payment status")
 
     def test_payment_start_fails_safely_without_paystack_configuration(self):
         self.client.force_login(self.user)
