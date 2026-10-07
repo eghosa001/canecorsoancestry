@@ -52,6 +52,8 @@ class StorageProbeTests(TestCase):
         self.assertEqual(response.json()["error_type"], "HTTPError")
         self.assertEqual(response.json()["http_status"], 403)
         self.assertEqual(response.json()["reason"], "Forbidden")
+        self.assertEqual(response.json()["stage"], "put")
+        self.assertEqual(len(response.json()["signing_fingerprint"]), 16)
 
     def test_storage_probe_writes_reads_and_cleans_up(self):
         payload = b"\xff\xd8\xff\xe0cca-runtime-r2-probe\xff\xd9"
@@ -66,7 +68,12 @@ class StorageProbeTests(TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "ok", "storage": "r2"})
+        payload = response.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["storage"], "r2")
+        self.assertEqual(payload["stage"], "complete")
+        self.assertEqual(len(payload["signing_fingerprint"]), 16)
+        self.assertIsInstance(payload["server_epoch"], int)
         save.assert_called_once()
         open_file.assert_called_once_with("smoke/runtime/probe.jpg", "rb")
         delete.assert_called_once_with("smoke/runtime/probe.jpg")
