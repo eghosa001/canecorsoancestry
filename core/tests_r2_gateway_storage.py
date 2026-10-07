@@ -42,10 +42,9 @@ class R2GatewayRetryTests(SimpleTestCase):
             storage._request("dogs/test.jpg", method="HEAD")
 
         request = urlopen.call_args.args[0]
-        self.assertEqual(
-            request.get_header("User-agent"),
-            "CaneCorsoAncestry-Media/1.0",
-        )
+        user_agent = request.get_header("User-agent")
+        self.assertIn("Mozilla/5.0", user_agent)
+        self.assertIn("CaneCorsoAncestry-Media/1.0", user_agent)
         self.assertIn("application/json", request.get_header("Accept"))
 
     def test_transient_gateway_error_is_retried(self):
