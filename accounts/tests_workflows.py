@@ -6,6 +6,7 @@ from registry.models import (
     Dog,
     Kennel,
     KennelMembership,
+    ModerationRoleAssignment,
     Submission,
     VerificationEvent,
     VerificationState,
@@ -58,9 +59,13 @@ class MemberSubmissionTests(TestCase):
 
 
 class ModeratorVerificationTests(TestCase):
-    def test_staff_can_record_overall_verification(self):
+    def test_moderator_can_record_overall_verification(self):
         staff = get_user_model().objects.create_user(
-            username="reviewer", is_staff=True
+            username="reviewer"
+        )
+        ModerationRoleAssignment.objects.create(
+            user=staff,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         dog = Dog.objects.create(name="Review Dog", slug="review-dog")
         self.client.force_login(staff)
