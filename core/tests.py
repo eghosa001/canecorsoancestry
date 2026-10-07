@@ -127,6 +127,51 @@ class PublicThemeRegressionTests(TestCase):
             [first.pk, other.pk],
         )
 
+    def test_home_falls_back_when_one_kennel_dominates_fast_candidates(self):
+        cache.delete("cca:home:featured-dog-ids:v1")
+        dominant = Kennel.objects.create(name="Dominant Kennel", slug="dominant-kennel")
+        for index in range(96):
+            dog = Dog.objects.create(
+                name=f"Dominant {index:03d}",
+                slug=f"dominant-{index:03d}",
+                kennel=dominant,
+                is_public=True,
+                search_count=1000 - index,
+            )
+            DogImage.objects.create(
+                dog=dog,
+                image=f"dogs/{dog.slug}.jpg",
+                is_primary=True,
+            )
+
+        expected = []
+        for index in range(3):
+            kennel = Kennel.objects.create(
+                name=f"Other Kennel {index}",
+                slug=f"other-kennel-{index}",
+            )
+            dog = Dog.objects.create(
+                name=f"Other Featured {index}",
+                slug=f"other-featured-{index}",
+                kennel=kennel,
+                is_public=True,
+                search_count=10 - index,
+            )
+            DogImage.objects.create(
+                dog=dog,
+                image=f"dogs/{dog.slug}.jpg",
+                is_primary=True,
+            )
+            expected.append(dog.name)
+
+        response = self.client.get(reverse("home"))
+        names = [dog.name for dog in response.context["featured_dogs"]]
+
+        self.assertEqual(len(names), 4)
+        self.assertTrue(any(name.startswith("Dominant ") for name in names))
+        for name in expected:
+            self.assertIn(name, names)
+
     def test_home_restores_cca_plaque_and_theme_controls(self):
         response = self.client.get(reverse("home"))
 
