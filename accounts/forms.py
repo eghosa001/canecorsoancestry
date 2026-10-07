@@ -6,7 +6,6 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.validators import FileExtensionValidator
 from django.db.models import Q
 from django.utils.text import slugify
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -17,28 +16,22 @@ from registry.models import DisputeCase, Dog, DogDocument, DogIdentityNumber, Do
 from .models import Profile, SubmissionPayment
 
 
-IMAGE_MAX_BYTES = 10 * 1024 * 1024
+IMAGE_MAX_BYTES = 20 * 1024 * 1024
 DOCUMENT_MAX_BYTES = 20 * 1024 * 1024
-IMAGE_EXTENSIONS = ["jpg", "jpeg", "jpe", "jfif", "png", "webp", "heic", "heif", "hif"]
-IMAGE_ACCEPT = "image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp,image/heic,image/heif,.heic,.heif,.hif"
-DOCUMENT_ACCEPT = f"application/pdf,{IMAGE_ACCEPT}"
-_HEIF_BRANDS = {b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx", b"hevm", b"hevs", b"mif1", b"msf1"}
+IMAGE_ACCEPT = "image/*"
+DOCUMENT_ACCEPT = "application/pdf,image/*"
+PHOTO_MAX_DIMENSION = 3200
 
-# Native iPhone photos are commonly HEIC/HEIF. Register Pillow support once so
-# validation and server-side normalization behave the same on every upload path.
+# Register HEIC/HEIF support, then let Pillow validate image content rather than
+# trusting a filename extension or browser-reported MIME type. This keeps the
+# submission portal compatible with normal phone, camera and downloaded images.
 register_heif_opener(thumbnails=False)
 
 
-def _image_format_from_header(header):
-    if header.startswith(b"\xff\xd8\xff"):
-        return "jpeg"
-    if header.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "png"
-    if len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP":
-        return "webp"
-    if len(header) >= 12 and header[4:8] == b"ftyp" and header[8:12] in _HEIF_BRANDS:
-        return "heif"
-    return ""
+def _is_pdf(upload):
+    header = upload.read(5)
+    upload.seek(0)
+    return header.startswith(b"%PDF-")
 
 
 def _verify_uploaded_image(upload):
@@ -52,56 +45,69 @@ def _verify_uploaded_image(upload):
     except ValidationError:
         raise
     except (UnidentifiedImageError, OSError, SyntaxError, ValueError) as exc:
-        raise ValidationError("The uploaded image is damaged or not a supported image.") from exc
+        raise ValidationError(
+            "The uploaded file is not a readable photo. Choose a normal image from your gallery, camera or files."
+        ) from exc
     finally:
         upload.seek(0)
 
 
 def validate_image_upload(upload):
     if upload.size > IMAGE_MAX_BYTES:
-        raise ValidationError("Image files must be 10 MB or smaller.")
-    header = upload.read(16)
-    upload.seek(0)
-    if not _image_format_from_header(header):
-        raise ValidationError("The uploaded image content is not a valid JPEG, PNG, WebP or HEIC/HEIF file.")
+        raise ValidationError("Image files must be 20 MB or smaller.")
     _verify_uploaded_image(upload)
 
 
 def validate_document_upload(upload):
     if upload.size > DOCUMENT_MAX_BYTES:
         raise ValidationError("Evidence files must be 20 MB or smaller.")
-    header = upload.read(16)
-    upload.seek(0)
-    if header.startswith(b"%PDF-"):
+    if _is_pdf(upload):
         return
-    if not _image_format_from_header(header):
-        raise ValidationError("The uploaded evidence is not a valid PDF, JPEG, PNG, WebP or HEIC/HEIF file.")
     _verify_uploaded_image(upload)
 
 
 def normalize_image_upload(upload):
-    """Convert HEIC/HEIF uploads to browser-safe JPEG before R2 storage."""
-    if not upload:
-        return upload
-    header = upload.read(16)
-    upload.seek(0)
-    if _image_format_from_header(header) != "heif":
+    """Normalize any accepted raster image to a compact, browser-safe JPEG."""
+    if not upload or _is_pdf(upload):
         return upload
 
     try:
         with Image.open(upload) as source:
             source.load()
             image = ImageOps.exif_transpose(source)
-            if image.mode != "RGB":
+
+            if image.width > PHOTO_MAX_DIMENSION or image.height > PHOTO_MAX_DIMENSION:
+                image.thumbnail(
+                    (PHOTO_MAX_DIMENSION, PHOTO_MAX_DIMENSION),
+                    Image.Resampling.LANCZOS,
+                )
+
+            if image.mode in {"RGBA", "LA"} or (
+                image.mode == "P" and "transparency" in image.info
+            ):
+                rgba = image.convert("RGBA")
+                background = Image.new("RGB", rgba.size, "white")
+                background.paste(rgba, mask=rgba.getchannel("A"))
+                image = background
+            elif image.mode != "RGB":
                 image = image.convert("RGB")
+
             output = BytesIO()
-            image.save(output, format="JPEG", quality=92, optimize=True)
+            image.save(
+                output,
+                format="JPEG",
+                quality=92,
+                optimize=True,
+                progressive=True,
+            )
     except (UnidentifiedImageError, OSError, SyntaxError, ValueError) as exc:
-        raise ValidationError("The iPhone HEIC/HEIF photo could not be converted. Please choose another photo.") from exc
+        raise ValidationError(
+            "This photo could not be prepared for upload. Choose another image and try again."
+        ) from exc
     finally:
         upload.seek(0)
 
-    stem = Path(upload.name or "upload").stem or "upload"
+    stem = Path(upload.name or "photo").stem or "photo"
     return SimpleUploadedFile(
         f"{stem}.jpg",
         output.getvalue(),
@@ -152,10 +158,9 @@ class HealthRecordSubmissionForm(forms.Form):
             attrs={"accept": DOCUMENT_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(["pdf", *IMAGE_EXTENSIONS]),
             validate_document_upload,
         ],
-        help_text="Required evidence. PDF, JPG, PNG, WebP or iPhone HEIC/HEIF, up to 20 MB. Kept private unless separately approved for publication.",
+        help_text="Required evidence. PDF or a readable image from your phone, camera or files, up to 20 MB. Kept private unless separately approved for publication.",
     )
     notes = forms.CharField(
         required=False,
@@ -369,10 +374,9 @@ class DogSubmissionForm(forms.Form):
             attrs={"accept": IMAGE_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(IMAGE_EXTENSIONS),
             validate_image_upload,
         ],
-        help_text="Optional. JPEG/JPG/JFIF, PNG, WebP or iPhone HEIC/HEIF, up to 10 MB. This becomes the dog's first profile photo after approval.",
+        help_text="Optional. Choose a photo from your phone, camera or files, up to 20 MB. This becomes the dog's first profile photo after approval.",
     )
     photo_caption = forms.CharField(
         max_length=220,
@@ -482,10 +486,9 @@ class LitterPuppySubmissionForm(forms.Form):
             attrs={"accept": IMAGE_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(IMAGE_EXTENSIONS),
             validate_image_upload,
         ],
-        help_text="Optional. JPEG/JPG/JFIF, PNG, WebP or iPhone HEIC/HEIF, up to 10 MB. It becomes the puppy's first profile photo after approval.",
+        help_text="Optional. Choose a photo from your phone, camera or files, up to 20 MB. It becomes the puppy's first profile photo after approval.",
     )
     photo_caption = forms.CharField(
         max_length=220,
@@ -588,10 +591,9 @@ class DogImageSubmissionForm(forms.Form):
             attrs={"accept": IMAGE_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(IMAGE_EXTENSIONS),
             validate_image_upload,
         ],
-        help_text="JPEG/JPG/JFIF, PNG, WebP or iPhone HEIC/HEIF, up to 10 MB.",
+        help_text="Choose a photo from your phone, camera or files, up to 20 MB.",
     )
     caption = forms.CharField(max_length=220, required=False)
     is_primary = forms.BooleanField(required=False)
@@ -609,7 +611,6 @@ class DogDocumentSubmissionForm(forms.Form):
             attrs={"accept": DOCUMENT_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(["pdf", *IMAGE_EXTENSIONS]),
             validate_document_upload,
         ]
     )
@@ -695,7 +696,6 @@ class SubmissionEvidenceForm(forms.Form):
             attrs={"accept": DOCUMENT_ACCEPT}
         ),
         validators=[
-            FileExtensionValidator(["pdf", *IMAGE_EXTENSIONS]),
             validate_document_upload,
         ]
     )
@@ -792,10 +792,9 @@ class KennelClaimForm(forms.Form):
         required=False,
         widget=forms.ClearableFileInput(attrs={"accept": DOCUMENT_ACCEPT}),
         validators=[
-            FileExtensionValidator(["pdf", *IMAGE_EXTENSIONS]),
             validate_document_upload,
         ],
-        help_text="Optional supporting document or image, including iPhone HEIC/HEIF photos.",
+        help_text="Optional supporting document or image, including photos from phones and cameras.",
     )
     notes = forms.CharField(
         required=False,
@@ -907,10 +906,9 @@ class DisputeForm(forms.Form):
         required=False,
         widget=forms.ClearableFileInput(attrs={"accept": DOCUMENT_ACCEPT}),
         validators=[
-            FileExtensionValidator(["pdf", *IMAGE_EXTENSIONS]),
             validate_document_upload,
         ],
-        help_text="Optional pedigree, certificate, screenshot or other supporting evidence, including iPhone HEIC/HEIF photos.",
+        help_text="Optional pedigree, certificate, screenshot or other supporting evidence, including photos from phones and cameras.",
     )
 
     def clean_attachment(self):
