@@ -312,7 +312,7 @@ class DogSubmissionForm(forms.Form):
             FileExtensionValidator(["jpg", "jpeg", "jpe", "jfif", "png", "webp"]),
             validate_image_upload,
         ],
-        help_text="Optional. JPG, PNG or WebP, up to 10 MB. This becomes the dog's first profile photo after approval.",
+        help_text="Optional. JPEG/JPG/JFIF, PNG or WebP, up to 10 MB. This becomes the dog's first profile photo after approval.",
     )
     photo_caption = forms.CharField(
         max_length=220,
@@ -422,7 +422,7 @@ class LitterPuppySubmissionForm(forms.Form):
             FileExtensionValidator(["jpg", "jpeg", "jpe", "jfif", "png", "webp"]),
             validate_image_upload,
         ],
-        help_text="Optional. JPG, PNG or WebP, up to 10 MB. It becomes the puppy's first profile photo after approval.",
+        help_text="Optional. JPEG/JPG/JFIF, PNG or WebP, up to 10 MB. It becomes the puppy's first profile photo after approval.",
     )
     photo_caption = forms.CharField(
         max_length=220,
