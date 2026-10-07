@@ -366,6 +366,108 @@ class DogModelTests(TestCase):
         self.assertEqual(len(response.context["kennels"]), 18)
         self.assertTrue(response.context["page_obj"].has_next())
 
+    def test_kennel_gallery_only_uses_photographed_dog_cards(self):
+        kennel = Kennel.objects.create(name="Photo Kennel", slug="photo-kennel")
+        photographed = Dog.objects.create(
+            name="Photographed Dog",
+            slug="photographed-dog",
+            kennel=kennel,
+            is_public=True,
+        )
+        Dog.objects.create(
+            name="Pedigree Only Dog",
+            slug="pedigree-only-dog",
+            kennel=kennel,
+            is_public=True,
+        )
+        DogImage.objects.create(
+            dog=photographed,
+            image="dogs/photo-kennel/photographed.jpg",
+            is_primary=True,
+        )
+
+        response = self.client.get(reverse("registry:kennel-detail", args=[kennel.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["dog_total"], 1)
+        self.assertEqual(response.context["public_dog_total"], 2)
+        self.assertContains(response, "Dogs with photos")
+        self.assertContains(response, "Photographed Dog")
+        self.assertNotContains(response, "Pedigree Only Dog")
+
+    def test_litter_keeps_image_less_offspring_as_linked_text_records(self):
+        sire = Dog.objects.create(
+            name="Gallery Sire",
+            slug="gallery-sire",
+            sex=Dog.Sex.MALE,
+            is_public=True,
+        )
+        dam = Dog.objects.create(
+            name="Gallery Dam",
+            slug="gallery-dam",
+            sex=Dog.Sex.FEMALE,
+            is_public=True,
+        )
+        litter = Litter.objects.create(
+            code="GALLERY-LITTER",
+            sire=sire,
+            dam=dam,
+            date_of_birth="2026-10-07",
+            is_public=True,
+        )
+        photographed = Dog.objects.create(
+            name="Photo Puppy",
+            slug="photo-puppy",
+            litter=litter,
+            sire=sire,
+            dam=dam,
+            date_of_birth="2026-10-07",
+            is_public=True,
+        )
+        DogImage.objects.create(
+            dog=photographed,
+            image="dogs/gallery/photo-puppy.jpg",
+            is_primary=True,
+        )
+        Dog.objects.create(
+            name="No Photo Puppy",
+            slug="no-photo-puppy",
+            litter=litter,
+            sire=sire,
+            dam=dam,
+            date_of_birth="2026-10-07",
+            is_public=True,
+        )
+
+        response = self.client.get(reverse("registry:litter-detail", args=[litter.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["offspring_total"], 2)
+        self.assertEqual(len(response.context["imaged_offspring"]), 1)
+        self.assertEqual(len(response.context["other_offspring"]), 1)
+        self.assertContains(response, "Photo Puppy")
+        self.assertContains(response, "No Photo Puppy")
+        self.assertContains(response, "Other registered offspring")
+        self.assertNotContains(response, '<div class="media-placeholder">CCA</div>', html=False)
+
+    def test_explicit_search_keeps_image_less_record_without_fake_thumbnail(self):
+        Dog.objects.create(
+            name="Text Only Champion",
+            slug="text-only-champion",
+            is_public=True,
+        )
+
+        response = self.client.get(
+            reverse("registry:dog-search"),
+            {"q": "Text Only Champion"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Text Only Champion")
+        self.assertContains(response, "Pedigree record · no public photo")
+        self.assertContains(response, "search-result-card no-media", html=False)
+        self.assertNotContains(response, '<div class="media-placeholder">CCA</div>', html=False)
+
     def test_generated_litter_uses_parent_pair_as_public_label(self):
         sire = Dog.objects.create(name="Atlas", slug="atlas-litter-label", sex=Dog.Sex.MALE)
         dam = Dog.objects.create(name="Hera", slug="hera-litter-label", sex=Dog.Sex.FEMALE)
