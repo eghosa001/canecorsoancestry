@@ -249,5 +249,5 @@ class FormControlContrastTests(TestCase):
 
         self.assertIn("padding-top: 96px !important;", css)
         self.assertIn("padding-top: 108px !important;", css)
-        self.assertNotIn("padding-top: env(safe-area-inset-top);", css)
+        self.assertNotIn("iPhone-safe mobile brand position v84", css)
         self.assertNotIn("transform: translateY(7px);", css)
