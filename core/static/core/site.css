@@ -141,7 +141,7 @@ main:focus { outline: none; }
   min-height: min(720px, calc(100vh - 76px));
   max-width: var(--max);
   margin: auto;
-  padding: 82px 24px 46px;
+  padding: 118px 24px 46px;
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(260px, .6fr);
   align-items: center;
@@ -549,7 +549,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   .brand { text-align: center; }
   .main-nav { justify-content: flex-start; overflow-x: auto; gap: 16px; padding-bottom: 2px; }
   .main-nav a { white-space: nowrap; }
-  .hero { grid-template-columns: 1fr; padding: 56px 18px 34px; min-height: auto; }
+  .hero { grid-template-columns: 1fr; padding: 82px 18px 34px; min-height: auto; }
   .hero::before { inset: 50% 0 0 0; }
   .hero h1 { font-size: clamp(3.25rem, 17vw, 5rem); }
   .hero-mark { min-height: 220px; }
@@ -1567,7 +1567,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   }
 
   .hero {
-    padding: 36px 16px 28px;
+    padding: 66px 16px 28px;
     gap: 26px;
   }
   .hero h1 { font-size: clamp(2.9rem, 15vw, 4.4rem); }
