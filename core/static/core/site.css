@@ -6774,3 +6774,42 @@ html[data-theme="light"] .hero-search input {
   .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hero-stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+
+/* Auth navigation v76: logout is a first-class action on desktop and mobile. */
+.logout-form {
+  display: inline-flex;
+  margin: 0;
+}
+.logout-button {
+  cursor: pointer;
+  font: inherit;
+}
+.mobile-logout-form {
+  margin: 0;
+}
+.mobile-logout-form button {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.mobile-logout-form button:hover,
+.mobile-logout-form button:focus-visible,
+.logout-button:hover,
+.logout-button:focus-visible {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+@media (max-width: 760px) {
+  .mobile-logout-form {
+    min-width: 0;
+  }
+}
