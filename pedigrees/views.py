@@ -2,6 +2,7 @@ import csv
 from time import perf_counter
 from uuid import UUID
 
+from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
@@ -65,9 +66,22 @@ def pedigree_index(request):
     dogs = _public_dogs()
     if query:
         dogs = dogs.filter(public_dog_match_filter(query))
-    else:
-        dogs = dogs.order_by("name")[:24]
-    return render(request, "pedigrees/index.html", {"dogs": dogs, "query": query})
+    dogs = dogs.order_by("name")
+    paginator = Paginator(dogs, 18)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
+    return render(
+        request,
+        "pedigrees/index.html",
+        {
+            "dogs": page_obj.object_list,
+            "page_obj": page_obj,
+            "query": query,
+            "querystring": query_params.urlencode(),
+            "result_count": paginator.count,
+        },
+    )
 
 
 def pedigree_detail(request, slug):

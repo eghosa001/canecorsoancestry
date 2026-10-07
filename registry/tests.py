@@ -312,12 +312,39 @@ class DogModelTests(TestCase):
         self.assertContains(response, "Sforza")
         self.assertNotContains(response, "Custodi Nos")
 
-    def test_kennel_directory_shows_sixty_names_per_page(self):
-        for index in range(61):
+    def test_kennel_directory_is_bounded_to_twenty_four_names_per_page(self):
+        for index in range(25):
             Kennel.objects.create(name=f"Kennel {index:02d}", slug=f"kennel-{index:02d}")
 
         response = self.client.get(reverse("registry:kennel-list"))
 
-        self.assertEqual(len(response.context["kennels"]), 60)
+        self.assertEqual(len(response.context["kennels"]), 24)
         self.assertTrue(response.context["page_obj"].has_next())
+
+    def test_dog_profile_collapses_secondary_relationships_after_six(self):
+        sire = Dog.objects.create(
+            name="Disclosure Sire",
+            slug="disclosure-sire",
+            sex=Dog.Sex.MALE,
+            is_public=True,
+        )
+        dog = Dog.objects.create(
+            name="Disclosure Dog",
+            slug="disclosure-dog",
+            sire=sire,
+            is_public=True,
+        )
+        for index in range(7):
+            Dog.objects.create(
+                name=f"Disclosure Sibling {index}",
+                slug=f"disclosure-sibling-{index}",
+                sire=sire,
+                is_public=True,
+            )
+
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Show 1 more sibling")
+        self.assertContains(response, 'class="relationship-more"', html=False)
 

@@ -5,14 +5,17 @@
   <header class="page-heading">
     <p class="eyebrow">Verified submissions</p>
     <h1>Choose a submission package</h1>
-    <p>Payment opens a submission slot only. Every kennel, owner, dog and litter record is still reviewed by an administrator before publication.</p>
+    <p>Payment opens a submission slot only. Every kennel, owner, dog and litter record is still reviewed by an moderator before publication.</p>
   </header>
+  <div class="button-row section-spacer-tight">
+    <a class="btn btn-outline" href="{% url 'dashboard' %}">Back to dashboard</a>
+  </div>
 
   <div class="feature-grid section-spacer-tight">
     <article class="panel">
       <p class="eyebrow">Single dog</p>
       <h2>₦500</h2>
-      <p>Submit one dog for admin verification.</p>
+      <p>Submit one dog for moderator verification.</p>
     </article>
     <article class="panel">
       <p class="eyebrow">Dog batch</p>
@@ -27,11 +30,11 @@
   </div>
 
   {% if not paystack_configured %}
-    <div class="notice error">Paystack is not configured on the server yet. An administrator must add the Paystack secret key before live payment can start.</div>
+    <div class="notice error">Paystack is not configured on the server yet. An moderator must add the Paystack secret key before live payment can start.</div>
   {% endif %}
 
   {% if not has_verified_kennel %}
-    <div class="notice">Your kennel and ownership must be approved by an administrator before you can buy a submission package.</div>
+    <div class="notice">Your kennel and ownership must be approved by an moderator before you can buy a submission package.</div>
   {% else %}
     <form class="member-form" method="post">
       {% csrf_token %}

@@ -7,10 +7,14 @@
     <h1>{{ payment.get_package_display }}</h1>
     <p>{{ payment.kennel.name }} · ₦{{ payment.amount_naira }} · {{ payment.get_status_display }}</p>
   </header>
+  <div class="button-row section-spacer-tight">
+    <a class="btn btn-outline" href="{% url 'accounts:submissions' %}">Back to submissions</a>
+    <a class="btn btn-outline" href="{% url 'dashboard' %}">Dashboard</a>
+  </div>
 
   <div class="panel">
     <p><strong>Reference:</strong> {{ payment.reference }}</p>
-    <p><strong>Important:</strong> payment does not publish records. Every submitted record remains pending until an administrator verifies and approves it.</p>
+    <p><strong>Important:</strong> payment does not publish records. Every submitted record remains pending until an moderator verifies and approves it.</p>
     {% if payment.status == "pending" and payment.authorization_url %}
       <div class="button-row"><a class="btn btn-gold" href="{{ payment.authorization_url }}">Continue payment on Paystack</a></div>
     {% endif %}
@@ -40,7 +44,7 @@
   {% endif %}
 
   <div class="section-heading section-spacer">
-    <div><p class="eyebrow">Admin review</p><h2>Records in this package</h2></div>
+    <div><p class="eyebrow">Moderator review</p><h2>Records in this package</h2></div>
   </div>
   <div class="submission-list">
     {% for link in links %}

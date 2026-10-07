@@ -47,26 +47,7 @@
     </div>
   </section>
 
-  <section class="panel">
-    <div class="panel-heading">
-      <div><h2>High-risk submissions</h2><span>Major conflicts, duplicate identity signals, protected ancestry changes, or other rules currently classified RED.</span></div>
-    </div>
-    <div class="moderation-list">
-      {% for item in high_risk_queue %}
-        <article class="moderation-card">
-          <div class="moderation-card-content">
-            <div class="moderation-meta">
-              <div><strong>{{ item.get_kind_display }}</strong><p>{{ item.pk }}</p></div>
-              <span class="submission-state red">RED — HIGH RISK</span>
-            </div>
-            <a class="text-link" href="{% url 'accounts:moderation-submission' item.pk %}">Open high-risk review →</a>
-          </div>
-        </article>
-      {% empty %}
-        <p class="muted">No red high-risk submissions are currently pending.</p>
-      {% endfor %}
-    </div>
-  </section>
+  
 
   <section class="panel">
     <div class="panel-heading">
@@ -93,7 +74,10 @@
     </div>
   </section>
 
-  <section class="panel">
+  <details class="panel moderation-details ux-disclosure">
+    <summary><span><strong>Review oversight</strong><small>Recent overrides and the reasons recorded for them.</small></span></summary>
+    <div class="ux-disclosure-body">
+
     <div class="panel-heading">
       <div><h2>Recent overrides</h2><span>Override history remains visible with reviewer, warnings snapshot and reason.</span></div>
     </div>
@@ -111,9 +95,14 @@
     {% empty %}
       <p class="muted">No override decisions have been recorded yet.</p>
     {% endfor %}
-  </section>
+  
+    </div>
+  </details>
 
-  <section class="panel">
+  <details class="panel moderation-details ux-disclosure">
+    <summary><span><strong>Moderator activity</strong><small>Review volume, override rates and unusual-activity signals.</small></span></summary>
+    <div class="ux-disclosure-body">
+
     <div class="panel-heading">
       <div><h2>Admin activity monitoring</h2><span>Unusual override activity is a review signal, not an accusation. Current comparison threshold: {{ override_warning_threshold }}% (peer average {{ peer_override_average }}%).</span></div>
     </div>
@@ -131,9 +120,14 @@
         <p class="muted">No reviewer activity recorded yet.</p>
       {% endfor %}
     </div>
-  </section>
+  
+    </div>
+  </details>
 
-  <section class="panel">
+  <details class="panel moderation-details ux-disclosure">
+    <summary><span><strong>Role reference</strong><small>What Members, Moderators, Senior Moderators and Super Admins can do.</small></span></summary>
+    <div class="ux-disclosure-body">
+
     <div class="panel-heading">
       <div>
         <h2>Account and role boundaries</h2>
@@ -158,9 +152,14 @@
         <p>Separate superuser identity. Manages staff accounts, verification rules, protected-record locks and Django administration.</p>
       </article>
     </div>
-  </section>
+  
+    </div>
+  </details>
 
-  <section class="panel">
+  <details class="panel moderation-details ux-disclosure">
+    <summary><span><strong>Staff accounts</strong><small>Create or update dedicated Moderator and Senior Moderator identities.</small></span></summary>
+    <div class="ux-disclosure-body">
+
     <div class="panel-heading">
       <h2>Dedicated staff accounts</h2>
       <span>Create a separate login for every Moderator or Senior Moderator. Do not reuse a member or kennel email/account.</span>
@@ -195,9 +194,14 @@
         {% endif %}
       </form>
     {% endfor %}
-  </section>
+  
+    </div>
+  </details>
 
-  <section class="panel">
+  <details class="panel moderation-details ux-disclosure">
+    <summary><span><strong>Verification rules</strong><small>Low-frequency system rules for risk and second approval.</small></span></summary>
+    <div class="ux-disclosure-body">
+
     <div class="panel-heading"><h2>Verification rules</h2><span>Risk and second-approval requirements are explicit and configurable; there is no hidden score.</span></div>
     {% for rule in rules %}
       <form class="review-diff-row" method="post" action="{% url 'accounts:verification-rule-update' rule.pk %}">
@@ -213,9 +217,14 @@
         <button class="btn btn-outline" type="submit">Save rule</button>
       </form>
     {% endfor %}
-  </section>
+  
+    </div>
+  </details>
 
-  <section class="panel">
+  <details class="panel moderation-details ux-disclosure">
+    <summary><span><strong>Protected records</strong><small>Lock or unlock important dog and litter records with an audit reason.</small></span></summary>
+    <div class="ux-disclosure-body">
+
     <div class="panel-heading">
       <div><h2>Record locking</h2><span>Lock important published dog or litter records. Lock/unlock actions require a reason and are written to the audit trail.</span></div>
     </div>
@@ -251,9 +260,14 @@
       {% endfor %}
       {% if not locked_dogs and not locked_litters %}<p class="muted">No records are explicitly locked yet.</p>{% endif %}
     </div>
-  </section>
+  
+    </div>
+  </details>
 
-  <section class="panel">
+  <details class="panel moderation-details ux-disclosure">
+    <summary><span><strong>Protected-record history</strong><small>Recent lock-sensitive changes and their audit snapshots.</small></span></summary>
+    <div class="ux-disclosure-body">
+
     <div class="panel-heading"><h2>Recently changed protected records</h2><span>Old and new values remain in the audit event.</span></div>
     {% for event in recent_changes %}
       <article class="audit-card">
@@ -268,6 +282,8 @@
     {% empty %}
       <p class="muted">No protected record changes have been recorded yet.</p>
     {% endfor %}
-  </section>
+  
+    </div>
+  </details>
 </section>
 {% endblock %}

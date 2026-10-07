@@ -13,6 +13,7 @@
       <a href="#my-dogs">My dogs</a>
       <a href="{% url 'accounts:my-pedigrees' %}">Pedigrees</a>
       <a href="{% url 'accounts:my-litters' %}">Litters</a>
+      <a href="#health">Health & DNA</a>
       <a href="#my-kennel">Kennel</a>
       <a href="{% url 'accounts:documents' %}">Documents</a>
       <a href="{% url 'accounts:submissions' %}">Submissions</a>
@@ -29,6 +30,7 @@
         <a href="#my-dogs">My dogs</a>
         <a href="{% url 'accounts:my-pedigrees' %}">Pedigrees</a>
         <a href="{% url 'accounts:my-litters' %}">Litters</a>
+        <a href="#health">Health & DNA</a>
         <a href="#my-kennel">Kennel</a>
         <a href="{% url 'accounts:documents' %}">Documents</a>
         <a href="{% url 'accounts:submissions' %}">Submissions</a>
@@ -159,7 +161,7 @@
         {% else %}
           <div class="empty-state">
             <strong>No approved or linked dogs yet.</strong>
-            <p>A new dog appears here after administrator approval. You can include its first profile photo during the original paid submission.</p>
+            <p>A new dog appears here after moderator approval. You can include its first profile photo during the original paid submission.</p>
             {% if can_purchase_records %}<a class="btn btn-gold" href="{% url 'accounts:submit-dog' %}">Submit first dog</a>{% endif %}
           </div>
         {% endif %}

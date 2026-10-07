@@ -12,6 +12,10 @@
     <input id="pedigree-q" name="q" value="{{ query }}" data-dog-autocomplete placeholder="Dog name, kennel or registration" autocomplete="off">
     <button type="submit">Search</button>
   </form>
+  <div class="result-summary">
+    <strong>{{ result_count }} pedigree{{ result_count|pluralize }}</strong>
+    {% if query %}<span>matching “{{ query }}”</span>{% else %}<span>available to browse</span>{% endif %}
+  </div>
   <div class="pedigree-index-grid">
     {% for dog in dogs %}
       <a class="pedigree-index-card" href="{% url 'pedigrees:detail' dog.slug %}">
@@ -24,5 +28,6 @@
       <div class="empty-state"><p>No matching public pedigree records.</p></div>
     {% endfor %}
   </div>
+  {% include "includes/pagination.html" %}
 </section>
 {% endblock %}
