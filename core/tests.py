@@ -180,7 +180,7 @@ class PublicThemeRegressionTests(TestCase):
         self.assertContains(response, "hero-mobile-break")
         self.assertContains(response, '<button class="theme-toggle', count=3)
         self.assertContains(response, "Countries")
-        self.assertContains(response, "site.css?v=20261007-final-ux-v73")
+        self.assertContains(response, "site.css?v=20261007-final-ux-v75")
         self.assertContains(response, "premium-polish.css?v=20261007-interaction-v50")
 
 
