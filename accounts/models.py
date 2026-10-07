@@ -22,7 +22,7 @@ class Profile(models.Model):
 class SubmissionPayment(models.Model):
     class Package(models.TextChoices):
         SINGLE_DOG = "single_dog", "1 dog"
-        MULTI_DOG = "multi_dog", "2–4 dogs"
+        MULTI_DOG = "multi_dog", "2–6 dogs"
         LITTER = "litter", "1 litter + its puppies"
 
     class Status(models.TextChoices):
@@ -69,7 +69,7 @@ class SubmissionPayment(models.Model):
         if package == cls.Package.SINGLE_DOG:
             return 50_000
         if package == cls.Package.MULTI_DOG:
-            return 150_000
+            return 100_000
         if package == cls.Package.LITTER:
             return 100_000
         raise ValidationError("Unknown submission package.")
@@ -82,8 +82,8 @@ class SubmissionPayment(models.Model):
         super().clean()
         if self.package == self.Package.SINGLE_DOG and self.dog_count != 1:
             raise ValidationError({"dog_count": "A single-dog package contains exactly one dog."})
-        if self.package == self.Package.MULTI_DOG and not 2 <= self.dog_count <= 4:
-            raise ValidationError({"dog_count": "A multi-dog package must contain 2–4 dogs."})
+        if self.package == self.Package.MULTI_DOG and not 2 <= self.dog_count <= 6:
+            raise ValidationError({"dog_count": "A multi-dog package must contain 2–6 dogs."})
         if self.package == self.Package.LITTER and self.dog_count != 0:
             raise ValidationError({"dog_count": "Litter packages use the litter and puppy workflow."})
 
