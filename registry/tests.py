@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
@@ -71,6 +72,24 @@ class DogModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        dog.refresh_from_db()
+        self.assertEqual(dog.search_count, 1)
+
+    def test_search_origin_popularity_throttles_repeat_writes(self):
+        dog = Dog.objects.create(
+            name="Throttled Search Dog",
+            slug="throttled-search-dog",
+            is_public=True,
+        )
+        cache.delete(f"cca:dog-search-hit:{dog.pk}")
+
+        for _ in range(2):
+            response = self.client.get(
+                reverse("registry:dog-detail", args=[dog.slug]),
+                {"source": "search"},
+            )
+            self.assertEqual(response.status_code, 200)
+
         dog.refresh_from_db()
         self.assertEqual(dog.search_count, 1)
 
