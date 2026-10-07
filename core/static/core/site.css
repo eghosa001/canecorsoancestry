@@ -6935,3 +6935,16 @@ html[data-theme="light"] .hero-search input {
     word-break: normal;
   }
 }
+
+/* Photo-first record presentation v81. */
+.search-result-card.no-media {
+  grid-template-columns: minmax(0, 1fr);
+}
+.search-result-card.no-media .search-result-main {
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .search-result-card.no-media {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
