@@ -2370,6 +2370,11 @@ def verification_dashboard(request):
                 "user": user,
                 "admin_label": admin_public_label(user),
                 "role": moderation_role(user),
+                "role_label": {
+                    ModerationRoleAssignment.Role.OWNER: "Super Admin",
+                    ModerationRoleAssignment.Role.SENIOR: "Senior Moderator",
+                    ModerationRoleAssignment.Role.REVIEWER: "Moderator",
+                }.get(moderation_role(user), "Suspended staff"),
                 "reviews": len(decision_rows),
                 "approved": approved,
                 "rejected": rejected,
