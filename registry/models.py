@@ -22,6 +22,16 @@ class VerificationState(models.TextChoices):
     HEALTH_VERIFIED = "health", "Health/DNA verified"
 
 
+def public_verification_label(state):
+    """Return a truthful public label without exposing internal workflow states."""
+    labels = {
+        VerificationState.IDENTITY_REVIEWED: "Identity reviewed",
+        VerificationState.PEDIGREE_REVIEWED: "Pedigree reviewed",
+        VerificationState.HEALTH_VERIFIED: "Health/DNA verified",
+    }
+    return labels.get(state, "Not independently verified")
+
+
 class SubmissionRiskLevel(models.TextChoices):
     GREEN = "green", "Green — pass"
     YELLOW = "yellow", "Yellow — review"
@@ -486,6 +496,10 @@ class HealthRecord(models.Model):
                 name="health_dog_test_idx",
             )
         ]
+
+    @property
+    def public_verification_label(self):
+        return public_verification_label(self.verification_state)
 
 
 class DogSource(models.Model):
