@@ -525,6 +525,7 @@ def _pending_duplicate_checks(findings, submission, run_id, payload):
             )
 
 
+def _litter_puppy_checks(findings, submission, run_id, payload):
     litter_submission_id = payload.get("litter_submission_id")
     if not litter_submission_id:
         return
