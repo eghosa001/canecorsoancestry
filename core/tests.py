@@ -77,6 +77,50 @@ class DashboardTests(TestCase):
 
 
 
+class AuthenticatedNavigationTests(TestCase):
+    def test_authenticated_member_has_visible_post_logout_on_desktop_and_mobile(self):
+        user = get_user_model().objects.create_user(
+            username="logout-member",
+            email="logout-member@example.com",
+            password="Member-pass-123",
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Log out", count=2)
+        self.assertContains(response, f'action="{reverse("logout")}"', count=2)
+        self.assertContains(response, 'method="post"', count=2)
+        self.assertContains(response, 'class="logout-form"')
+        self.assertContains(response, 'class="mobile-logout-form"')
+
+    def test_authenticated_super_admin_has_same_logout_action(self):
+        owner = get_user_model().objects.create_superuser(
+            username="logout-owner",
+            email="logout-owner@example.com",
+            password="Owner-pass-123",
+        )
+        self.client.force_login(owner)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Log out", count=2)
+
+    def test_logout_post_ends_session_and_returns_home(self):
+        user = get_user_model().objects.create_user(
+            username="logout-post-member",
+            password="Member-pass-123",
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(reverse("logout"), {"next": reverse("home")})
+
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+
 class PublicThemeRegressionTests(TestCase):
     def test_home_caches_public_statistics_under_the_read_key(self):
         cache.delete("cca:home:public-stats:v3")
@@ -180,7 +224,7 @@ class PublicThemeRegressionTests(TestCase):
         self.assertContains(response, "hero-mobile-break")
         self.assertContains(response, '<button class="theme-toggle', count=3)
         self.assertContains(response, "Countries")
-        self.assertContains(response, "site.css?v=20261007-final-ux-v75")
+        self.assertContains(response, "site.css?v=20261007-auth-nav-v76")
         self.assertContains(response, "premium-polish.css?v=20261007-interaction-v50")
 
 
