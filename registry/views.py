@@ -37,7 +37,7 @@ from .permissions import can_contribute_to_dog
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_stored_images
 
 
-PROFILE_RELATION_PREVIEW_LIMIT = 100
+PROFILE_RELATION_PREVIEW_LIMIT = 30
 SEARCH_HIT_THROTTLE_SECONDS = 30
 
 
@@ -436,7 +436,7 @@ def kennel_list(request):
         )
     kennels = kennels.order_by("name")
 
-    paginator = Paginator(kennels, 60)
+    paginator = Paginator(kennels, 24)
     page_obj = paginator.get_page(request.GET.get("page"))
     query_params = request.GET.copy()
     query_params.pop("page", None)
