@@ -2464,7 +2464,7 @@ def verification_dashboard(request):
         pending.filter(
             verification_status=SubmissionVerificationStatus.AWAITING_SECOND
         )
-        .select_related("submitted_by", "kennel", "dog", "litter")
+        .select_related("submitted_by", "kennel", "dog", "litter", "litter__sire", "litter__dam")
         .order_by("created_at")[:50]
     )
     recent_overrides = list(
