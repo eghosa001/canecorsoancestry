@@ -115,6 +115,23 @@ Missing facts stay missing. Do not invent:
 - breeder/owner facts;
 - kennel details.
 
+## Account and authority separation
+
+Member identities and moderation/administration identities are permanently separate accounts.
+
+- A **Member** account represents the kennel/member side of the platform. It may hold kennel Owner, Editor, or Contributor membership and may submit/manage its own dogs, litters, payments, documents, evidence, health/DNA records, disputes, and profile data.
+- A Member account must never receive Moderator, Senior Moderator, or Super Admin authority. A kennel/member username or email cannot be promoted into staff authority.
+- A person who is both a breeder/member and part of the moderation team must use **two different accounts and two different login identities**: one Member account and one dedicated staff account.
+- A **Moderator** is a dedicated non-member staff identity. It may review ordinary submissions, request evidence, handle disputes, and record verification events. It has no member/kennel ownership tools and no Django Admin access.
+- A **Senior Moderator** is a dedicated non-member staff identity. It has Moderator abilities plus flagged/high-risk decisions, overrides, duplicate merges, and second approvals. It cannot create staff accounts, change system verification rules, or use Django Admin.
+- A **Super Admin** is a dedicated Django superuser identity. It can manage staff accounts/roles, verification rules, protected-record locks, and Django Admin in addition to moderation authority.
+- Django `is_staff` alone must never grant moderation authority. Moderation authority comes only from an explicit dedicated staff-role assignment.
+- Django Admin is reserved for Super Admin identities only.
+- Staff identities may not later acquire kennel membership or submit member-owned records. Member identities may not later acquire moderation authority.
+- Suspending a staff role must not convert that account into a Member account.
+
+These are authorization invariants, not UI conventions, and must be enforced server-side as well as reflected in navigation and dashboards.
+
 ## Payments
 
 The owner has confirmed a Paystack-backed paid submission model. Payment buys a submission/review slot; it never publishes or verifies a dog automatically.
