@@ -6955,3 +6955,33 @@ html[data-theme="light"] .hero-search input {
   transform: translateY(2px) scale(1.055);
   transform-origin: center 42%;
 }
+
+/* iPhone-safe mobile brand position v84.
+   viewport-fit=cover can place sticky header content too close to the notch/Dynamic Island.
+   Keep the navigation compact while deliberately lowering the owner-facing brand. */
+@media (max-width: 760px) {
+  .site-header {
+    padding-top: env(safe-area-inset-top);
+    min-height: calc(72px + env(safe-area-inset-top)) !important;
+  }
+
+  .header-inner {
+    min-height: 72px !important;
+    padding-top: 4px !important;
+    padding-bottom: 7px !important;
+  }
+
+  .brand {
+    transform: translateY(7px);
+  }
+
+  .brand-mark {
+    transform: translateY(4px) scale(1.055);
+  }
+}
+
+@media (max-width: 420px) {
+  .brand {
+    transform: translateY(8px);
+  }
+}
