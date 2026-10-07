@@ -43,7 +43,7 @@
       <div class="header-actions">
         <form class="header-search" action="{% url 'registry:dog-search' %}" method="get"><label class="sr-only" for="header-q">Search dogs</label><input id="header-q" name="q" data-dog-autocomplete placeholder="Search dog, kennel, registration" autocomplete="off"></form>
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode">Light mode</button>
-        {% if user.is_authenticated %}{% if user.is_staff %}<a class="account-link" href="{% url 'accounts:moderation' %}">Moderation</a>{% endif %}<a class="account-link" href="{% url 'dashboard' %}">{{ account_name }}</a>{% else %}<a class="account-link" href="{% url 'login' %}">Sign in</a><a class="account-link" href="{% url 'accounts:signup' %}">Join</a>{% endif %}
+        {% if user.is_authenticated %}{% if staff_identity and staff_role %}<a class="account-link" href="{% url 'accounts:moderation' %}">{{ staff_role_label }} workspace</a>{% endif %}<a class="account-link" href="{% url 'dashboard' %}">{% if staff_identity %}{{ account_name }} · {{ staff_role_label }}{% else %}{{ account_name }}{% endif %}</a>{% else %}<a class="account-link" href="{% url 'login' %}">Sign in</a><a class="account-link" href="{% url 'accounts:signup' %}">Join</a>{% endif %}
       </div>
       <button class="theme-toggle mobile-header-theme" type="button" data-theme-toggle aria-label="Switch to light mode">Light</button>
       <details class="mobile-nav">
@@ -65,8 +65,8 @@
           <button class="theme-toggle mobile-theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode">Light mode</button>
           <div class="mobile-account-actions">
             {% if user.is_authenticated %}
-              {% if user.is_staff %}<a href="{% url 'accounts:moderation' %}">Moderation</a>{% endif %}
-              <a class="mobile-account-primary" href="{% url 'dashboard' %}">My account · {{ account_name }}</a>
+              {% if staff_identity and staff_role %}<a href="{% url 'accounts:moderation' %}">{{ staff_role_label }} workspace</a>{% endif %}
+              <a class="mobile-account-primary" href="{% url 'dashboard' %}">{% if staff_identity %}Staff account · {{ account_name }}{% else %}My account · {{ account_name }}{% endif %}</a>
             {% else %}
               <a href="{% url 'login' %}">Sign in</a>
               <a class="mobile-account-primary" href="{% url 'accounts:signup' %}">Join</a>
