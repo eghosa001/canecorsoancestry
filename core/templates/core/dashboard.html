@@ -241,7 +241,7 @@
             <thead><tr><th>Dog</th><th>Test</th><th>Result</th><th>Date</th><th>Status</th></tr></thead>
             <tbody>
             {% for record in health_records %}
-              <tr><td>{{ record.dog.name }}</td><td>{{ record.test_type }}</td><td>{{ record.result }}</td><td>{{ record.tested_on|default:"—" }}</td><td>{{ record.get_verification_state_display }}</td></tr>
+              <tr><td>{{ record.dog.name }}</td><td>{{ record.test_type }}</td><td>{{ record.result }}</td><td>{{ record.tested_on|default:"—" }}</td><td>{{ record.public_verification_label }}</td></tr>
             {% empty %}
               <tr><td colspan="5">No approved health or DNA records are linked to your dogs yet.</td></tr>
             {% endfor %}
