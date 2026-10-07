@@ -66,12 +66,13 @@ class MemberProfileForm(forms.ModelForm):
 
 
 class HealthRecordSubmissionForm(forms.Form):
-    class EvidenceType(forms.TextChoices):
-        HEALTH = "health", "Health test"
-        DNA = "dna", "DNA / parentage test"
+    EVIDENCE_TYPES = (
+        ("health", "Health test"),
+        ("dna", "DNA / parentage test"),
+    )
 
     evidence_type = forms.ChoiceField(
-        choices=EvidenceType.choices,
+        choices=EVIDENCE_TYPES,
         label="Record type",
     )
     test_type = forms.CharField(
