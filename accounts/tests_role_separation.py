@@ -127,6 +127,55 @@ class StrictRoleSeparationTests(TestCase):
         self.assertTrue(can_review_flagged_submissions(self.owner))
         self.assertTrue(can_manage_verification(self.owner))
 
+    def test_moderator_cannot_gain_kennel_membership_or_submit_member_records(self):
+        moderator = get_user_model().objects.create_user(
+            username="staff-cannot-be-member",
+            email="staff-cannot-be-member@example.com",
+        )
+        ModerationRoleAssignment.objects.create(
+            user=moderator,
+            role=ModerationRoleAssignment.Role.REVIEWER,
+            assigned_by=self.owner,
+        )
+        from registry.models import Kennel, KennelMembership
+
+        kennel = Kennel.objects.create(
+            name="Staff Boundary Kennel",
+            slug="staff-boundary-kennel",
+        )
+        with self.assertRaises(ValidationError):
+            KennelMembership.objects.create(
+                user=moderator,
+                kennel=kennel,
+                role=KennelMembership.Role.OWNER,
+            )
+        with self.assertRaises(ValidationError):
+            Submission.objects.create(
+                kind=Submission.Kind.KENNEL_CREATE,
+                submitted_by=moderator,
+                payload={"name": "Forbidden", "slug": "forbidden"},
+            )
+
+    def test_django_staff_flag_does_not_grant_moderation(self):
+        accidental_staff = get_user_model().objects.create_user(
+            username="accidental-django-staff",
+            is_staff=True,
+        )
+
+        self.assertFalse(can_review_submissions(accidental_staff))
+        self.assertFalse(can_review_flagged_submissions(accidental_staff))
+        self.assertFalse(can_manage_verification(accidental_staff))
+
+        self.client.force_login(accidental_staff)
+        self.assertEqual(
+            self.client.get(reverse("accounts:moderation")).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.get(reverse("admin:index")).status_code,
+            302,
+        )
+
     def test_member_cannot_be_promoted_through_role_management_endpoint(self):
         member = get_user_model().objects.create_user(
             username="cannot-promote-member",
