@@ -606,6 +606,46 @@ def approve_submission(
             is_primary=is_primary,
         )
 
+    elif submission.kind == Submission.Kind.HEALTH:
+        if submission.dog is None or not submission.attachment:
+            raise ValueError("Health/DNA submission requires a target dog and supporting evidence.")
+
+        test_type = str(payload.get("test_type") or "").strip()
+        result = str(payload.get("result") or "").strip()
+        if not test_type or not result:
+            raise ValueError("Health/DNA submissions require both a test name and result.")
+
+        health_record = HealthRecord.objects.create(
+            dog=submission.dog,
+            test_type=test_type,
+            result=result,
+            tested_on=_date_from_payload(payload.get("tested_on")),
+            verification_state=VerificationState.HEALTH_VERIFIED,
+            notes=submission.notes,
+        )
+        evidence_type = str(payload.get("evidence_type") or "health")
+        document_type = (
+            DogDocument.DocumentType.DNA
+            if evidence_type == "dna"
+            else DogDocument.DocumentType.HEALTH
+        )
+        DogDocument.objects.create(
+            dog=submission.dog,
+            title=f"{test_type} supporting evidence",
+            document_type=document_type,
+            file=submission.attachment.name,
+            is_public=False,
+            submitted_by=submission.submitted_by,
+            source_submission=submission,
+        )
+        VerificationEvent.objects.create(
+            dog=submission.dog,
+            health_record=health_record,
+            state=VerificationState.HEALTH_VERIFIED,
+            reviewer=reviewer,
+            note="Health/DNA result verified from member-supplied supporting evidence.",
+        )
+
     elif submission.kind == Submission.Kind.DOCUMENT:
         if submission.dog is None or not submission.attachment:
             raise ValueError("Document submission requires a target dog and attachment.")
@@ -1185,6 +1225,7 @@ def submission_diff(submission, *, dog_names=None, litter_names=None):
         Submission.Kind.KENNEL_CREATE,
         Submission.Kind.KENNEL_CLAIM,
         Submission.Kind.DOCUMENT,
+        Submission.Kind.HEALTH,
         Submission.Kind.IMAGE,
     }:
         for key, value in payload.items():
