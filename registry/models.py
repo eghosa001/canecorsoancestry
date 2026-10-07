@@ -670,10 +670,10 @@ class Submission(models.Model):
 
 class ModerationRoleAssignment(models.Model):
     class Role(models.TextChoices):
-        NONE = "none", "No verification role"
-        OWNER = "owner", "Owner / Super Admin"
-        SENIOR = "senior", "Senior Reviewer"
-        REVIEWER = "reviewer", "Reviewer"
+        NONE = "none", "Suspended staff"
+        OWNER = "owner", "Super Admin"
+        SENIOR = "senior", "Senior Moderator"
+        REVIEWER = "reviewer", "Moderator"
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -701,7 +701,27 @@ class ModerationRoleAssignment(models.Model):
     def public_label(self):
         return f"Admin #{self.admin_number}" if self.admin_number else "Admin"
 
+    def clean(self):
+        super().clean()
+        if not self.user_id:
+            return
+        if KennelMembership.objects.filter(user_id=self.user_id).exists() or Submission.objects.filter(
+            submitted_by_id=self.user_id
+        ).exists():
+            raise ValidationError(
+                {"user": "Member accounts cannot receive moderator or administrator authority. Create a separate staff account."}
+            )
+        if self.role == self.Role.OWNER and not self.user.is_superuser:
+            raise ValidationError(
+                {"role": "Super Admin authority is reserved for Django superuser accounts."}
+            )
+        if self.user.is_superuser and self.role != self.Role.OWNER:
+            raise ValidationError(
+                {"role": "A Django superuser must use the Super Admin moderation role."}
+            )
+
     def save(self, *args, **kwargs):
+        self.full_clean()
         super().save(*args, **kwargs)
         if self.admin_number is None and self.pk:
             number = 10000 + self.pk
