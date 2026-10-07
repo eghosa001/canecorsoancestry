@@ -525,42 +525,6 @@ def _pending_duplicate_checks(findings, submission, run_id, payload):
             )
 
 
-def _litter_puppy_checks(findings, submission, run_id, payload):
-    if submission.kind == Submission.Kind.HEALTH:
-        add(
-            "Target dog",
-            "pass" if submission.dog_id else "fail",
-            "Health/DNA result is linked to a canonical dog." if submission.dog_id else "No target dog is linked.",
-        )
-        add(
-            "Structured result",
-            "fail" if "health_record_incomplete" in finding_codes else "pass",
-            (
-                "Test name or result is incomplete."
-                if "health_record_incomplete" in finding_codes
-                else f"{payload.get('test_type') or 'Test'}: {payload.get('result') or 'Result'}."
-            ),
-        )
-        add(
-            "Supporting evidence",
-            "fail" if "health_evidence_missing" in finding_codes else "pass",
-            (
-                "Supporting evidence is missing."
-                if "health_evidence_missing" in finding_codes
-                else "A private supporting result/certificate is attached for administrator review."
-            ),
-        )
-        add(
-            "Existing health/DNA result",
-            "fail" if "duplicate_health_record" in finding_codes else "pass",
-            (
-                "An equivalent result already exists and should be reconciled before approval."
-                if "duplicate_health_record" in finding_codes
-                else "No equivalent structured result is already recorded."
-            ),
-        )
-        return rows
-
     litter_submission_id = payload.get("litter_submission_id")
     if not litter_submission_id:
         return
@@ -1059,6 +1023,41 @@ def verification_checklist(submission):
             add("Sex", "pass", f"Submitted value is valid: {dict(Dog.Sex.choices).get(sex)}.")
         else:
             add("Sex", "fail", f"Unsupported submitted value: {sex}.")
+
+    if submission.kind == Submission.Kind.HEALTH:
+        add(
+            "Target dog",
+            "pass" if submission.dog_id else "fail",
+            "Health/DNA result is linked to a canonical dog." if submission.dog_id else "No target dog is linked.",
+        )
+        add(
+            "Structured result",
+            "fail" if "health_record_incomplete" in finding_codes else "pass",
+            (
+                "Test name or result is incomplete."
+                if "health_record_incomplete" in finding_codes
+                else f"{payload.get('test_type') or 'Test'}: {payload.get('result') or 'Result'}."
+            ),
+        )
+        add(
+            "Supporting evidence",
+            "fail" if "health_evidence_missing" in finding_codes else "pass",
+            (
+                "Supporting evidence is missing."
+                if "health_evidence_missing" in finding_codes
+                else "A private supporting result/certificate is attached for administrator review."
+            ),
+        )
+        add(
+            "Existing health/DNA result",
+            "fail" if "duplicate_health_record" in finding_codes else "pass",
+            (
+                "An equivalent result already exists and should be reconciled before approval."
+                if "duplicate_health_record" in finding_codes
+                else "No equivalent structured result is already recorded."
+            ),
+        )
+        return rows
 
     litter_submission_id = payload.get("litter_submission_id")
     if litter_submission_id:
