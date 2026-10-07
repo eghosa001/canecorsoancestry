@@ -7,6 +7,9 @@
     <h1>Notifications</h1>
     <p>Review decisions and important changes to records you contribute.</p>
   </header>
+  <div class="button-row section-spacer-tight">
+    <a class="btn btn-outline" href="{% url 'dashboard' %}">Back to dashboard</a>
+  </div>
   <form method="post" class="button-row">{% csrf_token %}<button class="btn btn-outline" type="submit">Mark all as read</button></form>
   <div class="notification-list">
     {% for item in notifications %}
