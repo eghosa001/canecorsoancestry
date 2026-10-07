@@ -1,6 +1,6 @@
 const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
 // Bump this whenever public HTML/static layout assets must invalidate edge cache.
-const EDGE_CACHE_VERSION = "final-ux-v75"; // Require both final UI stylesheets before edge cutover
+const EDGE_CACHE_VERSION = "auth-nav-v76"; // Visible authenticated logout navigation
 const CACHE_FRESH_SECONDS = 900;
 const CACHE_RETENTION_SECONDS = 604800;
 const ORIGIN_GRACE_MS = 3500;
