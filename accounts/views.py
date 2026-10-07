@@ -2299,8 +2299,16 @@ def verification_dashboard(request):
     ).count()
 
     reviewer_rows = []
+    staff_user_ids = set(
+        ModerationRoleAssignment.objects.values_list("user_id", flat=True)
+    )
+    staff_user_ids.update(
+        get_user_model().objects.filter(is_superuser=True).values_list("pk", flat=True)
+    )
     staff_users = list(
-        get_user_model().objects.filter(is_staff=True).order_by("username")
+        get_user_model().objects.filter(pk__in=staff_user_ids).order_by(
+            "-is_superuser", "username"
+        )
     )
     decision_actions = {
         SubmissionReview.Action.APPROVED,
@@ -2477,10 +2485,59 @@ def verification_dashboard(request):
             "locked_litters": locked_litters,
             "rules": rules,
             "staff_users": staff_users,
-            "role_choices": ModerationRoleAssignment.Role.choices,
+            "staff_account_form": ModeratorAccountCreateForm(),
+            "role_choices": (
+                (ModerationRoleAssignment.Role.NONE, "Suspended staff"),
+                (ModerationRoleAssignment.Role.REVIEWER, "Moderator"),
+                (ModerationRoleAssignment.Role.SENIOR, "Senior Moderator"),
+            ),
             "risk_choices": SubmissionRiskLevel.choices,
         },
     )
+
+
+@login_required
+@require_POST
+def moderation_create_account(request):
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+
+    form = ModeratorAccountCreateForm(request.POST)
+    if not form.is_valid():
+        message = next(
+            (
+                str(error)
+                for errors in form.errors.values()
+                for error in errors
+            ),
+            "Moderator account details were invalid.",
+        )
+        messages.error(request, message)
+        return redirect("accounts:verification-dashboard")
+
+    with transaction.atomic():
+        user = form.save()
+        assignment = ModerationRoleAssignment.objects.create(
+            user=user,
+            role=form.cleaned_data["role"],
+            assigned_by=request.user,
+        )
+        record_audit(
+            action=ModerationAudit.Action.VERIFICATION,
+            actor=request.user,
+            summary={
+                "type": "moderator_account_created",
+                "target_admin_number": assignment.admin_number,
+                "new_role": assignment.role,
+            },
+            note="Super Admin created a dedicated moderation account.",
+        )
+
+    messages.success(
+        request,
+        f"{assignment.get_role_display()} account created as {assignment.public_label}.",
+    )
+    return redirect("accounts:verification-dashboard")
 
 
 @login_required
@@ -2490,44 +2547,50 @@ def moderation_set_role(request):
         raise PermissionDenied
 
     user_id = request.POST.get("user_id", "").strip()
-    user_lookup = request.POST.get("user_lookup", "").strip()
-    if user_id:
-        if not user_id.isdigit():
-            messages.error(request, "Invalid administrator account ID.")
-            return redirect("accounts:verification-dashboard")
-        target = get_object_or_404(get_user_model(), pk=int(user_id))
-    elif user_lookup:
-        target = get_user_model().objects.filter(
-            Q(username__iexact=user_lookup) | Q(email__iexact=user_lookup)
-        ).first()
-        if target is None:
-            messages.error(request, "No user matches that username or email.")
-            return redirect("accounts:verification-dashboard")
-    else:
-        messages.error(request, "Choose a user or enter a username/email.")
-        return redirect("accounts:verification-dashboard")
-    requested_role = request.POST.get("role", "").strip()
-    if target.is_superuser:
-        messages.info(request, "Superusers always have owner-level verification authority.")
+    if not user_id.isdigit():
+        messages.error(request, "Invalid staff account ID.")
         return redirect("accounts:verification-dashboard")
 
-    current = ModerationRoleAssignment.objects.filter(user=target).first()
-    before = current.role if current else ""
-    if not requested_role:
-        requested_role = ModerationRoleAssignment.Role.NONE
-    if requested_role not in dict(ModerationRoleAssignment.Role.choices):
-        messages.error(request, "Unknown moderation role.")
+    target = get_object_or_404(get_user_model(), pk=int(user_id))
+    if target.is_superuser:
+        messages.info(request, "Super Admin accounts keep Super Admin authority.")
         return redirect("accounts:verification-dashboard")
-    assignment, _ = ModerationRoleAssignment.objects.update_or_create(
-        user=target,
-        defaults={
-            "role": requested_role,
-            "assigned_by": request.user,
-        },
-    )
-    should_be_staff = requested_role != ModerationRoleAssignment.Role.NONE
-    if target.is_staff != should_be_staff:
-        target.is_staff = should_be_staff
+    if has_member_identity(target):
+        ModerationRoleAssignment.objects.filter(user=target).delete()
+        if target.is_staff:
+            target.is_staff = False
+            target.save(update_fields=("is_staff",))
+        messages.error(
+            request,
+            "That is a member account. Member identities cannot be moderators; create a separate staff account.",
+        )
+        return redirect("accounts:verification-dashboard")
+
+    assignment = ModerationRoleAssignment.objects.filter(user=target).first()
+    if assignment is None:
+        messages.error(
+            request,
+            "Only dedicated staff accounts can receive moderation roles. Create a separate moderator account first.",
+        )
+        return redirect("accounts:verification-dashboard")
+
+    requested_role = request.POST.get("role", "").strip() or ModerationRoleAssignment.Role.NONE
+    allowed_roles = {
+        ModerationRoleAssignment.Role.NONE,
+        ModerationRoleAssignment.Role.REVIEWER,
+        ModerationRoleAssignment.Role.SENIOR,
+    }
+    if requested_role not in allowed_roles:
+        messages.error(request, "That role can only be assigned to a Super Admin account.")
+        return redirect("accounts:verification-dashboard")
+
+    before = assignment.role
+    assignment.role = requested_role
+    assignment.assigned_by = request.user
+    assignment.save(update_fields=("role", "assigned_by"))
+
+    if target.is_staff:
+        target.is_staff = False
         target.save(update_fields=("is_staff",))
 
     record_audit(
@@ -2539,9 +2602,9 @@ def moderation_set_role(request):
             "previous_role": before,
             "new_role": requested_role,
         },
-        note="Owner updated moderation authority.",
+        note="Super Admin updated dedicated staff authority.",
     )
-    messages.success(request, "Moderator authority updated.")
+    messages.success(request, "Staff authority updated.")
     return redirect("accounts:verification-dashboard")
 
 
