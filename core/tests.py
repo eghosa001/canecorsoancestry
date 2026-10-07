@@ -1,5 +1,6 @@
 from io import BytesIO
 from pathlib import Path
+import urllib.error
 from unittest.mock import patch
 
 from django.conf import settings
@@ -32,6 +33,25 @@ class StorageProbeTests(TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
+
+    def test_storage_probe_reports_safe_http_failure_diagnostics(self):
+        failure = urllib.error.HTTPError(
+            "https://media.example.test/_r2/probe.jpg",
+            403,
+            "Forbidden",
+            hdrs=None,
+            fp=None,
+        )
+        with patch("core.views.default_storage.save", side_effect=failure):
+            response = self.client.post(
+                reverse("storage-probe"),
+                HTTP_X_CCA_STORAGE_PROBE=settings.SECRET_KEY,
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["error_type"], "HTTPError")
+        self.assertEqual(response.json()["http_status"], 403)
+        self.assertEqual(response.json()["reason"], "Forbidden")
 
     def test_storage_probe_writes_reads_and_cleans_up(self):
         payload = b"\xff\xd8\xff\xe0cca-runtime-r2-probe\xff\xd9"
