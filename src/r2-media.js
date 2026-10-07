@@ -167,12 +167,28 @@ async function handleR2Gateway(request, env, url) {
           request.headers.get("content-type") || "application/octet-stream",
       },
     });
+
+    const verified = await env.MEDIA_BUCKET.head(key);
+    if (!verified || verified.size !== body.byteLength) {
+      await env.MEDIA_BUCKET.delete(key);
+      return Response.json(
+        {
+          status: "r2_verify_failed",
+          key,
+          expected_size: body.byteLength,
+          actual_size: verified ? verified.size : null,
+        },
+        { status: 500 },
+      );
+    }
+
     return Response.json(
       {
         status: "stored",
         key,
-        size: body.byteLength,
+        size: verified.size,
         etag: stored.httpEtag,
+        r2_verified: true,
       },
       { status: 201 },
     );
