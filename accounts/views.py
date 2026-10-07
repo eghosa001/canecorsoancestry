@@ -1094,7 +1094,7 @@ def submit_image(request, pk):
             "eyebrow": "Dog media",
             "title": f"Submit a photo for {dog.name}",
             "current_photo_url": _current_dog_photo_url(dog),
-            "intro": "Original uploads are retained; approved photos are attached to the canonical dog.",
+            "intro": "Choose a dog photo from your phone, camera or files. It is securely normalized for reliable display, then held for Moderator approval.",
             "button_label": "Submit photo",
             "multipart": True,
             "dog": dog,
