@@ -1,11 +1,12 @@
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Dog, DogImage, DogRegistration, HealthRecord, Kennel, RegistrationAuthority, VerificationState
+from .models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, RegistrationAuthority, VerificationState
 from .services import duplicate_candidates
 
 
@@ -32,7 +33,7 @@ class DogModelTests(TestCase):
         response = self.client.get(reverse("registry:dog-search"), {"q": "Paged Dog"})
 
         self.assertEqual(response.context["result_count"], 25)
-        self.assertEqual(len(response.context["dogs"]), 24)
+        self.assertEqual(len(response.context["dogs"]), 18)
         self.assertTrue(response.context["page_obj"].has_next())
 
     def test_duplicate_candidates_skip_very_common_name_buckets(self):
@@ -135,6 +136,50 @@ class DogModelTests(TestCase):
         )
         self.assertNotContains(response, "Second Shared Kennel Dog")
         self.assertNotContains(response, "No Image Dog")
+
+    def test_search_keeps_source_image_fallback_without_prefetching_sources_for_every_card(self):
+        dog = Dog.objects.create(
+            name="Source Image Search Dog",
+            slug="source-image-search-dog",
+            is_public=True,
+        )
+        DogSource.objects.create(
+            dog=dog,
+            source_url="https://canecorsopedigree.com/dog/source-image-search-dog",
+            raw_payload={
+                "image_url": "https://canecorsopedigree.com/static/images/animal/source-image.jpg"
+            },
+        )
+
+        response = self.client.get(
+            reverse("registry:dog-search"),
+            {"q": "Source Image Search"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "https://canecorsopedigree.com/static/images/animal/source-image.jpg",
+        )
+
+    def test_authenticated_profile_secondary_actions_are_grouped(self):
+        user = get_user_model().objects.create_user(
+            username="profile-reviewer-member",
+            password="test-pass-123",
+        )
+        dog = Dog.objects.create(
+            name="Grouped Actions Dog",
+            slug="grouped-actions-dog",
+            is_public=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Contribute or request review")
+        self.assertContains(response, 'class="profile-manage-actions ux-disclosure"', html=False)
+        self.assertContains(response, "Request profile review")
 
     def test_dog_suggestions_return_live_matches(self):
         Dog.objects.create(
@@ -312,13 +357,13 @@ class DogModelTests(TestCase):
         self.assertContains(response, "Sforza")
         self.assertNotContains(response, "Custodi Nos")
 
-    def test_kennel_directory_is_bounded_to_twenty_four_names_per_page(self):
+    def test_kennel_directory_is_bounded_to_eighteen_names_per_page(self):
         for index in range(25):
             Kennel.objects.create(name=f"Kennel {index:02d}", slug=f"kennel-{index:02d}")
 
         response = self.client.get(reverse("registry:kennel-list"))
 
-        self.assertEqual(len(response.context["kennels"]), 24)
+        self.assertEqual(len(response.context["kennels"]), 18)
         self.assertTrue(response.context["page_obj"].has_next())
 
     def test_dog_profile_collapses_secondary_relationships_after_six(self):
