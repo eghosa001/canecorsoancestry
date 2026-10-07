@@ -172,7 +172,7 @@
         {% for item in recent_submissions %}
           <div class="dashboard-status-row">
             <div>
-              <strong>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.code }}{% elif item.kennel %}{{ item.kennel.name }}{% else %}{{ item.get_kind_display }}{% endif %}</strong>
+              <strong>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.public_label }}{% elif item.kennel %}{{ item.kennel.name }}{% else %}{{ item.get_kind_display }}{% endif %}</strong>
               <span>{{ item.get_kind_display }} · {{ item.created_at|date:"d M Y" }}</span>
             </div>
             <span class="submission-state {{ item.status }}">{{ item.get_status_display }}</span>
@@ -210,12 +210,12 @@
         {% for litter in litters %}
           {% if litter.is_public %}
             <a class="activity-row" href="{% url 'registry:litter-detail' litter.pk %}">
-              <strong>{{ litter.code }}</strong>
+              <strong>{{ litter.public_label }}</strong>
               <span>{{ litter.date_of_birth|default:"Date not recorded" }}</span>
             </a>
           {% else %}
             <div class="activity-row">
-              <strong>{{ litter.code }}</strong>
+              <strong>{{ litter.public_label }}</strong>
               <span>Private · {{ litter.date_of_birth|default:"Date not recorded" }}</span>
             </div>
           {% endif %}
