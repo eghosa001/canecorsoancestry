@@ -45,6 +45,16 @@ class CloudflareR2GatewayStorage(Storage):
             "X-R2-Timestamp": timestamp,
             "X-R2-Content-SHA256": digest,
             "X-R2-Signature": signature,
+            # Cloudflare can reject Python's default urllib identity before a
+            # workers.dev request reaches the Worker. Use an explicit normal
+            # HTTPS client identity for this private signed server-to-server path.
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/154.0.0.0 Safari/537.36 "
+                "CaneCorsoAncestry-Media/1.0"
+            ),
+            "Accept": "application/json, application/octet-stream;q=0.9, */*;q=0.8",
         }
         if content_type:
             headers["Content-Type"] = content_type
