@@ -33,7 +33,7 @@ SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 
-# Render overrides the default storage backend with the R2 media gateway.
+# The deployment layer overrides the default storage backend with the R2 media gateway.
 # Keeping production.py storage-neutral avoids stale provider-specific branches.
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
