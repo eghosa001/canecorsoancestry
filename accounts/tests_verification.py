@@ -43,17 +43,18 @@ class VerificationGovernanceTests(TestCase):
         self.reviewer = User.objects.create_user(
             username="normal-reviewer",
             password="test-pass-123",
-            is_staff=True,
         )
         self.senior_one = User.objects.create_user(
             username="senior-one",
             password="test-pass-123",
-            is_staff=True,
         )
         self.senior_two = User.objects.create_user(
             username="senior-two",
             password="test-pass-123",
-            is_staff=True,
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.reviewer,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         ModerationRoleAssignment.objects.create(
             user=self.senior_one,
