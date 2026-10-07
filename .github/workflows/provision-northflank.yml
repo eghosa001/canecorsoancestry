@@ -361,6 +361,8 @@ jobs:
           echo "NORTHFLANK_ORIGIN=$origin" >> "$GITHUB_ENV"
           echo "Northflank origin: $origin"
 
+          expected_r2_fingerprint="$(printf '%s' "$R2_GATEWAY_SIGNING_KEY" | sha256sum | cut -c1-16)"
+          echo "Expected R2 signing fingerprint: $expected_r2_fingerprint; runner_epoch=$(date +%s)"
           storage_status=""
           for attempt in $(seq 1 6); do
             storage_status="$(curl --connect-timeout 10 --max-time 30 -sS -X POST               -H 'X-CCA-Edge: 1'               -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY"               -H "X-CCA-Storage-Probe: $DJANGO_SECRET_KEY"               -o /tmp/nf-storage-probe.json               -w '%{http_code}' "$origin/__internal/storage-probe/" || true)"
