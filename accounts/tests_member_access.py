@@ -233,7 +233,7 @@ class MemberAccessFlowTests(TestCase):
         self.assertNotContains(response, "No approved photo yet")
         self.assertContains(
             response,
-            'accept="image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp"',
+            'accept="image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp,image/heic,image/heif,.heic,.heif,.hif"',
             html=False,
         )
 
