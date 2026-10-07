@@ -1,6 +1,6 @@
 const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
 // Bump this whenever public HTML/static layout assets must invalidate edge cache.
-const EDGE_CACHE_VERSION = "iphone-upload-v84"; // iPhone-safe mobile header and upload UX refresh
+const EDGE_CACHE_VERSION = "mobile-upload-v85"; // Correct mobile hero spacing and general photo upload refresh
 const CACHE_FRESH_SECONDS = 900;
 const CACHE_RETENTION_SECONDS = 604800;
 const ORIGIN_GRACE_MS = 3500;

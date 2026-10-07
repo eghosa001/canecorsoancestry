@@ -89,6 +89,24 @@ class CloudflareR2GatewayStorage(Storage):
             content_type=content_type,
         ):
             pass
+
+        # Do not report a successful member upload until R2 confirms the exact
+        # object is readable at the expected byte size. This catches gateway or
+        # storage failures at submission time instead of leaving a broken image
+        # for the member/moderator to discover later.
+        try:
+            with self._request(name, method="HEAD") as response:
+                stored_size = int(response.headers.get("Content-Length", "-1"))
+        except (FileNotFoundError, KeyError, TypeError, ValueError) as exc:
+            raise OSError("Uploaded file could not be verified in R2.") from exc
+
+        if stored_size != len(data):
+            try:
+                self.delete(name)
+            finally:
+                raise OSError(
+                    f"Uploaded file size mismatch: expected {len(data)} bytes, got {stored_size}."
+                )
         return name
 
     def _open(self, name, mode="rb"):

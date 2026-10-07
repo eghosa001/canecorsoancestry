@@ -1,7 +1,8 @@
 from io import BytesIO
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import urllib.error
 
+from django.core.files.base import ContentFile
 from django.test import SimpleTestCase, override_settings
 
 from core.r2_gateway_storage import CloudflareR2GatewayStorage
@@ -34,6 +35,29 @@ class R2GatewayRetryTests(SimpleTestCase):
         self.assertEqual(response.read(), b"ok")
         self.assertEqual(urlopen.call_count, 2)
         sleep.assert_called_once_with(0.25)
+
+    def test_save_exact_verifies_uploaded_size(self):
+        storage = CloudflareR2GatewayStorage(
+            base_url="https://media.example.test",
+            timeout=1,
+        )
+        put_response = MagicMock()
+        put_response.__enter__.return_value = put_response
+        put_response.__exit__.return_value = False
+        head_response = MagicMock()
+        head_response.headers = {"Content-Length": "4"}
+        head_response.__enter__.return_value = head_response
+        head_response.__exit__.return_value = False
+
+        with patch.object(
+            storage,
+            "_request",
+            side_effect=[put_response, head_response],
+        ) as request:
+            saved = storage.save_exact("dogs/test.jpg", ContentFile(b"data"))
+
+        self.assertEqual(saved, "dogs/test.jpg")
+        self.assertEqual(request.call_count, 2)
 
     def test_forbidden_gateway_error_is_not_retried(self):
         storage = CloudflareR2GatewayStorage(

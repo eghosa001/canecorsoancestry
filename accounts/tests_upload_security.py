@@ -47,7 +47,7 @@ class UploadValidationTests(SimpleTestCase):
 
         self.assertTrue(form.is_valid(), form.errors)
 
-    def test_iphone_heic_photo_is_accepted_and_normalized_to_jpeg(self):
+    def test_heic_photo_is_accepted_and_normalized_to_jpeg(self):
         buffer = BytesIO()
         Image.new("RGB", (24, 24)).save(buffer, format="HEIF")
         form = DogImageSubmissionForm(
@@ -68,7 +68,26 @@ class UploadValidationTests(SimpleTestCase):
         with Image.open(upload) as image:
             self.assertEqual(image.format, "JPEG")
 
-    def test_iphone_heic_evidence_is_accepted_and_normalized(self):
+    def test_valid_photo_does_not_depend_on_filename_extension_or_browser_mime(self):
+        buffer = BytesIO()
+        Image.new("RGB", (30, 20)).save(buffer, format="PNG")
+        form = DogImageSubmissionForm(
+            data={"caption": "", "notes": ""},
+            files={
+                "attachment": SimpleUploadedFile(
+                    "camera-upload.data",
+                    buffer.getvalue(),
+                    content_type="application/octet-stream",
+                )
+            },
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        upload = form.cleaned_data["attachment"]
+        self.assertTrue(upload.name.endswith(".jpg"))
+        self.assertEqual(upload.content_type, "image/jpeg")
+
+    def test_heic_evidence_is_accepted_and_normalized(self):
         buffer = BytesIO()
         Image.new("RGB", (24, 24)).save(buffer, format="HEIF")
         form = DogDocumentSubmissionForm(
@@ -92,7 +111,7 @@ class UploadValidationTests(SimpleTestCase):
     def test_image_size_limit_is_enforced_before_decoding(self):
         upload = SimpleUploadedFile("dog.jpg", b"\xff\xd8\xff")
         upload.size = IMAGE_MAX_BYTES + 1
-        with self.assertRaisesRegex(ValidationError, "10 MB or smaller"):
+        with self.assertRaisesRegex(ValidationError, "20 MB or smaller"):
             validate_image_upload(upload)
 
     def test_document_size_limit_is_enforced_before_signature_check(self):

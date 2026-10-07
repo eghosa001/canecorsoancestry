@@ -1,7 +1,10 @@
 from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
@@ -233,7 +236,7 @@ class MemberAccessFlowTests(TestCase):
         self.assertNotContains(response, "No approved photo yet")
         self.assertContains(
             response,
-            'accept="image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp,image/heic,image/heif,.heic,.heif,.hif"',
+            'accept="image/*"',
             html=False,
         )
 
@@ -287,14 +290,14 @@ class MemberAccessFlowTests(TestCase):
             ).exists()
         )
 
-    def test_iphone_heic_photo_reaches_submission_storage_as_jpeg(self):
+    def test_regular_gallery_photo_is_written_then_approved_end_to_end(self):
         member = get_user_model().objects.create_user(
-            username="iphone-upload-member",
+            username="general-photo-member",
             password="test-pass-123",
         )
         kennel = Kennel.objects.create(
-            name="iPhone Upload Kennel",
-            slug="iphone-upload-kennel",
+            name="General Photo Kennel",
+            slug="general-photo-kennel",
         )
         KennelMembership.objects.create(
             user=member,
@@ -302,8 +305,67 @@ class MemberAccessFlowTests(TestCase):
             role=KennelMembership.Role.OWNER,
         )
         dog = Dog.objects.create(
-            name="iPhone Upload Dog",
-            slug="iphone-upload-dog",
+            name="General Photo Dog",
+            slug="general-photo-dog",
+            kennel=kennel,
+            is_public=True,
+        )
+        buffer = BytesIO()
+        Image.new("RGBA", (48, 36), (80, 90, 100, 180)).save(buffer, format="PNG")
+        photo = SimpleUploadedFile(
+            "gallery-photo.data",
+            buffer.getvalue(),
+            content_type="application/octet-stream",
+        )
+        self.client.force_login(member)
+
+        field = Submission._meta.get_field("attachment")
+        with TemporaryDirectory() as temp_dir:
+            storage = FileSystemStorage(location=temp_dir, base_url="/media/")
+            with patch.object(field, "storage", storage):
+                response = self.client.post(
+                    reverse("accounts:submit-image", args=[dog.pk]),
+                    {
+                        "caption": "Gallery portrait",
+                        "is_primary": "on",
+                        "notes": "",
+                        "attachment": photo,
+                    },
+                )
+
+                self.assertEqual(response.status_code, 302)
+                submission = Submission.objects.get(
+                    kind=Submission.Kind.IMAGE,
+                    dog=dog,
+                )
+                self.assertTrue(submission.attachment.name.endswith(".jpg"))
+                stored_path = Path(temp_dir) / submission.attachment.name
+                self.assertTrue(stored_path.exists())
+                with Image.open(stored_path) as stored:
+                    self.assertEqual(stored.format, "JPEG")
+
+                approve_submission(submission, self.reviewer, "Photo checked.")
+                image = DogImage.objects.get(dog=dog)
+                self.assertEqual(image.image.name, submission.attachment.name)
+                self.assertTrue(image.is_primary)
+
+    def test_heic_photo_reaches_submission_storage_as_jpeg(self):
+        member = get_user_model().objects.create_user(
+            username="heic-upload-member",
+            password="test-pass-123",
+        )
+        kennel = Kennel.objects.create(
+            name="HEIC Upload Kennel",
+            slug="heic-upload-kennel",
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        dog = Dog.objects.create(
+            name="HEIC Upload Dog",
+            slug="heic-upload-dog",
             kennel=kennel,
             is_public=True,
         )
@@ -317,11 +379,11 @@ class MemberAccessFlowTests(TestCase):
         self.client.force_login(member)
         storage = Submission._meta.get_field("attachment").storage
 
-        with patch.object(storage, "save", return_value="submissions/iphone-upload.jpg") as save:
+        with patch.object(storage, "save", return_value="submissions/heic-upload.jpg") as save:
             response = self.client.post(
                 reverse("accounts:submit-image", args=[dog.pk]),
                 {
-                    "caption": "iPhone portrait",
+                    "caption": "HEIC portrait",
                     "is_primary": "on",
                     "notes": "",
                     "attachment": photo,
