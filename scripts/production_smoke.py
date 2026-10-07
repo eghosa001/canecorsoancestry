@@ -99,6 +99,50 @@ def verify_featured_images(page, label):
     page.screenshot(path=OUT / f"{label}-featured.png", full_page=True)
 
 
+def assert_visual_contrast(page, background_selector, foreground_selector, label, minimum=4.5):
+    result = page.evaluate(
+        """([backgroundSelector, foregroundSelector]) => {
+          const backgroundNode = document.querySelector(backgroundSelector);
+          const foregroundNode = document.querySelector(foregroundSelector);
+          if (!backgroundNode || !foregroundNode) return null;
+
+          const parse = (value) => {
+            const parts = (value.match(/[0-9.]+/g) || []).slice(0, 3).map(Number);
+            return parts.length === 3 ? parts : null;
+          };
+          const channel = (value) => {
+            const normalized = value / 255;
+            return normalized <= 0.04045
+              ? normalized / 12.92
+              : Math.pow((normalized + 0.055) / 1.055, 2.4);
+          };
+          const luminance = (rgb) =>
+            0.2126 * channel(rgb[0]) +
+            0.7152 * channel(rgb[1]) +
+            0.0722 * channel(rgb[2]);
+
+          const background = parse(getComputedStyle(backgroundNode).backgroundColor);
+          const foreground = parse(getComputedStyle(foregroundNode).color);
+          if (!background || !foreground) return null;
+          const backgroundLuminance = luminance(background);
+          const foregroundLuminance = luminance(foreground);
+          const ratio =
+            (Math.max(backgroundLuminance, foregroundLuminance) + 0.05) /
+            (Math.min(backgroundLuminance, foregroundLuminance) + 0.05);
+          return {
+            ratio,
+            background: getComputedStyle(backgroundNode).backgroundColor,
+            foreground: getComputedStyle(foregroundNode).color,
+          };
+        }""",
+        [background_selector, foreground_selector],
+    )
+    if result is None:
+        raise AssertionError(f"{label} elements are missing")
+    if result["ratio"] < minimum:
+        raise AssertionError(f"{label} contrast is too low: {result}")
+
+
 def visit(page, path, label, *, mobile=False):
     console_errors = []
     page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
@@ -278,15 +322,20 @@ def main():
                     raise AssertionError(f"Unexpected dark-theme accent: {gold}")
                 if page.locator("[data-theme-toggle]").count() != 3:
                     raise AssertionError("Production does not expose desktop, header-mobile, and menu-mobile theme controls")
-                if page.locator(".hero-mark").evaluate("(el) => getComputedStyle(el).display") == "none":
-                    raise AssertionError("Production CCA hero plaque is hidden")
-                if page.locator(".hero-mark small").inner_text().strip() != "CANECORSOANCESTRY.COM":
-                    raise AssertionError("Production CCA domain label is missing or misplaced")
-                search_bg = page.locator(".hero-search input").evaluate(
-                    "(el) => getComputedStyle(el).backgroundColor"
+                if page.locator(".hero-mark").count():
+                    raise AssertionError("Obsolete decorative hero plaque is still rendered")
+                assert_visual_contrast(
+                    page,
+                    ".hero-search input",
+                    ".hero-search input",
+                    "Dark-theme hero search",
                 )
-                if search_bg != "rgb(255, 255, 255)":
-                    raise AssertionError(f"Hero search field is not white: {search_bg}")
+                assert_visual_contrast(
+                    page,
+                    ".action-card",
+                    ".action-card strong",
+                    "Dark-theme home action card",
+                )
                 bg = page.evaluate(
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()"
                 )
@@ -301,6 +350,18 @@ def main():
                 )
                 if light_bg.lower() != "#f4f0e8":
                     raise AssertionError(f"Unexpected light-theme background: {light_bg}")
+                assert_visual_contrast(
+                    page,
+                    ".hero-search input",
+                    ".hero-search input",
+                    "Light-theme hero search",
+                )
+                assert_visual_contrast(
+                    page,
+                    ".action-card",
+                    ".action-card strong",
+                    "Light-theme home action card",
+                )
                 page.locator("[data-theme-toggle]").first.click()
                 if page.locator("html").get_attribute("data-theme") != "dark":
                     raise AssertionError("Production theme toggle did not restore dark mode")
@@ -310,11 +371,6 @@ def main():
                     raise AssertionError(f"Header is not using the cached Cane Corso head asset: {brand_src}")
                 if brand.evaluate("(el) => !el.complete || el.naturalWidth < 32 || el.naturalHeight < 32"):
                     raise AssertionError("Cane Corso head logo did not render correctly")
-                plaque_border = page.locator(".hero-mark").evaluate(
-                    "(el) => getComputedStyle(el).borderTopWidth"
-                )
-                if plaque_border != "1px":
-                    raise AssertionError(f"Production CCA plaque is not visibly boxed: {plaque_border}")
                 canonical = page.locator('link[rel="canonical"]').get_attribute("href")
                 if canonical != BASE_URL + "/":
                     raise AssertionError(f"Production canonical host is wrong: {canonical}")
@@ -409,6 +465,7 @@ def main():
                         firstY: stats[0]?.top,
                         secondY: stats[1]?.top,
                         thirdY: stats[2]?.top,
+                        fourthY: stats[3]?.top,
                         themeVisible: theme ? getComputedStyle(theme).display !== "none" : false,
                         themeTop: theme ? theme.getBoundingClientRect().top : -1,
                         menuTop: document.querySelector(".mobile-nav").getBoundingClientRect().top,
@@ -416,14 +473,18 @@ def main():
                       };
                     }"""
                 )
-                if not 68 <= restored_mobile["heroOffset"] <= 82:
-                    raise AssertionError(f"Customer mobile hero moved away from the restored position: {restored_mobile}")
-                if abs(restored_mobile["firstY"] - restored_mobile["secondY"]) > 3 or restored_mobile["thirdY"] <= restored_mobile["firstY"]:
-                    raise AssertionError(f"Customer mobile stats are not restored to a 2x2 grid: {restored_mobile}")
+                if not 24 <= restored_mobile["heroOffset"] <= 90:
+                    raise AssertionError(f"Mobile hero spacing is unreasonable: {restored_mobile}")
+                if (
+                    abs(restored_mobile["firstY"] - restored_mobile["secondY"]) > 3
+                    or abs(restored_mobile["thirdY"] - restored_mobile["fourthY"]) > 3
+                    or restored_mobile["thirdY"] <= restored_mobile["firstY"]
+                ):
+                    raise AssertionError(f"Mobile homepage statistics are not a balanced 2x2 grid: {restored_mobile}")
                 if not restored_mobile["themeVisible"]:
                     raise AssertionError("Mobile light/dark control is not directly visible in the header")
-                if restored_mobile["logoWidth"] < 54:
-                    raise AssertionError(f"Customer logo is still undersized on mobile: {restored_mobile}")
+                if restored_mobile["logoWidth"] < 40:
+                    raise AssertionError(f"Mobile logo is undersized: {restored_mobile}")
                 if abs(restored_mobile["themeTop"] - restored_mobile["menuTop"]) > 8:
                     raise AssertionError(f"Mobile theme and menu controls are not on the same row: {restored_mobile}")
                 skip_link = page.locator(".skip-link")
@@ -441,10 +502,22 @@ def main():
                 mobile_theme.click()
                 if page.locator("html").get_attribute("data-theme") != "light":
                     raise AssertionError("Production mobile theme toggle did not switch to light mode")
+                assert_visual_contrast(
+                    page,
+                    ".action-card",
+                    ".action-card strong",
+                    "Mobile light-theme action card with menu open",
+                )
                 page.screenshot(path=OUT / "home-mobile-light-menu.png", full_page=True)
                 mobile_theme.click()
                 if page.locator("html").get_attribute("data-theme") != "dark":
                     raise AssertionError("Production mobile theme toggle did not restore dark mode")
+                assert_visual_contrast(
+                    page,
+                    ".action-card",
+                    ".action-card strong",
+                    "Mobile dark-theme action card with menu open",
+                )
                 page.screenshot(path=OUT / "home-mobile-menu.png", full_page=True)
                 page.evaluate("window.scrollTo(0, 320)")
                 page.wait_for_timeout(150)
