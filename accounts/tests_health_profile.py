@@ -15,6 +15,7 @@ from registry.models import (
     VerificationState,
 )
 from registry.services import approve_submission
+from registry.verification import verification_checklist
 
 from .models import Profile
 
@@ -119,6 +120,12 @@ class HealthRecordSubmissionTests(TestCase):
         )
         self.assertEqual(submission.status, Submission.Status.PENDING)
         self.assertFalse(HealthRecord.objects.filter(dog=self.dog).exists())
+        checklist = verification_checklist(submission)
+        labels = {row["label"] for row in checklist}
+        self.assertEqual(
+            labels,
+            {"Target dog", "Structured result", "Supporting evidence", "Existing health/DNA result"},
+        )
 
         approve_submission(submission, self.reviewer, "Evidence checked.")
 
