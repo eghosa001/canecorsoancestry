@@ -102,9 +102,18 @@ def storage_probe(request):
             restored = handle.read()
         if restored != payload:
             raise OSError("R2 read-back did not match the uploaded bytes.")
-    except Exception:
+    except Exception as exc:
         logger.exception("Live storage probe failed")
-        response = JsonResponse({"status": "unhealthy", "storage": "r2"}, status=503)
+        response = JsonResponse(
+            {
+                "status": "unhealthy",
+                "storage": "r2",
+                "error_type": type(exc).__name__,
+                "http_status": getattr(exc, "code", None),
+                "reason": str(getattr(exc, "reason", "") or "")[:120],
+            },
+            status=503,
+        )
     else:
         response = JsonResponse({"status": "ok", "storage": "r2"})
     finally:
