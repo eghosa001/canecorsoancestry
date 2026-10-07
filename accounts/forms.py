@@ -363,7 +363,7 @@ class PaymentPackageForm(forms.Form):
         min_value=1,
         max_value=6,
         label="Number of dogs",
-        help_text="Use 1 for a single dog, or choose 2–6 for the ₦1,000 multi-dog package.",
+        help_text="Use 1 for a single dog, or choose 2–6 for the ₦1,500 multi-dog package.",
     )
 
     def __init__(self, *args, user=None, **kwargs):
