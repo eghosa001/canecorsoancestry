@@ -33,7 +33,7 @@
             <div class="moderation-meta">
               <div>
                 <span class="eyebrow">{{ item.get_kind_display }}</span>
-                <h3>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.code }}{% else %}Submission {{ item.pk }}{% endif %}</h3>
+                <h3>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.public_label }}{% else %}Submission {{ item.pk }}{% endif %}</h3>
                 <p>{{ item.submitted_by }}{% if item.kennel %} · {{ item.kennel.name }}{% endif %}</p>
               </div>
               <span class="submission-state {{ item.risk_level }}">{{ item.get_risk_level_display }}</span>
@@ -60,7 +60,7 @@
             <div class="moderation-meta">
               <div>
                 <span class="eyebrow">{{ item.get_kind_display }}</span>
-                <h3>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.code }}{% else %}Submission {{ item.pk }}{% endif %}</h3>
+                <h3>{% if item.dog %}{{ item.dog.name }}{% elif item.litter %}{{ item.litter.public_label }}{% else %}Submission {{ item.pk }}{% endif %}</h3>
                 <p>{{ item.submitted_by }}{% if item.kennel %} · {{ item.kennel.name }}{% endif %}</p>
               </div>
               <span class="submission-state red">RED — HIGH RISK</span>
@@ -253,7 +253,7 @@
       {% endfor %}
       {% for litter in locked_litters %}
         <article class="review-diff-row">
-          <strong>Litter · {{ litter.code }}</strong>
+          <strong>Litter · {{ litter.public_label }}</strong>
           <span>{{ litter.pk }}</span>
           <span>{% if litter.kennel %}{{ litter.kennel.name }} · {% endif %}locked {{ litter.record_locked_at|date:"d M Y, H:i" }}{% if litter.record_locked_by %} by {{ litter.record_locked_by_admin_label }}{% endif %}</span>
         </article>
@@ -274,7 +274,7 @@
         <div class="audit-time">{{ event.created_at|date:"d M Y" }}<small>{{ event.created_at|date:"H:i" }}</small></div>
         <div class="audit-main">
           <span class="eyebrow">{{ event.get_action_display }}</span>
-          <h3>{% if event.dog %}{{ event.dog.name }}{% elif event.litter %}{{ event.litter.code }}{% else %}Protected record{% endif %}</h3>
+          <h3>{% if event.dog %}{{ event.dog.name }}{% elif event.litter %}{{ event.litter.public_label }}{% else %}Protected record{% endif %}</h3>
           <p>Changed by {{ event.actor_admin_label }}{% if event.note %} · {{ event.note }}{% endif %}</p>
           <pre class="audit-summary">{{ event.summary }}</pre>
         </div>
