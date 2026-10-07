@@ -89,10 +89,13 @@ jobs:
         run: |
           set -euo pipefail
           origin="https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
-          expected_version="$(grep "core/site.css" templates/base.html | sed -E 's/.*\?v=([^"]+).*/\1/' | head -n1)"
-          test -n "$expected_version"
-          expected_marker="site.css?v=$expected_version"
-          echo "Waiting for origin UI marker: $expected_marker"
+          expected_site_version="$(grep "core/site.css" templates/base.html | sed -E 's/.*\?v=([^"]+).*/\1/' | head -n1)"
+          expected_premium_version="$(grep "core/premium-polish.css" templates/base.html | sed -E 's/.*\?v=([^"]+).*/\1/' | head -n1)"
+          test -n "$expected_site_version"
+          test -n "$expected_premium_version"
+          expected_site_marker="site.css?v=$expected_site_version"
+          expected_premium_marker="premium-polish.css?v=$expected_premium_version"
+          echo "Waiting for origin UI markers: $expected_site_marker and $expected_premium_marker"
 
           status=""
           for attempt in $(seq 1 48); do
@@ -102,13 +105,16 @@ jobs:
               -H 'Accept: text/html' \
               -o /tmp/origin-current.html \
               -w '%{http_code}' "$origin/" || true)"
-            if [ "$status" = "200" ] && grep -q "$expected_marker" /tmp/origin-current.html; then
+            if [ "$status" = "200" ] &&
+               grep -q "$expected_site_marker" /tmp/origin-current.html &&
+               grep -q "$expected_premium_marker" /tmp/origin-current.html; then
               echo "Origin is on the current UI release."
               break
             fi
             if [ "$attempt" = "48" ]; then
-              echo "::error::Northflank origin did not reach $expected_marker before edge cutover; HTTP $status"
+              echo "::error::Northflank origin did not reach both current UI markers before edge cutover; HTTP $status"
               grep -o 'site.css?v=[^"]*' /tmp/origin-current.html 2>/dev/null | head -n1 || true
+              grep -o 'premium-polish.css?v=[^"]*' /tmp/origin-current.html 2>/dev/null | head -n1 || true
               exit 1
             fi
             sleep 5
@@ -125,9 +131,12 @@ jobs:
         shell: bash
         run: |
           base="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
-          expected_version="$(grep "core/site.css" templates/base.html | sed -E 's/.*\?v=([^"]+).*/\1/' | head -n1)"
-          test -n "$expected_version"
-          expected_marker="site.css?v=$expected_version"
+          expected_site_version="$(grep "core/site.css" templates/base.html | sed -E 's/.*\?v=([^"]+).*/\1/' | head -n1)"
+          expected_premium_version="$(grep "core/premium-polish.css" templates/base.html | sed -E 's/.*\?v=([^"]+).*/\1/' | head -n1)"
+          test -n "$expected_site_version"
+          test -n "$expected_premium_version"
+          expected_site_marker="site.css?v=$expected_site_version"
+          expected_premium_marker="premium-polish.css?v=$expected_premium_version"
 
           for attempt in $(seq 1 12); do
             status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/edge-health.json -w '%{http_code}' "$base/__edge/health" || true)"
@@ -148,8 +157,8 @@ jobs:
                grep -q 'data-ui-version="customer-v49"' /tmp/edge-page.html &&
                grep -q 'cane-corso-head-logo-right.webp' /tmp/edge-page.html &&
                grep -q '20261004-headlogo-v64' /tmp/edge-page.html &&
-               grep -q 'premium-polish.css?v=20261007-interaction-v50' /tmp/edge-page.html &&
-               grep -q "$expected_marker" /tmp/edge-page.html; then
+               grep -q "$expected_premium_marker" /tmp/edge-page.html &&
+               grep -q "$expected_site_marker" /tmp/edge-page.html; then
               break
             fi
             if [ "$attempt" = "30" ]; then
