@@ -14,6 +14,7 @@ MEDIA_EDGE_BASE_URL = os.getenv(
     R2_GATEWAY_URL,
 ).rstrip("/")
 MEDIA_EDGE_URL_TTL = int(os.getenv("MEDIA_EDGE_URL_TTL", "300"))
+R2_GATEWAY_SIGNING_KEY = os.getenv("R2_GATEWAY_SIGNING_KEY", SECRET_KEY)
 
 if not R2_GATEWAY_URL:
     raise ImproperlyConfigured(
