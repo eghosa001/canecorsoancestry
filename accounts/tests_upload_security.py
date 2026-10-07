@@ -47,6 +47,48 @@ class UploadValidationTests(SimpleTestCase):
 
         self.assertTrue(form.is_valid(), form.errors)
 
+    def test_iphone_heic_photo_is_accepted_and_normalized_to_jpeg(self):
+        buffer = BytesIO()
+        Image.new("RGB", (24, 24)).save(buffer, format="HEIF")
+        form = DogImageSubmissionForm(
+            data={"caption": "", "notes": ""},
+            files={
+                "attachment": SimpleUploadedFile(
+                    "iphone-photo.heic",
+                    buffer.getvalue(),
+                    content_type="image/heic",
+                )
+            },
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        upload = form.cleaned_data["attachment"]
+        self.assertTrue(upload.name.endswith(".jpg"))
+        self.assertEqual(upload.content_type, "image/jpeg")
+        with Image.open(upload) as image:
+            self.assertEqual(image.format, "JPEG")
+
+    def test_iphone_heic_evidence_is_accepted_and_normalized(self):
+        buffer = BytesIO()
+        Image.new("RGB", (24, 24)).save(buffer, format="HEIF")
+        form = DogDocumentSubmissionForm(
+            data={
+                "title": "iPhone evidence",
+                "document_type": DogDocument.DocumentType.PEDIGREE,
+                "notes": "",
+            },
+            files={
+                "attachment": SimpleUploadedFile(
+                    "certificate.heic",
+                    buffer.getvalue(),
+                    content_type="image/heic",
+                )
+            },
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(form.cleaned_data["attachment"].name.endswith(".jpg"))
+
     def test_image_size_limit_is_enforced_before_decoding(self):
         upload = SimpleUploadedFile("dog.jpg", b"\xff\xd8\xff")
         upload.size = IMAGE_MAX_BYTES + 1

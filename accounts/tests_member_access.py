@@ -233,7 +233,7 @@ class MemberAccessFlowTests(TestCase):
         self.assertNotContains(response, "No approved photo yet")
         self.assertContains(
             response,
-            'accept="image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp"',
+            'accept="image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp,image/heic,image/heif,.heic,.heif,.hif"',
             html=False,
         )
 
@@ -286,6 +286,52 @@ class MemberAccessFlowTests(TestCase):
                 dog=dog,
             ).exists()
         )
+
+    def test_iphone_heic_photo_reaches_submission_storage_as_jpeg(self):
+        member = get_user_model().objects.create_user(
+            username="iphone-upload-member",
+            password="test-pass-123",
+        )
+        kennel = Kennel.objects.create(
+            name="iPhone Upload Kennel",
+            slug="iphone-upload-kennel",
+        )
+        KennelMembership.objects.create(
+            user=member,
+            kennel=kennel,
+            role=KennelMembership.Role.OWNER,
+        )
+        dog = Dog.objects.create(
+            name="iPhone Upload Dog",
+            slug="iphone-upload-dog",
+            kennel=kennel,
+            is_public=True,
+        )
+        buffer = BytesIO()
+        Image.new("RGB", (32, 32)).save(buffer, format="HEIF")
+        photo = SimpleUploadedFile(
+            "IMG_0001.HEIC",
+            buffer.getvalue(),
+            content_type="image/heic",
+        )
+        self.client.force_login(member)
+        storage = Submission._meta.get_field("attachment").storage
+
+        with patch.object(storage, "save", return_value="submissions/iphone-upload.jpg") as save:
+            response = self.client.post(
+                reverse("accounts:submit-image", args=[dog.pk]),
+                {
+                    "caption": "iPhone portrait",
+                    "is_primary": "on",
+                    "notes": "",
+                    "attachment": photo,
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        submission = Submission.objects.get(kind=Submission.Kind.IMAGE, dog=dog)
+        self.assertTrue(submission.attachment.name.endswith(".jpg"))
+        self.assertEqual(save.call_args.args[1].content_type, "image/jpeg")
 
 
 class PopularDogTests(TestCase):
