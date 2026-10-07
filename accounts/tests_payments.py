@@ -48,18 +48,18 @@ class PaidSubmissionTests(TestCase):
             {
                 "kennel": self.kennel.pk,
                 "package": SubmissionPayment.Package.MULTI_DOG,
-                "dog_count": 4,
+                "dog_count": 6,
             },
             user=self.user,
         )
         self.assertTrue(batch_form.is_valid(), batch_form.errors)
-        self.assertEqual(batch_form.cleaned_data["amount_kobo"], 150000)
+        self.assertEqual(batch_form.cleaned_data["amount_kobo"], 100000)
 
         oversized_form = PaymentPackageForm(
             {
                 "kennel": self.kennel.pk,
                 "package": SubmissionPayment.Package.MULTI_DOG,
-                "dog_count": 5,
+                "dog_count": 7,
             },
             user=self.user,
         )
