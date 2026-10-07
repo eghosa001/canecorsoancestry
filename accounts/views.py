@@ -36,6 +36,7 @@ from registry.models import (
     DogImage,
     DogSource,
     EvidenceRequest,
+    HealthRecord,
     Kennel,
     Litter,
     ModerationAudit,
@@ -98,6 +99,8 @@ from .forms import (
     KennelEditForm,
     LitterPuppySubmissionForm,
     LitterSubmissionForm,
+    HealthRecordSubmissionForm,
+    MemberProfileForm,
     MemberSignUpForm,
     PaymentPackageForm,
     MergeDogsForm,
@@ -344,6 +347,32 @@ def resend_verification(request):
         request,
         "registration/resend_verification.html",
         {"form": form},
+    )
+
+
+@login_required
+def profile(request):
+    member_profile, _ = Profile.objects.get_or_create(
+        user=request.user,
+        defaults={"display_name": request.user.get_username()},
+    )
+    form = MemberProfileForm(request.POST or None, instance=member_profile)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Profile updated.")
+        return redirect("accounts:profile")
+
+    memberships = request.user.kennel_memberships.select_related("kennel").order_by(
+        "created_at"
+    )
+    return render(
+        request,
+        "accounts/profile.html",
+        {
+            "form": form,
+            "member_profile": member_profile,
+            "memberships": memberships,
+        },
     )
 
 
@@ -987,6 +1016,61 @@ def submit_image(request, pk):
             "current_photo_url": _current_dog_photo_url(dog),
             "intro": "Original uploads are retained; approved photos are attached to the canonical dog.",
             "button_label": "Submit photo",
+            "multipart": True,
+            "dog": dog,
+        },
+    )
+
+
+@login_required
+def submit_health_record(request, pk):
+    dog = get_object_or_404(Dog, pk=pk)
+    if not can_contribute_to_dog(request.user, dog):
+        raise PermissionDenied
+
+    form = HealthRecordSubmissionForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        upload = form.cleaned_data["attachment"]
+        try:
+            with transaction.atomic():
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.HEALTH,
+                    submitted_by=request.user,
+                    dog=dog,
+                    kennel=dog.kennel,
+                    payload={
+                        "evidence_type": form.cleaned_data["evidence_type"],
+                        "test_type": form.cleaned_data["test_type"].strip(),
+                        "result": form.cleaned_data["result"].strip(),
+                        "tested_on": _date_value(form.cleaned_data["tested_on"]),
+                    },
+                    attachment=upload,
+                    notes=form.cleaned_data["notes"],
+                )
+        except (OSError, urllib.error.URLError) as exc:
+            _add_upload_storage_error(form, "attachment", exc)
+        else:
+            verify_submission(submission)
+            messages.success(
+                request,
+                "Health/DNA result submitted for administrator verification.",
+            )
+            return redirect("accounts:submissions")
+
+    return render(
+        request,
+        "accounts/submission_form.html",
+        {
+            "form": form,
+            "eyebrow": "Health & DNA",
+            "title": f"Submit a health/DNA result for {dog.name}",
+            "current_photo_url": _current_dog_photo_url(dog),
+            "intro": (
+                "Structured results remain pending until an administrator checks "
+                "the supporting evidence. The uploaded certificate stays private "
+                "unless its visibility is separately approved."
+            ),
+            "button_label": "Submit result for review",
             "multipart": True,
             "dog": dog,
         },
