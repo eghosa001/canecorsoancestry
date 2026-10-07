@@ -91,7 +91,7 @@ def media_file(request, path):
             signed_media_url(
                 media_base,
                 path,
-                settings.SECRET_KEY,
+                getattr(settings, "R2_GATEWAY_SIGNING_KEY", settings.SECRET_KEY),
                 ttl=getattr(settings, "MEDIA_EDGE_URL_TTL", 300),
             )
         )
