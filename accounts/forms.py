@@ -170,6 +170,8 @@ class MemberSignUpForm(UserCreationForm):
         user = super().save(commit=False)
         user.username = slugify(self.cleaned_data["kennel_name"])[:150]
         user.email = self.cleaned_data["email"]
+        user.is_staff = False
+        user.is_superuser = False
         if commit:
             user.save()
         return user
