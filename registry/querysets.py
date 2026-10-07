@@ -1,15 +1,17 @@
-from django.db.models import Exists, F, OuterRef, Q, Subquery, Window
+from django.db.models import F, Q, Subquery, Window
 from django.db.models.functions import Coalesce, RowNumber
 
 from .models import Dog, DogAlias, DogImage, DogRegistration
 
 
 def with_stored_images(queryset):
-    return queryset.annotate(
-        _has_stored_image=Exists(
-            DogImage.objects.filter(dog_id=OuterRef("pk"))
-        )
-    ).filter(_has_stored_image=True)
+    """Restrict to dogs with managed images using one deduplicated ID set.
+
+    DISTINCT encourages PostgreSQL to hash the imaged-dog IDs once instead of
+    probing DogImage for every candidate dog in popularity-ranked listings.
+    """
+    image_dog_ids = DogImage.objects.order_by().values("dog_id").distinct()
+    return queryset.filter(pk__in=Subquery(image_dog_ids))
 
 
 def one_dog_per_kennel(queryset):
