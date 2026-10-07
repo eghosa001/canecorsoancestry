@@ -148,7 +148,7 @@ jobs:
                grep -q 'data-ui-version="customer-v49"' /tmp/edge-page.html &&
                grep -q 'cane-corso-head-logo-right.webp' /tmp/edge-page.html &&
                grep -q '20261004-headlogo-v64' /tmp/edge-page.html &&
-               grep -q 'premium-polish.css?v=20261004-interaction-v49' /tmp/edge-page.html &&
+               grep -q 'premium-polish.css?v=20261007-interaction-v50' /tmp/edge-page.html &&
                grep -q "$expected_marker" /tmp/edge-page.html; then
               break
             fi
