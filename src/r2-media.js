@@ -113,21 +113,32 @@ async function verifyGatewayRequest(request, env, key, body) {
   const digest = request.headers.get("x-r2-content-sha256") || "";
   const signature = request.headers.get("x-r2-signature") || "";
 
-  if (!/^\d+$/.test(timestamp)) return false;
+  if (!/^\d+$/.test(timestamp)) return { ok: false, reason: "timestamp_format" };
   const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - Number(timestamp)) > 300) return false;
+  if (Math.abs(now - Number(timestamp)) > 300) {
+    return { ok: false, reason: "timestamp_skew" };
+  }
 
   const actualDigest = await sha256Hex(body);
-  if (!constantTimeEqual(actualDigest, digest)) return false;
+  if (!constantTimeEqual(actualDigest, digest)) {
+    return { ok: false, reason: "digest" };
+  }
 
+  const method = request.method.toUpperCase();
   const message = [
-    request.method.toUpperCase(),
+    method,
     key,
     timestamp,
     digest,
   ].join("\n");
-  const expected = await hmacHex(env.R2_GATEWAY_SIGNING_KEY || env.DJANGO_SECRET_KEY, message);
-  return constantTimeEqual(expected, signature);
+  const expected = await hmacHex(
+    env.R2_GATEWAY_SIGNING_KEY || env.DJANGO_SECRET_KEY,
+    message,
+  );
+  if (!constantTimeEqual(expected, signature)) {
+    return { ok: false, reason: "signature", method };
+  }
+  return { ok: true, reason: "ok", method };
 }
 
 async function handleR2Gateway(request, env, url) {
@@ -138,8 +149,18 @@ async function handleR2Gateway(request, env, url) {
     ? await request.arrayBuffer()
     : new ArrayBuffer(0);
 
-  if (!(await verifyGatewayRequest(request, env, key, body))) {
-    return new Response("Forbidden", { status: 403 });
+  const verification = await verifyGatewayRequest(request, env, key, body);
+  if (!verification.ok) {
+    return Response.json(
+      { status: "forbidden", reason: verification.reason },
+      {
+        status: 403,
+        headers: {
+          "x-r2-auth-reason": verification.reason,
+          "x-r2-auth-method": verification.method || request.method.toUpperCase(),
+        },
+      },
+    );
   }
 
   if (request.method === "GET") {
@@ -217,8 +238,18 @@ async function handleR2Ingest(request, env, url) {
   if (!key) return new Response("Invalid key", { status: 400 });
 
   const body = await request.arrayBuffer();
-  if (!(await verifyGatewayRequest(request, env, key, body))) {
-    return new Response("Forbidden", { status: 403 });
+  const verification = await verifyGatewayRequest(request, env, key, body);
+  if (!verification.ok) {
+    return Response.json(
+      { status: "forbidden", reason: verification.reason },
+      {
+        status: 403,
+        headers: {
+          "x-r2-auth-reason": verification.reason,
+          "x-r2-auth-method": verification.method || request.method.toUpperCase(),
+        },
+      },
+    );
   }
 
   let payload;

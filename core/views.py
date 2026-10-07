@@ -139,6 +139,16 @@ def storage_probe(request):
                 "error_type": type(exc).__name__,
                 "http_status": getattr(exc, "code", None),
                 "reason": str(getattr(exc, "reason", "") or "")[:120],
+                "auth_reason": (
+                    getattr(exc, "headers", {}).get("X-R2-Auth-Reason", "")
+                    if getattr(exc, "headers", None)
+                    else ""
+                ),
+                "auth_method": (
+                    getattr(exc, "headers", {}).get("X-R2-Auth-Method", "")
+                    if getattr(exc, "headers", None)
+                    else ""
+                ),
                 **diagnostics,
             },
             status=503,
