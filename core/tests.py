@@ -224,7 +224,7 @@ class PublicThemeRegressionTests(TestCase):
         self.assertContains(response, "hero-mobile-break")
         self.assertContains(response, '<button class="theme-toggle', count=3)
         self.assertContains(response, "Countries")
-        self.assertContains(response, "site.css?v=20261007-iphone-upload-v84")
+        self.assertContains(response, "site.css?v=20261007-mobile-upload-v85")
         self.assertContains(response, "premium-polish.css?v=20261007-interaction-v50")
 
 
@@ -243,10 +243,11 @@ class FormControlContrastTests(TestCase):
         self.assertIn('input[type="file"]::file-selector-button', css)
         self.assertIn("select option,", css)
 
-    def test_mobile_header_respects_iphone_safe_area_and_lowers_brand(self):
+    def test_mobile_home_gap_increases_without_moving_header_brand(self):
         css_path = finders.find("core/site.css")
         css = Path(css_path).read_text(encoding="utf-8")
 
-        self.assertIn("padding-top: env(safe-area-inset-top);", css)
-        self.assertIn("min-height: calc(72px + env(safe-area-inset-top))", css)
-        self.assertIn("transform: translateY(7px);", css)
+        self.assertIn("padding-top: 96px !important;", css)
+        self.assertIn("padding-top: 108px !important;", css)
+        self.assertNotIn("padding-top: env(safe-area-inset-top);", css)
+        self.assertNotIn("transform: translateY(7px);", css)
