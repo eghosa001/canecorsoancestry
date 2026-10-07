@@ -24,6 +24,7 @@ urlpatterns = [
     path("payments/paystack/callback/", views.paystack_callback, name="paystack-callback"),
     path("payments/paystack/webhook/", views.paystack_webhook, name="paystack-webhook"),
     path("payments/<uuid:pk>/", views.member_account_only(views.payment_detail), name="payment-detail"),
+    path("payments/<uuid:pk>/verify/", views.member_account_only(views.payment_verify), name="payment-verify"),
     path("payments/<uuid:pk>/dog/", views.member_account_only(views.payment_submit_dog), name="payment-submit-dog"),
     path("payments/<uuid:pk>/litter/", views.member_account_only(views.payment_submit_litter), name="payment-submit-litter"),
     path("payments/<uuid:pk>/puppy/", views.member_account_only(views.payment_submit_puppy), name="payment-submit-puppy"),
