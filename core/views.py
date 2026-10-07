@@ -8,10 +8,11 @@ from django.core.cache import cache
 from django.db import connection
 from django.db.models import Prefetch, Q
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 
 from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
+from registry.permissions import can_manage_verification, can_review_submissions, is_staff_identity
 from registry.querysets import one_dog_per_kennel, with_stored_images
 
 from .seo import json_ld
@@ -179,6 +180,13 @@ def home(request):
 
 @login_required
 def dashboard(request):
+    if is_staff_identity(request.user):
+        if can_manage_verification(request.user):
+            return redirect("accounts:verification-dashboard")
+        if can_review_submissions(request.user):
+            return redirect("accounts:moderation")
+        return redirect("home")
+
     memberships = list(
         request.user.kennel_memberships.select_related("kennel").order_by("created_at")
     )
