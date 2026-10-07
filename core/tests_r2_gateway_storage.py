@@ -30,6 +30,24 @@ class R2GatewayRetryTests(SimpleTestCase):
 
         self.assertEqual(signature.call_args.args[0], "dedicated-r2-key")
 
+    def test_request_uses_explicit_application_http_identity(self):
+        storage = CloudflareR2GatewayStorage(
+            base_url="https://media.example.test",
+            timeout=1,
+        )
+        with patch(
+            "core.r2_gateway_storage.urllib.request.urlopen",
+            return_value=BytesIO(b"ok"),
+        ) as urlopen:
+            storage._request("dogs/test.jpg", method="HEAD")
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.get_header("User-agent"),
+            "CaneCorsoAncestry-Media/1.0",
+        )
+        self.assertIn("application/json", request.get_header("Accept"))
+
     def test_transient_gateway_error_is_retried(self):
         storage = CloudflareR2GatewayStorage(
             base_url="https://media.example.test",
