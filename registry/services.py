@@ -161,7 +161,7 @@ def _require_paid_submission(submission):
     if payment.kennel_id != submission.kennel_id:
         raise ValueError("The payment belongs to a different kennel.")
     if submission.kennel is None or not submission.kennel.verified_at:
-        raise ValueError("The kennel must be administrator-verified before publication.")
+        raise ValueError("The kennel must be moderator-verified before publication.")
     if not KennelMembership.objects.filter(
         kennel=submission.kennel,
         user=submission.submitted_by,
@@ -265,7 +265,7 @@ def request_submission_evidence(submission, reviewer, reason):
 @transaction.atomic
 def request_high_risk_override(submission, reviewer, reason):
     if not can_review_flagged_submissions(reviewer):
-        raise ValueError("Only a senior reviewer or owner can request a high-risk override.")
+        raise ValueError("Only a Senior Moderator or Super Admin can request a high-risk override.")
     reason = (reason or "").strip()
     if not reason:
         raise ValueError("An override reason is required.")
@@ -316,9 +316,9 @@ def reject_high_risk_override(submission, reviewer, reason):
     if pending_override is None:
         raise ValueError("No high-risk override is awaiting second review.")
     if pending_override.reviewer_id == reviewer.pk:
-        raise ValueError("The second reviewer must be a different administrator.")
+        raise ValueError("The second reviewer must be a different Senior Moderator or Super Admin.")
     if not can_second_approve(reviewer):
-        raise ValueError("Only a senior reviewer or owner can complete second review.")
+        raise ValueError("Only a Senior Moderator or Super Admin can complete second review.")
     _create_review(
         submission,
         reviewer,
@@ -374,7 +374,7 @@ def approve_submission(
     resolution_notes = (resolution_notes or "").strip()
     if blocking_findings:
         if allow_override and not can_review_flagged_submissions(reviewer):
-            raise ValueError("Only a senior reviewer or owner can override automated warnings.")
+            raise ValueError("Only a Senior Moderator or Super Admin can override automated warnings.")
         if not allow_override:
             raise ValueError(
                 "Automated verification warnings are present. Use Approve with override and provide a reason."
@@ -383,16 +383,16 @@ def approve_submission(
             raise ValueError("An override reason is required.")
         if submission.requires_second_review:
             if override_review is None:
-                raise ValueError("High-risk findings require a second administrator.")
+                raise ValueError("High-risk findings require a second Senior Moderator or Super Admin.")
             if (
                 override_review.submission_id != submission.pk
                 or override_review.action != SubmissionReview.Action.OVERRIDE_REQUESTED
             ):
                 raise ValueError("The high-risk override request is invalid.")
             if override_review.reviewer_id == reviewer.pk:
-                raise ValueError("The second reviewer must be a different administrator.")
+                raise ValueError("The second reviewer must be a different Senior Moderator or Super Admin.")
             if not can_second_approve(reviewer):
-                raise ValueError("Only a senior reviewer or owner can complete second review.")
+                raise ValueError("Only a Senior Moderator or Super Admin can complete second review.")
 
     payload = submission.payload or {}
     review_diff = submission_diff(submission)
@@ -462,7 +462,7 @@ def approve_submission(
             dog=dog,
             state=verification_state,
             reviewer=reviewer,
-            note="Created and published after administrator verification of the submitted record.",
+            note="Created and published after moderator verification of the submitted record.",
         )
 
         registration = payload.get("registration", "").strip()
@@ -879,7 +879,7 @@ def reject_submission(submission, reviewer, resolution_notes=""):
     ]
     submission.refresh_from_db()
     if blocking_findings and not can_review_flagged_submissions(reviewer):
-        raise ValueError("A senior reviewer or owner must decide a flagged submission.")
+        raise ValueError("A Senior Moderator or Super Admin must decide a flagged submission.")
     review_diff = submission_diff(submission)
     submission.status = Submission.Status.REJECTED
     submission.reviewed_by = reviewer
