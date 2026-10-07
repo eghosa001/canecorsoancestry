@@ -142,8 +142,9 @@ jobs:
             -H "x-r2-content-sha256: $digest" \
             -H "x-r2-signature: $signature" \
             --data-binary "$body" "$base/_r2/$key" || true)"
-          if [ "$put_status" != "201" ]; then
-            echo "::error::Signed R2 upload failed; HTTP $put_status"
+          if [ "$put_status" != "201" ] ||
+             ! grep -q '"r2_verified"[[:space:]]*:[[:space:]]*true' /tmp/r2-put.json; then
+            echo "::error::Signed R2 upload was not verified by the gateway; HTTP $put_status"
             cat /tmp/r2-put.json 2>/dev/null || true
             exit 1
           fi
@@ -205,6 +206,7 @@ jobs:
             -H "x-r2-signature: $signature" \
             --data-binary @/tmp/r2-smoke.jpg "$base/_r2/$key" || true)"
           test "$put_status" = "201"
+          grep -q '"r2_verified"[[:space:]]*:[[:space:]]*true' /tmp/r2-image-put.json
 
           empty_digest="$(printf '' | sha256sum | awk '{print $1}')"
           timestamp="$(date +%s)"
