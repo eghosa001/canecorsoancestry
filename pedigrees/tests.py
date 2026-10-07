@@ -19,6 +19,26 @@ from .services import (
 
 
 # Virtual mating accuracy/performance coverage.
+class PedigreeIndexUxTests(TestCase):
+    def test_pedigree_index_is_paginated_for_browse_and_search(self):
+        for index in range(19):
+            Dog.objects.create(
+                name=f"Paged Pedigree {index:02d}",
+                slug=f"paged-pedigree-{index:02d}",
+                is_public=True,
+            )
+
+        browse = self.client.get(reverse("pedigrees:index"))
+        search = self.client.get(reverse("pedigrees:index"), {"q": "Paged Pedigree"})
+
+        self.assertEqual(browse.context["result_count"], 19)
+        self.assertEqual(len(browse.context["dogs"]), 18)
+        self.assertTrue(browse.context["page_obj"].has_next())
+        self.assertEqual(search.context["result_count"], 19)
+        self.assertEqual(len(search.context["dogs"]), 18)
+        self.assertTrue(search.context["page_obj"].has_next())
+
+
 class PedigreeServiceTests(TestCase):
     def test_repeated_ancestor_uses_one_canonical_dog_record(self):
         common = Dog.objects.create(name="Common Ancestor", slug="common", sex=Dog.Sex.MALE)
