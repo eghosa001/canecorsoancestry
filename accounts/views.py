@@ -724,7 +724,7 @@ def payment_submit_dog(request, pk):
             "form": form,
             "eyebrow": "Paid dog submission",
             "title": f"Submit a dog · {payment.kennel.name}",
-            "intro": "Add the dog's details and, if available, its primary profile photo in this same submission. Nothing is published until an administrator approves it.",
+            "intro": "Add the dog's details and, if available, its primary profile photo in this same submission. Nothing is published until an authorized Moderator approves it.",
             "button_label": "Submit for admin verification",
             "multipart": True,
         },
@@ -796,7 +796,7 @@ def payment_submit_litter(request, pk):
             "form": form,
             "eyebrow": "Paid litter submission",
             "title": f"Submit a litter · {payment.kennel.name}",
-            "intro": "The litter and its puppies remain private until an administrator verifies and approves the records.",
+            "intro": "The litter and its puppies remain private until an authorized Moderator verifies and approves the records.",
             "button_label": "Submit litter for admin verification",
         },
     )
@@ -1068,7 +1068,7 @@ def submit_health_record(request, pk):
             verify_submission(submission)
             messages.success(
                 request,
-                "Health/DNA result submitted for administrator verification.",
+                "Health/DNA result submitted for Moderator verification.",
             )
             return redirect("accounts:submissions")
 
@@ -1081,7 +1081,7 @@ def submit_health_record(request, pk):
             "title": f"Submit a health/DNA result for {dog.name}",
             "current_photo_url": _current_dog_photo_url(dog),
             "intro": (
-                "Structured results remain pending until an administrator checks "
+                "Structured results remain pending until an authorized Moderator checks "
                 "the supporting evidence. The uploaded certificate stays private "
                 "unless its visibility is separately approved."
             ),
@@ -1635,7 +1635,7 @@ def review_submission(request, pk, decision):
         elif decision == "reject":
             if flagged and not can_review_flagged_submissions(request.user):
                 raise ValueError(
-                    "A senior reviewer or owner must decide a flagged submission."
+                    "A Senior Moderator or Super Admin must decide a flagged submission."
                 )
             reject_submission(submission, request.user, notes)
             messages.success(request, "Submission rejected.")
@@ -1647,7 +1647,7 @@ def review_submission(request, pk, decision):
         elif decision == "override":
             if not can_review_flagged_submissions(request.user):
                 raise ValueError(
-                    "Only a senior reviewer or owner can override an automated warning."
+                    "Only a Senior Moderator or Super Admin can override an automated warning."
                 )
             if not flagged:
                 raise ValueError("There is no current warning to override.")
@@ -1655,7 +1655,7 @@ def review_submission(request, pk, decision):
                 request_high_risk_override(submission, request.user, notes)
                 messages.success(
                     request,
-                    "High-risk override recorded. A different senior reviewer or owner must approve it before publication.",
+                    "High-risk override recorded. A different Senior Moderator or Super Admin must approve it before publication.",
                 )
             else:
                 approve_submission(
@@ -1669,7 +1669,7 @@ def review_submission(request, pk, decision):
         elif decision == "second_approve":
             if not can_second_approve(request.user):
                 raise ValueError(
-                    "Only a senior reviewer or owner can complete second review."
+                    "Only a Senior Moderator or Super Admin can complete second review."
                 )
             override_review = (
                 submission.review_decisions.filter(
