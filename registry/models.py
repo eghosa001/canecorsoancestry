@@ -85,6 +85,21 @@ class KennelMembership(models.Model):
             models.UniqueConstraint(fields=("kennel", "user"), name="unique_kennel_member")
         ]
 
+    def clean(self):
+        super().clean()
+        if not self.user_id:
+            return
+        if self.user.is_superuser or ModerationRoleAssignment.objects.filter(
+            user_id=self.user_id
+        ).exists():
+            raise ValidationError(
+                {"user": "Staff accounts cannot hold kennel membership. Use the separate member account."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
 
 class Dog(models.Model):
     class Sex(models.TextChoices):
@@ -645,6 +660,21 @@ class Submission(models.Model):
                 name="submission_verify_queue_idx",
             ),
         ]
+
+    def clean(self):
+        super().clean()
+        if not self.submitted_by_id:
+            return
+        if self.submitted_by.is_superuser or ModerationRoleAssignment.objects.filter(
+            user_id=self.submitted_by_id
+        ).exists():
+            raise ValidationError(
+                {"submitted_by": "Staff accounts cannot submit member records. Use the separate member account."}
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     @property
     def assigned_to_admin_label(self):
