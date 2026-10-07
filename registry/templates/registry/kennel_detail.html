@@ -20,7 +20,7 @@
   <div class="dog-card-grid">
     {% for dog in dogs %}
       <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
-        <div class="dog-card-media"><img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}" loading="lazy" decoding="async"></div>
+        <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}" loading="lazy" decoding="async">{% else %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% endif %}</div>
         <div class="dog-card-body"><h3>{{ dog.name }}</h3><p>{{ dog.colour|default:"Colour not recorded" }} · {{ dog.get_sex_display }}</p></div>
       </a>
     {% empty %}<div class="empty-state"><p>{% if public_dog_total %}This kennel has public pedigree records, but no public dog photos yet.{% else %}No public dogs are linked yet.{% endif %}</p></div>{% endfor %}
