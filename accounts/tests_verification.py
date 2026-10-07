@@ -237,7 +237,7 @@ class VerificationGovernanceTests(TestCase):
 
     def test_normal_reviewer_cannot_override_red_finding(self):
         submission = self._puppy_submission()
-        with self.assertRaisesRegex(ValueError, "senior reviewer or owner"):
+        with self.assertRaisesRegex(ValueError, "Senior Moderator or Super Admin"):
             request_high_risk_override(
                 submission,
                 self.reviewer,
