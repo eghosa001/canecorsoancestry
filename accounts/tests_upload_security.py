@@ -1,6 +1,9 @@
+from io import BytesIO
+
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase
+from PIL import Image
 
 from accounts.forms import (
     DOCUMENT_MAX_BYTES,
@@ -27,6 +30,22 @@ class UploadValidationTests(SimpleTestCase):
         )
         self.assertFalse(form.is_valid())
         self.assertIn("attachment", form.errors)
+
+    def test_valid_jfif_thumbnail_is_accepted_as_jpeg(self):
+        buffer = BytesIO()
+        Image.new("RGB", (24, 24)).save(buffer, format="JPEG")
+        form = DogImageSubmissionForm(
+            data={"caption": "", "notes": ""},
+            files={
+                "attachment": SimpleUploadedFile(
+                    "dog-thumbnail.jfif",
+                    buffer.getvalue(),
+                    content_type="image/jpeg",
+                )
+            },
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
 
     def test_image_size_limit_is_enforced_before_decoding(self):
         upload = SimpleUploadedFile("dog.jpg", b"\xff\xd8\xff")
