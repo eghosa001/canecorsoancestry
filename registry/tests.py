@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Dog, DogImage, DogRegistration, Kennel, RegistrationAuthority
+from .models import Dog, DogImage, DogRegistration, HealthRecord, Kennel, RegistrationAuthority, VerificationState
 from .services import duplicate_candidates
 
 
@@ -227,6 +227,26 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "COI")
         self.assertContains(response, "12.50%")
+
+    def test_public_profile_hides_internal_source_attached_label(self):
+        dog = Dog.objects.create(
+            name="Public Verification Dog",
+            slug="public-verification-dog",
+            is_public=True,
+            verification_state=VerificationState.SOURCE_ATTACHED,
+        )
+        HealthRecord.objects.create(
+            dog=dog,
+            test_type="Hips",
+            result="Good",
+            verification_state=VerificationState.SOURCE_ATTACHED,
+        )
+
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Source attached")
+        self.assertContains(response, "Not independently verified")
 
     def test_public_dog_profile_bounds_large_relationship_previews(self):
         sire = Dog.objects.create(
