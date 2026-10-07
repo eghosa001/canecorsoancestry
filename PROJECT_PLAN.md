@@ -251,9 +251,9 @@ Later, Bellissimo may consume a stable public ancestry API from Cane Corso Ances
 - SEO/structured data
 - deployment and production hardening
 
-## First-release exclusions
+## Commercial submission model
 
-Do not prioritize payments or paid registration workflows in the first release. Build pedigree integrity, search, ancestry exploration, kennel participation and verification first.
+The owner has since approved Paystack-backed submission packages for verified kennel members. Payment grants a submission/review slot only; it does not register, verify or publish a dog automatically. Keep payment state separate from moderation state, preserve the ₦500 single-dog / ₦1,500 multi-dog / ₦1,000 litter pricing unless the owner changes it, and require administrator approval before any paid pedigree record becomes public.
 
 ## Definition of done for the initial product
 
