@@ -1,6 +1,8 @@
+import hashlib
 import hmac
 import logging
 import os
+import time
 import uuid
 from urllib.parse import urlparse
 
@@ -96,26 +98,60 @@ def storage_probe(request):
     key = f"smoke/runtime/{uuid.uuid4().hex}.jpg"
     payload = b"\xff\xd8\xff\xe0cca-runtime-r2-probe\xff\xd9"
     saved_name = ""
+    stage = "exists"
+    signing_key = getattr(settings, "R2_GATEWAY_SIGNING_KEY", "")
+    diagnostics = {
+        "server_epoch": int(time.time()),
+        "signing_fingerprint": hashlib.sha256(
+            signing_key.encode("utf-8")
+        ).hexdigest()[:16],
+    }
+
     try:
-        saved_name = default_storage.save(key, ContentFile(payload, name="probe.jpg"))
+        # Exercise each storage operation separately so a 403 can be attributed
+        # to the exact signed request instead of a generic save failure.
+        default_storage.exists(key)
+
+        stage = "put"
+        if hasattr(default_storage, "save_exact"):
+            saved_name = default_storage.save_exact(
+                key,
+                ContentFile(payload, name="probe.jpg"),
+            )
+        else:
+            saved_name = default_storage.save(
+                key,
+                ContentFile(payload, name="probe.jpg"),
+            )
+
+        stage = "get"
         with default_storage.open(saved_name, "rb") as handle:
             restored = handle.read()
         if restored != payload:
             raise OSError("R2 read-back did not match the uploaded bytes.")
     except Exception as exc:
-        logger.exception("Live storage probe failed")
+        logger.exception("Live storage probe failed at stage=%s", stage)
         response = JsonResponse(
             {
                 "status": "unhealthy",
                 "storage": "r2",
+                "stage": stage,
                 "error_type": type(exc).__name__,
                 "http_status": getattr(exc, "code", None),
                 "reason": str(getattr(exc, "reason", "") or "")[:120],
+                **diagnostics,
             },
             status=503,
         )
     else:
-        response = JsonResponse({"status": "ok", "storage": "r2"})
+        response = JsonResponse(
+            {
+                "status": "ok",
+                "storage": "r2",
+                "stage": "complete",
+                **diagnostics,
+            }
+        )
     finally:
         if saved_name:
             try:
@@ -125,7 +161,6 @@ def storage_probe(request):
 
     response["Cache-Control"] = "no-store"
     return response
-
 
 def robots_txt(request):
     body = "\n".join([
