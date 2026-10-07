@@ -1,14 +1,19 @@
+import hmac
 import logging
 import os
+import uuid
 from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.db import connection
 from django.db.models import Prefetch, Q
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 from django.urls import reverse
 
 from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
@@ -75,6 +80,38 @@ def healthz(request):
                 or ""
             ),
         })
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@require_POST
+def storage_probe(request):
+    """Private deploy-time check of the exact Django -> R2 media path."""
+    supplied = request.headers.get("X-CCA-Storage-Probe", "")
+    if not supplied or not hmac.compare_digest(supplied, settings.SECRET_KEY):
+        raise Http404
+
+    key = f"smoke/runtime/{uuid.uuid4().hex}.jpg"
+    payload = b"\xff\xd8\xff\xe0cca-runtime-r2-probe\xff\xd9"
+    saved_name = ""
+    try:
+        saved_name = default_storage.save(key, ContentFile(payload, name="probe.jpg"))
+        with default_storage.open(saved_name, "rb") as handle:
+            restored = handle.read()
+        if restored != payload:
+            raise OSError("R2 read-back did not match the uploaded bytes.")
+    except Exception:
+        logger.exception("Live storage probe failed")
+        response = JsonResponse({"status": "unhealthy", "storage": "r2"}, status=503)
+    else:
+        response = JsonResponse({"status": "ok", "storage": "r2"})
+    finally:
+        if saved_name:
+            try:
+                default_storage.delete(saved_name)
+            except Exception:
+                logger.exception("Live storage probe cleanup failed")
+
     response["Cache-Control"] = "no-store"
     return response
 
