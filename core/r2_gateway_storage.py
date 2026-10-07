@@ -94,10 +94,15 @@ class CloudflareR2GatewayStorage(Storage):
         except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
             raise OSError("R2 upload returned an invalid verification response.") from exc
 
+        try:
+            stored_size = int(payload.get("size", -1))
+        except (TypeError, ValueError) as exc:
+            raise OSError("R2 upload returned an invalid stored size.") from exc
+
         if (
             payload.get("status") != "stored"
             or payload.get("r2_verified") is not True
-            or int(payload.get("size", -1)) != len(data)
+            or stored_size != len(data)
         ):
             raise OSError("R2 could not verify the uploaded file.")
 
