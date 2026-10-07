@@ -39,4 +39,9 @@ def site_metadata(request):
         "account_name": account_name,
         "staff_identity": staff_identity,
         "staff_role": staff_role,
+        "staff_role_label": {
+            "owner": "Super Admin",
+            "senior": "Senior Moderator",
+            "reviewer": "Moderator",
+        }.get(staff_role, "Staff"),
     }
