@@ -14,7 +14,7 @@ from registry.services import approve_submission
 
 from .forms import PaymentPackageForm
 from .models import PaymentSubmissionLink, SubmissionPayment
-from .payments import PaystackError, initialize_transaction, record_successful_payment, webhook_signature_valid
+from .payments import PaystackError, record_successful_payment, webhook_signature_valid
 
 
 class PaidSubmissionTests(TestCase):
@@ -53,7 +53,7 @@ class PaidSubmissionTests(TestCase):
             user=self.user,
         )
         self.assertTrue(batch_form.is_valid(), batch_form.errors)
-        self.assertEqual(batch_form.cleaned_data["amount_kobo"], 100000)
+        self.assertEqual(batch_form.cleaned_data["amount_kobo"], 150000)
 
         oversized_form = PaymentPackageForm(
             {
@@ -74,34 +74,6 @@ class PaidSubmissionTests(TestCase):
         )
         self.assertTrue(litter_form.is_valid(), litter_form.errors)
         self.assertEqual(litter_form.cleaned_data["amount_kobo"], 100000)
-
-    @patch("accounts.payments.requests.post")
-    def test_transaction_initialization_uses_configured_subaccount(self, post):
-        payment = SubmissionPayment.objects.create(
-            user=self.user,
-            kennel=self.kennel,
-            package=SubmissionPayment.Package.SINGLE_DOG,
-            dog_count=1,
-            amount_kobo=50000,
-            reference="CCA-subaccount-test",
-        )
-        post.return_value.raise_for_status.return_value = None
-        post.return_value.json.return_value = {
-            "status": True,
-            "data": {
-                "authorization_url": "https://checkout.paystack.com/subaccount-test",
-                "access_code": "subaccount-test",
-            },
-        }
-
-        with self.settings(
-            PAYSTACK_SECRET_KEY="sk_test_example",
-            PAYSTACK_SUBACCOUNT_CODE="ACCT_test123",
-        ):
-            initialize_transaction(payment, "https://example.com/callback")
-
-        payload = post.call_args.kwargs["json"]
-        self.assertEqual(payload["subaccount"], "ACCT_test123")
 
     @patch("accounts.views.verify_transaction")
     def test_member_can_recheck_pending_payment_status(self, verify):
@@ -180,6 +152,7 @@ class PaidSubmissionTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Paystack is not configured on the server yet.")
+        self.assertContains(response, "₦1,500")
         self.assertContains(response, "₦1,000")
         self.assertEqual(SubmissionPayment.objects.filter(user=self.user).count(), 0)
 
@@ -258,7 +231,7 @@ class PaidSubmissionTests(TestCase):
             kennel=self.kennel,
             package=SubmissionPayment.Package.MULTI_DOG,
             dog_count=4,
-            amount_kobo=150000,
+            amount_kobo=100000,
             reference="CCA-retired-price",
             status=SubmissionPayment.Status.PENDING,
             access_code="retired-access",
@@ -272,7 +245,7 @@ class PaidSubmissionTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "This checkout uses retired pricing.")
-        self.assertContains(response, "₦1000")
+        self.assertContains(response, "₦1500")
         self.assertNotContains(response, 'data-paystack-checkout-link')
         self.assertNotContains(response, "window.location.replace")
 

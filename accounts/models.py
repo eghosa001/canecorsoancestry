@@ -69,7 +69,7 @@ class SubmissionPayment(models.Model):
         if package == cls.Package.SINGLE_DOG:
             return 50_000
         if package == cls.Package.MULTI_DOG:
-            return 100_000
+            return 150_000
         if package == cls.Package.LITTER:
             return 100_000
         raise ValidationError("Unknown submission package.")
