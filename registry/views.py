@@ -31,6 +31,7 @@ from .models import (
     Kennel,
     Litter,
     Submission,
+    public_verification_label,
 )
 from .permissions import can_contribute_to_dog
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_stored_images
@@ -307,7 +308,7 @@ def dog_detail(request, slug):
             {"@type": "PropertyValue", "name": "Sex", "value": dog.get_sex_display()},
             {"@type": "PropertyValue", "name": "Colour", "value": dog.colour or "Not recorded"},
             {"@type": "PropertyValue", "name": "Country", "value": dog.country or "Not recorded"},
-            {"@type": "PropertyValue", "name": "Verification", "value": dog.get_verification_state_display()},
+            {"@type": "PropertyValue", "name": "Verification", "value": public_verification_label(dog.verification_state)},
         ],
     }
     if dog.date_of_birth:
