@@ -6765,3 +6765,12 @@ html[data-theme="light"] .hero-search input {
     padding: 8px 0;
   }
 }
+
+
+/* Final UX audit: four homepage metrics should read as one compact set. */
+.hero-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.hero-stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 760px) {
+  .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero-stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
