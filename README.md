@@ -58,7 +58,7 @@ New pedigree records use Paystack-backed submission packages:
 
 - **₦500** — one dog;
 - **₦1,500** — 2–4 dogs from the same verified kennel;
-- **₦200** — one genuine litter plus the puppies belonging to that litter.
+- **₦1,000** — one genuine litter plus the puppies belonging to that litter.
 
 Payment never publishes a record. The kennel/owner must already be approved, and every submitted dog or litter remains in the admin moderation queue until an administrator verifies and approves it. Litter-package eligibility is enforced server-side and conflicting litter, identity, pedigree or payment facts are routed to explainable admin review rather than silently published.
 
