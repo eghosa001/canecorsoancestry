@@ -2,8 +2,32 @@ name: Full release audit
 
 on:
   pull_request:
+    paths:
+      - "accounts/**"
+      - "config/**"
+      - "core/**"
+      - "pedigrees/**"
+      - "registry/**"
+      - "manage.py"
+      - "requirements.txt"
+      - "Dockerfile"
+      - "src/site-edge.js"
+      - "scripts/test_site_edge_cache.mjs"
+      - ".github/workflows/release-audit.yml"
   push:
     branches: [main]
+    paths:
+      - "accounts/**"
+      - "config/**"
+      - "core/**"
+      - "pedigrees/**"
+      - "registry/**"
+      - "manage.py"
+      - "requirements.txt"
+      - "Dockerfile"
+      - "src/site-edge.js"
+      - "scripts/test_site_edge_cache.mjs"
+      - ".github/workflows/release-audit.yml"
   workflow_dispatch:
 
 permissions:
