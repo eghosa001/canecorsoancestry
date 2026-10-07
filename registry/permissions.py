@@ -47,6 +47,8 @@ def is_staff_identity(user):
     """Staff identities are permanently separate from member identities."""
     if not getattr(user, "is_authenticated", False):
         return False
+    if has_member_identity(user):
+        return False
     if getattr(user, "is_superuser", False):
         return True
     try:
