@@ -40,6 +40,9 @@ def initialize_transaction(payment, callback_url):
             }
         ),
     }
+    subaccount_code = getattr(settings, "PAYSTACK_SUBACCOUNT_CODE", "").strip()
+    if subaccount_code:
+        payload["subaccount"] = subaccount_code
     try:
         response = requests.post(
             f"{settings.PAYSTACK_BASE_URL}/transaction/initialize",
