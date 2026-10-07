@@ -12,7 +12,7 @@ from django.shortcuts import render
 from django.urls import reverse
 
 from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
-from registry.querysets import one_dog_per_kennel, with_stored_images
+from registry.querysets import with_stored_images
 
 from .seo import json_ld
 
@@ -87,21 +87,50 @@ def robots_txt(request):
     return HttpResponse(body, content_type="text/plain; charset=utf-8")
 
 
-def home(request):
-    image_candidates = list(
-        _display_dogs(
-            one_dog_per_kennel(
-                with_stored_images(Dog.objects.filter(is_public=True))
-            ).order_by("-search_count", "-updated_at", "name"),
-            include_sources=False,
-        )[:4]
+def _load_featured_dogs():
+    """Return four popular imaged dogs without a whole-table window sort."""
+    cache_key = "cca:home:featured-dog-ids:v1"
+    featured_ids = cache.get(cache_key)
+
+    def load(ids):
+        if not ids:
+            return []
+        rows = list(
+            _display_dogs(
+                Dog.objects.filter(pk__in=ids, is_public=True),
+                include_sources=False,
+            )
+        )
+        by_id = {dog.pk: dog for dog in rows}
+        return [by_id[dog_id] for dog_id in ids if dog_id in by_id]
+
+    if featured_ids:
+        featured = load(featured_ids)
+        if len(featured) == len(featured_ids):
+            return featured
+
+    candidate_rows = list(
+        with_stored_images(Dog.objects.filter(is_public=True))
+        .order_by("-search_count", "-updated_at", "name")
+        .values_list("pk", "kennel_id")[:96]
     )
-    _attach_source_image_urls(image_candidates)
-    featured_dogs = [
-        dog
-        for dog in image_candidates
-        if dog.display_images or dog.source_image_url
-    ][:4]
+    seen_groups = set()
+    featured_ids = []
+    for dog_id, kennel_id in candidate_rows:
+        group_id = kennel_id or dog_id
+        if group_id in seen_groups:
+            continue
+        seen_groups.add(group_id)
+        featured_ids.append(dog_id)
+        if len(featured_ids) == 4:
+            break
+
+    cache.set(cache_key, featured_ids, 300)
+    return load(featured_ids)
+
+
+def home(request):
+    featured_dogs = _load_featured_dogs()
     public_stats = cache.get("cca:home:public-stats:v3")
     if public_stats is None:
         public_stats = {
