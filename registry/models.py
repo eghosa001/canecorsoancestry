@@ -266,21 +266,6 @@ class Dog(models.Model):
         return super().save(*args, **kwargs)
 
     @property
-    def public_label(self):
-        """Human-facing litter name while keeping generated codes internal."""
-        if self.code and not self.code.startswith("AUTO-"):
-            return self.code
-        if self.sire_id and self.dam_id:
-            return f"{self.sire.name} × {self.dam.name}"
-        if self.dam_id:
-            return f"{self.dam.name} litter"
-        if self.sire_id:
-            return f"{self.sire.name} litter"
-        if self.date_of_birth:
-            return f"Litter born {self.date_of_birth:%d %b %Y}"
-        return "Litter"
-
-    @property
     def record_locked_by_admin_label(self):
         if not self.record_locked_by_id:
             return ""
@@ -349,6 +334,21 @@ class Litter(models.Model):
                 raise ValidationError({"sire": "The sire must be born before the litter."})
             if self.dam and self.dam.date_of_birth and self.dam.date_of_birth >= self.date_of_birth:
                 raise ValidationError({"dam": "The dam must be born before the litter."})
+
+    @property
+    def public_label(self):
+        """Human-facing litter name while keeping generated codes internal."""
+        if self.code and not self.code.startswith("AUTO-"):
+            return self.code
+        if self.sire_id and self.dam_id:
+            return f"{self.sire.name} × {self.dam.name}"
+        if self.dam_id:
+            return f"{self.dam.name} litter"
+        if self.sire_id:
+            return f"{self.sire.name} litter"
+        if self.date_of_birth:
+            return f"Litter born {self.date_of_birth:%d %b %Y}"
+        return "Litter"
 
     @property
     def record_locked_by_admin_label(self):
