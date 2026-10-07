@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}{{ litter.code }} · Cane Corso Ancestry{% endblock %}
+{% block title %}{{ litter.public_label }} · Cane Corso Ancestry{% endblock %}
 {% block content %}
 <section class="page-shell">
   <header class="page-heading">
     <p class="eyebrow">Litter</p>
-    <h1>{{ litter.code }}</h1>
+    <h1>{{ litter.public_label }}</h1>
     <p>{{ litter.date_of_birth|default:"Date of birth not recorded" }}{% if litter.kennel %} · <a class="text-link" href="{% url 'registry:kennel-detail' litter.kennel.slug %}">{{ litter.kennel.name }}</a>{% endif %}</p>
   </header>
 
