@@ -572,7 +572,7 @@ def litter_detail(request, pk):
             Dog.objects.filter(litter=litter, is_public=True)
         ).order_by("name")
     )
-    _attach_source_images_for_missing(offspring)
+    _attach_source_image_urls(offspring)
     imaged_offspring = [
         dog
         for dog in offspring
