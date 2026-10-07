@@ -306,13 +306,13 @@ class DogSubmissionForm(forms.Form):
         required=False,
         label="Primary photo",
         widget=forms.ClearableFileInput(
-            attrs={"accept": "image/jpeg,image/png,image/webp"}
+            attrs={"accept": "image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp"}
         ),
         validators=[
-            FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
+            FileExtensionValidator(["jpg", "jpeg", "jpe", "jfif", "png", "webp"]),
             validate_image_upload,
         ],
-        help_text="Optional. JPG, PNG or WebP, up to 10 MB. This becomes the dog's first profile photo after approval.",
+        help_text="Optional. JPEG/JPG/JFIF, PNG or WebP, up to 10 MB. This becomes the dog's first profile photo after approval.",
     )
     photo_caption = forms.CharField(
         max_length=220,
@@ -416,13 +416,13 @@ class LitterPuppySubmissionForm(forms.Form):
         required=False,
         label="Primary photo",
         widget=forms.ClearableFileInput(
-            attrs={"accept": "image/jpeg,image/png,image/webp"}
+            attrs={"accept": "image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp"}
         ),
         validators=[
-            FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
+            FileExtensionValidator(["jpg", "jpeg", "jpe", "jfif", "png", "webp"]),
             validate_image_upload,
         ],
-        help_text="Optional. JPG, PNG or WebP, up to 10 MB. It becomes the puppy's first profile photo after approval.",
+        help_text="Optional. JPEG/JPG/JFIF, PNG or WebP, up to 10 MB. It becomes the puppy's first profile photo after approval.",
     )
     photo_caption = forms.CharField(
         max_length=220,
@@ -519,13 +519,13 @@ class DogImageSubmissionForm(forms.Form):
     attachment = forms.FileField(
         label="Photo",
         widget=forms.ClearableFileInput(
-            attrs={"accept": "image/jpeg,image/png,image/webp"}
+            attrs={"accept": "image/jpeg,.jpg,.jpeg,.jpe,.jfif,image/png,image/webp"}
         ),
         validators=[
-            FileExtensionValidator(["jpg", "jpeg", "png", "webp"]),
+            FileExtensionValidator(["jpg", "jpeg", "jpe", "jfif", "png", "webp"]),
             validate_image_upload,
         ],
-        help_text="JPG, PNG or WebP, up to 10 MB.",
+        help_text="JPEG/JPG/JFIF, PNG or WebP, up to 10 MB.",
     )
     caption = forms.CharField(max_length=220, required=False)
     is_primary = forms.BooleanField(required=False)
