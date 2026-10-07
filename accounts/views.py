@@ -5,6 +5,7 @@ import logging
 import urllib.error
 from urllib.parse import urlparse
 import uuid
+from functools import wraps
 
 from django.contrib import messages
 from django.conf import settings
@@ -59,6 +60,9 @@ from registry.permissions import (
     can_review_flagged_submissions,
     can_review_submissions,
     can_second_approve,
+    can_use_member_features,
+    has_member_identity,
+    is_staff_identity,
     admin_public_label,
     moderation_role,
 )
@@ -83,6 +87,16 @@ from pedigrees.services import pedigree_analysis, pedigree_export_rows
 logger = logging.getLogger(__name__)
 
 
+def member_account_only(view_func):
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if request.user.is_authenticated and not can_use_member_features(request.user):
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+
+    return wrapped
+
+
 from .models import PaymentSubmissionLink, Profile, SubmissionPayment
 
 from .forms import (
@@ -102,6 +116,7 @@ from .forms import (
     HealthRecordSubmissionForm,
     MemberProfileForm,
     MemberSignUpForm,
+    ModeratorAccountCreateForm,
     PaymentPackageForm,
     MergeDogsForm,
     ReviewSubmissionForm,
