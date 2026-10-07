@@ -9,6 +9,7 @@ from registry.models import (
     DogImage,
     Kennel,
     KennelMembership,
+    ModerationRoleAssignment,
     Submission,
 )
 
@@ -21,7 +22,10 @@ class CloudflareMediaAccessTests(TestCase):
         self.staff = User.objects.create_user(
             username="staff",
             password="pass",
-            is_staff=True,
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.staff,
+            role=ModerationRoleAssignment.Role.REVIEWER,
         )
         self.kennel = Kennel.objects.create(name="Test Kennel", slug="test-kennel")
         KennelMembership.objects.create(
@@ -45,7 +49,7 @@ class CloudflareMediaAccessTests(TestCase):
             (True, True),
         )
 
-    def test_private_document_is_limited_to_member_or_staff(self):
+    def test_private_document_is_limited_to_member_or_moderator(self):
         DogDocument.objects.create(
             dog=self.dog,
             title="Private pedigree",
@@ -83,7 +87,7 @@ class CloudflareMediaAccessTests(TestCase):
             (False, False),
         )
 
-    def test_dispute_attachment_is_owner_or_staff_only(self):
+    def test_dispute_attachment_is_owner_or_moderator_only(self):
         DisputeCase.objects.create(
             dog=self.dog,
             opened_by=self.owner,
