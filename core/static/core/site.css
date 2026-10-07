@@ -6912,3 +6912,26 @@ html[data-theme="light"] .hero-search input {
     top: 64px;
   }
 }
+
+/* Mobile record-title containment v80. */
+@media (max-width: 760px) {
+  .page-heading,
+  .page-heading h1,
+  .profile-section-grid,
+  .profile-section-grid > *,
+  .parent-grid,
+  .parent-grid > *,
+  .compact-facts,
+  .compact-facts dd {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .page-heading h1,
+  .parent-link,
+  .parent-grid strong,
+  .compact-facts dd {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+}
