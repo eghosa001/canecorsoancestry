@@ -2,7 +2,8 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import DatabaseError, connection, transaction
-from django.db.models import Count, Exists, F, OuterRef, Prefetch, Q, Subquery
+from django.db.models import Count, Exists, F, IntegerField, OuterRef, Prefetch, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -37,7 +38,7 @@ from .permissions import can_contribute_to_dog
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_stored_images
 
 
-PROFILE_RELATION_PREVIEW_LIMIT = 30
+PROFILE_RELATION_PREVIEW_LIMIT = 18
 SEARCH_HIT_THROTTLE_SECONDS = 30
 
 
@@ -96,6 +97,26 @@ def _attach_source_image_urls(dogs):
 
 def _public_dogs_with_images():
     return with_stored_images(Dog.objects.filter(is_public=True))
+
+
+def _attach_source_images_for_missing(dogs):
+    """Load source-image metadata only for cards that do not already have stored media."""
+    missing = [dog for dog in dogs if not getattr(dog, "display_images", [])]
+    if not missing:
+        _attach_source_image_urls(dogs)
+        return
+
+    by_dog = {}
+    sources = (
+        DogSource.objects.filter(dog_id__in=[dog.pk for dog in missing])
+        .only("dog_id", "raw_payload", "verified_at", "created_at")
+        .order_by("dog_id", "-verified_at", "-created_at")
+    )
+    for source in sources:
+        by_dog.setdefault(source.dog_id, []).append(source)
+    for dog in missing:
+        dog.display_source_media = by_dog.get(dog.pk, [])
+    _attach_source_image_urls(dogs)
 
 
 def dog_suggestions(request):
@@ -165,7 +186,7 @@ def dog_search(request):
         )
     else:
         base_dogs = _public_dogs_with_images()
-    dogs = _dog_cards(base_dogs, include_sources=bool(query))
+    dogs = _dog_cards(base_dogs, include_sources=False)
     if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE, Dog.Sex.UNKNOWN}:
         dogs = dogs.filter(sex=sex)
     if country:
@@ -177,7 +198,7 @@ def dog_search(request):
         dogs = one_dog_per_kennel(dogs)
 
     dogs = dogs.order_by("name") if query else dogs.order_by("-search_count", "-updated_at", "name")
-    paginator = Paginator(dogs, 24)
+    paginator = Paginator(dogs, 18)
     if not query and not sex and not country and not kennel_slug:
         cached_count = cache.get("cca:dog-search:default-count:v1")
         if cached_count is None:
@@ -185,7 +206,7 @@ def dog_search(request):
             cache.set("cca:dog-search:default-count:v1", cached_count, 900)
         paginator.__dict__["count"] = cached_count
     page_obj = paginator.get_page(request.GET.get("page"))
-    _attach_source_image_urls(page_obj.object_list)
+    _attach_source_images_for_missing(page_obj.object_list)
     query_params = request.GET.copy()
     query_params.pop("page", None)
 
@@ -360,6 +381,7 @@ def dog_detail(request, slug):
             "relative_health": relative_health,
             "coi_percent": coi_percent,
             "coi_error": coi_error,
+            "relation_limit": relation_limit,
             "can_contribute": can_contribute_to_dog(request.user, dog),
             "structured_data": json_ld(structured_data),
         },
@@ -422,10 +444,26 @@ def pedigree_statistics(request):
 
 def kennel_list(request):
     query = request.GET.get("q", "").strip()
+    public_dog_count = (
+        Dog.objects.filter(kennel_id=OuterRef("pk"), is_public=True)
+        .values("kennel_id")
+        .annotate(total=Count("pk"))
+        .values("total")[:1]
+    )
+    public_litter_count = (
+        Litter.objects.filter(kennel_id=OuterRef("pk"), is_public=True)
+        .values("kennel_id")
+        .annotate(total=Count("pk"))
+        .values("total")[:1]
+    )
     kennels = Kennel.objects.annotate(
-        public_dog_count=Count("dogs", filter=Q(dogs__is_public=True), distinct=True),
-        public_litter_count=Count(
-            "litters", filter=Q(litters__is_public=True), distinct=True
+        public_dog_count=Coalesce(
+            Subquery(public_dog_count, output_field=IntegerField()),
+            Value(0),
+        ),
+        public_litter_count=Coalesce(
+            Subquery(public_litter_count, output_field=IntegerField()),
+            Value(0),
         ),
     )
     if query:
@@ -436,7 +474,7 @@ def kennel_list(request):
         )
     kennels = kennels.order_by("name")
 
-    paginator = Paginator(kennels, 24)
+    paginator = Paginator(kennels, 18)
     page_obj = paginator.get_page(request.GET.get("page"))
     query_params = request.GET.copy()
     query_params.pop("page", None)
@@ -457,7 +495,8 @@ def kennel_list(request):
 def kennel_detail(request, slug):
     kennel = get_object_or_404(Kennel, slug=slug)
     dog_queryset = _dog_cards(
-        Dog.objects.filter(kennel=kennel, is_public=True)
+        Dog.objects.filter(kennel=kennel, is_public=True),
+        include_sources=False,
     ).order_by("name")
     litter_queryset = (
         Litter.objects.filter(kennel=kennel, is_public=True)
@@ -465,7 +504,7 @@ def kennel_detail(request, slug):
         .order_by("-date_of_birth", "code")
     )
     dog_page = Paginator(dog_queryset, 24).get_page(request.GET.get("dogs_page"))
-    _attach_source_image_urls(dog_page.object_list)
+    _attach_source_images_for_missing(dog_page.object_list)
     litter_page = Paginator(litter_queryset, 20).get_page(request.GET.get("litters_page"))
     kennel_linked = kennel.memberships.exists()
     is_member = bool(
