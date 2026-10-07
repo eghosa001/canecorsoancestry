@@ -74,6 +74,32 @@ jobs:
           echo "::add-mask::$signing_key"
           echo "R2_GATEWAY_SIGNING_KEY=$signing_key" >> "$GITHUB_ENV"
 
+      - name: Wait for matching R2 gateway signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$MEDIA_EDGE"
+          key="smoke/signing-key-readiness"
+          empty_digest="$(printf '' | sha256sum | awk '{print $1}')"
+          accepted="0"
+          for attempt in $(seq 1 24); do
+            timestamp="$(date +%s)"
+            signature="$(R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$empty_digest" python -c 'import hashlib,hmac,os; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["R2_GATEWAY_SIGNING_KEY"].encode(), chr(10).join(["HEAD", k, t, d]).encode(), hashlib.sha256).hexdigest())')"
+            status="$(curl --connect-timeout 8 --max-time 20 -sS -o /dev/null -w '%{http_code}' -X HEAD \
+              -H "x-r2-timestamp: $timestamp" \
+              -H "x-r2-content-sha256: $empty_digest" \
+              -H "x-r2-signature: $signature" \
+              "$base/_r2/$key" || true)"
+            if [ "$status" = "404" ] || [ "$status" = "200" ]; then
+              accepted="1"
+              break
+            fi
+            echo "R2 signing key not active yet (HTTP $status); retrying."
+            sleep 5
+          done
+          test "$accepted" = "1"
+          echo "R2 gateway accepts the dedicated signing key."
+
       - name: Discover reachable Supabase session pooler
         shell: bash
         run: |
