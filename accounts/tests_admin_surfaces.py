@@ -47,6 +47,27 @@ class AdminSurfaceSmokeTests(TestCase):
         )
         verify_submission(self.submission)
 
+    def test_moderation_queue_hides_database_maintenance_under_advanced_tools(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse("accounts:moderation"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Advanced data tools")
+        self.assertContains(response, "moderation-toolbox")
+        self.assertContains(response, "Pending review")
+
+    def test_super_admin_dashboard_prioritises_risk_without_duplicate_high_risk_section(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse("accounts:verification-dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Flagged submissions")
+        self.assertContains(response, "Records requiring second approval")
+        self.assertContains(response, "Staff accounts")
+        self.assertNotContains(response, "<h2>High-risk submissions</h2>", html=False)
+
     def test_owner_admin_surfaces_render(self):
         self.client.force_login(self.owner)
 
