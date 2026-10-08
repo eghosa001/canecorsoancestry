@@ -185,8 +185,18 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
         )
         if not missing or missing.status != 404:
             raise AssertionError(f"{name} branded 404 returned {missing.status if missing else None}")
-        if "404 · Page not found" not in desktop.locator("body").inner_text():
-            raise AssertionError(f"{name} production 404 is not branded")
+        body_text = desktop.locator("body").inner_text()
+        branded_404 = (
+            desktop.locator(".site-header").count()
+            and desktop.locator(".auth-card").count()
+            and "That page is not in the ancestry database." in body_text
+            and "Search dogs" in body_text
+        )
+        if not branded_404:
+            snippet = " ".join(body_text.split())[:500]
+            raise AssertionError(
+                f"{name} production 404 is not branded; body starts: {snippet!r}"
+            )
 
         mobile = browser.new_page(**mobile_options)
         for path, label in (
