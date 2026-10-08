@@ -2,12 +2,15 @@ from django.http import HttpResponse
 from django.test import TestCase, override_settings
 from django.urls import path
 
+from config.urls import urlpatterns as project_urlpatterns
+
 
 def boom(_request):
     raise RuntimeError("intentional production error-page test")
 
 
 urlpatterns = [
+    *project_urlpatterns,
     path("boom/", boom),
 ]
 
