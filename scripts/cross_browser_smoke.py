@@ -15,6 +15,44 @@ OUT.mkdir(parents=True, exist_ok=True)
 AXE_PATH = Path(os.getenv("AXE_CORE_PATH", "node_modules/axe-core/axe.min.js"))
 
 
+
+# Best-effort browser lab metrics; not field Core Web Vitals.
+LAB_METRICS_SCRIPT = """
+(() => {
+  const current = { lcp_ms: null, cls: 0 };
+  window.__ccaLabMetrics = current;
+  if (!window.PerformanceObserver) return;
+  try {
+    new PerformanceObserver((list) => {
+      for (const item of list.getEntries()) current.lcp_ms = Math.round(item.startTime);
+    }).observe({ type: "largest-contentful-paint", buffered: true });
+  } catch (_) {}
+  try {
+    new PerformanceObserver((list) => {
+      for (const item of list.getEntries()) {
+        if (!item.hadRecentInput) current.cls += item.value;
+      }
+    }).observe({ type: "layout-shift", buffered: true });
+  } catch (_) {}
+})();
+"""
+
+
+def lab_metrics(page):
+    """Navigation and paint metrics from the current browser page load."""
+    return page.evaluate("""() => {
+      const nav = performance.getEntriesByType("navigation")[0];
+      const metrics = window.__ccaLabMetrics || {};
+      const resources = performance.getEntriesByType("resource");
+      return {
+        ttfb_ms: nav ? Math.round(nav.responseStart - nav.requestStart) : null,
+        lcp_ms: metrics.lcp_ms == null ? null : metrics.lcp_ms,
+        cls: Math.round((metrics.cls || 0) * 10000) / 10000,
+        resource_requests: resources.length
+      };
+    }""")
+
+
 def open_live(page, path, attempts=8):
     url = f"{BASE_URL}{path}"
     for _ in range(attempts):
@@ -157,6 +195,7 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
     results = []
     try:
         desktop = browser.new_page(viewport={"width": 1440, "height": 1000})
+        desktop.add_init_script(script=LAB_METRICS_SCRIPT)
         for path, label in (
             ("/", "home"),
             ("/dogs/?q=Branco", "dog-search"),
@@ -167,11 +206,13 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
         ):
             response = open_live(desktop, path)
             assert_layout(desktop, f"{name}-{label}-desktop")
+            vitals = lab_metrics(desktop)
             axe_scan(desktop, f"{name}-{label}-desktop", axe_source)
             results.append(
                 {
                     "browser": name,
                     "viewport": "desktop",
+                    "lab_metrics": vitals,
                     "path": path,
                     "status": response.status if response else None,
                 }
@@ -199,6 +240,7 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
             )
 
         mobile = browser.new_page(**mobile_options)
+        mobile.add_init_script(script=LAB_METRICS_SCRIPT)
         for path, label in (
             ("/", "home"),
             ("/dogs/?q=Branco", "dog-search"),
@@ -209,11 +251,13 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
         ):
             response = open_live(mobile, path)
             assert_layout(mobile, f"{name}-{label}-mobile", mobile=True)
+            vitals = lab_metrics(mobile)
             axe_scan(mobile, f"{name}-{label}-mobile", axe_source)
             results.append(
                 {
                     "browser": name,
                     "viewport": "mobile",
+                    "lab_metrics": vitals,
                     "path": path,
                     "status": response.status if response else None,
                 }
@@ -231,6 +275,7 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
                     viewport={"width": width, "height": 844},
                     has_touch=width <= 430,
                 )
+                responsive.add_init_script(script=LAB_METRICS_SCRIPT)
                 try:
                     for path, label in (
                         ("/", "home"),
@@ -248,6 +293,7 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
                             {
                                 "browser": name,
                                 "viewport": f"{width}px",
+                                "lab_metrics": lab_metrics(responsive),
                                 "path": path,
                                 "status": response.status if response else None,
                             }
@@ -270,7 +316,11 @@ def main():
         )
     axe_source = AXE_PATH.read_text(encoding="utf-8")
 
-    report = {"base_url": BASE_URL, "checks": []}
+    report = {
+        "base_url": BASE_URL,
+        "measurement_note": "Lab navigation TTFB, LCP, CLS; unsupported metrics can be null. Not real-user 75th-percentile Core Web Vitals.",
+        "checks": [],
+    }
     with sync_playwright() as p:
         for name, browser_type in (
             ("chromium", p.chromium),
