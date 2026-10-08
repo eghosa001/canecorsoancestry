@@ -370,7 +370,7 @@ jobs:
               -o /tmp/nf-health-release.json \
               -w '%{http_code}' "$origin/healthz/" || true)"
             if [ "$release_status" = "200" ] &&
-               grep -q "\"release\":\"$GITHUB_SHA\"" /tmp/nf-health-release.json; then
+               grep -Eq "\"release\"[[:space:]]*:[[:space:]]*\"$GITHUB_SHA\"" /tmp/nf-health-release.json; then
               echo "Northflank health release marker: $GITHUB_SHA"
               break
             fi
