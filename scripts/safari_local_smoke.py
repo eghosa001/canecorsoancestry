@@ -33,7 +33,9 @@ def run():
             nav = page.locator(".mobile-nav")
             nav.locator("summary").tap()
             assert nav.get_attribute("open") is not None, "iPhone menu will not open"
-            page.locator("#main-content").tap(position={"x": 15, "y": 15})
+            # Tap actual visible hero text, not the top-left of <main>:
+            # its bounding box may begin underneath Safari's sticky header.
+            page.locator(".hero-copy h1").tap()
             assert nav.get_attribute("open") is None, "tapping outside leaves Safari menu open"
 
             go(page, "/dogs/?q=")
