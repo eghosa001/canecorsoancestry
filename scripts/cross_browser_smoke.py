@@ -75,6 +75,19 @@ def assert_layout(page, label, mobile=False):
         if header["logoWidth"] < 40:
             raise AssertionError(f"{label} mobile logo is undersized: {header}")
 
+        if page.locator(".hero-copy").count():
+            spacing = page.evaluate(
+                """() => {
+                  const header = document.querySelector('.site-header').getBoundingClientRect();
+                  const hero = document.querySelector('.hero-copy').getBoundingClientRect();
+                  return hero.top - header.bottom;
+                }"""
+            )
+            if spacing < 40:
+                raise AssertionError(
+                    f"{label} homepage content is too close to the header: {spacing}px"
+                )
+
 
 def axe_scan(page, label, axe_source):
     page.add_script_tag(content=axe_source)
