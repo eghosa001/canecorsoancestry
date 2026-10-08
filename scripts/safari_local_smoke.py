@@ -62,7 +62,10 @@ def run():
               };
             }""")
             field.fill("Safari")
-            page.wait_for_function("window.__safariResolve.length > 0", timeout=6000)
+            # Playwright wait_for_function uses eval, forbidden by our CSP.
+            # Let the 100ms debounce run, then inspect through page.evaluate.
+            page.wait_for_timeout(300)
+            assert page.evaluate("window.__safariResolve.length") > 0, "Suggestion fetch was not scheduled"
             page.locator("h1").tap()
             page.evaluate("window.__safariResolve.shift()()")
             page.wait_for_timeout(250)
