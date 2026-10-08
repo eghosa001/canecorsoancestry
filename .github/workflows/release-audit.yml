@@ -74,7 +74,9 @@ jobs:
           test -s staticfiles/core/site.css.gz
           test -s staticfiles/core/site.css.br
           test -s staticfiles/core/site.css
-          echo 'Compressed CSS assets (.gz and .br) verified.'
+          test -s staticfiles/core/site.js.gz
+          test -s staticfiles/core/site.js.br
+          echo 'Compressed CSS and shared JS assets (.gz and .br) verified.'
 
       - name: Production settings check
         env:
@@ -158,4 +160,5 @@ jobs:
       - name: Validate site edge
         run: |
           node --check src/site-edge.js
+          node --check core/static/core/site.js
           node scripts/test_site_edge_cache.mjs
