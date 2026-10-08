@@ -1,7 +1,7 @@
 from django.db.models import F, Q, Subquery, Window
 from django.db.models.functions import Coalesce, RowNumber
 
-from .models import Dog, DogAlias, DogImage, DogRegistration
+from .models import Dog, DogAlias, DogImage, DogRegistration, DogSource
 
 
 def with_stored_images(queryset):
@@ -12,6 +12,36 @@ def with_stored_images(queryset):
     """
     image_dog_ids = DogImage.objects.order_by().values("dog_id").distinct()
     return queryset.filter(pk__in=Subquery(image_dog_ids))
+
+
+def with_displayable_images(queryset):
+    """Restrict public discovery to dogs that can render a real photograph.
+
+    Managed uploads are preferred. Trusted imported CaneCorsoPedigree image
+    URLs are also valid display media so legacy records with a genuine photo
+    are not hidden merely because the photo has not been copied into R2 yet.
+    """
+    managed_ids = DogImage.objects.order_by().values("dog_id").distinct()
+    source_ids = (
+        DogSource.objects.filter(
+            Q(
+                raw_payload__image_url__startswith=(
+                    "https://canecorsopedigree.com/static/images/animal/"
+                )
+            )
+            | Q(
+                raw_payload__image_url__startswith=(
+                    "https://www.canecorsopedigree.com/static/images/animal/"
+                )
+            )
+        )
+        .order_by()
+        .values("dog_id")
+        .distinct()
+    )
+    return queryset.filter(
+        Q(pk__in=Subquery(managed_ids)) | Q(pk__in=Subquery(source_ids))
+    )
 
 
 def one_dog_per_kennel(queryset):
