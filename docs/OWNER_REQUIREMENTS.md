@@ -89,7 +89,7 @@ From those links the website should derive automatically:
 
 ### Public dog discovery
 
-Public dog browse, typed search and autocomplete/suggestion lists show photographed dogs only. Image-less pedigree records may remain directly addressable and may appear inside pedigrees/relationships, but must not surface as normal public listing cards or search suggestions until they have a managed photo.
+Public dog browse, typed search and autocomplete/suggestion lists show photographed dogs only. A displayable photo may be a managed upload or a trusted imported source image that passes the site's image-source validation. Image-less pedigree records may remain directly addressable and may appear inside pedigrees/relationships, but must not surface as normal public listing cards or search suggestions.
 
 ### Duplicate handling
 
@@ -160,3 +160,8 @@ Do not remove or downscale:
 - `docs/design-reference/member-dashboard-reference.jpg`
 
 They are permanent acceptance references for future UI reviews.
+
+
+## Production acceptance gates
+
+Changes affecting identity, payments, public discovery, moderation, authentication, media, or production configuration must stay covered by change-scoped automated tests. Release validation must include SQLite and PostgreSQL, production security/settings checks, live public-route smoke, and post-deploy Chromium/Firefox/WebKit plus serious/critical accessibility checks. Production data health must fail on canonical-litter duplicates, case-insensitive kennel duplicates, staff/member identity overlap, or litter-member parent/date conflicts. Password recovery is not considered production-ready while outbound account email is disabled.
