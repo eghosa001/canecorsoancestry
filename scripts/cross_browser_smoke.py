@@ -106,6 +106,10 @@ def axe_scan(page, label, axe_source):
             "impact": violation.get("impact"),
             "nodes": len(violation.get("nodes") or []),
             "help": violation.get("help"),
+            "targets": [
+                node.get("target")
+                for node in (violation.get("nodes") or [])[:4]
+            ],
         }
         for violation in result.get("violations", [])
         if violation.get("impact") in {"serious", "critical"}
