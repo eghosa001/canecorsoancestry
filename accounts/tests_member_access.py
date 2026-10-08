@@ -114,6 +114,16 @@ class MemberAccessFlowTests(TestCase):
         self.assertEqual(image.caption, "Stacked portrait")
         self.assertTrue(image.is_primary)
 
+        public_profile = self.client.get(
+            reverse("registry:dog-detail", args=[submission.dog.slug])
+        )
+        public_search = self.client.get(
+            reverse("registry:dog-search"), {"q": "Member Dog"}
+        )
+        self.assertContains(public_profile, "Member Dog")
+        self.assertContains(public_profile, image.image.url)
+        self.assertContains(public_search, "Member Dog")
+
         self.client.force_login(member)
         pedigree = self.client.get(
             reverse("accounts:member-pedigree", args=[submission.dog.pk])
