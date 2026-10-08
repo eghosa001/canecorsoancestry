@@ -4,7 +4,8 @@ from time import perf_counter
 
 from django.core.cache import cache
 from django.db import connection
-from django.db.models import Count, Q
+from django.db.models import Case, CharField, Count, F, Q, Value, When, Window
+from django.db.models.functions import RowNumber
 
 from registry.models import Dog, HealthRecord
 
@@ -242,6 +243,80 @@ def sibling_relationships(dog, public_only=True, limit=None):
             }
         )
     return result
+
+
+def profile_direct_relations(dog, *, public_only=True, limit=19):
+    """Fetch bounded sibling and offspring previews in one database round trip.
+
+    Rank each relationship bucket independently in SQL, including dogs that
+    genuinely belong to *both* buckets, so a prolific parent cannot crowd out
+    either preview. Only a bounded number of rows is materialized in Django.
+    """
+    if limit <= 0:
+        return [], []
+
+    sibling_filter = Q(pk__in=[])
+    if dog.sire_id:
+        sibling_filter |= Q(sire_id=dog.sire_id)
+    if dog.dam_id:
+        sibling_filter |= Q(dam_id=dog.dam_id)
+    offspring_filter = Q(sire_id=dog.pk) | Q(dam_id=dog.pk)
+
+    candidates = Dog.objects.filter(sibling_filter | offspring_filter).exclude(pk=dog.pk)
+    if public_only:
+        candidates = candidates.filter(is_public=True)
+
+    candidates = (
+        candidates.annotate(
+            _profile_kind=Case(
+                When(sibling_filter & offspring_filter, then=Value("both")),
+                When(offspring_filter, then=Value("offspring")),
+                default=Value("sibling"),
+                output_field=CharField(),
+            )
+        )
+        .annotate(
+            _profile_rank=Window(
+                expression=RowNumber(),
+                partition_by=[F("_profile_kind")],
+                order_by=[F("name").asc(), F("pk").asc()],
+            )
+        )
+        .filter(_profile_rank__lte=limit)
+        .select_related("sire", "dam", "kennel")
+        .order_by("name", "pk")
+    )
+
+    sibling_rows = []
+    offspring_rows = []
+    for relative in candidates:
+        is_sibling = bool(
+            (dog.sire_id and relative.sire_id == dog.sire_id)
+            or (dog.dam_id and relative.dam_id == dog.dam_id)
+        )
+        is_offspring = relative.sire_id == dog.pk or relative.dam_id == dog.pk
+        if is_sibling:
+            shared = tuple(
+                parent
+                for parent in ("sire", "dam")
+                if getattr(dog, parent + "_id")
+                and getattr(relative, parent + "_id") == getattr(dog, parent + "_id")
+            )
+            sibling_rows.append(
+                {
+                    "dog": relative,
+                    "relation": (
+                        "Full sibling"
+                        if dog.sire_id and dog.dam_id and len(shared) == 2
+                        else "Half sibling"
+                    ),
+                    "shared_parents": shared,
+                }
+            )
+        if is_offspring:
+            offspring_rows.append(relative)
+
+    return sibling_rows[:limit], offspring_rows[:limit]
 
 
 def offspring_for(dog, public_only=True):
