@@ -162,7 +162,7 @@ assert.match(
 );
 assert.match(
   smokeWorkflow,
-  /EXPECTED_EDGE_CACHE_VERSION: edge-\$\{\{ github\.event\.workflow_run\.id \|\| github\.run_id \}\}/,
+  /EXPECTED_EDGE_CACHE_VERSION: \$\{\{ github\.event_name == 'workflow_run' && format\('edge-\{0\}', github\.event\.workflow_run\.id\) \|\| '' \}\}/,
   "Production smoke must verify the exact Cloudflare cutover run namespace",
 );
 assert.match(
