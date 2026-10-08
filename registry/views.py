@@ -309,6 +309,14 @@ def _public_profile_dog(slug):
             _has_profile_sources=Exists(
                 DogSource.objects.filter(dog_id=OuterRef("pk"))
             ),
+            _has_public_offspring=Exists(
+                Dog.objects.filter(is_public=True).filter(
+                    Q(sire_id=OuterRef("pk")) | Q(dam_id=OuterRef("pk"))
+                )
+            ),
+            _has_subject_health=Exists(
+                HealthRecord.objects.filter(dog_id=OuterRef("pk"))
+            ),
         )
     )
     dog = dogs.filter(slug=slug).first()
@@ -392,9 +400,14 @@ def dog_detail(request, slug):
     relation_limit = PROFILE_RELATION_PREVIEW_LIMIT
     # A single bounded SQL request retrieves both relationship previews.
     # The extra row in each category preserves accurate truncation indicators.
-    sibling_rows, offspring_rows = profile_direct_relations(
-        dog, limit=relation_limit + 1
-    )
+    if dog.sire_id or dog.dam_id or dog._has_public_offspring:
+        sibling_rows, offspring_rows = profile_direct_relations(
+            dog, limit=relation_limit + 1
+        )
+    else:
+        # Unknown parents rule out siblings; the indexed EXISTS above also
+        # confirms there are no public offspring, so no relationship query.
+        sibling_rows, offspring_rows = [], []
     siblings_truncated = len(sibling_rows) > relation_limit
     siblings = sibling_rows[:relation_limit]
     offspring_truncated = len(offspring_rows) > relation_limit
@@ -410,12 +423,17 @@ def dog_detail(request, slug):
 
     # Fetch the subject's tests and its relatives' tests together, preserving
     # each section while avoiding a separate network round trip to PostgreSQL.
-    relative_health, dog.display_health_records = direct_relative_health(
-        dog,
-        sibling_rows=siblings,
-        children=offspring,
-        include_subject_records=True,
-    )
+    if dog._has_subject_health or dog.sire_id or dog.dam_id or siblings or offspring:
+        relative_health, dog.display_health_records = direct_relative_health(
+            dog,
+            sibling_rows=siblings,
+            children=offspring,
+            include_subject_records=True,
+        )
+    else:
+        # Neither the subject nor any public direct relative can have rows
+        # to display. Preserve the empty Health & DNA section in the template.
+        relative_health, dog.display_health_records = [], []
 
     return render(
         request,

@@ -348,6 +348,45 @@ class DogModelTests(TestCase):
         self.assertNotContains(response, "Source attached")
         self.assertContains(response, "Not independently verified")
 
+    def test_isolated_public_profile_requires_only_one_database_query(self):
+        dog = Dog.objects.create(
+            name="Isolated Dog", slug="isolated-dog", is_public=True
+        )
+        with self.assertNumQueries(1):
+            response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["siblings"], [])
+        self.assertEqual(response.context["offspring"], [])
+        self.assertEqual(response.context["relative_health"], [])
+        self.assertContains(response, "No health or DNA information has been published")
+
+    def test_isolated_dog_with_health_keeps_record_and_skips_relation_query(self):
+        dog = Dog.objects.create(
+            name="Isolated Health Dog", slug="isolated-health-dog", is_public=True
+        )
+        HealthRecord.objects.create(dog=dog, test_type="Heart", result="Normal")
+        with self.assertNumQueries(2):
+            response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertEqual(response.context["siblings"], [])
+        self.assertContains(response, "Normal")
+
+    def test_dog_without_parents_still_displays_public_offspring(self):
+        dog = Dog.objects.create(
+            name="No Parent Sire", slug="no-parent-sire", is_public=True,
+        )
+        public_child = Dog.objects.create(
+            name="Public Child", slug="public-child-no-parent", sire=dog, is_public=True
+        )
+        Dog.objects.create(
+            name="Private Child", slug="private-child-no-parent", sire=dog, is_public=False
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertEqual(
+            [row.pk for row in response.context["offspring"]], [public_child.pk]
+        )
+        self.assertContains(response, "Public Child")
+        self.assertNotContains(response, "Private Child")
+
     def test_empty_profile_extras_need_only_the_primary_lookup(self):
         dog = Dog.objects.create(
             name="Minimal Profile", slug="minimal-profile", is_public=True,
