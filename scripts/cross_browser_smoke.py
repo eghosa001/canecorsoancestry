@@ -156,18 +156,34 @@ def axe_scan(page, label, axe_source):
         raise AssertionError(f"{label} serious/critical accessibility violations: {serious}")
 
 
-def assert_photo_only_search(page, label):
+def assert_search_visibility_contract(page, label):
+    # Unfiltered browsing remains photo-first; deliberate text searches must
+    # also find published pedigree records without a photograph.
+    open_live(page, "/dogs/")
+    browse_cards = page.locator(".search-result-card")
+    if not browse_cards.count():
+        raise AssertionError(f"{label} unfiltered dog browse returned no cards")
+    browse_missing = page.locator(".search-result-card:not(:has(img))").count()
+    if browse_missing:
+        raise AssertionError(
+            f"{label} unfiltered photo gallery included {browse_missing} imageless cards"
+        )
+
     open_live(page, "/dogs/?q=Branco")
     cards = page.locator(".search-result-card")
     if not cards.count():
-        raise AssertionError(f"{label} known production search returned no photographed dog")
-    missing = page.evaluate(
+        raise AssertionError(f"{label} known public dog text search returned no results")
+    malformed = page.evaluate(
         """() => [...document.querySelectorAll('.search-result-card')]
-          .filter((card) => !card.querySelector('img'))
-          .map((card) => (card.textContent || '').trim().slice(0, 120))"""
+          .filter(card => !card.querySelector('img') &&
+            (!card.classList.contains('no-media') ||
+              !card.textContent.includes('no public photo')))
+          .map(card => (card.textContent || '').trim().slice(0, 120))"""
     )
-    if missing:
-        raise AssertionError(f"{label} public search exposed image-less records: {missing[:5]}")
+    if malformed:
+        raise AssertionError(
+            f"{label} image-less search results lacked an explicit fallback: {malformed[:5]}"
+        )
 
 
 def assert_autocomplete_interactions(page, label):
@@ -218,7 +234,7 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
                 }
             )
 
-        assert_photo_only_search(desktop, f"{name}-desktop")
+        assert_search_visibility_contract(desktop, f"{name}-desktop")
         missing = desktop.goto(
             f"{BASE_URL}/this-cane-corso-page-does-not-exist/",
             wait_until="domcontentloaded",
@@ -263,7 +279,7 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
                 }
             )
 
-        assert_photo_only_search(mobile, f"{name}-mobile")
+        assert_search_visibility_contract(mobile, f"{name}-mobile")
         assert_autocomplete_interactions(mobile, f"{name}-mobile")
         mobile.screenshot(path=OUT / f"cross-browser-{name}-mobile.png", full_page=True)
 

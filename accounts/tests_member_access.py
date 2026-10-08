@@ -12,7 +12,7 @@ from django.utils import timezone
 from PIL import Image
 
 from core.r2_gateway_storage import CloudflareR2GatewayStorage
-from registry.models import Dog, DogImage, DogSource, Kennel, KennelMembership, ModerationRoleAssignment, Submission
+from registry.models import Dog, DogDocument, DogImage, DogSource, Kennel, KennelMembership, ModerationRoleAssignment, Submission
 
 from .models import PaymentSubmissionLink, SubmissionPayment
 from registry.services import approve_submission
@@ -113,6 +113,16 @@ class MemberAccessFlowTests(TestCase):
         self.assertEqual(image.image.name, "submissions/2026/10/member-dog.jpg")
         self.assertEqual(image.caption, "Stacked portrait")
         self.assertTrue(image.is_primary)
+
+        public_profile = self.client.get(
+            reverse("registry:dog-detail", args=[submission.dog.slug])
+        )
+        public_search = self.client.get(
+            reverse("registry:dog-search"), {"q": "Member Dog"}
+        )
+        self.assertContains(public_profile, "Member Dog")
+        self.assertContains(public_profile, image.image.url)
+        self.assertContains(public_search, "Member Dog")
 
         self.client.force_login(member)
         pedigree = self.client.get(
@@ -420,10 +430,26 @@ class MemberAccessFlowTests(TestCase):
                 with Image.open(stored_path) as stored:
                     self.assertEqual(stored.format, "JPEG")
 
+                # Verify member submission does not leak to visitors before approval.
+                self.client.logout()
+                pending_profile = self.client.get(
+                    reverse("registry:dog-detail", args=[dog.slug])
+                )
+                self.assertNotContains(
+                    pending_profile, submission.attachment.name
+                )
                 approve_submission(submission, self.reviewer, "Photo checked.")
                 image = DogImage.objects.get(dog=dog)
                 self.assertEqual(image.image.name, submission.attachment.name)
                 self.assertTrue(image.is_primary)
+                public_profile = self.client.get(
+                    reverse("registry:dog-detail", args=[dog.slug])
+                )
+                self.assertContains(public_profile, image.image.url)
+                public_search = self.client.get(
+                    reverse("registry:dog-search"), {"q": dog.name}
+                )
+                self.assertContains(public_search, image.image.url)
 
     def test_heic_photo_reaches_submission_storage_as_jpeg(self):
         member = get_user_model().objects.create_user(
@@ -470,6 +496,133 @@ class MemberAccessFlowTests(TestCase):
         submission = Submission.objects.get(kind=Submission.Kind.IMAGE, dog=dog)
         self.assertTrue(submission.attachment.name.endswith(".jpg"))
         self.assertEqual(save.call_args.args[1].content_type, "image/jpeg")
+
+
+class ApprovedDocumentPublicationTests(TestCase):
+    """Exercise browser upload -> pending moderation -> public PDF -> storage."""
+
+    def setUp(self):
+        self.owner = get_user_model().objects.create_user(
+            username="pdf-member", password="strong-test-password"
+        )
+        self.reviewer = get_user_model().objects.create_user(
+            username="pdf-reviewer"
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.reviewer, role=ModerationRoleAssignment.Role.REVIEWER
+        )
+        self.kennel = Kennel.objects.create(
+            name="Document Publication Kennel", slug="document-publication-kennel"
+        )
+        KennelMembership.objects.create(
+            user=self.owner, kennel=self.kennel,
+            role=KennelMembership.Role.OWNER
+        )
+        self.dog = Dog.objects.create(
+            name="Document Publication Dog",
+            slug="document-publication-dog",
+            kennel=self.kennel, is_public=True
+        )
+
+    @staticmethod
+    def pdf():
+        return SimpleUploadedFile(
+            "pedigree-proof.pdf",
+            b"%PDF-1.4\\n1 0 obj\\n<< /Type /Catalog >>\\nendobj\\n%%EOF\\n",
+            content_type="application/pdf",
+        )
+
+    def test_public_document_appears_only_after_admin_approval_and_file_opens(self):
+        original = self.pdf().read()
+        submission_field = Submission._meta.get_field("attachment")
+        document_field = DogDocument._meta.get_field("file")
+        with TemporaryDirectory() as temp_dir:
+            storage = FileSystemStorage(location=temp_dir, base_url="/media/")
+            with patch.object(submission_field, "storage", storage), patch.object(
+                document_field, "storage", storage
+            ):
+                self.client.force_login(self.owner)
+                response = self.client.post(
+                    reverse("accounts:submit-document", args=[self.dog.pk]),
+                    {
+                        "title": "Official pedigree certificate",
+                        "document_type": DogDocument.DocumentType.PEDIGREE,
+                        "is_public": "on",
+                        "notes": "Please publish after verification",
+                        "attachment": self.pdf(),
+                    },
+                )
+                self.assertRedirects(response, reverse("accounts:submissions"))
+                submission = Submission.objects.get(
+                    kind=Submission.Kind.DOCUMENT, dog=self.dog
+                )
+                self.assertEqual(submission.status, Submission.Status.PENDING)
+                self.assertFalse(DogDocument.objects.filter(dog=self.dog).exists())
+                self.client.logout()
+                before = self.client.get(
+                    reverse("registry:dog-detail", args=[self.dog.slug])
+                )
+                self.assertNotContains(before, "Official pedigree certificate")
+
+                # Exercise the actual moderator approval HTTP endpoint,
+                # rather than calling the service directly.
+                self.client.force_login(self.reviewer)
+                review_response = self.client.post(
+                    reverse(
+                        "accounts:review-submission",
+                        args=[submission.pk, "approve"],
+                    ),
+                    {"resolution_notes": "Document checked."},
+                )
+                self.assertEqual(review_response.status_code, 302)
+                self.client.logout()
+                submission.refresh_from_db()
+                self.assertEqual(submission.status, Submission.Status.APPROVED)
+                document = DogDocument.objects.get(source_submission=submission)
+                self.assertTrue(document.is_public)
+                self.assertEqual(document.title, "Official pedigree certificate")
+                self.assertTrue(storage.exists(document.file.name))
+                with document.file.open("rb") as published_file:
+                    self.assertEqual(published_file.read(), original)
+                public = self.client.get(
+                    reverse("registry:dog-detail", args=[self.dog.slug])
+                )
+                self.assertContains(public, "Published documents")
+                self.assertContains(public, document.title)
+                self.assertContains(public, document.file.url)
+
+    def test_approved_private_document_never_appears_on_public_profile(self):
+        submission_field = Submission._meta.get_field("attachment")
+        document_field = DogDocument._meta.get_field("file")
+        with TemporaryDirectory() as temp_dir:
+            storage = FileSystemStorage(location=temp_dir, base_url="/media/")
+            with patch.object(submission_field, "storage", storage), patch.object(
+                document_field, "storage", storage
+            ):
+                self.client.force_login(self.owner)
+                response = self.client.post(
+                    reverse("accounts:submit-document", args=[self.dog.pk]),
+                    {
+                        "title": "Confidential ownership proof",
+                        "document_type": DogDocument.DocumentType.REGISTRATION,
+                        "notes": "Keep private",
+                        "attachment": self.pdf(),
+                    },
+                )
+                self.assertRedirects(response, reverse("accounts:submissions"))
+                submission = Submission.objects.get(
+                    kind=Submission.Kind.DOCUMENT, dog=self.dog
+                )
+                self.client.logout()
+                approve_submission(submission, self.reviewer, "Evidence verified.")
+                document = DogDocument.objects.get(source_submission=submission)
+                self.assertFalse(document.is_public)
+                self.assertTrue(storage.exists(document.file.name))
+                public = self.client.get(
+                    reverse("registry:dog-detail", args=[self.dog.slug])
+                )
+                self.assertNotContains(public, "Confidential ownership proof")
+                self.assertNotContains(public, document.file.url)
 
 
 class PopularDogTests(TestCase):
