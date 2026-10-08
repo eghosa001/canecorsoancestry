@@ -235,7 +235,7 @@ class DogModelTests(TestCase):
         DogRegistration.objects.create(dog=dog, number="PERF-001")
         DogImage.objects.create(dog=dog, image="dogs/performance.jpg")
 
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(1):
             response = self.client.get(
                 reverse("registry:dog-suggestions"),
                 {"q": "Performance"},
