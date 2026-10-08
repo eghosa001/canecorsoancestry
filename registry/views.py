@@ -289,11 +289,6 @@ def dog_detail(request, slug):
         include_sources=False,
     ).prefetch_related(
         Prefetch(
-            "health_records",
-            queryset=HealthRecord.objects.order_by("test_type", "-tested_on"),
-            to_attr="display_health_records",
-        ),
-        Prefetch(
             "titles",
             queryset=DogTitle.objects.order_by("name"),
             to_attr="display_titles",
@@ -375,10 +370,13 @@ def dog_detail(request, slug):
     mates_truncated = len(mate_rows) > relation_limit
     mates = mate_rows[:relation_limit]
 
-    relative_health = direct_relative_health(
+    # Fetch the subject's tests and its relatives' tests together, preserving
+    # each section while avoiding a separate network round trip to PostgreSQL.
+    relative_health, dog.display_health_records = direct_relative_health(
         dog,
         sibling_rows=siblings,
         children=offspring,
+        include_subject_records=True,
     )
 
     return render(
