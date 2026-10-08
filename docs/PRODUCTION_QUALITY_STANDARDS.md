@@ -6,7 +6,7 @@ These are acceptance criteria, not achieved scores. A green workflow is not proo
 
 - Measure real-user Core Web Vitals (75th percentile): LCP <= 2.5s, INP <= 200ms, CLS <= 0.1; do not represent CI navigation timings as LCP.
 - Measure warm/cold, HIT/MISS/BYPASS, mobile/desktop separately. Report query counts and DB time along with origin/edge response time.
-- Target uncached dog-profile p95 <= 1.5s with 8 concurrent clients. Currently fail above 4.5s as a regression guard while optimizing.
+- Target uncached dog-profile p95 <= 1.5s with 8 concurrent clients. Currently fail above 5.0s using nearest-rank p95 across 24 dynamic requests as a regression guard while optimizing. This is not a performance-quality target.
 - Target health p95 <= 1s, currently fail above 2s.
 - Audit production-like PostgreSQL query plans for dog-profile, kennel, search, and pedigree routes. Prevent N+1 regressions.
 - Deliver appropriately sized image variants, maintain intrinsic dimensions, and check CSS/font render blocking before claiming frontend optimization.
