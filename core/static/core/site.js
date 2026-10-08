@@ -27,6 +27,7 @@
       var openSuggestions = [];
       var pickerInteracting = false;
       var lastPanelScrollAt = 0;
+      var lastSearchFocusAt = 0;
 
       function closeMobileMenus() {
         document.querySelectorAll(".mobile-nav[open], .dashboard-mobile-nav[open]").forEach(function (menu) {
@@ -50,7 +51,13 @@
         // Keep the picker stable only while its own suggestion panel is being
         // manipulated. A real page scroll should dismiss autocomplete and blur
         // the field so mobile keyboards do not remain pinned over the page.
-        if (pickerInteracting || Date.now() - lastPanelScrollAt < 180) {
+        // iOS Safari scrolls the page automatically while raising its keyboard.
+        // Do not interpret that focus-induced movement as a dismiss gesture.
+        var keyboardFocusing = Date.now() - lastSearchFocusAt < 450 &&
+          document.activeElement &&
+          document.activeElement.matches &&
+          document.activeElement.matches("[data-dog-autocomplete]");
+        if (pickerInteracting || keyboardFocusing || Date.now() - lastPanelScrollAt < 180) {
           return;
         }
         dismissSearchUI();
@@ -59,6 +66,11 @@
       document.addEventListener("pointerdown", function (event) {
         if (!event.target.closest(".dog-autocomplete-host")) {
           dismissSearchUI();
+        }
+        // Native <details> menus do not dismiss when a Safari user taps
+        // outside. Keep the menu state synchronized with touch navigation.
+        if (!event.target.closest(".mobile-nav, .dashboard-mobile-nav")) {
+          closeMobileMenus();
         }
       });
 
@@ -159,6 +171,9 @@
 
         function requestSuggestions(value, browse) {
           clearTimeout(timer);
+          // Invalidate any in-flight response immediately, even while the
+          // latest keystroke is still in its debounce window.
+          var serial = ++requestSerial;
           var expected = (value || "").trim();
           if (!browse && expected.length < 2) {
             close();
@@ -167,7 +182,6 @@
 
           panel.setAttribute("aria-busy", "true");
           timer = setTimeout(function () {
-            var serial = ++requestSerial;
             fetch(suggestionUrl(expected, browse), {
               headers: { "Accept": "application/json" },
               credentials: "same-origin"
@@ -186,6 +200,8 @@
         }
 
         function close() {
+          clearTimeout(timer);
+          requestSerial += 1;
           activeIndex = -1;
           input.removeAttribute("aria-activedescendant");
           input.setAttribute("aria-expanded", "false");
@@ -282,6 +298,7 @@
         input.addEventListener("compositionend", refreshFromInput);
 
         input.addEventListener("focus", function () {
+          lastSearchFocusAt = Date.now();
           if ((input.dataset.dogAutocompleteMode || "navigate") !== "fill") return;
           if (!input.value.trim()) {
             requestSuggestions("", true);
