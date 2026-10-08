@@ -534,22 +534,25 @@ def kennel_detail(request, slug):
     dog_page = Paginator(dog_queryset, 24).get_page(request.GET.get("dogs_page"))
     _attach_source_images_for_missing(dog_page.object_list)
     litter_page = Paginator(litter_queryset, 20).get_page(request.GET.get("litters_page"))
-    kennel_linked = kennel.memberships.exists()
-    is_member = bool(
-        request.user.is_authenticated
-        and request.user.kennel_memberships.filter(kennel=kennel).exists()
-    )
-    pending_claim = Submission.objects.filter(
-        kind=Submission.Kind.KENNEL_CLAIM,
-        status=Submission.Status.PENDING,
-        kennel=kennel,
-    ).select_related("submitted_by").first()
-    claim_pending = bool(
-        request.user.is_authenticated
-        and pending_claim
-        and pending_claim.submitted_by_id == request.user.id
-    )
-    claim_in_review = pending_claim is not None
+    # Anonymous kennel browsing must not fetch private claim/ownership facts.
+    # These queries are expensive against the remote production database.
+    is_member = False
+    kennel_linked = False
+    pending_claim_owner_id = None
+    if request.user.is_authenticated:
+        is_member = request.user.kennel_memberships.filter(kennel=kennel).exists()
+        kennel_linked = kennel.memberships.exists()
+        pending_claim_owner_id = (
+            Submission.objects.filter(
+                kind=Submission.Kind.KENNEL_CLAIM,
+                status=Submission.Status.PENDING,
+                kennel=kennel,
+            )
+            .values_list("submitted_by_id", flat=True)
+            .first()
+        )
+    claim_in_review = pending_claim_owner_id is not None
+    claim_pending = claim_in_review and pending_claim_owner_id == request.user.pk
     return render(
         request,
         "registry/kennel_detail.html",

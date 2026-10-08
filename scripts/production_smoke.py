@@ -250,7 +250,7 @@ def concurrent_health_probe(total=16, workers=8):
         "p95_seconds": round(ordered[p95_index], 3),
         "max_seconds": round(max(timings), 3),
     }
-    if result["p95_seconds"] > 6:
+    if result["p95_seconds"] > 2:
         raise AssertionError(f"Dynamic origin concurrency probe is too slow: {result}")
     return result
 
@@ -297,7 +297,7 @@ def concurrent_profile_probe(path, total=12, workers=8):
         "p95_seconds": round(ordered[p95_index], 3),
         "max_seconds": round(max(timings), 3),
     }
-    if result["p95_seconds"] > 5:
+    if result["p95_seconds"] > 4.5:
         raise AssertionError(f"Concurrent dog-profile probe is too slow: {result}")
     return result
 
