@@ -161,7 +161,7 @@ jobs:
             echo "::warning::Account email is not fully configured; password recovery will remain unavailable."
           fi
 
-          payload="$(jq -n             --arg name "$NF_SERVICE_NAME"             --arg db "$DATABASE_URL"             --arg secret "$DJANGO_SECRET_KEY"             --arg r2_signing "$R2_GATEWAY_SIGNING_KEY"             --arg paystack "$PAYSTACK_SECRET_KEY"             --arg email_host "$EMAIL_HOST"             --arg email_user "$EMAIL_HOST_USER"             --arg email_password "$EMAIL_HOST_PASSWORD"             --arg from_email "$from_email"             --arg email_enabled "$email_enabled"             --arg site "$PUBLIC_SITE"             --arg media "$MEDIA_EDGE"             '{
+          payload="$(jq -n             --arg name "$NF_SERVICE_NAME"             --arg db "$DATABASE_URL"             --arg secret "$DJANGO_SECRET_KEY"             --arg r2_signing "$R2_GATEWAY_SIGNING_KEY"             --arg paystack "$PAYSTACK_SECRET_KEY"             --arg email_host "$EMAIL_HOST"             --arg email_user "$EMAIL_HOST_USER"             --arg email_password "$EMAIL_HOST_PASSWORD"             --arg from_email "$from_email"             --arg email_enabled "$email_enabled"             --arg git_sha "$GITHUB_SHA"             --arg site "$PUBLIC_SITE"             --arg media "$MEDIA_EDGE"             '{
               name:$name,
               description:"Always-on Django origin for Cane Corso Ancestry",
               billing:{
@@ -205,6 +205,7 @@ jobs:
                 DEFAULT_FROM_EMAIL:$from_email,
                 ACCOUNT_EMAIL_ENABLED:$email_enabled,
                 REQUIRE_EMAIL_VERIFICATION:$email_enabled,
+                GIT_COMMIT_SHA:$git_sha,
                 DJANGO_SETTINGS_MODULE:"config.settings.northflank",
                 DJANGO_DB_SCHEMA:"django_app",
                 DJANGO_DB_SSLMODE:"require",
@@ -247,13 +248,13 @@ jobs:
             echo "Created Northflank service: $service_id"
           else
             echo "Reusing existing Northflank service: $service_id"
-            patch="$(jq -n --arg site "$PUBLIC_SITE" --arg media "$MEDIA_EDGE" --arg db "$DATABASE_URL" --arg secret "$DJANGO_SECRET_KEY"             --arg r2_signing "$R2_GATEWAY_SIGNING_KEY" --arg paystack "$PAYSTACK_SECRET_KEY" --arg email_host "$EMAIL_HOST" --arg email_user "$EMAIL_HOST_USER" --arg email_password "$EMAIL_HOST_PASSWORD" --arg from_email "$from_email" --arg email_enabled "$email_enabled" '{runtimeEnvironment:{DATABASE_URL:$db,DJANGO_SECRET_KEY:$secret,R2_GATEWAY_SIGNING_KEY:$r2_signing,PAYSTACK_SECRET_KEY:$paystack,
+            patch="$(jq -n --arg site "$PUBLIC_SITE" --arg media "$MEDIA_EDGE" --arg db "$DATABASE_URL" --arg secret "$DJANGO_SECRET_KEY"             --arg r2_signing "$R2_GATEWAY_SIGNING_KEY" --arg paystack "$PAYSTACK_SECRET_KEY" --arg email_host "$EMAIL_HOST" --arg email_user "$EMAIL_HOST_USER" --arg email_password "$EMAIL_HOST_PASSWORD" --arg from_email "$from_email" --arg email_enabled "$email_enabled" --arg git_sha "$GITHUB_SHA" '{runtimeEnvironment:{DATABASE_URL:$db,DJANGO_SECRET_KEY:$secret,R2_GATEWAY_SIGNING_KEY:$r2_signing,PAYSTACK_SECRET_KEY:$paystack,
                 EMAIL_HOST:$email_host,
                 EMAIL_HOST_USER:$email_user,
                 EMAIL_HOST_PASSWORD:$email_password,
                 DEFAULT_FROM_EMAIL:$from_email,
                 ACCOUNT_EMAIL_ENABLED:$email_enabled,
-                REQUIRE_EMAIL_VERIFICATION:$email_enabled,DJANGO_SETTINGS_MODULE:"config.settings.northflank",DJANGO_DB_SCHEMA:"django_app",DJANGO_DB_SSLMODE:"require",DJANGO_DB_EXTRA_SCHEMAS:"extensions,public",DJANGO_DB_CONN_MAX_AGE:"300",DJANGO_DB_CONNECT_TIMEOUT:"5",DJANGO_DB_KEEPALIVES_IDLE:"30",DJANGO_DB_KEEPALIVES_INTERVAL:"10",DJANGO_DB_KEEPALIVES_COUNT:"3",DJANGO_ALLOWED_HOSTS:"canecorsoancestry-site-edge.aighewieghosa111.workers.dev,.code.run,127.0.0.1,localhost",DJANGO_CSRF_TRUSTED_ORIGINS:"https://*.code.run,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",SITE_URL:$site,R2_GATEWAY_URL:$media,MEDIA_EDGE_BASE_URL:$media,MEDIA_EDGE_URL_TTL:"300",DJANGO_HSTS_SECONDS:"31536000",DJANGO_HSTS_INCLUDE_SUBDOMAINS:"1",DJANGO_HSTS_PRELOAD:"1",DJANGO_LOG_LEVEL:"INFO",ANCESTRY_EMAIL_NOTIFICATIONS:"0",GUNICORN_WORKERS:"1",GUNICORN_THREADS:"4",GUNICORN_TIMEOUT:"60",GUNICORN_KEEPALIVE:"5",GUNICORN_MAX_REQUESTS:"1000",GUNICORN_MAX_REQUESTS_JITTER:"100"}}')"
+                REQUIRE_EMAIL_VERIFICATION:$email_enabled,GIT_COMMIT_SHA:$git_sha,DJANGO_SETTINGS_MODULE:"config.settings.northflank",DJANGO_DB_SCHEMA:"django_app",DJANGO_DB_SSLMODE:"require",DJANGO_DB_EXTRA_SCHEMAS:"extensions,public",DJANGO_DB_CONN_MAX_AGE:"300",DJANGO_DB_CONNECT_TIMEOUT:"5",DJANGO_DB_KEEPALIVES_IDLE:"30",DJANGO_DB_KEEPALIVES_INTERVAL:"10",DJANGO_DB_KEEPALIVES_COUNT:"3",DJANGO_ALLOWED_HOSTS:"canecorsoancestry-site-edge.aighewieghosa111.workers.dev,.code.run,127.0.0.1,localhost",DJANGO_CSRF_TRUSTED_ORIGINS:"https://*.code.run,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",SITE_URL:$site,R2_GATEWAY_URL:$media,MEDIA_EDGE_BASE_URL:$media,MEDIA_EDGE_URL_TTL:"300",DJANGO_HSTS_SECONDS:"31536000",DJANGO_HSTS_INCLUDE_SUBDOMAINS:"1",DJANGO_HSTS_PRELOAD:"1",DJANGO_LOG_LEVEL:"INFO",ANCESTRY_EMAIL_NOTIFICATIONS:"0",GUNICORN_WORKERS:"1",GUNICORN_THREADS:"4",GUNICORN_TIMEOUT:"60",GUNICORN_KEEPALIVE:"5",GUNICORN_MAX_REQUESTS:"1000",GUNICORN_MAX_REQUESTS_JITTER:"100"}}')"
             curl -sS --fail-with-body "${auth[@]}" -X PATCH --data "$patch" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/combined/$service_id" >/tmp/nf-service-patch.json
             echo "Synced Northflank runtime environment to the workers.dev public site."
           fi
@@ -360,6 +361,26 @@ jobs:
           origin="https://$dns"
           echo "NORTHFLANK_ORIGIN=$origin" >> "$GITHUB_ENV"
           echo "Northflank origin: $origin"
+
+          release_status=""
+          for attempt in $(seq 1 18); do
+            release_status="$(curl --connect-timeout 10 --max-time 30 -sS \
+              -H 'X-CCA-Edge: 1' \
+              -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
+              -o /tmp/nf-health-release.json \
+              -w '%{http_code}' "$origin/healthz/" || true)"
+            if [ "$release_status" = "200" ] &&
+               grep -Eq "\"release\"[[:space:]]*:[[:space:]]*\"$GITHUB_SHA\"" /tmp/nf-health-release.json; then
+              echo "Northflank health release marker: $GITHUB_SHA"
+              break
+            fi
+            if [ "$attempt" = "18" ]; then
+              echo "::error::Northflank health endpoint did not expose exact deployed SHA $GITHUB_SHA; HTTP $release_status"
+              cat /tmp/nf-health-release.json 2>/dev/null || true
+              exit 1
+            fi
+            sleep 5
+          done
 
           expected_r2_fingerprint="$(printf '%s' "$R2_GATEWAY_SIGNING_KEY" | sha256sum | cut -c1-16)"
           echo "Expected R2 signing fingerprint: $expected_r2_fingerprint; runner_epoch=$(date +%s)"
