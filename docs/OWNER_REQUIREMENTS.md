@@ -69,6 +69,10 @@ One real dog must map to one canonical database record.
 
 A linebred pedigree may display the same ancestor in several pedigree positions, but those positions must resolve to the same canonical dog.
 
+### Canonical litters
+
+A real birth event maps to one litter. When sire, dam and date of birth are all known, **the same sire + same dam + same date of birth is one canonical litter**, regardless of puppy count or submission code. Moderation must block creation of a second litter for the same parent pair and birth date and direct reviewers to the existing litter.
+
 ### Relationships
 
 Parent relationships are stored once as sire/dam links.
@@ -82,6 +86,10 @@ From those links the website should derive automatically:
 - repeated ancestors;
 - common ancestors;
 - pedigree paths.
+
+### Public dog discovery
+
+Public dog browse, typed search and autocomplete/suggestion lists show photographed dogs only. Image-less pedigree records may remain directly addressable and may appear inside pedigrees/relationships, but must not surface as normal public listing cards or search suggestions until they have a managed photo.
 
 ### Duplicate handling
 
@@ -139,7 +147,7 @@ The owner has confirmed a Paystack-backed paid submission model. Payment buys a 
 Current packages:
 
 - **₦500** — one dog;
-- **₦1,500** — 2–4 dogs from the same verified kennel;
+- **₦1,500** — 2–6 dogs from the same verified kennel;
 - **₦1,000** — one genuine litter plus the puppies belonging to that litter.
 
 Only approved kennel owners/editors may purchase submission packages. Every paid dog or litter remains private/pending until the normal verification and administrator moderation flow approves it. Cane Corso Ancestry remains a pedigree/ancestry platform and must not describe these charges as official dog registration fees.
