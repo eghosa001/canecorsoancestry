@@ -5,7 +5,10 @@ const FALLBACK_EDGE_CACHE_VERSION = "local-dev";
 const CACHE_FRESH_SECONDS = 900;
 const CACHE_RETENTION_SECONDS = 604800;
 const ORIGIN_GRACE_MS = 3500;
-const AUTH_GRACE_MS = 450;
+// A genuine Django login page usually takes longer than 450ms to arrive over
+// the remote origin connection. Give it a fair chance before substituting
+// the temporary edge form, which must only serve as a cold-start fallback.
+const AUTH_GRACE_MS = 2200;
 const READY_TIMEOUT_MS = 3500;
 const AUTH_READY_TIMEOUT_MS = 4500;
 const STATIC_EDGE_CACHE_SECONDS = 31536000;
