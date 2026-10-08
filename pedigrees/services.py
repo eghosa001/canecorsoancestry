@@ -484,9 +484,11 @@ def _pedigree_graph(*dogs, public_only=False):
                     parent.is_public,
                     parent.name,
                     parent.slug
-                FROM {table} parent
-                JOIN pedigree child
-                  ON parent.id = child.sire_id OR parent.id = child.dam_id
+                FROM pedigree child
+                CROSS JOIN LATERAL (
+                    VALUES (child.sire_id), (child.dam_id)
+                ) AS parent_keys(parent_id)
+                JOIN {table} parent ON parent.id = parent_keys.parent_id
                 {public_parent}
             )
             SELECT id, sire_id, dam_id, is_public, name, slug

@@ -1,4 +1,5 @@
 from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase
 from django.urls import reverse
 
@@ -8,6 +9,7 @@ from .services import (
     descendant_generations,
     direct_relative_health,
     inbreeding_coefficient,
+    _pedigree_graph,
     mate_relationships,
     pedigree_analysis,
     pedigree_generations,
@@ -20,6 +22,27 @@ from .services import (
 
 # Virtual mating accuracy/performance coverage.
 class PedigreeServiceTests(TestCase):
+    def test_public_shared_ancestor_graph_uses_one_postgres_query(self):
+        if connection.vendor != "postgresql":
+            self.skipTest("This query budget applies to PostgreSQL's recursive CTE.")
+        ancestor = Dog.objects.create(
+            name="Graph Ancestor", slug="graph-ancestor", is_public=True
+        )
+        sire = Dog.objects.create(
+            name="Graph Sire", slug="graph-sire", sire=ancestor, is_public=True
+        )
+        dam = Dog.objects.create(
+            name="Graph Dam", slug="graph-dam", sire=ancestor, is_public=True
+        )
+        child = Dog.objects.create(
+            name="Graph Child", slug="graph-child", sire=sire, dam=dam, is_public=True
+        )
+        with self.assertNumQueries(1):
+            links, nodes = _pedigree_graph(child, public_only=True)
+        self.assertEqual(len(links), 4)
+        self.assertEqual(links[child.pk], (sire.pk, dam.pk))
+        self.assertIn(ancestor.pk, nodes)
+
     def test_pedigree_index_is_paginated_for_browse_and_search(self):
         for index in range(19):
             Dog.objects.create(

@@ -29,7 +29,7 @@
     <div class="dog-card-grid">
       {% for dog in imaged_offspring %}
         <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
-          <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}" loading="lazy" decoding="async">{% else %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% endif %}</div>
+          <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async">{% else %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% endif %}</div>
           <div class="dog-card-body"><h3>{{ dog.name }}</h3><p>{{ dog.get_sex_display }} · {{ dog.colour|default:"Colour not recorded" }}</p></div>
         </a>
       {% endfor %}
