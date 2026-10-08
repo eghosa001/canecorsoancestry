@@ -222,6 +222,42 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
         assert_photo_only_search(mobile, f"{name}-mobile")
         assert_autocomplete_interactions(mobile, f"{name}-mobile")
         mobile.screenshot(path=OUT / f"cross-browser-{name}-mobile.png", full_page=True)
+
+        # Catch compact-phone and tablet regressions missed by the fixed 390px
+        # smoke viewport. Run one browser to keep release CI fast.
+        if name == "chromium":
+            for width in (320, 360, 430, 768, 1024):
+                responsive = browser.new_page(
+                    viewport={"width": width, "height": 844},
+                    has_touch=width <= 430,
+                )
+                try:
+                    for path, label in (
+                        ("/", "home"),
+                        ("/dogs/?q=Branco", "dog-search"),
+                        ("/pedigrees/", "pedigrees"),
+                        ("/member/signup/", "signup"),
+                    ):
+                        response = open_live(responsive, path)
+                        assert_layout(
+                            responsive,
+                            f"{name}-{label}-{width}px",
+                            mobile=width <= 760,
+                        )
+                        results.append(
+                            {
+                                "browser": name,
+                                "viewport": f"{width}px",
+                                "path": path,
+                                "status": response.status if response else None,
+                            }
+                        )
+                    responsive.screenshot(
+                        path=OUT / f"cross-browser-{name}-{width}px.png",
+                        full_page=True,
+                    )
+                finally:
+                    responsive.close()
     finally:
         browser.close()
     return results
