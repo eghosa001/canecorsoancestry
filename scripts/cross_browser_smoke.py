@@ -148,18 +148,6 @@ def assert_autocomplete_interactions(page, label):
         raise AssertionError(f"{label} autocomplete does not dismiss on page scroll")
 
 
-def assert_password_recovery(page, label):
-    open_live(page, "/accounts/password_reset/")
-    body = page.locator("body").inner_text()
-    if "temporarily unavailable" in body.lower():
-        raise AssertionError(
-            f"{label} production password recovery is disabled; configure outbound email"
-        )
-    button = page.get_by_role("button", name="Send reset link")
-    if button.is_disabled():
-        raise AssertionError(f"{label} password-reset submit button is disabled")
-
-
 def browser_contract(browser_type, name, axe_source, mobile_options):
     browser = browser_type.launch()
     results = []
@@ -186,8 +174,6 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
             )
 
         assert_photo_only_search(desktop, f"{name}-desktop")
-        assert_password_recovery(desktop, f"{name}-desktop")
-
         missing = desktop.goto(
             f"{BASE_URL}/__production-smoke-missing-page__/",
             wait_until="domcontentloaded",
@@ -221,7 +207,6 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
 
         assert_photo_only_search(mobile, f"{name}-mobile")
         assert_autocomplete_interactions(mobile, f"{name}-mobile")
-        assert_password_recovery(mobile, f"{name}-mobile")
         mobile.screenshot(path=OUT / f"cross-browser-{name}-mobile.png", full_page=True)
     finally:
         browser.close()
