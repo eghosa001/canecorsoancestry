@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+// This smoke-policy test is intentionally part of the Cloudflare edge deploy gate.
 import {
   cacheKey,
   edgeCacheVersion,
