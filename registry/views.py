@@ -283,35 +283,71 @@ def _record_search_hit_without_wait(dog_id):
         return
 
 
-def dog_detail(request, slug):
-    dogs = _dog_cards(
-        Dog.objects.filter(is_public=True),
-        include_parents=True,
-        include_sources=False,
-    ).prefetch_related(
-        Prefetch(
-            "titles",
-            queryset=DogTitle.objects.order_by("name"),
-            to_attr="display_titles",
-        ),
-        Prefetch(
-            "documents",
-            queryset=DogDocument.objects.filter(is_public=True).order_by("-created_at"),
-            to_attr="display_documents",
-        ),
+def _public_profile_dog(slug):
+    """Load published profile sections only when they have actual rows.
+
+    Cheap correlated EXISTS checks are part of the indexed dog lookup and
+    avoid separate remote database round trips for empty image, title,
+    registration and published-document collections.
+    """
+    dogs = (
+        Dog.objects.filter(is_public=True)
+        .select_related("kennel", "sire", "dam")
+        .annotate(
+            _has_profile_images=Exists(
+                DogImage.objects.filter(dog_id=OuterRef("pk"))
+            ),
+            _has_profile_registrations=Exists(
+                DogRegistration.objects.filter(dog_id=OuterRef("pk"))
+            ),
+            _has_profile_titles=Exists(
+                DogTitle.objects.filter(dog_id=OuterRef("pk"))
+            ),
+            _has_public_documents=Exists(
+                DogDocument.objects.filter(dog_id=OuterRef("pk"), is_public=True)
+            ),
+            _has_profile_sources=Exists(
+                DogSource.objects.filter(dog_id=OuterRef("pk"))
+            ),
+        )
     )
     dog = dogs.filter(slug=slug).first()
+    if dog is None:
+        return None
+
+    dog.display_images = (
+        list(DogImage.objects.filter(dog=dog).order_by(
+            "-is_primary", "sort_order", "created_at"
+        )) if dog._has_profile_images else []
+    )
+    dog.display_registrations = (
+        list(DogRegistration.objects.filter(dog=dog).select_related("authority"))
+        if dog._has_profile_registrations else []
+    )
+    dog.display_titles = (
+        list(DogTitle.objects.filter(dog=dog).order_by("name"))
+        if dog._has_profile_titles else []
+    )
+    dog.display_documents = (
+        list(DogDocument.objects.filter(dog=dog, is_public=True).order_by("-created_at"))
+        if dog._has_public_documents else []
+    )
+    dog.display_source_media = (
+        list(DogSource.objects.filter(dog=dog).order_by("-verified_at", "-created_at"))
+        if not dog.display_images and dog._has_profile_sources else []
+    )
+    _attach_source_image_urls([dog])
+    return dog
+
+
+def dog_detail(request, slug):
+    dog = _public_profile_dog(slug)
     if dog is None:
         old = DogRedirect.objects.select_related("dog").filter(old_slug=slug).first()
         if old and old.dog.is_public:
             return redirect("registry:dog-detail", slug=old.dog.slug, permanent=True)
-        return get_object_or_404(dogs, slug=slug)
+        return get_object_or_404(Dog.objects.filter(is_public=True), slug=slug)
 
-    if not dog.display_images:
-        dog.display_source_media = list(
-            DogSource.objects.filter(dog=dog).order_by("-verified_at", "-created_at")
-        )
-    _attach_source_image_urls([dog])
 
     try:
         coi_percent = inbreeding_coefficient(dog, public_only=True) * 100
