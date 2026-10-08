@@ -14,7 +14,7 @@ on:
       - "scripts/production_smoke.py"
       - "scripts/cross_browser_smoke.py"
   workflow_run:
-    workflows: ["Cloudflare site edge", "Provision Northflank origin"]
+    workflows: ["Cloudflare site edge"]
     types: [completed]
 
 permissions:
