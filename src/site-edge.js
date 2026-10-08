@@ -1,6 +1,6 @@
 const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
 // Bump this whenever public HTML/static layout assets must invalidate edge cache.
-const EDGE_CACHE_VERSION = "mobile-upload-v85"; // Correct mobile hero spacing and general photo upload refresh
+const EDGE_CACHE_VERSION = "edge-dev"; // Replaced with an immutable release-specific value during deploy
 const CACHE_FRESH_SECONDS = 900;
 const CACHE_RETENTION_SECONDS = 604800;
 const ORIGIN_GRACE_MS = 3500;
@@ -184,11 +184,11 @@ function rewriteForVisitor(response, request, env, extraHeaders = {}) {
   });
 }
 
-function cacheKey(request) {
+function cacheKey(request, cacheVersion = EDGE_CACHE_VERSION) {
   const url = new URL(request.url);
   url.hash = "";
   if (isSearchTrackingUrl(url)) url.search = "";
-  url.searchParams.set("__cca_edge_v", EDGE_CACHE_VERSION);
+  url.searchParams.set("__cca_edge_v", cacheVersion);
   return new Request(url.toString(), { method: "GET" });
 }
 
@@ -470,7 +470,12 @@ async function handleRequest(request, env, ctx) {
 
   if (url.pathname === "/__edge/health") {
     return Response.json(
-      { status: "ok", service: "site-edge", origin: env.ORIGIN_URL || DEFAULT_ORIGIN },
+      {
+        status: "ok",
+        service: "site-edge",
+        origin: env.ORIGIN_URL || DEFAULT_ORIGIN,
+        cache_version: EDGE_CACHE_VERSION,
+      },
       { headers: { "cache-control": "no-store" } },
     );
   }
