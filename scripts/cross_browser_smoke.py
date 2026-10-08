@@ -224,22 +224,24 @@ def main():
 
     report = {"base_url": BASE_URL, "checks": []}
     with sync_playwright() as p:
-        desktop_mobile = {
-            "viewport": {"width": 390, "height": 844},
-            "is_mobile": True,
-            "has_touch": True,
-        }
         for name, browser_type in (
             ("chromium", p.chromium),
             ("firefox", p.firefox),
             ("webkit", p.webkit),
         ):
+            mobile_options = {
+                "viewport": {"width": 390, "height": 844},
+                "has_touch": True,
+            }
+            if name != "firefox":
+                mobile_options["is_mobile"] = True
+
             started = time.perf_counter()
             rows = browser_contract(
                 browser_type,
                 name,
                 axe_source,
-                desktop_mobile,
+                mobile_options,
             )
             report["checks"].extend(rows)
             report[name] = {"seconds": round(time.perf_counter() - started, 3)}
