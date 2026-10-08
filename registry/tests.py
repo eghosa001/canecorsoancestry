@@ -8,8 +8,8 @@ from django.urls import reverse
 
 from pedigrees.services import profile_direct_relations
 
-from .models import Dog, DogDocument, DogImage, DogRegistration, DogSource, DogTitle, HealthRecord, Kennel, Litter, RegistrationAuthority, VerificationState
-from .services import duplicate_candidates
+from .models import Dog, DogDocument, DogImage, DogRegistration, DogSource, DogTitle, HealthRecord, Kennel, Litter, ModerationRoleAssignment, RegistrationAuthority, Submission, VerificationState
+from .services import approve_submission, duplicate_candidates
 from .views import _public_profile_dog
 
 
@@ -296,6 +296,73 @@ class DogModelTests(TestCase):
         self.assertTrue(
             any(row["id"] == str(dog.pk) for row in response.json()["results"])
         )
+
+    @patch("registry.services.verify_submission", return_value=[])
+    def test_approved_member_photo_updates_public_profile_and_search(self, _verify):
+        reviewer = get_user_model().objects.create_user(username="photo-reviewer")
+        member = get_user_model().objects.create_user(username="photo-member")
+        ModerationRoleAssignment.objects.create(
+            user=reviewer, role=ModerationRoleAssignment.Role.REVIEWER,
+        )
+        dog = Dog.objects.create(
+            name="Approved Photo Dog", slug="approved-photo-dog", is_public=True
+        )
+        DogImage.objects.create(
+            dog=dog, image="dogs/old-photo.jpg", is_primary=True,
+        )
+        submission = Submission.objects.create(
+            kind=Submission.Kind.IMAGE, submitted_by=member, dog=dog,
+            payload={"caption": "New official photo", "is_primary": True},
+            attachment="dogs/new-official-photo.jpg",
+        )
+        cache_keys = (
+            "cca:dog-search:default-count:v1",
+            "cca:dog-search:countries:v3",
+            "cca:dog-search:kennels:v3",
+        )
+        for key in cache_keys:
+            cache.set(key, "old", timeout=900)
+        with self.captureOnCommitCallbacks(execute=True):
+            approve_submission(submission, reviewer)
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, Submission.Status.APPROVED)
+        self.assertEqual(
+            DogImage.objects.get(dog=dog, is_primary=True).image.name,
+            "dogs/new-official-photo.jpg",
+        )
+        for key in cache_keys:
+            self.assertIsNone(cache.get(key))
+        profile = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertContains(profile, "new-official-photo.jpg")
+        self.assertContains(profile, "old-photo.jpg")
+        self.assertContains(profile, "New official photo")
+        search = self.client.get(
+            reverse("registry:dog-search"), {"q": "Approved Photo Dog"}
+        )
+        self.assertContains(search, "new-official-photo.jpg")
+
+    @patch("registry.services.verify_submission", return_value=[])
+    def test_approved_rename_is_searchable_under_old_and_new_names(self, _verify):
+        reviewer = get_user_model().objects.create_user(username="rename-reviewer")
+        member = get_user_model().objects.create_user(username="rename-member")
+        ModerationRoleAssignment.objects.create(
+            user=reviewer, role=ModerationRoleAssignment.Role.REVIEWER,
+        )
+        dog = Dog.objects.create(
+            name="Old Champion Name", slug="old-champion-name", is_public=True
+        )
+        submission = Submission.objects.create(
+            kind=Submission.Kind.CORRECTION,
+            submitted_by=member, dog=dog, payload={"name": "New Champion Name"},
+        )
+        approve_submission(submission, reviewer)
+        dog.refresh_from_db()
+        self.assertEqual(dog.name, "New Champion Name")
+        self.assertEqual(dog.slug, "old-champion-name")
+        self.assertTrue(dog.aliases.filter(name="Old Champion Name").exists())
+        for query in ("Old Champion Name", "New Champion Name"):
+            response = self.client.get(reverse("registry:dog-search"), {"q": query})
+            self.assertContains(response, "New Champion Name")
 
     def test_private_dogs_remain_hidden_from_all_public_searches(self):
         Dog.objects.create(
