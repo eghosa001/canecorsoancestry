@@ -46,8 +46,6 @@
       }
 
       window.addEventListener("scroll", function () {
-        closeMobileMenus();
-
         // Keep the picker stable only while its own suggestion panel is being
         // manipulated. A real page scroll should dismiss autocomplete and blur
         // the field so mobile keyboards do not remain pinned over the page.
@@ -60,6 +58,7 @@
         if (pickerInteracting || keyboardFocusing || Date.now() - lastPanelScrollAt < 180) {
           return;
         }
+        closeMobileMenus();
         dismissSearchUI();
       }, { passive: true });
 
@@ -192,7 +191,10 @@
                 if (!browse && input.value.trim() !== expected) return;
                 render(data.results || []);
               })
-              .catch(close)
+              .catch(function () {
+                // A failed old request must not dismiss a newer valid picker.
+                if (serial === requestSerial) close();
+              })
               .finally(function () {
                 if (serial === requestSerial) panel.setAttribute("aria-busy", "false");
               });
