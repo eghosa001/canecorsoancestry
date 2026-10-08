@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN DJANGO_SETTINGS_MODULE=config.settings.development \
+RUN DJANGO_SETTINGS_MODULE=config.settings.buildstatic \
     python manage.py collectstatic --noinput
 
 EXPOSE 8080
