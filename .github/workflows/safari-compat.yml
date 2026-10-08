@@ -1,0 +1,76 @@
+name: Safari compatibility
+
+on:
+  pull_request:
+    paths:
+      - "core/static/core/site.css"
+      - "core/static/core/site.js"
+      - "core/static/core/premium-polish.css"
+      - "templates/base.html"
+      - "accounts/templates/accounts/submission_form.html"
+      - "scripts/safari_local_smoke.py"
+      - ".github/workflows/safari-compat.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: safari-compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  webkit-local:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt playwright
+      - name: Install WebKit only
+        run: python -m playwright install --with-deps webkit
+      - name: Prepare isolated member fixture
+        run: |
+          python manage.py migrate --noinput
+          python manage.py shell <<'PY'
+          import os
+          from django.contrib.auth import get_user_model
+          from registry.models import Dog, Kennel, KennelMembership
+          user = get_user_model().objects.create_user(
+              username="safari-smoke-member",
+              password="safari-smoke-password",
+              email="safari-smoke@example.test",
+          )
+          kennel = Kennel.objects.create(
+              name="Safari Smoke Kennel", slug="safari-smoke-kennel"
+          )
+          KennelMembership.objects.create(
+              user=user, kennel=kennel, role=KennelMembership.Role.OWNER,
+          )
+          dog = Dog.objects.create(
+              name="Safari Dog",
+              slug="safari-dog",
+              kennel=kennel,
+              is_public=True,
+          )
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as out:
+              out.write(f"SAFARI_TEST_DOG_ID={dog.pk}\n")
+          PY
+      - name: Start local Django
+        run: |
+          python manage.py runserver 127.0.0.1:8000 --noreload > /tmp/cca-safari.log 2>&1 &
+          for i in $(seq 1 25); do
+            if curl -fsS http://127.0.0.1:8000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/cca-safari.log
+          exit 1
+      - name: WebKit iPhone smoke
+        run: |
+          python -m py_compile scripts/safari_local_smoke.py
+          python scripts/safari_local_smoke.py
