@@ -117,9 +117,9 @@ DEFAULT_RULES = {
         True,
     ),
     "duplicate_litter": (
-        "Possible duplicate litter",
-        SubmissionRiskLevel.YELLOW,
-        False,
+        "Duplicate canonical litter identity",
+        SubmissionRiskLevel.RED,
+        True,
     ),
     "missing_litter_core_data": (
         "Incomplete litter identity data",
