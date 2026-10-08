@@ -168,7 +168,7 @@ class DogModelTests(TestCase):
             "https://canecorsopedigree.com/static/images/animal/source-image.jpg",
         )
 
-    def test_public_search_excludes_untrusted_source_url_without_managed_photo(self):
+    def test_public_search_shows_record_but_not_untrusted_source_photo(self):
         dog = Dog.objects.create(
             name="Untrusted Source Dog",
             slug="untrusted-source-dog",
@@ -186,7 +186,9 @@ class DogModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "Untrusted Source Dog")
+        self.assertContains(response, "Untrusted Source Dog")
+        self.assertContains(response, "Pedigree record · no public photo")
+        self.assertNotContains(response, "https://example.com/untrusted.jpg")
 
     def test_authenticated_profile_secondary_actions_are_grouped(self):
         user = get_user_model().objects.create_user(
