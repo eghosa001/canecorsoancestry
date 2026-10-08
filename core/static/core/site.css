@@ -6970,3 +6970,67 @@ html[data-theme="light"] .hero-search input {
     padding-top: 108px !important;
   }
 }
+
+
+/* Approved photo fidelity: fit full dogs and prevent hard face/body cropping.
+   Keep layout dimensions fixed to avoid CLS while using contain over cover. */
+.dog-profile .profile-photo {
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+}
+.dog-profile .profile-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: 620px;
+  object-fit: contain;
+  object-position: center center;
+}
+.dog-card .dog-card-media img,
+.search-result-card .search-result-media img,
+.dashboard-dog-media img,
+.member-form-target-media img {
+  object-fit: contain;
+  object-position: center center;
+}
+.dog-photo-gallery {
+  margin-top: 18px;
+}
+.dog-photo-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 154px), 1fr));
+  gap: 12px;
+}
+.dog-photo-gallery-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  overflow: hidden;
+  text-decoration: none;
+  background: var(--surface-2);
+}
+.dog-photo-gallery-item img {
+  display: block;
+  width: 100%;
+  height: 174px;
+  object-fit: contain;
+  object-position: center;
+}
+.dog-photo-gallery-item span {
+  padding: 9px 10px;
+  color: var(--text);
+  font-size: .78rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.dog-photo-gallery-item:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+@media (max-width: 440px) {
+  .dog-photo-gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dog-photo-gallery-item img { height: 142px; }
+}
