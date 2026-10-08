@@ -17,6 +17,7 @@ from pedigrees.services import (
     inbreeding_coefficient,
     mate_relationships,
     offspring_for,
+    profile_direct_relations,
     sibling_relationships,
 )
 
@@ -353,12 +354,13 @@ def dog_detail(request, slug):
         }
 
     relation_limit = PROFILE_RELATION_PREVIEW_LIMIT
-    sibling_rows = sibling_relationships(dog, limit=relation_limit + 1)
+    # A single bounded SQL request retrieves both relationship previews.
+    # The extra row in each category preserves accurate truncation indicators.
+    sibling_rows, offspring_rows = profile_direct_relations(
+        dog, limit=relation_limit + 1
+    )
     siblings_truncated = len(sibling_rows) > relation_limit
     siblings = sibling_rows[:relation_limit]
-
-    offspring_queryset = offspring_for(dog)
-    offspring_rows = list(offspring_queryset[: relation_limit + 1])
     offspring_truncated = len(offspring_rows) > relation_limit
     offspring = offspring_rows[:relation_limit]
 
