@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 // This smoke-policy test is intentionally part of the Cloudflare edge deploy gate.
 import {
   cacheKey,
@@ -129,3 +130,50 @@ try {
 } finally {
   globalThis.fetch = realFetch;
 }
+
+
+const cloudflareWorkflow = readFileSync(
+  new URL("../.github/workflows/cloudflare-site-edge.yml", import.meta.url),
+  "utf8",
+);
+const smokeWorkflow = readFileSync(
+  new URL("../.github/workflows/production-smoke.yml", import.meta.url),
+  "utf8",
+);
+const northflankWorkflow = readFileSync(
+  new URL("../.github/workflows/provision-northflank.yml", import.meta.url),
+  "utf8",
+);
+
+assert.match(
+  cloudflareWorkflow,
+  /EDGE_CACHE_VERSION: edge-\$\{\{ github\.run_id \}\}/,
+  "Cloudflare cache namespace must be unique to the edge workflow run",
+);
+assert.match(
+  cloudflareWorkflow,
+  /APP_RELEASE_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \|\| '' \}\}/,
+  "Cloudflare must retain the triggering Northflank app release identity",
+);
+assert.match(
+  cloudflareWorkflow,
+  /ref: \$\{\{ github\.event_name == 'workflow_run' && 'main' \|\| github\.sha \}\}/,
+  "Post-Northflank edge deploys must use the latest Worker source from main",
+);
+assert.match(
+  smokeWorkflow,
+  /EXPECTED_EDGE_CACHE_VERSION: edge-\$\{\{ github\.event\.workflow_run\.id \|\| github\.run_id \}\}/,
+  "Production smoke must verify the exact Cloudflare cutover run namespace",
+);
+assert.match(
+  northflankWorkflow,
+  /GIT_COMMIT_SHA:\$git_sha/,
+  "Northflank runtime must expose its exact deployed Git SHA",
+);
+assert.match(
+  northflankWorkflow,
+  /Northflank health release marker/,
+  "Northflank deploy must verify its health release marker before succeeding",
+);
+
+console.log("release handshake workflow assertions passed");
