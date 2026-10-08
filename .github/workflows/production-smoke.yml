@@ -5,6 +5,10 @@ on:
   pull_request:
     paths:
       - "scripts/production_smoke.py"
+      - "scripts/cross_browser_smoke.py"
+      - "registry/**"
+      - "accounts/**"
+      - "templates/**"
       - ".github/workflows/production-smoke.yml"
   push:
     branches: [main]
@@ -35,9 +39,17 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: pip install -r requirements.txt playwright
-      - run: python -m playwright install --with-deps chromium
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install browser and accessibility engines
+        run: |
+          npm install --no-save axe-core@4
+          python -m playwright install --with-deps chromium firefox webkit
       - name: Verify live production UI and concurrency
         run: python scripts/production_smoke.py
+      - name: Verify Chromium, Firefox, WebKit and accessibility
+        run: python scripts/cross_browser_smoke.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
