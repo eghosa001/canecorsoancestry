@@ -76,6 +76,34 @@ def _resolve_litter(value):
         return None
 
 
+def _canonical_litter_conflict(*, sire, dam, date_of_birth, exclude_litter_id=None):
+    """Serialize canonical-litter checks on the parent rows.
+
+    When both parents and DOB are known, the biological birth event is unique.
+    Locking the same ordered parent rows makes concurrent moderation approvals
+    serialize even before a database-level uniqueness constraint is involved.
+    """
+    if not (sire and dam and date_of_birth):
+        return None
+
+    parent_ids = sorted((sire.pk, dam.pk), key=str)
+    # Force lock acquisition now and in a stable order to avoid deadlocks.
+    list(
+        Dog.objects.select_for_update()
+        .filter(pk__in=parent_ids)
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+    conflicts = Litter.objects.filter(
+        sire=sire,
+        dam=dam,
+        date_of_birth=date_of_birth,
+    )
+    if exclude_litter_id:
+        conflicts = conflicts.exclude(pk=exclude_litter_id)
+    return conflicts.order_by("created_at", "pk").first()
+
+
 def _date_from_payload(value):
     if not value:
         return None
@@ -730,12 +758,28 @@ def approve_submission(
             raise ValueError("Litter code is required.")
         if Litter.objects.filter(code=code).exists():
             raise ValueError("A litter with that code already exists.")
+
+        sire = _resolve_dog(payload.get("sire_id"))
+        dam = _resolve_dog(payload.get("dam_id"))
+        date_of_birth = _date_from_payload(payload.get("date_of_birth"))
+        existing_litter = _canonical_litter_conflict(
+            sire=sire,
+            dam=dam,
+            date_of_birth=date_of_birth,
+        )
+        if existing_litter is not None:
+            raise ValueError(
+                "This sire, dam and date of birth already identify one canonical "
+                f"litter ({existing_litter.public_label}). Use the existing litter "
+                "instead of creating another."
+            )
+
         litter = Litter(
             code=code,
             kennel=kennel,
-            sire=_resolve_dog(payload.get("sire_id")),
-            dam=_resolve_dog(payload.get("dam_id")),
-            date_of_birth=_date_from_payload(payload.get("date_of_birth")),
+            sire=sire,
+            dam=dam,
+            date_of_birth=date_of_birth,
             country=str(payload.get("country") or "").strip(),
             declared_puppy_count=payload.get("declared_puppy_count") or None,
             notes=str(payload.get("notes") or "").strip(),
@@ -752,10 +796,27 @@ def approve_submission(
         code = str(payload.get("code") or litter.code).strip()
         if Litter.objects.exclude(pk=litter.pk).filter(code=code).exists():
             raise ValueError("A litter with that code already exists.")
+
+        sire = _resolve_dog(payload.get("sire_id"))
+        dam = _resolve_dog(payload.get("dam_id"))
+        date_of_birth = _date_from_payload(payload.get("date_of_birth"))
+        existing_litter = _canonical_litter_conflict(
+            sire=sire,
+            dam=dam,
+            date_of_birth=date_of_birth,
+            exclude_litter_id=litter.pk,
+        )
+        if existing_litter is not None:
+            raise ValueError(
+                "This sire, dam and date of birth already identify one canonical "
+                f"litter ({existing_litter.public_label}). Merge/correct the existing "
+                "record instead of creating a duplicate birth event."
+            )
+
         litter.code = code
-        litter.sire = _resolve_dog(payload.get("sire_id"))
-        litter.dam = _resolve_dog(payload.get("dam_id"))
-        litter.date_of_birth = _date_from_payload(payload.get("date_of_birth"))
+        litter.sire = sire
+        litter.dam = dam
+        litter.date_of_birth = date_of_birth
         litter.country = str(payload.get("country") or "").strip()
         litter.declared_puppy_count = payload.get("declared_puppy_count") or None
         litter.notes = str(payload.get("notes") or "").strip()
