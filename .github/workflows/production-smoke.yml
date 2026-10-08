@@ -14,10 +14,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: production-smoke-live
-  cancel-in-progress: true
-
 jobs:
   script-check:
     if: github.event_name == 'pull_request'
@@ -37,6 +33,9 @@ jobs:
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main')
+    concurrency:
+      group: production-smoke-live
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 18
     env:
