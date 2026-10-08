@@ -495,7 +495,7 @@ class DogModelTests(TestCase):
         self.assertContains(response, "Other registered offspring")
         self.assertNotContains(response, '<div class="media-placeholder">CCA</div>', html=False)
 
-    def test_explicit_search_keeps_image_less_record_without_fake_thumbnail(self):
+    def test_explicit_search_excludes_image_less_record(self):
         Dog.objects.create(
             name="Text Only Champion",
             slug="text-only-champion",
@@ -508,10 +508,8 @@ class DogModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Text Only Champion")
-        self.assertContains(response, "Pedigree record · no public photo")
-        self.assertContains(response, "search-result-card no-media", html=False)
-        self.assertNotContains(response, '<div class="media-placeholder">CCA</div>', html=False)
+        self.assertNotContains(response, "Text Only Champion")
+        self.assertEqual(response.context["result_count"], 0)
 
     def test_generated_litter_uses_parent_pair_as_public_label(self):
         sire = Dog.objects.create(name="Atlas", slug="atlas-litter-label", sex=Dog.Sex.MALE)
