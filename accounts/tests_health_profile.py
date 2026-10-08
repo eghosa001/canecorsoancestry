@@ -133,6 +133,13 @@ class HealthRecordSubmissionTests(TestCase):
 
         approve_submission(submission, self.reviewer, "Evidence checked.")
 
+        # The approval must also be visible on the public profile, not just
+        # persisted in HealthRecord.
+        public_profile = self.client.get(
+            reverse("registry:dog-detail", args=[self.dog.slug])
+        )
+        self.assertContains(public_profile, "Hip score")
+        self.assertContains(public_profile, "Health & DNA")
         record = HealthRecord.objects.get(dog=self.dog, test_type="Hip score")
         self.assertEqual(record.result, "A")
         self.assertEqual(record.verification_state, VerificationState.HEALTH_VERIFIED)
