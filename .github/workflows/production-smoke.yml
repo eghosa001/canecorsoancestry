@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 18
     env:
       PRODUCTION_BASE_URL: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
-      EXPECTED_EDGE_CACHE_VERSION: ${{ github.event.workflow_run.head_sha || '' }}
+      EXPECTED_EDGE_CACHE_VERSION: ${{ github.event_name == 'workflow_run' && format('edge-{0}', github.event.workflow_run.id) || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -83,17 +83,17 @@ jobs:
           PY
               )"
               if [ -n "$live_version" ]; then
-                echo "LIVE_EDGE_CACHE_VERSION=$live_version" >> "$GITHUB_ENV"
                 echo "Live edge cache namespace: $live_version"
-                if [ -n "$EXPECTED_EDGE_CACHE_VERSION" ] && [ "$live_version" != "$EXPECTED_EDGE_CACHE_VERSION" ]; then
-                  echo "::notice::GitHub workflow_run display SHA was $EXPECTED_EDGE_CACHE_VERSION, but the deployed Cloudflare edge reports $live_version. Continuing against actual live production."
+                if [ -z "$EXPECTED_EDGE_CACHE_VERSION" ] || [ "$live_version" = "$EXPECTED_EDGE_CACHE_VERSION" ]; then
+                  echo "LIVE_EDGE_CACHE_VERSION=$live_version" >> "$GITHUB_ENV"
+                  exit 0
                 fi
-                exit 0
+                echo "Waiting for exact Cloudflare cutover namespace $EXPECTED_EDGE_CACHE_VERSION (currently $live_version)."
               fi
             fi
             sleep 5
           done
-          echo "::error::Cloudflare edge did not expose a cache_version; HTTP $status"
+          echo "::error::Cloudflare edge did not expose expected cache namespace ${EXPECTED_EDGE_CACHE_VERSION:-<any>}; HTTP $status"
           exit 1
       - name: Verify live production UI and concurrency
         run: python scripts/production_smoke.py
