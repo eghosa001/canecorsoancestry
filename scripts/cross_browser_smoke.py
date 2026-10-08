@@ -179,7 +179,7 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
 
         assert_photo_only_search(desktop, f"{name}-desktop")
         missing = desktop.goto(
-            f"{BASE_URL}/__production-smoke-missing-page__/",
+            f"{BASE_URL}/this-cane-corso-page-does-not-exist/",
             wait_until="domcontentloaded",
             timeout=30_000,
         )
