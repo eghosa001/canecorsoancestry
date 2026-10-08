@@ -376,8 +376,13 @@ def direct_relative_health(
     public_only=True,
     sibling_rows=None,
     children=None,
+    include_subject_records=False,
 ):
-    """Summarize published health records for parents, siblings and offspring."""
+    """Summarize direct relatives' tests; optionally fetch the subject's tests too.
+
+    With include_subject_records=True, return (relative_rows, subject_records)
+    from one health query. Legacy callers keep the existing list return type.
+    """
     relatives = {}
 
     def add(relative, relation):
@@ -404,19 +409,29 @@ def direct_relative_health(
     for child in list(children)[:200]:
         add(child, "Offspring")
 
-    if not relatives:
+    if not relatives and not include_subject_records:
         return []
 
+    ids = set(relatives)
+    if include_subject_records:
+        ids.add(dog.pk)
+    subject_records = []
     records = HealthRecord.objects.filter(
-        dog_id__in=relatives.keys()
+        dog_id__in=ids
     ).select_related("dog").order_by("dog__name", "test_type", "-tested_on")
     for record in records:
-        relatives[record.dog_id]["records"].append(record)
+        if include_subject_records and record.dog_id == dog.pk:
+            subject_records.append(record)
+        if record.dog_id in relatives:
+            relatives[record.dog_id]["records"].append(record)
 
-    return sorted(
+    result = sorted(
         relatives.values(),
         key=lambda row: (row["dog"].name.lower(), str(row["dog"].pk)),
     )
+    if include_subject_records:
+        return result, subject_records
+    return result
 
 
 def common_ancestors(dog_a, dog_b, generations=10, public_only=False):
@@ -617,6 +632,10 @@ def _relationship_matrix(*dogs, public_only=False):
 
 def inbreeding_coefficient(dog, public_only=False):
     """Return Wright's inbreeding coefficient without allocating a full NxN matrix."""
+    # With an unknown sire or dam, no recorded ancestral loop can connect
+    # the parents. Returning zero avoids an unnecessary recursive database query.
+    if not dog.sire_id or not dog.dam_id:
+        return 0.0
     ordered, links = _pedigree_order(dog, public_only=public_only)
     if dog.pk not in links:
         return 0.0

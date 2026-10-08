@@ -336,6 +336,49 @@ class PedigreeServiceTests(TestCase):
         self.assertEqual(response.context["dam"], chosen)
         self.assertEqual(response.context["error"], "")
 
+    def test_public_profile_health_combines_subject_and_relatives_in_one_query(self):
+        sire = Dog.objects.create(
+            name="Combined Health Sire", slug="combined-health-sire", is_public=True
+        )
+        subject = Dog.objects.create(
+            name="Combined Health Dog", slug="combined-health-dog",
+            sire=sire, is_public=True
+        )
+        HealthRecord.objects.create(dog=sire, test_type="Hips", result="Good")
+        HealthRecord.objects.create(dog=subject, test_type="Eyes", result="Clear")
+
+        with self.assertNumQueries(1):
+            relatives, subject_records = direct_relative_health(
+                subject,
+                sibling_rows=[],
+                children=[],
+                include_subject_records=True,
+            )
+        self.assertEqual([row.result for row in subject_records], ["Clear"])
+        self.assertEqual(len(relatives), 1)
+        self.assertEqual(relatives[0]["records"][0].result, "Good")
+        self.assertEqual(relatives[0]["relations"], ["Sire"])
+
+    def test_subject_health_still_loads_without_any_public_relatives(self):
+        dog = Dog.objects.create(
+            name="Unrelated Health Dog", slug="unrelated-health-dog", is_public=True
+        )
+        HealthRecord.objects.create(dog=dog, test_type="Heart", result="Normal")
+        with self.assertNumQueries(1):
+            relatives, subject_records = direct_relative_health(
+                dog, sibling_rows=[], children=[], include_subject_records=True
+            )
+        self.assertEqual(relatives, [])
+        self.assertEqual(subject_records[0].result, "Normal")
+
+    def test_unknown_parent_coi_skips_ancestry_database_request(self):
+        sire = Dog.objects.create(name="Unknown COI Sire", slug="unknown-coi-sire")
+        child = Dog.objects.create(
+            name="Unknown COI Child", slug="unknown-coi-child", sire=sire
+        )
+        with self.assertNumQueries(0):
+            self.assertEqual(inbreeding_coefficient(child, public_only=True), 0.0)
+
     def test_relative_health_is_derived_from_connected_family(self):
         sire = Dog.objects.create(
             name="Health Sire", slug="health-sire", is_public=True
