@@ -74,7 +74,7 @@ def run():
             go(page, "/accounts/login/")
             page.locator("input[name='username']").fill("safari-smoke-member")
             page.locator("input[name='password']").fill("safari-smoke-password")
-            page.locator("button[type='submit']").first.click()
+            page.locator("input[name='username']").locator("xpath=ancestor::form").locator("button[type='submit']").click()
             page.wait_for_load_state("domcontentloaded")
             assert "/accounts/login/" not in page.url, "Safari login did not complete"
 
@@ -87,7 +87,7 @@ def run():
                 "mimeType": "image/jpeg",
                 "buffer": buffer.getvalue(),
             })
-            page.locator("button[type='submit']").last.click()
+            page.locator("form.member-form button[type='submit']").click()
             page.wait_for_url("**/member/submissions/", timeout=12000)
             assert "Photo submitted for review." in page.locator("body").inner_text()
 
@@ -98,7 +98,7 @@ def run():
                 "mimeType": "application/pdf",
                 "buffer": b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n",
             })
-            page.locator("button[type='submit']").last.click()
+            page.locator("form.member-form button[type='submit']").click()
             page.wait_for_url("**/member/submissions/", timeout=12000)
             assert "Document submitted for review." in page.locator("body").inner_text()
 
