@@ -320,6 +320,17 @@ class Litter(models.Model):
 
     class Meta:
         ordering = ("-date_of_birth", "code")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("sire", "dam", "date_of_birth"),
+                condition=Q(
+                    sire__isnull=False,
+                    dam__isnull=False,
+                    date_of_birth__isnull=False,
+                ),
+                name="unique_canonical_litter_birth",
+            )
+        ]
 
     def clean(self):
         super().clean()
