@@ -67,8 +67,23 @@
     </div>
   </div>
 
+  {% if dog.display_images|length > 1 %}
+  <section class="dog-photo-gallery panel" id="photos" aria-label="Approved photos">
+    <div class="panel-heading"><h2>Photos</h2><span>Approved photographs for {{ dog.name }}</span></div>
+    <div class="dog-photo-gallery-grid">
+      {% for photo in dog.display_images %}
+        <a class="dog-photo-gallery-item" href="{{ photo.image.url }}" target="_blank" rel="noopener" aria-label="View approved photo {{ forloop.counter }} of {{ dog.name }}">
+          <img src="{{ photo.image.url }}" alt="{{ dog.name }}{% if photo.caption %} — {{ photo.caption }}{% endif %}" loading="lazy" decoding="async">
+          <span>{% if photo.caption %}{{ photo.caption }}{% elif photo.is_primary %}Main photo{% else %}Photo {{ forloop.counter }}{% endif %}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   <nav class="profile-tabs" aria-label="Profile sections">
     <a href="#overview">Overview</a>
+    {% if dog.display_images|length > 1 %}<a href="#photos">Photos</a>{% endif %}
     <a href="{% url 'pedigrees:detail' dog.slug %}">Pedigree</a>
     <a href="#health">Health</a>
     <a href="#offspring">Offspring</a>

@@ -2,8 +2,9 @@ const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
 // Fallback for local/dev runs. Production injects the exact deployed Git SHA
 // so each successful app release gets a fresh cache namespace automatically.
 const FALLBACK_EDGE_CACHE_VERSION = "local-dev";
-const CACHE_FRESH_SECONDS = 900;
-const CACHE_RETENTION_SECONDS = 604800;
+// Catalogue pages may cache briefly; member-edited profile pages must always be live.
+const CACHE_FRESH_SECONDS = 20;
+const CACHE_RETENTION_SECONDS = 60;
 const ORIGIN_GRACE_MS = 3500;
 // A genuine Django login page usually takes longer than 450ms to arrive over
 // the remote origin connection. Give it a fair chance before substituting
@@ -122,6 +123,18 @@ function isCacheablePublicPath(url, request) {
   const path = url.pathname;
   if (isPrivatePath(path)) return false;
   if (path.startsWith("/static/")) return true;
+  // Never serve a stale approved photo, corrected dog name, health result,
+  // kennel/litter edit or pedigree update from an edge HTML cache. Search
+  // results and autocomplete must likewise reflect moderation immediately.
+  if (
+    path === "/dogs/suggestions/" ||
+    (path === "/dogs/" && url.search) ||
+    path === "/pedigrees/virtual-mating/" ||
+    /^\/dogs\/[-a-z0-9]+\/$/i.test(path) ||
+    /^\/kennels\/[-a-z0-9]+\/$/i.test(path) ||
+    /^\/litters\/[0-9a-f-]+\/$/i.test(path) ||
+    /^\/pedigrees\/[-a-z0-9]+\/(?:descendants\/)?$/i.test(path)
+  ) return false;
   if (path === "/" || path === "/dogs/" || path === "/dogs/suggestions/" || path === "/kennels/" || path === "/statistics/" || path === "/pedigrees/" || path === "/pedigrees/virtual-mating/") return true;
   if (/^\/dogs\/[-a-z0-9]+\/$/i.test(path)) return true;
   if (/^\/kennels\/[-a-z0-9]+\/$/i.test(path)) return true;

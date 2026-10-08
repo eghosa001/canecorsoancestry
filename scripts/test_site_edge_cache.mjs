@@ -12,7 +12,15 @@ import {
   timedOriginGet,
 } from "../src/site-edge.js";
 
-const publicUrl = new URL("https://example.test/dogs/example-dog/");
+const publicUrl = new URL("https://example.test/");
+const profileUrl = new URL("https://example.test/dogs/example-dog/");
+assert.equal(isCacheablePublicPath(profileUrl, new Request(profileUrl)), false);
+const searchUrl = new URL("https://example.test/dogs/?q=Updated+Name");
+assert.equal(isCacheablePublicPath(searchUrl, new Request(searchUrl)), false);
+const kennelUrl = new URL("https://example.test/kennels/example/");
+assert.equal(isCacheablePublicPath(kennelUrl, new Request(kennelUrl)), false);
+const pedigreeUrl = new URL("https://example.test/pedigrees/example-dog/");
+assert.equal(isCacheablePublicPath(pedigreeUrl, new Request(pedigreeUrl)), false);
 
 const csrfRequest = new Request(publicUrl, {
   headers: { cookie: "csrftoken=anonymous-token" },
@@ -61,13 +69,13 @@ const trackedUrl = new URL(
   "https://example.test/dogs/example-dog/?source=search",
 );
 const trackedRequest = new Request(trackedUrl);
-assert.equal(isCacheablePublicPath(trackedUrl, trackedRequest), true);
+assert.equal(isCacheablePublicPath(trackedUrl, trackedRequest), false);
 
 const matingUrl = new URL(
   "https://example.test/pedigrees/virtual-mating/?sire_q=Atlas&dam_q=Anthie",
 );
 const matingRequest = new Request(matingUrl);
-assert.equal(isCacheablePublicPath(matingUrl, matingRequest), true);
+assert.equal(isCacheablePublicPath(matingUrl, matingRequest), false);
 
 const suggestionsUrl = new URL(
   "https://example.test/dogs/suggestions/?q=Anthie",
@@ -75,7 +83,7 @@ const suggestionsUrl = new URL(
 const suggestionsRequest = new Request(suggestionsUrl, {
   headers: { accept: "application/json" },
 });
-assert.equal(isCacheablePublicPath(suggestionsUrl, suggestionsRequest), true);
+assert.equal(isCacheablePublicPath(suggestionsUrl, suggestionsRequest), false);
 assert.equal(edgeCacheVersion({}), "local-dev");
 assert.equal(edgeCacheVersion({ EDGE_CACHE_VERSION: "release-sha-123" }), "release-sha-123");
 assert.equal(

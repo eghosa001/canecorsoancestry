@@ -607,7 +607,12 @@ class DogImageSubmissionForm(forms.Form):
         help_text="Choose a photo from your phone, camera or files, up to 20 MB.",
     )
     caption = forms.CharField(max_length=220, required=False)
-    is_primary = forms.BooleanField(required=False)
+    is_primary = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Use as the main profile photo",
+        help_text="Checked by default. Uncheck to add the approved photo to the gallery only.",
+    )
     notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
 
     def clean_attachment(self):
