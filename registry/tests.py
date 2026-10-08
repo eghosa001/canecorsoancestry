@@ -6,6 +6,8 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
+from pedigrees.services import profile_direct_relations
+
 from .models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, RegistrationAuthority, VerificationState
 from .services import duplicate_candidates
 
@@ -344,6 +346,77 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Source attached")
         self.assertContains(response, "Not independently verified")
+
+    def test_profile_direct_relations_is_one_query_and_preserves_relationships(self):
+        sire = Dog.objects.create(name="Common Sire", slug="common-sire", is_public=True)
+        dam = Dog.objects.create(name="Common Dam", slug="common-dam", is_public=True)
+        dog = Dog.objects.create(
+            name="Profile Subject", slug="profile-subject", sire=sire, dam=dam, is_public=True
+        )
+        full = Dog.objects.create(
+            name="A Full Sibling", slug="a-full-sibling", sire=sire, dam=dam, is_public=True
+        )
+        half = Dog.objects.create(
+            name="B Half Sibling", slug="b-half-sibling", sire=sire, is_public=True
+        )
+        child = Dog.objects.create(
+            name="C Offspring", slug="c-offspring", sire=dog, is_public=True
+        )
+        with self.assertNumQueries(1):
+            siblings, offspring = profile_direct_relations(dog, limit=5)
+        self.assertEqual(
+            [(row["dog"].pk, row["relation"], row["shared_parents"]) for row in siblings],
+            [(full.pk, "Full sibling", ("sire", "dam")),
+             (half.pk, "Half sibling", ("sire",))],
+        )
+        self.assertEqual([row.pk for row in offspring], [child.pk])
+
+    def test_profile_direct_relations_bounds_each_category_and_excludes_private(self):
+        sire = Dog.objects.create(name="Preview Parent", slug="preview-parent", is_public=True)
+        subject = Dog.objects.create(
+            name="Preview Subject", slug="preview-subject", sire=sire, is_public=True
+        )
+        for index in range(6):
+            Dog.objects.create(
+                name=f"Sibling {index}", slug=f"relation-sibling-{index}",
+                sire=sire, is_public=True,
+            )
+            Dog.objects.create(
+                name=f"Child {index}", slug=f"relation-child-{index}",
+                sire=subject, is_public=True,
+            )
+        Dog.objects.create(
+            name="A Private Sibling", slug="private-sibling", sire=sire, is_public=False
+        )
+        Dog.objects.create(
+            name="A Private Child", slug="private-child", sire=subject, is_public=False
+        )
+        with self.assertNumQueries(1):
+            siblings, offspring = profile_direct_relations(subject, limit=3)
+        self.assertEqual([row["dog"].name for row in siblings], [
+            "Sibling 0", "Sibling 1", "Sibling 2",
+        ])
+        self.assertEqual([row.name for row in offspring], [
+            "Child 0", "Child 1", "Child 2",
+        ])
+
+    def test_profile_direct_relations_keeps_dog_in_both_relationship_buckets(self):
+        common_dam = Dog.objects.create(
+            name="Double Relation Dam", slug="double-relation-dam", is_public=True
+        )
+        subject = Dog.objects.create(
+            name="Double Relation Subject", slug="double-relation-subject",
+            dam=common_dam, is_public=True,
+        )
+        both = Dog.objects.create(
+            name="Double Relation Child", slug="double-relation-child",
+            sire=subject, dam=common_dam, is_public=True,
+        )
+        with self.assertNumQueries(1):
+            siblings, offspring = profile_direct_relations(subject, limit=1)
+        self.assertEqual([row["dog"].pk for row in siblings], [both.pk])
+        self.assertEqual(siblings[0]["relation"], "Half sibling")
+        self.assertEqual([row.pk for row in offspring], [both.pk])
 
     def test_public_dog_profile_bounds_large_relationship_previews(self):
         sire = Dog.objects.create(
