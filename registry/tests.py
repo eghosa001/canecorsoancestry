@@ -271,7 +271,7 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"][0]["registration"], "PERF-001")
 
-    def test_public_search_excludes_image_less_match(self):
+    def test_public_search_includes_published_image_less_match(self):
         dog = Dog.objects.create(
             name="Hidden Pedigree Record",
             slug="hidden-pedigree-record",
@@ -279,9 +279,10 @@ class DogModelTests(TestCase):
         )
         response = self.client.get(reverse("registry:dog-search"), {"q": "Hidden Pedigree"})
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, dog.name)
+        self.assertContains(response, dog.name)
+        self.assertContains(response, "Pedigree record · no public photo")
 
-    def test_dog_suggestions_exclude_image_less_match(self):
+    def test_dog_suggestions_include_image_less_match(self):
         dog = Dog.objects.create(
             name="Hidden Suggestion Record",
             slug="hidden-suggestion-record",
@@ -292,9 +293,37 @@ class DogModelTests(TestCase):
             {"q": "Hidden Suggestion"},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(
+        self.assertTrue(
             any(row["id"] == str(dog.pk) for row in response.json()["results"])
         )
+
+    def test_private_dogs_remain_hidden_from_all_public_searches(self):
+        Dog.objects.create(
+            name="Private Member Dog", slug="private-member-dog", is_public=False,
+        )
+        results = self.client.get(
+            reverse("registry:dog-search"), {"q": "Private Member Dog"}
+        )
+        suggestions = self.client.get(
+            reverse("registry:dog-suggestions"), {"q": "Private Member Dog"}
+        )
+        self.assertEqual(results.context["result_count"], 0)
+        self.assertEqual(suggestions.json()["results"], [])
+
+    def test_public_profile_shows_additional_approved_photo_gallery(self):
+        dog = Dog.objects.create(
+            name="Gallery Champion", slug="gallery-champion", is_public=True,
+        )
+        DogImage.objects.create(
+            dog=dog, image="dogs/portrait-original.jpg", is_primary=True
+        )
+        DogImage.objects.create(
+            dog=dog, image="dogs/new-approved-photo.jpg", caption="Full body",
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertContains(response, 'id="photos"', html=False)
+        self.assertContains(response, "new-approved-photo.jpg")
+        self.assertContains(response, "Full body")
 
     def test_public_dog_profile_always_exposes_coi(self):
         common = Dog.objects.create(
@@ -688,7 +717,7 @@ class DogModelTests(TestCase):
         self.assertContains(response, "Other registered offspring")
         self.assertNotContains(response, '<div class="media-placeholder">CCA</div>', html=False)
 
-    def test_explicit_search_excludes_image_less_record(self):
+    def test_explicit_search_includes_public_image_less_record(self):
         Dog.objects.create(
             name="Text Only Champion",
             slug="text-only-champion",
@@ -701,8 +730,8 @@ class DogModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["result_count"], 0)
-        self.assertEqual(list(response.context["dogs"]), [])
+        self.assertEqual(response.context["result_count"], 1)
+        self.assertEqual([dog.name for dog in response.context["dogs"]], ["Text Only Champion"])
 
     def test_generated_litter_uses_parent_pair_as_public_label(self):
         sire = Dog.objects.create(name="Atlas", slug="atlas-litter-label", sex=Dog.Sex.MALE)
