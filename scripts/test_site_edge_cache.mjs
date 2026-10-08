@@ -73,8 +73,8 @@ const suggestionsRequest = new Request(suggestionsUrl, {
 });
 assert.equal(isCacheablePublicPath(suggestionsUrl, suggestionsRequest), true);
 assert.equal(
-  cacheKey(trackedRequest).url,
-  "https://example.test/dogs/example-dog/?__cca_edge_v=mobile-upload-v85",
+  cacheKey(trackedRequest, "test-release-123").url,
+  "https://example.test/dogs/example-dog/?__cca_edge_v=test-release-123",
 );
 
 console.log("site-edge cache policy tests passed");
