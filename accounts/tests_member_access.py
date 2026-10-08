@@ -564,7 +564,18 @@ class ApprovedDocumentPublicationTests(TestCase):
                 )
                 self.assertNotContains(before, "Official pedigree certificate")
 
-                approve_submission(submission, self.reviewer, "Document checked.")
+                # Exercise the actual moderator approval HTTP endpoint,
+                # rather than calling the service directly.
+                self.client.force_login(self.reviewer)
+                review_response = self.client.post(
+                    reverse(
+                        "accounts:review-submission",
+                        args=[submission.pk, "approve"],
+                    ),
+                    {"resolution_notes": "Document checked."},
+                )
+                self.assertEqual(review_response.status_code, 302)
+                self.client.logout()
                 submission.refresh_from_db()
                 self.assertEqual(submission.status, Submission.Status.APPROVED)
                 document = DogDocument.objects.get(source_submission=submission)
