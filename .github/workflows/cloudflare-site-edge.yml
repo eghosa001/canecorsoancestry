@@ -14,6 +14,9 @@ on:
       - "wrangler.site.toml"
       - "scripts/test_site_edge_cache.mjs"
       - ".github/workflows/cloudflare-site-edge.yml"
+  workflow_run:
+    workflows: ["Provision Northflank origin"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -25,10 +28,13 @@ concurrency:
 
 jobs:
   validate:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -54,7 +60,12 @@ jobs:
         run: npx --yes wrangler@4 deploy --dry-run --config wrangler.site.toml
 
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: >
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -62,9 +73,12 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 19a03bec57c0277e01e1e70e241576af
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -124,6 +138,36 @@ jobs:
         run: |
           python -c 'import json, os; open("/tmp/site-edge-secrets.json", "w", encoding="utf-8").write(json.dumps({"ORIGIN_EDGE_SECRET": os.environ["DJANGO_SECRET_KEY"]}))'
 
+      - name: Inject release-scoped cache namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_SHA"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path("wrangler.site.toml")
+          text = path.read_text(encoding="utf-8")
+          release = os.environ["RELEASE_SHA"]
+          line = f'EDGE_CACHE_VERSION = "{release}"'
+
+          if "EDGE_CACHE_VERSION =" in text:
+              lines = [
+                  line if item.strip().startswith("EDGE_CACHE_VERSION =") else item
+                  for item in text.splitlines()
+              ]
+              text = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
+          else:
+              marker = 'ORIGIN_URL = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"'
+              if marker not in text:
+                  raise SystemExit("wrangler.site.toml [vars] ORIGIN_URL marker is missing")
+              text = text.replace(marker, marker + "\n" + line)
+
+          path.write_text(text, encoding="utf-8")
+          print(f"Edge cache namespace: {release}")
+          PY
+
       - name: Deploy site edge
         run: npx --yes wrangler@4 deploy --config wrangler.site.toml --secrets-file /tmp/site-edge-secrets.json
 
@@ -140,10 +184,13 @@ jobs:
 
           for attempt in $(seq 1 12); do
             status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/edge-health.json -w '%{http_code}' "$base/__edge/health" || true)"
-            if [ "$status" = "200" ] && grep -q '"service":"site-edge"' /tmp/edge-health.json; then
+            if [ "$status" = "200" ] &&
+               grep -q '"service":"site-edge"' /tmp/edge-health.json &&
+               grep -q "\"cache_version\":\"$RELEASE_SHA\"" /tmp/edge-health.json; then
               break
             fi
             if [ "$attempt" = "12" ]; then
+              echo "::error::Site edge did not expose release cache namespace $RELEASE_SHA"
               cat /tmp/edge-health.json 2>/dev/null || true
               exit 1
             fi
