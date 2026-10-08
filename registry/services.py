@@ -5,6 +5,7 @@ import re
 
 from django.conf import settings
 from django.contrib.postgres.search import TrigramSimilarity
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.db import IntegrityError, connection, transaction
@@ -539,6 +540,7 @@ def approve_submission(
         dog = submission.dog
         if dog is None:
             raise ValueError("Correction submission has no target dog.")
+        previous_name = dog.name
 
         editable = ("name", "sex", "date_of_birth", "colour", "country", "bloodline", "bio")
         for field in editable:
@@ -556,6 +558,10 @@ def approve_submission(
             dog.litter = _resolve_litter(payload.get("litter_id"))
         dog.full_clean()
         dog.save()
+        # Keep the former identity searchable after an approved rename.
+        # The canonical slug stays stable to preserve existing pedigree links.
+        if previous_name.strip() and previous_name.casefold() != dog.name.casefold():
+            DogAlias.objects.get_or_create(dog=dog, name=previous_name.strip())
 
         if "registration" in payload:
             desired_registration = str(payload.get("registration") or "").strip()
@@ -919,6 +925,18 @@ def approve_submission(
             },
             note=resolution_notes,
         )
+    # Clearing Django's directory metadata after commit prevents a newly
+    # approved dog, photo, or kennel from leaving stale browse counts/filters.
+    # Public content at the Cloudflare edge has a separate freshness policy.
+    transaction.on_commit(
+        lambda: cache.delete_many(
+            [
+                "cca:dog-search:default-count:v1",
+                "cca:dog-search:countries:v3",
+                "cca:dog-search:kennels:v3",
+            ]
+        )
+    )
     return submission
 
 
