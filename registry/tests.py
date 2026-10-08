@@ -8,8 +8,9 @@ from django.urls import reverse
 
 from pedigrees.services import profile_direct_relations
 
-from .models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, RegistrationAuthority, VerificationState
+from .models import Dog, DogDocument, DogImage, DogRegistration, DogSource, DogTitle, HealthRecord, Kennel, Litter, RegistrationAuthority, VerificationState
 from .services import duplicate_candidates
+from .views import _public_profile_dog
 
 
 class DogModelTests(TestCase):
@@ -346,6 +347,62 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Source attached")
         self.assertContains(response, "Not independently verified")
+
+    def test_empty_profile_extras_need_only_the_primary_lookup(self):
+        dog = Dog.objects.create(
+            name="Minimal Profile", slug="minimal-profile", is_public=True,
+        )
+        with self.assertNumQueries(1):
+            profile = _public_profile_dog(dog.slug)
+        self.assertEqual(profile.pk, dog.pk)
+        self.assertEqual(profile.display_images, [])
+        self.assertEqual(profile.display_registrations, [])
+        self.assertEqual(profile.display_titles, [])
+        self.assertEqual(profile.display_documents, [])
+        self.assertEqual(profile.display_source_media, [])
+
+    def test_complete_profile_fetches_every_published_section_without_extra_queries(self):
+        dog = Dog.objects.create(
+            name="Full Profile", slug="full-profile", is_public=True,
+        )
+        DogImage.objects.create(dog=dog, image="dogs/full-profile.jpg", is_primary=True)
+        DogRegistration.objects.create(dog=dog, number="FULL-PROFILE-123")
+        DogTitle.objects.create(dog=dog, name="Champion")
+        DogDocument.objects.create(
+            dog=dog, title="Public DNA", document_type=DogDocument.DocumentType.DNA,
+            file="documents/public-dna.pdf", is_public=True,
+        )
+        DogDocument.objects.create(
+            dog=dog, title="Private DNA", file="documents/private-dna.pdf",
+            is_public=False,
+        )
+        with self.assertNumQueries(5):
+            profile = _public_profile_dog(dog.slug)
+        self.assertEqual(profile.display_images[0].image.name, "dogs/full-profile.jpg")
+        self.assertEqual(profile.display_registrations[0].number, "FULL-PROFILE-123")
+        self.assertEqual(profile.display_titles[0].name, "Champion")
+        self.assertEqual([doc.title for doc in profile.display_documents], ["Public DNA"])
+        self.assertEqual(profile.display_source_media, [])
+
+    def test_unphotographed_profile_still_loads_trusted_source_image(self):
+        dog = Dog.objects.create(
+            name="Source Profile", slug="source-profile", is_public=True,
+        )
+        DogSource.objects.create(
+            dog=dog,
+            source_type=DogSource.SourceType.PEDIGREE,
+            title="Public pedigree",
+            raw_payload={
+                "image_url": "https://canecorsopedigree.com/static/images/animal/source-profile.jpg"
+            },
+        )
+        with self.assertNumQueries(2):
+            profile = _public_profile_dog(dog.slug)
+        self.assertEqual(profile.display_images, [])
+        self.assertEqual(
+            profile.source_image_url,
+            "https://canecorsopedigree.com/static/images/animal/source-profile.jpg",
+        )
 
     def test_profile_direct_relations_is_one_query_and_preserves_relationships(self):
         sire = Dog.objects.create(name="Common Sire", slug="common-sire", is_public=True)
