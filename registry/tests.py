@@ -139,7 +139,7 @@ class DogModelTests(TestCase):
         self.assertNotContains(response, "Second Shared Kennel Dog")
         self.assertNotContains(response, "No Image Dog")
 
-    def test_public_search_excludes_source_only_record_without_managed_photo(self):
+    def test_public_search_includes_trusted_source_photo_without_managed_copy(self):
         dog = Dog.objects.create(
             name="Source Image Search Dog",
             slug="source-image-search-dog",
@@ -159,7 +159,31 @@ class DogModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "Source Image Search Dog")
+        self.assertContains(response, "Source Image Search Dog")
+        self.assertContains(
+            response,
+            "https://canecorsopedigree.com/static/images/animal/source-image.jpg",
+        )
+
+    def test_public_search_excludes_untrusted_source_url_without_managed_photo(self):
+        dog = Dog.objects.create(
+            name="Untrusted Source Dog",
+            slug="untrusted-source-dog",
+            is_public=True,
+        )
+        DogSource.objects.create(
+            dog=dog,
+            source_url="https://example.com/dog/untrusted-source-dog",
+            raw_payload={"image_url": "https://example.com/untrusted.jpg"},
+        )
+
+        response = self.client.get(
+            reverse("registry:dog-search"),
+            {"q": "Untrusted Source"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Untrusted Source Dog")
 
     def test_authenticated_profile_secondary_actions_are_grouped(self):
         user = get_user_model().objects.create_user(
