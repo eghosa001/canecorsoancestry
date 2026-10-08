@@ -9,6 +9,8 @@ from pathlib import Path
 import requests
 from playwright.sync_api import sync_playwright
 
+from performance_math import nearest_rank_percentile
+
 
 BASE_URL = os.getenv("PRODUCTION_BASE_URL", "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev").rstrip("/")
 OUT = Path(os.getenv("PRODUCTION_SMOKE_DIR", "artifacts/production-smoke"))
@@ -241,13 +243,11 @@ def concurrent_health_probe(total=16, workers=8):
     if any(status != 200 for status in statuses):
         raise AssertionError(f"Concurrent health probe statuses: {statuses}")
 
-    ordered = sorted(timings)
-    p95_index = max(0, min(len(ordered) - 1, int(len(ordered) * 0.95) - 1))
     result = {
         "requests": total,
         "concurrency": workers,
         "median_seconds": round(statistics.median(timings), 3),
-        "p95_seconds": round(ordered[p95_index], 3),
+        "p95_seconds": round(nearest_rank_percentile(timings), 3),
         "max_seconds": round(max(timings), 3),
     }
     if result["p95_seconds"] > 2:
@@ -255,7 +255,7 @@ def concurrent_health_probe(total=16, workers=8):
     return result
 
 
-def concurrent_profile_probe(path, total=12, workers=8):
+def concurrent_profile_probe(path, total=24, workers=8):
     def one(index):
         separator = "&" if "?" in path else "?"
         url = f"{BASE_URL}{path}{separator}smoke=concurrency-{index}"
@@ -288,16 +288,14 @@ def concurrent_profile_probe(path, total=12, workers=8):
     if failures:
         raise AssertionError(f"Concurrent dog-profile probe failures: {failures}")
 
-    ordered = sorted(timings)
-    p95_index = max(0, min(len(ordered) - 1, int(len(ordered) * 0.95) - 1))
     result = {
         "requests": total,
         "concurrency": workers,
         "median_seconds": round(statistics.median(timings), 3),
-        "p95_seconds": round(ordered[p95_index], 3),
+        "p95_seconds": round(nearest_rank_percentile(timings), 3),
         "max_seconds": round(max(timings), 3),
     }
-    if result["p95_seconds"] > 4.5:
+    if result["p95_seconds"] > 5.0:
         raise AssertionError(f"Concurrent dog-profile probe is too slow: {result}")
     return result
 

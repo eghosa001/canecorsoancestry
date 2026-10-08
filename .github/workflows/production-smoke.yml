@@ -5,6 +5,8 @@ on:
   pull_request:
     paths:
       - "scripts/production_smoke.py"
+      - "scripts/performance_math.py"
+      - "scripts/tests/**"
       - "scripts/cross_browser_smoke.py"
       - ".github/workflows/production-smoke.yml"
   workflow_run:
@@ -25,7 +27,9 @@ jobs:
         with:
           python-version: "3.13"
       - name: Compile production smoke scripts
-        run: python -m py_compile scripts/production_smoke.py scripts/cross_browser_smoke.py
+        run: |
+          python -m py_compile scripts/production_smoke.py scripts/cross_browser_smoke.py scripts/performance_math.py
+          python -m unittest discover -s scripts/tests -p 'test_performance_math.py'
 
   live:
     if: >
@@ -55,7 +59,9 @@ jobs:
           node-version: "22"
       - run: pip install -r requirements.txt playwright
       - name: Validate smoke scripts
-        run: python -m py_compile scripts/production_smoke.py scripts/cross_browser_smoke.py
+        run: |
+          python -m py_compile scripts/production_smoke.py scripts/cross_browser_smoke.py scripts/performance_math.py
+          python -m unittest discover -s scripts/tests -p 'test_performance_math.py'
       - name: Install production browser and accessibility engines
         run: |
           npm install --no-save axe-core@4
