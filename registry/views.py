@@ -2,7 +2,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import DatabaseError, connection, transaction
-from django.db.models import Count, Exists, F, IntegerField, OuterRef, Prefetch, Q, Subquery, Value
+from django.db.models import Case, Count, Exists, F, IntegerField, OuterRef, Prefetch, Q, Subquery, Value, When
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -150,17 +150,24 @@ def dog_suggestions(request):
     # Keep an empty browse picker compact, but give typed searches enough
     # room for duplicate names, kennels and registration variants.
     suggestion_limit = 8 if browse and not query else 16
+    suggestions = dogs.annotate(_registration=Subquery(registration_number))
+    if query:
+        # Exact typed names outrank popular substring matches. Otherwise a
+        # recently published / low-traffic dog can disappear from autocomplete.
+        suggestions = suggestions.annotate(
+            _match_priority=Case(
+                When(name__iexact=query, then=Value(0)),
+                When(name__istartswith=query, then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
+            )
+        ).order_by("_match_priority", "-search_count", "name")
+    else:
+        suggestions = suggestions.order_by("-search_count", "-updated_at", "name")
     rows = list(
-        dogs.annotate(_registration=Subquery(registration_number))
-        .values(
-            "id",
-            "name",
-            "slug",
-            "sex",
-            "kennel__name",
-            "_registration",
-        )
-        .order_by("-search_count", "-updated_at", "name")[:suggestion_limit]
+        suggestions.values(
+            "id", "name", "slug", "sex", "kennel__name", "_registration"
+        )[:suggestion_limit]
     )
     sex_labels = dict(Dog.Sex.choices)
     results = [
