@@ -1,6 +1,9 @@
 name: Cloudflare site edge
 
 on:
+  workflow_run:
+    workflows: ["Provision Northflank origin"]
+    types: [completed]
   pull_request:
     paths:
       - "src/site-edge.js"
@@ -25,10 +28,13 @@ concurrency:
 
 jobs:
   validate:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -54,7 +60,7 @@ jobs:
         run: npx --yes wrangler@4 deploy --dry-run --config wrangler.site.toml
 
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'))
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -62,9 +68,13 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 19a03bec57c0277e01e1e70e241576af
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+      EDGE_CACHE_VERSION: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}-${{ github.run_id }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -124,6 +134,30 @@ jobs:
         run: |
           python -c 'import json, os; open("/tmp/site-edge-secrets.json", "w", encoding="utf-8").write(json.dumps({"ORIGIN_EDGE_SECRET": os.environ["DJANGO_SECRET_KEY"]}))'
 
+      - name: Inject release-specific cache namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path("src/site-edge.js")
+          source = path.read_text(encoding="utf-8")
+          version = os.environ["EDGE_CACHE_VERSION"]
+          updated, count = re.subn(
+              r'const EDGE_CACHE_VERSION = "[^"]+";',
+              f'const EDGE_CACHE_VERSION = "{version}";',
+              source,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("Could not inject EDGE_CACHE_VERSION")
+          path.write_text(updated, encoding="utf-8")
+          PY
+          node --check src/site-edge.js
+
       - name: Deploy site edge
         run: npx --yes wrangler@4 deploy --config wrangler.site.toml --secrets-file /tmp/site-edge-secrets.json
 
@@ -140,7 +174,7 @@ jobs:
 
           for attempt in $(seq 1 12); do
             status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/edge-health.json -w '%{http_code}' "$base/__edge/health" || true)"
-            if [ "$status" = "200" ] && grep -q '"service":"site-edge"' /tmp/edge-health.json; then
+            if [ "$status" = "200" ] && grep -q '"service":"site-edge"' /tmp/edge-health.json && grep -q "\"cache_version\":\"$EDGE_CACHE_VERSION\"" /tmp/edge-health.json; then
               break
             fi
             if [ "$attempt" = "12" ]; then
