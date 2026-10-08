@@ -11,6 +11,9 @@ from core.media_views import media_file
 from core.sitemaps import SITEMAPS
 from core.views import dashboard, healthz, home, robots_txt, storage_probe
 
+handler404 = "core.views.branded_not_found"
+handler500 = "core.views.branded_server_error"
+
 urlpatterns = [
     path("", home, name="home"),
     path("healthz/", healthz, name="healthz"),

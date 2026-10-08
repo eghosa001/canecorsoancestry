@@ -172,6 +172,16 @@ def storage_probe(request):
     response["Cache-Control"] = "no-store"
     return response
 
+def branded_not_found(request, exception=None):
+    """Render the customer-facing 404 explicitly in hosted production."""
+    return render(request, "404.html", status=404)
+
+
+def branded_server_error(request):
+    """Render the customer-facing 500 explicitly in hosted production."""
+    return render(request, "500.html", status=500)
+
+
 def robots_txt(request):
     body = "\n".join([
         "User-agent: *", "Allow: /",
