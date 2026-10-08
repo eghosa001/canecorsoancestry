@@ -124,7 +124,7 @@ def dog_suggestions(request):
     sex = request.GET.get("sex", "").strip()
     browse = request.GET.get("browse") == "1"
 
-    dogs = Dog.objects.filter(is_public=True)
+    dogs = with_stored_images(Dog.objects.filter(is_public=True))
 
     if len(query) >= 3:
         dogs = dogs.filter(public_dog_match_filter(query))
@@ -181,8 +181,10 @@ def dog_search(request):
     exact = request.GET.get("exact") == "1"
 
     if query:
-        base_dogs = Dog.objects.filter(is_public=True).filter(
-            public_dog_match_filter(query, exact=exact)
+        base_dogs = with_stored_images(
+            Dog.objects.filter(is_public=True).filter(
+                public_dog_match_filter(query, exact=exact)
+            )
         )
     else:
         base_dogs = _public_dogs_with_images()
