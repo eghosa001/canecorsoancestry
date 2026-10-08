@@ -780,7 +780,6 @@ def _litter_checks(findings, submission, run_id, payload):
         if sire_id and dam_id and litter_dob:
             duplicate = (
                 Litter.objects.filter(
-                    kennel_id=submission.kennel_id,
                     sire_id=sire_id,
                     dam_id=dam_id,
                     date_of_birth=litter_dob,
@@ -793,7 +792,7 @@ def _litter_checks(findings, submission, run_id, payload):
                     submission=submission,
                     run_id=run_id,
                     code="duplicate_litter",
-                    message="A litter with the same kennel, parents and DOB already exists.",
+                    message="A canonical litter with the same sire, dam and DOB already exists.",
                     expected=f"{duplicate.code} ({duplicate.pk})",
                     submitted=code or "No litter code",
                 )
