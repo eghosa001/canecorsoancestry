@@ -19,14 +19,26 @@ permissions:
   contents: read
 
 concurrency:
-  group: production-smoke
+  group: production-smoke-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  live:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+  script-check:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile production smoke scripts
+        run: python -m py_compile scripts/production_smoke.py scripts/cross_browser_smoke.py
+
+  live:
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
     env:
       PRODUCTION_BASE_URL: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
     steps:
@@ -35,25 +47,19 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - run: pip install -r requirements.txt playwright
       - name: Validate smoke scripts
         run: python -m py_compile scripts/production_smoke.py scripts/cross_browser_smoke.py
-      - name: Install Chromium for pull-request smoke
-        if: github.event_name == 'pull_request'
-        run: python -m playwright install --with-deps chromium
-      - uses: actions/setup-node@v4
-        if: github.event_name != 'pull_request'
-        with:
-          node-version: "22"
       - name: Install production browser and accessibility engines
-        if: github.event_name != 'pull_request'
         run: |
           npm install --no-save axe-core@4
           python -m playwright install --with-deps chromium firefox webkit
       - name: Verify live production UI and concurrency
         run: python scripts/production_smoke.py
       - name: Verify Chromium, Firefox, WebKit and accessibility
-        if: github.event_name != 'pull_request'
         run: python scripts/cross_browser_smoke.py
       - uses: actions/upload-artifact@v4
         if: always()
