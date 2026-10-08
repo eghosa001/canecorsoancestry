@@ -320,6 +320,17 @@ class Litter(models.Model):
 
     class Meta:
         ordering = ("-date_of_birth", "code")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("sire", "dam", "date_of_birth"),
+                condition=Q(
+                    sire__isnull=False,
+                    dam__isnull=False,
+                    date_of_birth__isnull=False,
+                ),
+                name="unique_canonical_litter_birth",
+            )
+        ]
 
     def clean(self):
         super().clean()
@@ -334,6 +345,22 @@ class Litter(models.Model):
                 raise ValidationError({"sire": "The sire must be born before the litter."})
             if self.dam and self.dam.date_of_birth and self.dam.date_of_birth >= self.date_of_birth:
                 raise ValidationError({"dam": "The dam must be born before the litter."})
+
+        if self.sire_id and self.dam_id and self.date_of_birth:
+            duplicate_birth = Litter.objects.exclude(pk=self.pk).filter(
+                sire_id=self.sire_id,
+                dam_id=self.dam_id,
+                date_of_birth=self.date_of_birth,
+            ).exists()
+            if duplicate_birth:
+                raise ValidationError(
+                    {
+                        "date_of_birth": (
+                            "This sire, dam and date of birth already identify one "
+                            "canonical litter. Use the existing litter."
+                        )
+                    }
+                )
 
     @property
     def public_label(self):

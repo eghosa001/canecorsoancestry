@@ -18,17 +18,19 @@ class DogModelTests(TestCase):
             dog.full_clean()
 
     def test_public_search_finds_dog_by_name(self):
-        Dog.objects.create(name="Karma Custodi Nos", slug="karma-custodi-nos", is_public=True)
+        dog = Dog.objects.create(name="Karma Custodi Nos", slug="karma-custodi-nos", is_public=True)
+        DogImage.objects.create(dog=dog, image="dogs/karma.jpg", is_primary=True)
         response = self.client.get(reverse("registry:dog-search"), {"q": "Karma"})
         self.assertContains(response, "Karma Custodi Nos")
 
     def test_public_search_is_paginated(self):
         for index in range(25):
-            Dog.objects.create(
+            dog = Dog.objects.create(
                 name=f"Paged Dog {index:02d}",
                 slug=f"paged-dog-{index:02d}",
                 is_public=True,
             )
+            DogImage.objects.create(dog=dog, image=f"dogs/paged-{index:02d}.jpg")
 
         response = self.client.get(reverse("registry:dog-search"), {"q": "Paged Dog"})
 
@@ -137,7 +139,7 @@ class DogModelTests(TestCase):
         self.assertNotContains(response, "Second Shared Kennel Dog")
         self.assertNotContains(response, "No Image Dog")
 
-    def test_search_keeps_source_image_fallback_without_prefetching_sources_for_every_card(self):
+    def test_public_search_includes_trusted_source_photo_without_managed_copy(self):
         dog = Dog.objects.create(
             name="Source Image Search Dog",
             slug="source-image-search-dog",
@@ -157,10 +159,31 @@ class DogModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Source Image Search Dog")
         self.assertContains(
             response,
             "https://canecorsopedigree.com/static/images/animal/source-image.jpg",
         )
+
+    def test_public_search_excludes_untrusted_source_url_without_managed_photo(self):
+        dog = Dog.objects.create(
+            name="Untrusted Source Dog",
+            slug="untrusted-source-dog",
+            is_public=True,
+        )
+        DogSource.objects.create(
+            dog=dog,
+            source_url="https://example.com/dog/untrusted-source-dog",
+            raw_payload={"image_url": "https://example.com/untrusted.jpg"},
+        )
+
+        response = self.client.get(
+            reverse("registry:dog-search"),
+            {"q": "Untrusted Source"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Untrusted Source Dog")
 
     def test_authenticated_profile_secondary_actions_are_grouped(self):
         user = get_user_model().objects.create_user(
@@ -182,12 +205,13 @@ class DogModelTests(TestCase):
         self.assertContains(response, "Request profile review")
 
     def test_dog_suggestions_return_live_matches(self):
-        Dog.objects.create(
+        dog = Dog.objects.create(
             name="Suggestion Champion",
             slug="suggestion-champion",
             is_public=True,
             search_count=8,
         )
+        DogImage.objects.create(dog=dog, image="dogs/suggestion.jpg", is_primary=True)
 
         response = self.client.get(
             reverse("registry:dog-suggestions"),
@@ -198,20 +222,22 @@ class DogModelTests(TestCase):
         self.assertEqual(response.json()["results"][0]["name"], "Suggestion Champion")
 
     def test_dog_suggestions_browse_returns_popular_sex_matches(self):
-        Dog.objects.create(
+        sire = Dog.objects.create(
             name="Browse Sire",
             slug="browse-sire",
             sex=Dog.Sex.MALE,
             is_public=True,
             search_count=20,
         )
-        Dog.objects.create(
+        dam = Dog.objects.create(
             name="Browse Dam",
             slug="browse-dam",
             sex=Dog.Sex.FEMALE,
             is_public=True,
             search_count=30,
         )
+        DogImage.objects.create(dog=sire, image="dogs/browse-sire.jpg")
+        DogImage.objects.create(dog=dam, image="dogs/browse-dam.jpg")
 
         response = self.client.get(
             reverse("registry:dog-suggestions"),
@@ -231,6 +257,7 @@ class DogModelTests(TestCase):
             search_count=15,
         )
         DogRegistration.objects.create(dog=dog, number="PERF-001")
+        DogImage.objects.create(dog=dog, image="dogs/performance.jpg")
 
         with self.assertNumQueries(1):
             response = self.client.get(
@@ -240,6 +267,31 @@ class DogModelTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"][0]["registration"], "PERF-001")
+
+    def test_public_search_excludes_image_less_match(self):
+        dog = Dog.objects.create(
+            name="Hidden Pedigree Record",
+            slug="hidden-pedigree-record",
+            is_public=True,
+        )
+        response = self.client.get(reverse("registry:dog-search"), {"q": "Hidden Pedigree"})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, dog.name)
+
+    def test_dog_suggestions_exclude_image_less_match(self):
+        dog = Dog.objects.create(
+            name="Hidden Suggestion Record",
+            slug="hidden-suggestion-record",
+            is_public=True,
+        )
+        response = self.client.get(
+            reverse("registry:dog-suggestions"),
+            {"q": "Hidden Suggestion"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            any(row["id"] == str(dog.pk) for row in response.json()["results"])
+        )
 
     def test_public_dog_profile_always_exposes_coi(self):
         common = Dog.objects.create(
@@ -341,6 +393,7 @@ class DogModelTests(TestCase):
 
     def test_public_search_finds_external_registration_number(self):
         dog = Dog.objects.create(name="Branco", slug="branco", is_public=True)
+        DogImage.objects.create(dog=dog, image="dogs/branco.jpg")
         authority = RegistrationAuthority.objects.create(code="KSS", name="Kennel authority")
         DogRegistration.objects.create(dog=dog, authority=authority, number="JR 710606 Cc")
 
@@ -466,7 +519,7 @@ class DogModelTests(TestCase):
         self.assertContains(response, "Other registered offspring")
         self.assertNotContains(response, '<div class="media-placeholder">CCA</div>', html=False)
 
-    def test_explicit_search_keeps_image_less_record_without_fake_thumbnail(self):
+    def test_explicit_search_excludes_image_less_record(self):
         Dog.objects.create(
             name="Text Only Champion",
             slug="text-only-champion",
@@ -479,10 +532,8 @@ class DogModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Text Only Champion")
-        self.assertContains(response, "Pedigree record · no public photo")
-        self.assertContains(response, "search-result-card no-media", html=False)
-        self.assertNotContains(response, '<div class="media-placeholder">CCA</div>', html=False)
+        self.assertEqual(response.context["result_count"], 0)
+        self.assertEqual(list(response.context["dogs"]), [])
 
     def test_generated_litter_uses_parent_pair_as_public_label(self):
         sire = Dog.objects.create(name="Atlas", slug="atlas-litter-label", sex=Dog.Sex.MALE)

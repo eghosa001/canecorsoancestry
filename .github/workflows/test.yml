@@ -12,6 +12,7 @@ on:
       - "manage.py"
       - "requirements.txt"
       - "Dockerfile"
+      - ".github/workflows/test.yml"
   pull_request:
     paths:
       - "accounts/**/*.py"
@@ -22,6 +23,7 @@ on:
       - "manage.py"
       - "requirements.txt"
       - "Dockerfile"
+      - ".github/workflows/test.yml"
 
 permissions:
   contents: read
@@ -38,14 +40,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: pip
+
       - run: pip install -r requirements.txt
+
       - name: Run change-scoped checks
         shell: bash
         run: |
+          set -euo pipefail
+
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch origin "${{ github.base_ref }}" --depth=1
             changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
@@ -61,19 +68,34 @@ jobs:
           python manage.py check
 
           targets=()
-          grep -q '^pedigrees/' <<<"$changed" && targets+=("pedigrees.tests.PedigreeServiceTests")
+
+          if grep -q '^pedigrees/' <<<"$changed"; then
+            targets+=("pedigrees.tests.PedigreeServiceTests")
+          fi
 
           if grep -Eq '^registry/(management/commands/(import_canecorso_archive|refresh_canecorso_latest)\.py|tests_canecorso_(import|latest)\.py)$' <<<"$changed"; then
             targets+=("registry.tests_canecorso_import" "registry.tests_canecorso_latest")
-          elif grep -Eq '^registry/(services|verification)\.py$' <<<"$changed"; then
+          fi
+
+          if grep -q '^registry/' <<<"$changed"; then
+            targets+=("registry.tests.DogModelTests")
+          fi
+
+          if grep -Eq '^registry/(models|services|verification|views|querysets)\.py$|^registry/migrations/|^registry/tests_production_hardening\.py$' <<<"$changed"; then
+            targets+=("registry.tests_production_hardening")
+          fi
+
+          if grep -Eq '^registry/(models|querysets)\.py$|^registry/management/commands/audit_production_invariants\.py$|^registry/tests_production_invariants\.py$|^registry/migrations/0014_unique_canonical_litter_birth\.py$' <<<"$changed"; then
+            targets+=("registry.tests_production_invariants")
+          fi
+
+          if grep -Eq '^registry/(services|verification)\.py$' <<<"$changed"; then
             targets+=(
               "accounts.tests_admin_surfaces"
               "accounts.tests_member_access.MemberAccessFlowTests"
               "accounts.tests_verification.VerificationGovernanceTests"
               "accounts.tests_moderation_intelligence.DuplicateIntelligenceTests"
             )
-          elif grep -q '^registry/' <<<"$changed"; then
-            targets+=("registry.tests.DogModelTests")
           fi
 
           if grep -q '^accounts/' <<<"$changed"; then
@@ -90,6 +112,7 @@ jobs:
               else
                 view_diff="$(git diff -U0 HEAD^ HEAD -- accounts/views.py)"
               fi
+
               if grep -Eq 'moderation_|verification_|review_submission|review_dispute|merge_dogs|verify_dog|duplicate_' <<<"$view_diff"; then
                 targets+=(
                   "accounts.tests_admin_surfaces"
@@ -97,6 +120,7 @@ jobs:
                   "accounts.tests_verification.VerificationGovernanceTests"
                 )
               fi
+
               if grep -Eq 'signup|submit_kennel|claim_kennel|edit_kennel|submit_document|request_document_visibility' <<<"$view_diff"; then
                 targets+=(
                   "accounts.tests_member_access.MemberAccessFlowTests"
@@ -105,6 +129,7 @@ jobs:
                   "accounts.tests_member_phase.KennelIdentityProtectionTests"
                 )
               fi
+
               scoped_accounts=true
             fi
 
@@ -112,10 +137,17 @@ jobs:
               targets+=("accounts.tests_account_recovery")
               scoped_accounts=true
             fi
+
+            if grep -Eq '^accounts/tests_production_readiness\.py$' <<<"$changed"; then
+              targets+=("accounts.tests_production_readiness")
+              scoped_accounts=true
+            fi
+
             if grep -Eq '^accounts/(forms\.py|tests_upload_security\.py)$' <<<"$changed"; then
               targets+=("accounts.tests_upload_security")
               scoped_accounts=true
             fi
+
             if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
               targets+=("accounts.tests_payments")
               scoped_accounts=true
@@ -125,10 +157,12 @@ jobs:
               targets+=("accounts.tests_member_access.MemberAccessFlowTests")
               scoped_accounts=true
             fi
+
             if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
               targets+=("accounts.tests_moderation_intelligence")
               scoped_accounts=true
             fi
+
             if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
               targets+=("accounts.tests_verification")
               scoped_accounts=true
@@ -140,7 +174,9 @@ jobs:
             fi
           fi
 
-          grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
+          if grep -Eq '^core/.*\.py$' <<<"$changed"; then
+            targets+=("core")
+          fi
 
           if [ ${#targets[@]} -eq 0 ]; then
             echo "No changed Python app requires tests."

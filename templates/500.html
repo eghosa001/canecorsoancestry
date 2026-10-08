@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Service issue · Cane Corso Ancestry{% endblock %}
+{% block meta_description %}Cane Corso Ancestry encountered a temporary service issue.{% endblock %}
+{% block content %}
+<section class="auth-shell">
+  <div class="auth-card">
+    <p class="eyebrow">Temporary service issue</p>
+    <h1>We could not complete that request.</h1>
+    <p class="muted">Your request was not intentionally discarded. Please return to the public database and try again. If the problem continues, an administrator can review the service logs.</p>
+    <div class="button-row">
+      <a class="btn btn-gold" href="{% url 'home' %}">Return home</a>
+      <a class="btn btn-outline" href="{% url 'registry:dog-search' %}">Search dogs</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

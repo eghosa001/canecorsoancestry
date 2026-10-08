@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "scripts/production_smoke.py"
+      - "scripts/cross_browser_smoke.py"
       - ".github/workflows/production-smoke.yml"
   push:
     branches: [main]
@@ -35,9 +36,25 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: pip install -r requirements.txt playwright
-      - run: python -m playwright install --with-deps chromium
+      - name: Validate smoke scripts
+        run: python -m py_compile scripts/production_smoke.py scripts/cross_browser_smoke.py
+      - name: Install Chromium for pull-request smoke
+        if: github.event_name == 'pull_request'
+        run: python -m playwright install --with-deps chromium
+      - uses: actions/setup-node@v4
+        if: github.event_name != 'pull_request'
+        with:
+          node-version: "22"
+      - name: Install production browser and accessibility engines
+        if: github.event_name != 'pull_request'
+        run: |
+          npm install --no-save axe-core@4
+          python -m playwright install --with-deps chromium firefox webkit
       - name: Verify live production UI and concurrency
         run: python scripts/production_smoke.py
+      - name: Verify Chromium, Firefox, WebKit and accessibility
+        if: github.event_name != 'pull_request'
+        run: python scripts/cross_browser_smoke.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

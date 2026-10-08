@@ -216,9 +216,9 @@ jobs:
                 R2_GATEWAY_URL:$media,
                 MEDIA_EDGE_BASE_URL:$media,
                 MEDIA_EDGE_URL_TTL:"300",
-                DJANGO_HSTS_SECONDS:"3600",
+                DJANGO_HSTS_SECONDS:"31536000",
                 DJANGO_HSTS_INCLUDE_SUBDOMAINS:"1",
-                DJANGO_HSTS_PRELOAD:"0",
+                DJANGO_HSTS_PRELOAD:"1",
                 DJANGO_LOG_LEVEL:"INFO",
                 ANCESTRY_EMAIL_NOTIFICATIONS:"0",
                 GUNICORN_WORKERS:"1",
@@ -253,7 +253,7 @@ jobs:
                 EMAIL_HOST_PASSWORD:$email_password,
                 DEFAULT_FROM_EMAIL:$from_email,
                 ACCOUNT_EMAIL_ENABLED:$email_enabled,
-                REQUIRE_EMAIL_VERIFICATION:$email_enabled,DJANGO_SETTINGS_MODULE:"config.settings.northflank",DJANGO_DB_SCHEMA:"django_app",DJANGO_DB_SSLMODE:"require",DJANGO_DB_EXTRA_SCHEMAS:"extensions,public",DJANGO_DB_CONN_MAX_AGE:"300",DJANGO_DB_CONNECT_TIMEOUT:"5",DJANGO_DB_KEEPALIVES_IDLE:"30",DJANGO_DB_KEEPALIVES_INTERVAL:"10",DJANGO_DB_KEEPALIVES_COUNT:"3",DJANGO_ALLOWED_HOSTS:"canecorsoancestry-site-edge.aighewieghosa111.workers.dev,.code.run,127.0.0.1,localhost",DJANGO_CSRF_TRUSTED_ORIGINS:"https://*.code.run,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",SITE_URL:$site,R2_GATEWAY_URL:$media,MEDIA_EDGE_BASE_URL:$media,MEDIA_EDGE_URL_TTL:"300",DJANGO_HSTS_SECONDS:"3600",DJANGO_HSTS_INCLUDE_SUBDOMAINS:"1",DJANGO_HSTS_PRELOAD:"0",DJANGO_LOG_LEVEL:"INFO",ANCESTRY_EMAIL_NOTIFICATIONS:"0",GUNICORN_WORKERS:"1",GUNICORN_THREADS:"4",GUNICORN_TIMEOUT:"60",GUNICORN_KEEPALIVE:"5",GUNICORN_MAX_REQUESTS:"1000",GUNICORN_MAX_REQUESTS_JITTER:"100"}}')"
+                REQUIRE_EMAIL_VERIFICATION:$email_enabled,DJANGO_SETTINGS_MODULE:"config.settings.northflank",DJANGO_DB_SCHEMA:"django_app",DJANGO_DB_SSLMODE:"require",DJANGO_DB_EXTRA_SCHEMAS:"extensions,public",DJANGO_DB_CONN_MAX_AGE:"300",DJANGO_DB_CONNECT_TIMEOUT:"5",DJANGO_DB_KEEPALIVES_IDLE:"30",DJANGO_DB_KEEPALIVES_INTERVAL:"10",DJANGO_DB_KEEPALIVES_COUNT:"3",DJANGO_ALLOWED_HOSTS:"canecorsoancestry-site-edge.aighewieghosa111.workers.dev,.code.run,127.0.0.1,localhost",DJANGO_CSRF_TRUSTED_ORIGINS:"https://*.code.run,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",SITE_URL:$site,R2_GATEWAY_URL:$media,MEDIA_EDGE_BASE_URL:$media,MEDIA_EDGE_URL_TTL:"300",DJANGO_HSTS_SECONDS:"31536000",DJANGO_HSTS_INCLUDE_SUBDOMAINS:"1",DJANGO_HSTS_PRELOAD:"1",DJANGO_LOG_LEVEL:"INFO",ANCESTRY_EMAIL_NOTIFICATIONS:"0",GUNICORN_WORKERS:"1",GUNICORN_THREADS:"4",GUNICORN_TIMEOUT:"60",GUNICORN_KEEPALIVE:"5",GUNICORN_MAX_REQUESTS:"1000",GUNICORN_MAX_REQUESTS_JITTER:"100"}}')"
             curl -sS --fail-with-body "${auth[@]}" -X PATCH --data "$patch" "$NF_API/projects/$NORTHFLANK_PROJECT_ID/services/combined/$service_id" >/tmp/nf-service-patch.json
             echo "Synced Northflank runtime environment to the workers.dev public site."
           fi
