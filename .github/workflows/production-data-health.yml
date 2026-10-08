@@ -62,6 +62,69 @@ jobs:
           "
       - name: Audit pedigree integrity
         run: python manage.py audit_pedigree_data --fail-on-critical
+      - name: Verify owner data invariants
+        run: |
+          python manage.py shell -c "
+          from django.db.models import Count, F, Q
+          from django.db.models.functions import Lower
+          from accounts.models import Profile
+          from registry.models import Dog, Kennel, KennelMembership, Litter, ModerationRoleAssignment
+
+          duplicate_litters = (
+              Litter.objects
+              .filter(sire__isnull=False, dam__isnull=False, date_of_birth__isnull=False)
+              .values('sire_id', 'dam_id', 'date_of_birth')
+              .annotate(total=Count('id'))
+              .filter(total__gt=1)
+              .count()
+          )
+          duplicate_kennels = (
+              Kennel.objects
+              .annotate(normalized_name=Lower('name'))
+              .values('normalized_name')
+              .annotate(total=Count('id'))
+              .filter(total__gt=1)
+              .count()
+          )
+          staff_ids = list(
+              ModerationRoleAssignment.objects
+              .exclude(role=ModerationRoleAssignment.Role.NONE)
+              .values_list('user_id', flat=True)
+          )
+          role_conflicts = (
+              KennelMembership.objects.filter(user_id__in=staff_ids).count()
+              + Profile.objects.filter(user_id__in=staff_ids).count()
+          )
+          litter_dob_conflicts = (
+              Dog.objects
+              .filter(litter__isnull=False, litter__date_of_birth__isnull=False)
+              .filter(Q(date_of_birth__isnull=True) | ~Q(date_of_birth=F('litter__date_of_birth')))
+              .count()
+          )
+          litter_sire_conflicts = (
+              Dog.objects
+              .filter(litter__isnull=False, litter__sire__isnull=False)
+              .filter(Q(sire__isnull=True) | ~Q(sire_id=F('litter__sire_id')))
+              .count()
+          )
+          litter_dam_conflicts = (
+              Dog.objects
+              .filter(litter__isnull=False, litter__dam__isnull=False)
+              .filter(Q(dam__isnull=True) | ~Q(dam_id=F('litter__dam_id')))
+              .count()
+          )
+
+          results = {
+              'duplicate_canonical_litters': duplicate_litters,
+              'duplicate_kennel_names': duplicate_kennels,
+              'staff_member_role_conflicts': role_conflicts,
+              'litter_dob_conflicts': litter_dob_conflicts,
+              'litter_sire_conflicts': litter_sire_conflicts,
+              'litter_dam_conflicts': litter_dam_conflicts,
+          }
+          print(results)
+          assert all(value == 0 for value in results.values()), results
+          "
       - name: Verify one production dog image end to end
         shell: bash
         run: |
@@ -140,3 +203,15 @@ jobs:
             echo "$path -> HTTP $status"
             test "$status" = "200"
           done
+      - name: Verify live account recovery is enabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl --connect-timeout 10 --max-time 30 -sS -o /tmp/password-reset.html -w '%{http_code}' "$PUBLIC_SITE/accounts/password_reset/" || true)"
+          echo "/accounts/password_reset/ -> HTTP $status"
+          test "$status" = "200"
+          if grep -qi "temporarily unavailable" /tmp/password-reset.html; then
+            echo "::error::Production password recovery is disabled. Configure EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD and DEFAULT_FROM_EMAIL."
+            exit 1
+          fi
+          grep -qi "Send reset link" /tmp/password-reset.html
