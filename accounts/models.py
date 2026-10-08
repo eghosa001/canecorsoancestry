@@ -31,6 +31,12 @@ class SubmissionPayment(models.Model):
         PAID = "paid", "Paid"
         FAILED = "failed", "Failed"
 
+    SINGLE_DOG_PRICE_KOBO = 50_000
+    MULTI_DOG_PRICE_KOBO = 150_000
+    LITTER_PRICE_KOBO = 100_000
+    MULTI_DOG_MIN_COUNT = 2
+    MULTI_DOG_MAX_COUNT = 6
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -67,11 +73,11 @@ class SubmissionPayment(models.Model):
     @classmethod
     def price_for(cls, package, dog_count=1):
         if package == cls.Package.SINGLE_DOG:
-            return 50_000
+            return cls.SINGLE_DOG_PRICE_KOBO
         if package == cls.Package.MULTI_DOG:
-            return 150_000
+            return cls.MULTI_DOG_PRICE_KOBO
         if package == cls.Package.LITTER:
-            return 100_000
+            return cls.LITTER_PRICE_KOBO
         raise ValidationError("Unknown submission package.")
 
     @property
@@ -82,8 +88,18 @@ class SubmissionPayment(models.Model):
         super().clean()
         if self.package == self.Package.SINGLE_DOG and self.dog_count != 1:
             raise ValidationError({"dog_count": "A single-dog package contains exactly one dog."})
-        if self.package == self.Package.MULTI_DOG and not 2 <= self.dog_count <= 6:
-            raise ValidationError({"dog_count": "A multi-dog package must contain 2–6 dogs."})
+        if (
+            self.package == self.Package.MULTI_DOG
+            and not self.MULTI_DOG_MIN_COUNT <= self.dog_count <= self.MULTI_DOG_MAX_COUNT
+        ):
+            raise ValidationError(
+                {
+                    "dog_count": (
+                        f"A multi-dog package must contain "
+                        f"{self.MULTI_DOG_MIN_COUNT}–{self.MULTI_DOG_MAX_COUNT} dogs."
+                    )
+                }
+            )
         if self.package == self.Package.LITTER and self.dog_count != 0:
             raise ValidationError({"dog_count": "Litter packages use the litter and puppy workflow."})
 
