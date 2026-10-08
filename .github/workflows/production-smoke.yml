@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 18
     env:
       PRODUCTION_BASE_URL: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
-      EXPECTED_EDGE_CACHE_VERSION: ${{ github.event.workflow_run.head_sha || '' }}
+      EXPECTED_EDGE_CACHE_VERSION: edge-${{ github.event.workflow_run.id || github.run_id }}
     steps:
       - uses: actions/checkout@v4
         with:
