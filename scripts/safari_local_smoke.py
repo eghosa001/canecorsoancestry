@@ -72,7 +72,7 @@ def run():
             assert not page.locator(".dog-suggestion:visible").count(), "Safari stale picker reopened after dismissal"
 
             go(page, "/accounts/login/")
-            page.locator("input[name='username']").fill("safari-smoke-member")
+            page.locator("input[name='username']").fill("safari-smoke@example.test")
             page.locator("input[name='password']").fill("safari-smoke-password")
             page.locator("input[name='username']").locator("xpath=ancestor::form").locator("button[type='submit']").click()
             page.wait_for_load_state("domcontentloaded")
