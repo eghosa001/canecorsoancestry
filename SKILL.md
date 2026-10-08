@@ -27,6 +27,10 @@ Use this file for future implementation work in this repository.
 - Normal users get a custom member dashboard; Django Admin is for internal moderation.
 - Use **Submit/Add Dog** instead of language that implies the website registers dogs.
 
+## Safari/WebKit release rule (permanent)
+
+All relevant new features and page changes must work on iPhone/iPad Safari as well as desktop Safari. Treat tap-to-open/tap-outside, on-screen keyboard and native input zoom, select and file chooser, HEIC/JPEG/PDF submissions, safe areas, scrollable pedigree tables/dropdowns, sticky header, readable text and non-cropped dog photography as required UI behavior. Use the **focused**, change-scoped WebKit smoke in `.github/workflows/safari-compat.yml` when touching those surfaces and preserve its test coverage for future additions. Native iPhone hardware checks complement but are not replaced by Playwright WebKit emulation. Do not change the owner's approved mobile logo/header offsets without explicit request.
+
 ## Infrastructure rule
 
 The current production stack is:
