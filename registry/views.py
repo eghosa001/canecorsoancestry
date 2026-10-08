@@ -35,7 +35,7 @@ from .models import (
     public_verification_label,
 )
 from .permissions import can_contribute_to_dog
-from .querysets import one_dog_per_kennel, public_dog_match_filter, with_stored_images
+from .querysets import one_dog_per_kennel, public_dog_match_filter, with_displayable_images, with_stored_images
 
 
 PROFILE_RELATION_PREVIEW_LIMIT = 18
@@ -96,7 +96,7 @@ def _attach_source_image_urls(dogs):
 
 
 def _public_dogs_with_images():
-    return with_stored_images(Dog.objects.filter(is_public=True))
+    return with_displayable_images(Dog.objects.filter(is_public=True))
 
 
 def _attach_source_images_for_missing(dogs):
@@ -124,7 +124,7 @@ def dog_suggestions(request):
     sex = request.GET.get("sex", "").strip()
     browse = request.GET.get("browse") == "1"
 
-    dogs = with_stored_images(Dog.objects.filter(is_public=True))
+    dogs = with_displayable_images(Dog.objects.filter(is_public=True))
 
     if len(query) >= 3:
         dogs = dogs.filter(public_dog_match_filter(query))
@@ -181,7 +181,7 @@ def dog_search(request):
     exact = request.GET.get("exact") == "1"
 
     if query:
-        base_dogs = with_stored_images(
+        base_dogs = with_displayable_images(
             Dog.objects.filter(is_public=True).filter(
                 public_dog_match_filter(query, exact=exact)
             )
@@ -215,7 +215,7 @@ def dog_search(request):
     countries = cache.get("cca:dog-search:countries:v3")
     if countries is None:
         countries = list(
-            with_stored_images(Dog.objects.filter(is_public=True))
+            with_displayable_images(Dog.objects.filter(is_public=True))
             .exclude(country="")
             .values_list("country", flat=True)
             .distinct()
@@ -225,12 +225,16 @@ def dog_search(request):
 
     kennels = cache.get("cca:dog-search:kennels:v3")
     if kennels is None:
-        kennels = list(
-            Kennel.objects.filter(
-                dogs__is_public=True,
-                dogs__images__isnull=False,
+        displayable_kennel_ids = (
+            with_displayable_images(
+                Dog.objects.filter(is_public=True, kennel__isnull=False)
             )
+            .order_by()
+            .values("kennel_id")
             .distinct()
+        )
+        kennels = list(
+            Kennel.objects.filter(pk__in=Subquery(displayable_kennel_ids))
             .order_by("name")
             .values("name", "slug")
         )
