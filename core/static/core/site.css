@@ -7034,3 +7034,40 @@ html[data-theme="light"] .hero-search input {
   .dog-photo-gallery-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dog-photo-gallery-item img { height: 142px; }
 }
+
+/* iOS/iPadOS Safari interaction hardening v87.
+   Preserve the approved header/logo positioning and existing Android layout.
+   overflow:clip avoids creating an intermediate scroll container that breaks
+   sticky header/tab behavior in WebKit while still containing wide records. */
+@supports (-webkit-touch-callout: none) {
+  @supports (overflow: clip) {
+    html, body {
+      overflow-x: clip !important;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .mobile-nav-panel {
+      max-height: min(72svh, 620px);
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+      padding-bottom: max(14px, env(safe-area-inset-bottom));
+    }
+    .mobile-nav-search input,
+    .filter-panel input,
+    .form-field input,
+    .form-field textarea,
+    .form-field select {
+      /* iOS Safari zooms the visual viewport for controls below 16px. */
+      font-size: 16px !important;
+    }
+    .mobile-nav-panel a,
+    .mobile-nav > summary,
+    .dog-suggestion,
+    .form-field input[type="file"] {
+      touch-action: manipulation;
+    }
+  }
+}

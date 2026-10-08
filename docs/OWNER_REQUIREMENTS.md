@@ -89,7 +89,7 @@ From those links the website should derive automatically:
 
 ### Public dog discovery
 
-Public dog browse, typed search and autocomplete/suggestion lists show photographed dogs only. A displayable photo may be a managed upload or a trusted imported source image that passes the site's image-source validation. Image-less pedigree records may remain directly addressable and may appear inside pedigrees/relationships, but must not surface as normal public listing cards or search suggestions.
+Unfiltered public dog browsing remains photo-first. **Explicit typed search and name/registration autocomplete must include all published dogs**, including records without photographs, so an approved dog is always discoverable by name. Never expose private/unapproved dogs. A displayable photo may be a managed upload or a trusted imported source image validated by the site. Search results without images must display a clear no-photo fallback.
 
 ### Duplicate handling
 
@@ -165,3 +165,8 @@ They are permanent acceptance references for future UI reviews.
 ## Production acceptance gates
 
 Changes affecting identity, payments, public discovery, moderation, authentication, media, or production configuration must stay covered by change-scoped automated tests. Release validation must include SQLite and PostgreSQL, production security/settings checks, live public-route smoke, and post-deploy Chromium/Firefox/WebKit plus serious/critical accessibility checks. Production data health must fail on canonical-litter duplicates, case-insensitive kennel duplicates, staff/member identity overlap, or litter-member parent/date conflicts. Password recovery is not considered production-ready while outbound account email is disabled.
+
+
+## Permanent Safari acceptance rule
+
+Every future change to a public page, mobile member/admin form, uploads, autocomplete, menu, pedigree scroller, theme, or responsive design must retain functional iPhone/iPad Safari (WebKit) compatibility. Preserve the owner-approved mobile logo position. Avoid iOS input zoom, keyboard-focus search dismissal, unusable native photo/document pickers, scroll clipping, stale autocomplete results, and hidden controls. Run the narrow WebKit browser smoke for affected changes; test actual Safari on an iPhone before claiming hardware-specific verification. Keep unrelated full UI/browser suites out of routine CI under the owner's fast-path rule.
