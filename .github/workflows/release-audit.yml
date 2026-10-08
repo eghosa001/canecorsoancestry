@@ -68,8 +68,13 @@ jobs:
       - name: Full test suite
         run: python manage.py test --verbosity 1
 
-      - name: Static build check
-        run: python manage.py collectstatic --noinput
+      - name: Verify compressed production static assets
+        run: |
+          DJANGO_SETTINGS_MODULE=config.settings.buildstatic python manage.py collectstatic --noinput
+          test -s staticfiles/core/site.css.gz
+          test -s staticfiles/core/site.css.br
+          test -s staticfiles/core/site.css
+          echo 'Compressed CSS assets (.gz and .br) verified.'
 
       - name: Production settings check
         env:
