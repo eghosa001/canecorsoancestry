@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Page not found · Cane Corso Ancestry{% endblock %}
+{% block meta_description %}The requested Cane Corso Ancestry page could not be found.{% endblock %}
+{% block content %}
+<section class="auth-shell">
+  <div class="auth-card">
+    <p class="eyebrow">404 · Page not found</p>
+    <h1>That page is not in the ancestry database.</h1>
+    <p class="muted">The link may be outdated, or the record may have moved. Search the current dog database or return home.</p>
+    <div class="button-row">
+      <a class="btn btn-gold" href="{% url 'registry:dog-search' %}">Search dogs</a>
+      <a class="btn btn-outline" href="{% url 'home' %}">Go home</a>
+    </div>
+  </div>
+</section>
+{% endblock %}
