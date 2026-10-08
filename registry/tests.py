@@ -508,8 +508,8 @@ class DogModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "Text Only Champion")
         self.assertEqual(response.context["result_count"], 0)
+        self.assertEqual(list(response.context["dogs"]), [])
 
     def test_generated_litter_uses_parent_pair_as_public_label(self):
         sire = Dog.objects.create(name="Atlas", slug="atlas-litter-label", sex=Dog.Sex.MALE)
