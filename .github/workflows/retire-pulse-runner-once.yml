@@ -42,7 +42,12 @@ jobs:
           set -euo pipefail
           old="actions.runner.eghosa001-PULSE-CITY.ORACLE.service"
           new="actions.runner.eghosa001-canecorsoancestry.CCA-ORACLE.service"
-          sudo -n systemctl disable --now "$old"
+          old_state="$(systemctl show --property=LoadState --value "$old" || true)"
+          if [[ "$old_state" != "not-found" && -n "$old_state" ]]; then
+            sudo -n systemctl disable --now "$old"
+          else
+            echo "Former PULSE systemd service is already absent."
+          fi
           if sudo -n systemctl is-active --quiet "$old"; then
             echo "::error::Old PULSE-CITY runner is still running."
             exit 1
@@ -52,5 +57,17 @@ jobs:
             exit 1
           fi
           sudo -n systemctl is-active --quiet "$new"
+          listener_count=0
+          while read -r pid comm; do
+            [[ "$comm" == "Runner.Listener" ]] || continue
+            dir="$(readlink "/proc/$pid/cwd" 2>/dev/null || true)"
+            echo "Actions listener work dir: $dir"
+            if [[ "$dir" != "/home/opc/actions-runner-cca" ]]; then
+              echo "::error::Another GitHub runner listener is running outside the CCA installation."
+              exit 1
+            fi
+            listener_count=$((listener_count + 1))
+          done < <(ps -eo pid=,comm=)
+          [[ "$listener_count" -eq 1 ]] || { echo "::error::Expected one CCA runner listener; found $listener_count."; exit 1; }
           echo "PASS: old PULSE-CITY service stopped and disabled; new CCA runner remains active."
           echo "Next: remove offline ORACLE runner registration from PULSE-CITY Settings > Actions > Runners."
