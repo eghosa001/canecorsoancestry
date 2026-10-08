@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   cacheKey,
+  edgeCacheVersion,
   hasPrivateCookie,
   isCacheablePublicPath,
   shouldWaitForOrigin,
@@ -72,9 +73,15 @@ const suggestionsRequest = new Request(suggestionsUrl, {
   headers: { accept: "application/json" },
 });
 assert.equal(isCacheablePublicPath(suggestionsUrl, suggestionsRequest), true);
+assert.equal(edgeCacheVersion({}), "mobile-upload-v85");
+assert.equal(edgeCacheVersion({ EDGE_CACHE_VERSION: "release-sha-123" }), "release-sha-123");
 assert.equal(
   cacheKey(trackedRequest).url,
   "https://example.test/dogs/example-dog/?__cca_edge_v=mobile-upload-v85",
+);
+assert.equal(
+  cacheKey(trackedRequest, { EDGE_CACHE_VERSION: "release-sha-123" }).url,
+  "https://example.test/dogs/example-dog/?__cca_edge_v=release-sha-123",
 );
 
 console.log("site-edge cache policy tests passed");

@@ -1,6 +1,7 @@
 const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
-// Bump this whenever public HTML/static layout assets must invalidate edge cache.
-const EDGE_CACHE_VERSION = "mobile-upload-v85"; // Correct mobile hero spacing and general photo upload refresh
+// Fallback for local/dev runs. Production injects the exact deployed Git SHA
+// so each successful app release gets a fresh cache namespace automatically.
+const FALLBACK_EDGE_CACHE_VERSION = "mobile-upload-v85";
 const CACHE_FRESH_SECONDS = 900;
 const CACHE_RETENTION_SECONDS = 604800;
 const ORIGIN_GRACE_MS = 3500;
@@ -184,11 +185,15 @@ function rewriteForVisitor(response, request, env, extraHeaders = {}) {
   });
 }
 
-function cacheKey(request) {
+function edgeCacheVersion(env = {}) {
+  return String(env.EDGE_CACHE_VERSION || FALLBACK_EDGE_CACHE_VERSION);
+}
+
+function cacheKey(request, env = {}) {
   const url = new URL(request.url);
   url.hash = "";
   if (isSearchTrackingUrl(url)) url.search = "";
-  url.searchParams.set("__cca_edge_v", EDGE_CACHE_VERSION);
+  url.searchParams.set("__cca_edge_v", edgeCacheVersion(env));
   return new Request(url.toString(), { method: "GET" });
 }
 
@@ -470,7 +475,12 @@ async function handleRequest(request, env, ctx) {
 
   if (url.pathname === "/__edge/health") {
     return Response.json(
-      { status: "ok", service: "site-edge", origin: env.ORIGIN_URL || DEFAULT_ORIGIN },
+      {
+        status: "ok",
+        service: "site-edge",
+        origin: env.ORIGIN_URL || DEFAULT_ORIGIN,
+        cache_version: edgeCacheVersion(env),
+      },
       { headers: { "cache-control": "no-store" } },
     );
   }
@@ -501,7 +511,7 @@ async function handleRequest(request, env, ctx) {
 
   const canCache = isCacheablePublicPath(url, request);
   const cache = caches.default;
-  const key = canCache ? cacheKey(request) : null;
+  const key = canCache ? cacheKey(request, env) : null;
 
   if (canCache) {
     const cached = await cache.match(key);
@@ -555,7 +565,7 @@ async function handleRequest(request, env, ctx) {
   return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
 
-export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, shouldWaitForOrigin, cacheKey, originRequest, timedOriginGet, authWarmingPage };
+export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, shouldWaitForOrigin, edgeCacheVersion, cacheKey, originRequest, timedOriginGet, authWarmingPage };
 
 export default {
   fetch(request, env, ctx) {
