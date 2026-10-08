@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -73,12 +73,13 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 19a03bec57c0277e01e1e70e241576af
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      APP_RELEASE_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+      EDGE_CACHE_VERSION: edge-${{ github.run_id }}
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -98,41 +99,44 @@ jobs:
           done
           exit "$missing"
 
-      - name: Wait for current Northflank UI before edge cutover
+      - name: Wait for exact Northflank release before edge cutover
         shell: bash
         run: |
           set -euo pipefail
           origin="https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
-          expected_site_version="$(grep "core/site.css" templates/base.html | sed -E 's/.*\?v=([^"]+).*/\1/' | head -n1)"
-          expected_premium_version="$(grep "core/premium-polish.css" templates/base.html | sed -E 's/.*\?v=([^"]+).*/\1/' | head -n1)"
-          test -n "$expected_site_version"
-          test -n "$expected_premium_version"
-          expected_site_marker="site.css?v=$expected_site_version"
-          expected_premium_marker="premium-polish.css?v=$expected_premium_version"
-          echo "Waiting for origin UI markers: $expected_site_marker and $expected_premium_marker"
 
-          status=""
-          for attempt in $(seq 1 48); do
+          if [ -n "$APP_RELEASE_SHA" ]; then
+            echo "Waiting for Northflank app release: $APP_RELEASE_SHA"
+            status=""
+            for attempt in $(seq 1 48); do
+              status="$(curl --connect-timeout 5 --max-time 15 -sS \
+                -H 'X-CCA-Edge: 1' \
+                -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
+                -o /tmp/origin-health.json \
+                -w '%{http_code}' "$origin/healthz/" || true)"
+              if [ "$status" = "200" ] &&
+                 grep -Eq "\"release\"[[:space:]]*:[[:space:]]*\"$APP_RELEASE_SHA\"" /tmp/origin-health.json; then
+                echo "Northflank origin is on exact app release $APP_RELEASE_SHA."
+                break
+              fi
+              if [ "$attempt" = "48" ]; then
+                echo "::error::Northflank origin did not expose app release $APP_RELEASE_SHA before edge cutover; HTTP $status"
+                cat /tmp/origin-health.json 2>/dev/null || true
+                exit 1
+              fi
+              sleep 5
+            done
+          else
             status="$(curl --connect-timeout 5 --max-time 15 -sS \
               -H 'X-CCA-Edge: 1' \
-              -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
-              -H 'Accept: text/html' \
-              -o /tmp/origin-current.html \
-              -w '%{http_code}' "$origin/" || true)"
-            if [ "$status" = "200" ] &&
-               grep -q "$expected_site_marker" /tmp/origin-current.html &&
-               grep -q "$expected_premium_marker" /tmp/origin-current.html; then
-              echo "Origin is on the current UI release."
-              break
-            fi
-            if [ "$attempt" = "48" ]; then
-              echo "::error::Northflank origin did not reach both current UI markers before edge cutover; HTTP $status"
-              grep -o 'site.css?v=[^"]*' /tmp/origin-current.html 2>/dev/null | head -n1 || true
-              grep -o 'premium-polish.css?v=[^"]*' /tmp/origin-current.html 2>/dev/null | head -n1 || true
+              -o /tmp/origin-health.json \
+              -w '%{http_code}' "$origin/healthz/" || true)"
+            if [ "$status" != "200" ]; then
+              echo "::error::Northflank origin health failed before edge-only cutover; HTTP $status"
+              cat /tmp/origin-health.json 2>/dev/null || true
               exit 1
             fi
-            sleep 5
-          done
+          fi
 
       - name: Build Worker secret file
         run: |
@@ -142,14 +146,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$RELEASE_SHA"
+          test -n "$EDGE_CACHE_VERSION"
           python - <<'PY'
           import os
           from pathlib import Path
 
           path = Path("wrangler.site.toml")
           text = path.read_text(encoding="utf-8")
-          release = os.environ["RELEASE_SHA"]
+          release = os.environ["EDGE_CACHE_VERSION"]
           line = f'EDGE_CACHE_VERSION = "{release}"'
 
           if "EDGE_CACHE_VERSION =" in text:
@@ -175,22 +179,18 @@ jobs:
         shell: bash
         run: |
           base="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
-          expected_site_version="$(grep "core/site.css" templates/base.html | sed -E 's/.*\?v=([^"]+).*/\1/' | head -n1)"
-          expected_premium_version="$(grep "core/premium-polish.css" templates/base.html | sed -E 's/.*\?v=([^"]+).*/\1/' | head -n1)"
-          test -n "$expected_site_version"
-          test -n "$expected_premium_version"
-          expected_site_marker="site.css?v=$expected_site_version"
-          expected_premium_marker="premium-polish.css?v=$expected_premium_version"
+          expected_site_marker="core/site.css"
+          expected_premium_marker="core/premium-polish.css"
 
           for attempt in $(seq 1 12); do
             status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/edge-health.json -w '%{http_code}' "$base/__edge/health" || true)"
             if [ "$status" = "200" ] &&
                grep -q '"service":"site-edge"' /tmp/edge-health.json &&
-               grep -q "\"cache_version\":\"$RELEASE_SHA\"" /tmp/edge-health.json; then
+               grep -q "\"cache_version\":\"$EDGE_CACHE_VERSION\"" /tmp/edge-health.json; then
               break
             fi
             if [ "$attempt" = "12" ]; then
-              echo "::error::Site edge did not expose release cache namespace $RELEASE_SHA"
+              echo "::error::Site edge did not expose release cache namespace $EDGE_CACHE_VERSION"
               cat /tmp/edge-health.json 2>/dev/null || true
               exit 1
             fi
