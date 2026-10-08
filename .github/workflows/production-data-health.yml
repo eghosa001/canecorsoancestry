@@ -31,6 +31,10 @@ jobs:
       DJANGO_ALLOWED_HOSTS: .code.run,127.0.0.1,localhost
       DJANGO_CSRF_TRUSTED_ORIGINS: https://web--canecorsoancestry--4w9gl8jxj4yr.code.run,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
       DJANGO_REQUIRE_OBJECT_STORAGE: "0"
+      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+      EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+      DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
       PUBLIC_SITE: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
     steps:
       - uses: actions/checkout@v4
@@ -41,8 +45,20 @@ jobs:
       - name: Verify required secrets
         shell: bash
         run: |
-          test -n "$SUPABASE_DATABASE_URL" || { echo "::error::SUPABASE_DATABASE_URL is missing"; exit 1; }
-          test -n "$DJANGO_SECRET_KEY" || { echo "::error::DJANGO_SECRET_KEY is missing"; exit 1; }
+          set -euo pipefail
+          missing=0
+          for name in SUPABASE_DATABASE_URL DJANGO_SECRET_KEY EMAIL_HOST EMAIL_HOST_USER EMAIL_HOST_PASSWORD DEFAULT_FROM_EMAIL; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Required production-readiness secret is missing: $name"
+              missing=1
+            else
+              echo "::add-mask::${!name}"
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Password recovery is a production-readiness blocker until outbound email is fully configured."
+            exit 1
+          fi
       - run: pip install -r requirements.txt
       - name: Discover reachable Supabase session pooler
         shell: bash
@@ -62,6 +78,8 @@ jobs:
           "
       - name: Audit pedigree integrity
         run: python manage.py audit_pedigree_data --fail-on-critical
+      - name: Audit owner production invariants
+        run: python manage.py audit_production_invariants --fail-on-critical
       - name: Verify owner data invariants
         run: |
           python manage.py shell -c "
