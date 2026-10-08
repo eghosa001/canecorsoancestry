@@ -125,7 +125,12 @@ def dog_suggestions(request):
     sex = request.GET.get("sex", "").strip()
     browse = request.GET.get("browse") == "1"
 
-    dogs = with_displayable_images(Dog.objects.filter(is_public=True))
+    # Typed lookup is a registry search, not a photo gallery. Every published
+    # dog must be discoverable even when a photograph has not been uploaded.
+    # Keep the image requirement only for the unfiltered browse picker.
+    dogs = Dog.objects.filter(is_public=True)
+    if not query and browse:
+        dogs = with_displayable_images(dogs)
 
     if len(query) >= 3:
         dogs = dogs.filter(public_dog_match_filter(query))
@@ -170,7 +175,7 @@ def dog_suggestions(request):
         for row in rows
     ]
     response = JsonResponse({"results": results})
-    response["Cache-Control"] = "public, max-age=30, stale-while-revalidate=120"
+    response["Cache-Control"] = "no-store"
     return response
 
 
@@ -182,10 +187,10 @@ def dog_search(request):
     exact = request.GET.get("exact") == "1"
 
     if query:
-        base_dogs = with_displayable_images(
-            Dog.objects.filter(is_public=True).filter(
-                public_dog_match_filter(query, exact=exact)
-            )
+        # An explicit name/alias/registration search must find published dogs
+        # irrespective of the completeness of their image gallery.
+        base_dogs = Dog.objects.filter(is_public=True).filter(
+            public_dog_match_filter(query, exact=exact)
         )
     else:
         base_dogs = _public_dogs_with_images()
