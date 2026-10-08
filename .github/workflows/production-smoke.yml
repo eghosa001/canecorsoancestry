@@ -35,7 +35,7 @@ jobs:
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main')
     concurrency:
-      group: production-smoke-live
+      group: production-smoke-live-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'production' }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 18
