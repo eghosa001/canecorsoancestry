@@ -32,7 +32,7 @@ jobs:
           test "$RUNNER_NAME" = "CCA-ORACLE"
           test "$(uname -m)" = aarch64
           test -f /home/opc/actions-runner-cca/.runner
-          python3 -c 'import json; p="/home/opc/actions-runner-cca/.runner"; d=json.load(open(p)); assert d.get("gitHubUrl","").rstrip("/").lower()=="https://github.com/eghosa001/canecorsoancestry"; assert d.get("agentName")=="CCA-ORACLE"; print("PASS: new runner belongs to Cane Corso Ancestry only.")'
+          python3 -c 'import json; p="/home/opc/actions-runner-cca/.runner"; d=json.load(open(p, encoding="utf-8-sig")); assert d.get("gitHubUrl","").rstrip("/").lower()=="https://github.com/eghosa001/canecorsoancestry"; assert d.get("agentName")=="CCA-ORACLE"; print("PASS: new runner belongs to Cane Corso Ancestry only.")'
           sudo -n systemctl is-active --quiet actions.runner.eghosa001-canecorsoancestry.CCA-ORACLE.service
           echo "PASS: CCA registered, online, service active and successfully executing this workflow."
 
