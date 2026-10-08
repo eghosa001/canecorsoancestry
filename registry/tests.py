@@ -394,6 +394,24 @@ class DogModelTests(TestCase):
         self.assertContains(response, "new-approved-photo.jpg")
         self.assertContains(response, "Full body")
 
+    def test_autocomplete_exact_name_beats_popular_substring_matches(self):
+        exact = Dog.objects.create(
+            name="Atlas", slug="atlas-exact-low-popularity",
+            is_public=True, search_count=0,
+        )
+        for index in range(18):
+            Dog.objects.create(
+                name=f"Atlas Popular {index:02d}",
+                slug=f"atlas-popular-{index:02d}",
+                is_public=True,
+                search_count=500,
+            )
+        response = self.client.get(
+            reverse("registry:dog-suggestions"), {"q": "Atlas"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["id"], str(exact.pk))
+
     def test_public_dog_profile_always_exposes_coi(self):
         common = Dog.objects.create(
             name="COI Common", slug="coi-common-profile", is_public=True
