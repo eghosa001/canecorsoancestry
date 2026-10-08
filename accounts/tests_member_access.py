@@ -420,10 +420,26 @@ class MemberAccessFlowTests(TestCase):
                 with Image.open(stored_path) as stored:
                     self.assertEqual(stored.format, "JPEG")
 
+                # Verify member submission does not leak to visitors before approval.
+                self.client.logout()
+                pending_profile = self.client.get(
+                    reverse("registry:dog-detail", args=[dog.slug])
+                )
+                self.assertNotContains(
+                    pending_profile, submission.attachment.name
+                )
                 approve_submission(submission, self.reviewer, "Photo checked.")
                 image = DogImage.objects.get(dog=dog)
                 self.assertEqual(image.image.name, submission.attachment.name)
                 self.assertTrue(image.is_primary)
+                public_profile = self.client.get(
+                    reverse("registry:dog-detail", args=[dog.slug])
+                )
+                self.assertContains(public_profile, image.image.url)
+                public_search = self.client.get(
+                    reverse("registry:dog-search"), {"q": dog.name}
+                )
+                self.assertContains(public_search, image.image.url)
 
     def test_heic_photo_reaches_submission_storage_as_jpeg(self):
         member = get_user_model().objects.create_user(
