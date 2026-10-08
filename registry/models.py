@@ -335,6 +335,22 @@ class Litter(models.Model):
             if self.dam and self.dam.date_of_birth and self.dam.date_of_birth >= self.date_of_birth:
                 raise ValidationError({"dam": "The dam must be born before the litter."})
 
+        if self.sire_id and self.dam_id and self.date_of_birth:
+            duplicate_birth = Litter.objects.exclude(pk=self.pk).filter(
+                sire_id=self.sire_id,
+                dam_id=self.dam_id,
+                date_of_birth=self.date_of_birth,
+            ).exists()
+            if duplicate_birth:
+                raise ValidationError(
+                    {
+                        "date_of_birth": (
+                            "This sire, dam and date of birth already identify one "
+                            "canonical litter. Use the existing litter."
+                        )
+                    }
+                )
+
     @property
     def public_label(self):
         """Human-facing litter name while keeping generated codes internal."""
