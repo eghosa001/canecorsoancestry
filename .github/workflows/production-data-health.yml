@@ -6,6 +6,9 @@ on:
     paths:
       - ".github/workflows/production-data-health.yml"
       - "scripts/discover_supabase_session_pooler.py"
+  workflow_run:
+    workflows: ["Provision Northflank origin"]
+    types: [completed]
   workflow_dispatch:
   schedule:
     - cron: "43 5 * * 4"
@@ -19,6 +22,7 @@ concurrency:
 
 jobs:
   audit:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
