@@ -12,6 +12,7 @@ on:
       - "manage.py"
       - "requirements.txt"
       - "Dockerfile"
+      - ".github/workflows/test.yml"
   pull_request:
     paths:
       - "accounts/**/*.py"
@@ -22,6 +23,7 @@ on:
       - "manage.py"
       - "requirements.txt"
       - "Dockerfile"
+      - ".github/workflows/test.yml"
 
 permissions:
   contents: read
@@ -38,14 +40,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: pip
+
       - run: pip install -r requirements.txt
+
       - name: Run change-scoped checks
         shell: bash
         run: |
+          set -euo pipefail
+
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch origin "${{ github.base_ref }}" --depth=1
             changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
@@ -61,104 +68,30 @@ jobs:
           python manage.py check
 
           targets=()
-          grep -q '^pedigrees/' <<<"$changed" && targets+=("pedigrees.tests.PedigreeServiceTests")
+
+          if grep -q '^pedigrees/' <<<"$changed"; then
+            targets+=("pedigrees.tests.PedigreeServiceTests")
+          fi
 
           if grep -Eq '^registry/(management/commands/(import_canecorso_archive|refresh_canecorso_latest)\.py|tests_canecorso_(import|latest)\.py)$' <<<"$changed"; then
             targets+=("registry.tests_canecorso_import" "registry.tests_canecorso_latest")
-          elif grep -Eq '^registry/(services|verification)\.py          elif grep -q '^registry/' <<<"$changed"; then
+          fi
+
+          if grep -q '^registry/' <<<"$changed"; then
             targets+=("registry.tests.DogModelTests")
           fi
 
-          if grep -q '^accounts/' <<<"$changed"; then
-            scoped_accounts=false
-
-            if grep -Eq '^accounts/(admin\.py|tests_admin_surfaces\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_admin_surfaces")
-              scoped_accounts=true
-            fi
-
-            if grep -q '^accounts/views\.py$' <<<"$changed"; then
-              if [ "${{ github.event_name }}" = "pull_request" ]; then
-                view_diff="$(git diff -U0 "origin/${{ github.base_ref }}...HEAD" -- accounts/views.py)"
-              else
-                view_diff="$(git diff -U0 HEAD^ HEAD -- accounts/views.py)"
-              fi
-              if grep -Eq 'moderation_|verification_|review_submission|review_dispute|merge_dogs|verify_dog|duplicate_' <<<"$view_diff"; then
-                targets+=(
-                  "accounts.tests_admin_surfaces"
-                  "accounts.tests_moderation_intelligence.ModerationQueueTests"
-                  "accounts.tests_verification.VerificationGovernanceTests"
-                )
-              fi
-              if grep -Eq 'signup|submit_kennel|claim_kennel|edit_kennel|submit_document|request_document_visibility' <<<"$view_diff"; then
-                targets+=(
-                  "accounts.tests_member_access.MemberAccessFlowTests"
-                  "accounts.tests_member_phase.KennelClaimTests"
-                  "accounts.tests_member_phase.DocumentVisibilityTests"
-                  "accounts.tests_member_phase.KennelIdentityProtectionTests"
-                )
-              fi
-              scoped_accounts=true
-            fi
-
-            if grep -Eq '^accounts/(forms\.py|tests_account_recovery\.py)            if grep -Eq '^accounts/(forms\.py|tests_upload_security\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_upload_security")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_payments")
-              scoped_accounts=true
-            fi
-
-            if grep -Eq '^accounts/(forms\.py|views\.py|tests_member_access\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_member_access.MemberAccessFlowTests")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
-              targets+=("accounts.tests_moderation_intelligence")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
-              targets+=("accounts.tests_verification")
-              scoped_accounts=true
-            fi
-
-            if [ "$scoped_accounts" != "true" ]; then
-              echo "::error::Accounts Python changes require an explicit change-scoped test mapping. Do not fall back to the full accounts suite."
-              exit 1
-            fi
+          if grep -Eq '^registry/(models|services|verification|views|querysets)\.py$|^registry/(migrations/|tests_production_hardening\.py)' <<<"$changed"; then
+            targets+=("registry.tests_production_hardening")
           fi
 
-          grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
-
-          if [ ${#targets[@]} -eq 0 ]; then
-            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          unique_targets=()
-          declare -A seen_targets=()
-          for target in "${targets[@]}"; do
-            if [ -z "${seen_targets[$target]+x}" ]; then
-              unique_targets+=("$target")
-              seen_targets["$target"]=1
-            fi
-          done
-          targets=("${unique_targets[@]}")
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
+          if grep -Eq '^registry/(services|verification)\.py$' <<<"$changed"; then
             targets+=(
-              "registry.tests.DogModelTests"
-              "registry.tests_production_hardening"
               "accounts.tests_admin_surfaces"
               "accounts.tests_member_access.MemberAccessFlowTests"
               "accounts.tests_verification.VerificationGovernanceTests"
               "accounts.tests_moderation_intelligence.DuplicateIntelligenceTests"
             )
-          elif grep -q '^registry/' <<<"$changed"; then
-            targets+=("registry.tests.DogModelTests")
           fi
 
           if grep -q '^accounts/' <<<"$changed"; then
@@ -175,6 +108,7 @@ jobs:
               else
                 view_diff="$(git diff -U0 HEAD^ HEAD -- accounts/views.py)"
               fi
+
               if grep -Eq 'moderation_|verification_|review_submission|review_dispute|merge_dogs|verify_dog|duplicate_' <<<"$view_diff"; then
                 targets+=(
                   "accounts.tests_admin_surfaces"
@@ -182,6 +116,7 @@ jobs:
                   "accounts.tests_verification.VerificationGovernanceTests"
                 )
               fi
+
               if grep -Eq 'signup|submit_kennel|claim_kennel|edit_kennel|submit_document|request_document_visibility' <<<"$view_diff"; then
                 targets+=(
                   "accounts.tests_member_access.MemberAccessFlowTests"
@@ -190,6 +125,7 @@ jobs:
                   "accounts.tests_member_phase.KennelIdentityProtectionTests"
                 )
               fi
+
               scoped_accounts=true
             fi
 
@@ -197,208 +133,17 @@ jobs:
               targets+=("accounts.tests_account_recovery")
               scoped_accounts=true
             fi
-            if grep -Eq '^accounts/(forms\.py|tests_upload_security\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_upload_security")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_payments")
-              scoped_accounts=true
-            fi
 
-            if grep -Eq '^accounts/(forms\.py|views\.py|tests_member_access\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_member_access.MemberAccessFlowTests")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
-              targets+=("accounts.tests_moderation_intelligence")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
-              targets+=("accounts.tests_verification")
-              scoped_accounts=true
-            fi
-
-            if [ "$scoped_accounts" != "true" ]; then
-              echo "::error::Accounts Python changes require an explicit change-scoped test mapping. Do not fall back to the full accounts suite."
-              exit 1
-            fi
-          fi
-
-          grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
-
-          if [ ${#targets[@]} -eq 0 ]; then
-            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          unique_targets=()
-          declare -A seen_targets=()
-          for target in "${targets[@]}"; do
-            if [ -z "${seen_targets[$target]+x}" ]; then
-              unique_targets+=("$target")
-              seen_targets["$target"]=1
-            fi
-          done
-          targets=("${unique_targets[@]}")
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
-              targets+=("accounts.tests_account_recovery")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/tests_production_readiness\.py            if grep -Eq '^accounts/(forms\.py|tests_upload_security\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_upload_security")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_payments")
-              scoped_accounts=true
-            fi
-
-            if grep -Eq '^accounts/(forms\.py|views\.py|tests_member_access\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_member_access.MemberAccessFlowTests")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
-              targets+=("accounts.tests_moderation_intelligence")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
-              targets+=("accounts.tests_verification")
-              scoped_accounts=true
-            fi
-
-            if [ "$scoped_accounts" != "true" ]; then
-              echo "::error::Accounts Python changes require an explicit change-scoped test mapping. Do not fall back to the full accounts suite."
-              exit 1
-            fi
-          fi
-
-          grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
-
-          if [ ${#targets[@]} -eq 0 ]; then
-            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          unique_targets=()
-          declare -A seen_targets=()
-          for target in "${targets[@]}"; do
-            if [ -z "${seen_targets[$target]+x}" ]; then
-              unique_targets+=("$target")
-              seen_targets["$target"]=1
-            fi
-          done
-          targets=("${unique_targets[@]}")
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
-            targets+=(
-              "registry.tests.DogModelTests"
-              "registry.tests_production_hardening"
-              "accounts.tests_admin_surfaces"
-              "accounts.tests_member_access.MemberAccessFlowTests"
-              "accounts.tests_verification.VerificationGovernanceTests"
-              "accounts.tests_moderation_intelligence.DuplicateIntelligenceTests"
-            )
-          elif grep -q '^registry/' <<<"$changed"; then
-            targets+=("registry.tests.DogModelTests")
-          fi
-
-          if grep -q '^accounts/' <<<"$changed"; then
-            scoped_accounts=false
-
-            if grep -Eq '^accounts/(admin\.py|tests_admin_surfaces\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_admin_surfaces")
-              scoped_accounts=true
-            fi
-
-            if grep -q '^accounts/views\.py$' <<<"$changed"; then
-              if [ "${{ github.event_name }}" = "pull_request" ]; then
-                view_diff="$(git diff -U0 "origin/${{ github.base_ref }}...HEAD" -- accounts/views.py)"
-              else
-                view_diff="$(git diff -U0 HEAD^ HEAD -- accounts/views.py)"
-              fi
-              if grep -Eq 'moderation_|verification_|review_submission|review_dispute|merge_dogs|verify_dog|duplicate_' <<<"$view_diff"; then
-                targets+=(
-                  "accounts.tests_admin_surfaces"
-                  "accounts.tests_moderation_intelligence.ModerationQueueTests"
-                  "accounts.tests_verification.VerificationGovernanceTests"
-                )
-              fi
-              if grep -Eq 'signup|submit_kennel|claim_kennel|edit_kennel|submit_document|request_document_visibility' <<<"$view_diff"; then
-                targets+=(
-                  "accounts.tests_member_access.MemberAccessFlowTests"
-                  "accounts.tests_member_phase.KennelClaimTests"
-                  "accounts.tests_member_phase.DocumentVisibilityTests"
-                  "accounts.tests_member_phase.KennelIdentityProtectionTests"
-                )
-              fi
-              scoped_accounts=true
-            fi
-
-            if grep -Eq '^accounts/(forms\.py|tests_account_recovery\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_account_recovery")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/(forms\.py|tests_upload_security\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_upload_security")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_payments")
-              scoped_accounts=true
-            fi
-
-            if grep -Eq '^accounts/(forms\.py|views\.py|tests_member_access\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_member_access.MemberAccessFlowTests")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
-              targets+=("accounts.tests_moderation_intelligence")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
-              targets+=("accounts.tests_verification")
-              scoped_accounts=true
-            fi
-
-            if [ "$scoped_accounts" != "true" ]; then
-              echo "::error::Accounts Python changes require an explicit change-scoped test mapping. Do not fall back to the full accounts suite."
-              exit 1
-            fi
-          fi
-
-          grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
-
-          if [ ${#targets[@]} -eq 0 ]; then
-            echo "No changed Python app requires tests."
-            exit 0
-          fi
-
-          unique_targets=()
-          declare -A seen_targets=()
-          for target in "${targets[@]}"; do
-            if [ -z "${seen_targets[$target]+x}" ]; then
-              unique_targets+=("$target")
-              seen_targets["$target"]=1
-            fi
-          done
-          targets=("${unique_targets[@]}")
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
+            if grep -Eq '^accounts/tests_production_readiness\.py$' <<<"$changed"; then
               targets+=("accounts.tests_production_readiness")
               scoped_accounts=true
             fi
+
             if grep -Eq '^accounts/(forms\.py|tests_upload_security\.py)$' <<<"$changed"; then
               targets+=("accounts.tests_upload_security")
               scoped_accounts=true
             fi
+
             if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
               targets+=("accounts.tests_payments")
               scoped_accounts=true
@@ -408,10 +153,12 @@ jobs:
               targets+=("accounts.tests_member_access.MemberAccessFlowTests")
               scoped_accounts=true
             fi
+
             if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
               targets+=("accounts.tests_moderation_intelligence")
               scoped_accounts=true
             fi
+
             if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
               targets+=("accounts.tests_verification")
               scoped_accounts=true
@@ -423,103 +170,9 @@ jobs:
             fi
           fi
 
-          grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
-
-          if [ ${#targets[@]} -eq 0 ]; then
-            echo "No changed Python app requires tests."
-            exit 0
+          if grep -Eq '^core/.*\.py$' <<<"$changed"; then
+            targets+=("core")
           fi
-
-          unique_targets=()
-          declare -A seen_targets=()
-          for target in "${targets[@]}"; do
-            if [ -z "${seen_targets[$target]+x}" ]; then
-              unique_targets+=("$target")
-              seen_targets["$target"]=1
-            fi
-          done
-          targets=("${unique_targets[@]}")
-
-          printf 'Running scoped tests: %s\n' "${targets[*]}"
-          python manage.py test "${targets[@]}" --verbosity 1
- <<<"$changed"; then
-            targets+=(
-              "registry.tests.DogModelTests"
-              "registry.tests_production_hardening"
-              "accounts.tests_admin_surfaces"
-              "accounts.tests_member_access.MemberAccessFlowTests"
-              "accounts.tests_verification.VerificationGovernanceTests"
-              "accounts.tests_moderation_intelligence.DuplicateIntelligenceTests"
-            )
-          elif grep -q '^registry/' <<<"$changed"; then
-            targets+=("registry.tests.DogModelTests")
-          fi
-
-          if grep -q '^accounts/' <<<"$changed"; then
-            scoped_accounts=false
-
-            if grep -Eq '^accounts/(admin\.py|tests_admin_surfaces\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_admin_surfaces")
-              scoped_accounts=true
-            fi
-
-            if grep -q '^accounts/views\.py$' <<<"$changed"; then
-              if [ "${{ github.event_name }}" = "pull_request" ]; then
-                view_diff="$(git diff -U0 "origin/${{ github.base_ref }}...HEAD" -- accounts/views.py)"
-              else
-                view_diff="$(git diff -U0 HEAD^ HEAD -- accounts/views.py)"
-              fi
-              if grep -Eq 'moderation_|verification_|review_submission|review_dispute|merge_dogs|verify_dog|duplicate_' <<<"$view_diff"; then
-                targets+=(
-                  "accounts.tests_admin_surfaces"
-                  "accounts.tests_moderation_intelligence.ModerationQueueTests"
-                  "accounts.tests_verification.VerificationGovernanceTests"
-                )
-              fi
-              if grep -Eq 'signup|submit_kennel|claim_kennel|edit_kennel|submit_document|request_document_visibility' <<<"$view_diff"; then
-                targets+=(
-                  "accounts.tests_member_access.MemberAccessFlowTests"
-                  "accounts.tests_member_phase.KennelClaimTests"
-                  "accounts.tests_member_phase.DocumentVisibilityTests"
-                  "accounts.tests_member_phase.KennelIdentityProtectionTests"
-                )
-              fi
-              scoped_accounts=true
-            fi
-
-            if grep -Eq '^accounts/(forms\.py|tests_account_recovery\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_account_recovery")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/(forms\.py|tests_upload_security\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_upload_security")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_payments")
-              scoped_accounts=true
-            fi
-
-            if grep -Eq '^accounts/(forms\.py|views\.py|tests_member_access\.py)$' <<<"$changed"; then
-              targets+=("accounts.tests_member_access.MemberAccessFlowTests")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
-              targets+=("accounts.tests_moderation_intelligence")
-              scoped_accounts=true
-            fi
-            if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
-              targets+=("accounts.tests_verification")
-              scoped_accounts=true
-            fi
-
-            if [ "$scoped_accounts" != "true" ]; then
-              echo "::error::Accounts Python changes require an explicit change-scoped test mapping. Do not fall back to the full accounts suite."
-              exit 1
-            fi
-          fi
-
-          grep -Eq '^core/.*\.py$' <<<"$changed" && targets+=("core")
 
           if [ ${#targets[@]} -eq 0 ]; then
             echo "No changed Python app requires tests."
