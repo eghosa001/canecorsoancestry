@@ -19,7 +19,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Prefetch, Q
+from django.db.models import Avg, Count, DurationField, Exists, ExpressionWrapper, F, OuterRef, Prefetch, Q
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -3041,6 +3041,57 @@ def data_health(request):
             "critical_total": critical_total,
         },
     )
+
+
+@login_required
+def data_health_evidence(request):
+    """Paginated, read-only triage of existing public pedigree evidence.
+
+    Only a Super Admin can directly edit source documents; reviewers may use
+    this list for investigation. A source attribution is NOT independent proof.
+    """
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
+
+    issue = request.GET.get("issue", "missing-source")
+    choices = {
+        "missing-source": "Missing source attribution",
+        "unreviewed-source": "No independently reviewed source",
+        "community-only": "Community-submitted verification state",
+        "unknown-sex": "Unknown sex on a public record",
+    }
+    if issue not in choices:
+        return HttpResponseBadRequest("Choose a supported evidence review filter.")
+
+    sources = DogSource.objects.filter(dog_id=OuterRef("pk"))
+    reviewed = sources.filter(verified_at__isnull=False)
+    public = Dog.objects.filter(is_public=True).annotate(
+        has_source=Exists(sources),
+        has_reviewed_source=Exists(reviewed),
+    )
+    if issue == "missing-source":
+        public = public.filter(has_source=False)
+    elif issue == "unreviewed-source":
+        public = public.filter(has_reviewed_source=False)
+    elif issue == "community-only":
+        public = public.filter(verification_state="community")
+    else:
+        public = public.filter(sex=Dog.Sex.UNKNOWN)
+
+    # Bound each request to 30 existing dogs, rather than materializing 33k
+    # source/history rows or inspecting every public photo.
+    page_obj = Paginator(
+        public.select_related("kennel").order_by("name", "pk"),
+        30,
+    ).get_page(request.GET.get("page"))
+    return render(request, "accounts/data_health_evidence.html", {
+        "dogs": page_obj.object_list,
+        "page_obj": page_obj,
+        "issue": issue,
+        "issue_title": choices[issue],
+        "issue_filters": choices,
+        "can_manage_sources": can_manage_verification(request.user),
+    })
 
 
 @login_required
