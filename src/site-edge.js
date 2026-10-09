@@ -1,4 +1,5 @@
-const DEFAULT_ORIGIN = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run";
+// Missing origin configuration must never silently route users to a retired database.
+const DEFAULT_ORIGIN = "http://127.0.0.1:18080";
 // Fallback for local/dev runs. Production injects the exact deployed Git SHA
 // so each successful app release gets a fresh cache namespace automatically.
 const FALLBACK_EDGE_CACHE_VERSION = "local-dev";
