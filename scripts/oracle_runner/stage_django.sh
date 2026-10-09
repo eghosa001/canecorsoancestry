@@ -15,7 +15,7 @@ if [[ "$GITHUB_REPOSITORY" != "$REPO" ||
   echo "::error::Oracle staging may run only as opc, on CCA/main, ARM64." >&2
   exit 1
 fi
-for name in DJANGO_SECRET_KEY SUPABASE_DATABASE_URL; do
+for name in DJANGO_SECRET_KEY; do
   if [[ -z "$(printenv "$name" || true)" ]]; then
     echo "::error::Missing required GitHub Actions secret: $name" >&2
     exit 1
@@ -25,6 +25,10 @@ command -v sudo >/dev/null
 sudo -n true
 DB_MODE="$(sudo -n cat /etc/cca/oracle-db-mode 2>/dev/null || printf supabase)"
 [[ "$DB_MODE" == supabase || "$DB_MODE" == local ]] || { echo "::error::Invalid DB mode"; exit 1; }
+if [[ "$DB_MODE" == supabase && -z "${SUPABASE_DATABASE_URL:-}" ]]; then
+  echo "::error::Legacy Supabase recovery mode requires SUPABASE_DATABASE_URL." >&2
+  exit 1
+fi
 export CCA_ORACLE_DB_MODE="$DB_MODE"
 if ! command -v podman >/dev/null; then
   echo "Installing Oracle Linux Podman container engine."
@@ -59,7 +63,7 @@ secret = os.environ["DJANGO_SECRET_KEY"]
 email_keys = ("EMAIL_HOST", "EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD")
 email_ready = all(os.environ.get(key, "") for key in email_keys)
 values = {
-    "SUPABASE_DATABASE_URL": os.environ["SUPABASE_DATABASE_URL"],
+    "SUPABASE_DATABASE_URL": os.environ.get("SUPABASE_DATABASE_URL", ""),
     "DJANGO_SETTINGS_MODULE": "scripts.oracle_runner.oracle_settings",
     "DJANGO_SECRET_KEY": secret,
     "DJANGO_ALLOWED_HOSTS": (
