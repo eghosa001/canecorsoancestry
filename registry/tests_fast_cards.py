@@ -4,8 +4,8 @@ from django.test.utils import CaptureQueriesContext
 from django.db import connection
 from django.core.cache import cache
 
-from registry.models import Dog, DogRegistration, RegistrationAuthority
-from registry.querysets import with_card_registration
+from registry.models import Dog, DogImage, DogRegistration, RegistrationAuthority
+from registry.querysets import with_card_image, with_card_registration
 from registry.views import _dog_cards
 
 
@@ -34,6 +34,37 @@ class FastPublicDogCardTests(TestCase):
             number = result[0].card_registration_number
         self.assertEqual((code, number), ("PERF", "CARD-001"))
         self.assertEqual(len(queries), 2, "dog row + managed image prefetch, no registration query")
+
+    def test_first_photo_and_registration_use_one_db_query(self):
+        DogImage.objects.create(
+            dog=self.dog, image="dogs/2026/10/lower-priority.jpg",
+            is_primary=False, sort_order=0,
+        )
+        DogImage.objects.create(
+            dog=self.dog, image="dogs/2026/10/primary-picture.jpg",
+            is_primary=True, sort_order=1,
+        )
+        cards = with_card_image(with_card_registration(_dog_cards(
+            Dog.objects.filter(pk=self.dog.pk), include_sources=False,
+            include_registrations=False, include_images=False,
+        )))
+        with CaptureQueriesContext(connection) as queries:
+            rows = list(cards)
+        self.assertEqual(len(queries), 1, "dog + first photo + registration must be one remote query")
+        self.assertEqual(rows[0].card_registration_number, "CARD-001")
+        self.assertEqual(rows[0].card_image_name, "dogs/2026/10/primary-picture.jpg")
+
+        cache.clear()
+        page = self.client.get("/dogs/?q=Card%20Performance")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "/media/dogs/2026/10/primary-picture.jpg")
+        self.assertNotContains(page, "lower-priority.jpg")
+        self.assertContains(page, "CARD-001")
+
+        home = self.client.get("/")
+        self.assertEqual(home.status_code, 200)
+        self.assertContains(home, "primary-picture.jpg")
+        self.assertContains(home, "CARD-001")
 
     def test_public_search_still_renders_registration_and_dog(self):
         cache.clear()

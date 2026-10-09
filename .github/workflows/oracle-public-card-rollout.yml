@@ -1,0 +1,56 @@
+name: Oracle public card speed rollout
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/oracle-public-card-rollout.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/oracle-public-card-rollout.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-django-stage-refs/heads/main
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check already-tested Oracle app release workflow
+        run: |
+          bash -n scripts/oracle_runner/apply_oracle_capacity_tune.sh
+          bash -n scripts/oracle_runner/oracle_perf_diagnostics.sh
+          python3 scripts/fast_path_guard.py
+
+  rollout-and-measure:
+    if: >-
+      github.event_name == 'push' &&
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 40
+    env:
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
+      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+      EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+      DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Apply current production Django release using tested rollback safeguard
+        shell: bash
+        run: bash scripts/oracle_runner/apply_oracle_capacity_tune.sh
+      - name: Measure Oracle SQL round trips, page queries and Cloudflare latency
+        shell: bash
+        run: bash scripts/oracle_runner/oracle_perf_diagnostics.sh

@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.cache import cache
+from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
 from django.db import DatabaseError, connection, transaction
 from django.db.models import Case, Count, Exists, F, IntegerField, OuterRef, Prefetch, Q, Subquery, Value, When
@@ -36,25 +37,27 @@ from .models import (
     public_verification_label,
 )
 from .permissions import can_contribute_to_dog
-from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_registration, with_displayable_images, with_stored_images
+from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images
 
 
 PROFILE_RELATION_PREVIEW_LIMIT = 18
 SEARCH_HIT_THROTTLE_SECONDS = 30
 
 
-def _dog_cards(queryset, *, include_parents=False, include_sources=True, include_registrations=True):
+def _dog_cards(queryset, *, include_parents=False, include_sources=True, include_registrations=True, include_images=True):
     related = ["kennel"]
     if include_parents:
         related.extend(["sire", "dam"])
 
-    prefetches = [
-        Prefetch(
-            "images",
-            queryset=DogImage.objects.order_by("-is_primary", "sort_order", "created_at"),
-            to_attr="display_images",
+    prefetches = []
+    if include_images:
+        prefetches.append(
+            Prefetch(
+                "images",
+                queryset=DogImage.objects.order_by("-is_primary", "sort_order", "created_at"),
+                to_attr="display_images",
+            )
         )
-    ]
     if include_registrations:
         prefetches.append(
             Prefetch(
@@ -106,7 +109,11 @@ def _public_dogs_with_images():
 
 def _attach_source_images_for_missing(dogs):
     """Load source-image metadata only for cards that do not already have stored media."""
-    missing = [dog for dog in dogs if not getattr(dog, "display_images", [])]
+    missing = [
+        dog for dog in dogs
+        if not getattr(dog, "display_images", [])
+        and not getattr(dog, "card_image_url", "")
+    ]
     if not missing:
         _attach_source_image_urls(dogs)
         return
@@ -205,9 +212,12 @@ def dog_search(request):
         )
     else:
         base_dogs = _public_dogs_with_images()
-    dogs = with_card_registration(
-        _dog_cards(base_dogs, include_sources=False, include_registrations=False)
-    )
+    dogs = with_card_image(with_card_registration(
+        _dog_cards(
+            base_dogs, include_sources=False,
+            include_registrations=False, include_images=False,
+        )
+    ))
     if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE, Dog.Sex.UNKNOWN}:
         dogs = dogs.filter(sex=sex)
     if country:
@@ -227,6 +237,8 @@ def dog_search(request):
             cache.set("cca:dog-search:default-count:v1", cached_count, 900)
         paginator.__dict__["count"] = cached_count
     page_obj = paginator.get_page(request.GET.get("page"))
+    for dog in page_obj.object_list:
+        dog.card_image_url = default_storage.url(dog.card_image_name) if dog.card_image_name else ""
     _attach_source_images_for_missing(page_obj.object_list)
     query_params = request.GET.copy()
     query_params.pop("page", None)

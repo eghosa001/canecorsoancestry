@@ -11,6 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.core.files.storage import default_storage
 from django.db import connection
 from django.db.models import Prefetch, Q
 from django.http import Http404, HttpResponse, JsonResponse
@@ -21,17 +22,19 @@ from django.urls import reverse
 
 from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
 from registry.permissions import can_manage_verification, can_review_submissions, is_staff_identity
-from registry.querysets import one_dog_per_kennel, with_card_registration, with_stored_images
+from registry.querysets import one_dog_per_kennel, with_card_image, with_card_registration, with_stored_images
 
 from .seo import json_ld
 
 logger = logging.getLogger(__name__)
 
 
-def _display_dogs(queryset, *, include_sources=True, include_registrations=True):
-    prefetches = [
-        Prefetch("images", queryset=DogImage.objects.order_by("-is_primary", "sort_order", "created_at"), to_attr="display_images"),
-    ]
+def _display_dogs(queryset, *, include_sources=True, include_registrations=True, include_images=True):
+    prefetches = []
+    if include_images:
+        prefetches.append(
+            Prefetch("images", queryset=DogImage.objects.order_by("-is_primary", "sort_order", "created_at"), to_attr="display_images")
+        )
     if include_registrations:
         prefetches.append(
             Prefetch("registrations", queryset=DogRegistration.objects.select_related("authority"), to_attr="display_registrations")
@@ -204,14 +207,17 @@ def _load_featured_dogs():
         if not ids:
             return []
         rows = list(
-            with_card_registration(
+            with_card_image(with_card_registration(
                 _display_dogs(
                     Dog.objects.filter(pk__in=ids, is_public=True),
                     include_sources=False,
                     include_registrations=False,
+                    include_images=False,
                 )
-            )
+            ))
         )
+        for dog in rows:
+            dog.card_image_url = default_storage.url(dog.card_image_name) if dog.card_image_name else ""
         by_id = {dog.pk: dog for dog in rows}
         return [by_id[dog_id] for dog_id in ids if dog_id in by_id]
 
