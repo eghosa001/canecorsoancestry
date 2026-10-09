@@ -38,6 +38,32 @@ jobs:
             code="$(curl -sS --connect-timeout 3 --max-time 12 -o /dev/null -w '%{http_code}' "http://127.0.0.1:18080$path" || true)"
             echo "oracle_loopback=$path status=$code"
           done
+      - name: Restore production private Cloudflare tunnel and enable boot recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "eghosa001/canecorsoancestry" ]] || exit 2
+          [[ "$(uname -m)" == aarch64 ]] || exit 2
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = local
+          sudo -n systemctl is-active --quiet cca-oracle-staging.service
+          sudo -n systemctl cat cca-cloudflared-vpc.service >/dev/null
+          echo "Before: $(sudo -n systemctl is-active cca-cloudflared-vpc.service || true)"
+          echo "Boot enabled before: $(sudo -n systemctl is-enabled cca-cloudflared-vpc.service || true)"
+          sudo -n systemctl enable --now cca-cloudflared-vpc.service
+          sudo -n systemctl is-active --quiet cca-cloudflared-vpc.service
+          sudo -n systemctl is-enabled --quiet cca-cloudflared-vpc.service
+          echo "PASS: Production VPC tunnel started and enabled on boot."
+          base="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+          ok=0
+          for attempt in $(seq 1 30); do
+            status="$(curl --connect-timeout 3 --max-time 12 -sS -o /dev/null -w '%{http_code}' "$base/__edge/ready" || true)"
+            page="$(curl --connect-timeout 3 --max-time 12 -sS -o /dev/null -w '%{http_code}' "$base/" || true)"
+            echo "check=$attempt ready=$status homepage=$page"
+            if [ "$status" = 200 ] && [ "$page" = 200 ]; then ok=1; break; fi
+            sleep 3
+          done
+          [ "$ok" = 1 ] || { echo "::error::Private tunnel started but site still unavailable"; exit 1; }
+          echo "PASS: Live Cloudflare homepage HTTP 200 via Oracle private VPC."
       - name: Diagnose Cloudflare Tunnel connector and private transport
         shell: bash
         run: |
