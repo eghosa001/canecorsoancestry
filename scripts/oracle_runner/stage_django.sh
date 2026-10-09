@@ -56,7 +56,7 @@ email_keys = ("EMAIL_HOST", "EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD")
 email_ready = all(os.environ.get(key, "") for key in email_keys)
 values = {
     "SUPABASE_DATABASE_URL": os.environ["SUPABASE_DATABASE_URL"],
-    "DJANGO_SETTINGS_MODULE": "config.settings.oracle",
+    "DJANGO_SETTINGS_MODULE": "scripts.oracle_runner.oracle_settings",
     "DJANGO_SECRET_KEY": secret,
     "DJANGO_ALLOWED_HOSTS": (
         "canecorsoancestry-site-edge.aighewieghosa111.workers.dev,"

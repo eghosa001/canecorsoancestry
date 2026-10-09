@@ -1,7 +1,7 @@
 from django.http import HttpResponse
 from django.test import RequestFactory, SimpleTestCase, override_settings
 
-from config.oracle_middleware import OracleEdgeOnlyMiddleware
+from scripts.oracle_runner.oracle_middleware import OracleEdgeOnlyMiddleware
 
 
 @override_settings(SECRET_KEY="oracle-test-secret")

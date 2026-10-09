@@ -10,9 +10,9 @@ on:
         options: [stage-only]
   pull_request:
     paths:
-      - "config/oracle_middleware.py"
-      - "config/settings/oracle.py"
-      - "core/tests_oracle_origin.py"
+      - "scripts/oracle_runner/oracle_middleware.py"
+      - "scripts/oracle_runner/oracle_settings.py"
+      - "scripts/tests/test_oracle_origin.py"
       - "scripts/oracle_runner/stage_django.sh"
       - ".github/workflows/oracle-stage-django.yml"
 
@@ -35,7 +35,7 @@ jobs:
           bash -n scripts/oracle_runner/stage_django.sh
           python3 scripts/fast_path_guard.py
           python3 -m pip install -q -r requirements.txt
-          python3 manage.py test core.tests_oracle_origin --noinput
+          python3 manage.py test scripts.tests.test_oracle_origin --noinput
 
   oracle-stage:
     if: >-
