@@ -756,6 +756,10 @@ class DogReferenceField(forms.CharField):
 class MergeDogsForm(forms.Form):
     canonical = DogReferenceField(label="Canonical dog")
     duplicate = DogReferenceField(label="Duplicate to retire")
+    confirm_merge = forms.BooleanField(
+        label="I checked both records and confirm these are the same real dog.",
+        help_text="The duplicate profile will retire and its parentage, descendants, registrations and records will be transferred.",
+    )
 
     def clean(self):
         cleaned = super().clean()

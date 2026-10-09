@@ -37,7 +37,16 @@
         <dt>Date of birth</dt><dd>{{ dog.date_of_birth|default:"Not recorded" }}</dd>
         <dt>Colour</dt><dd>{{ dog.colour|default:"Not recorded" }}</dd>
         <dt>Bloodline</dt><dd>{{ dog.bloodline|default:"Not recorded" }}</dd>
-        <dt>COI</dt><dd>{% if coi_percent != None %}{{ coi_percent|floatformat:2 }}% <small class="muted">from known public ancestry</small>{% else %}Unavailable{% if coi_error %} · {{ coi_error }}{% endif %}{% endif %}</dd>
+        <dt>COI</dt>
+        <dd>
+          {% if coi_percent != None %}
+            <strong>{{ coi_percent|floatformat:2 }}%</strong>
+            <small class="muted">Calculated from recorded, published pedigree links{% if not public_parentage_complete %} · incomplete public parentage{% endif %}. Missing ancestors can make the estimate too low; 0.00% does not prove no inbreeding.</small>
+          {% else %}
+            <strong>Cannot calculate</strong>
+            <small class="muted">{{ coi_error }} Ask a moderator to review parent links.</small>
+          {% endif %}
+        </dd>
         <dt>Country</dt><dd>{{ dog.country|default:"Not recorded" }}</dd>
         <dt>Kennel</dt>
         <dd>{% if dog.kennel %}<a class="text-link" href="{% url 'registry:kennel-detail' dog.kennel.slug %}">{{ dog.kennel.name }}</a>{% else %}Not recorded{% endif %}</dd>

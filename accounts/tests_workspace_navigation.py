@@ -82,3 +82,55 @@ class WorkspaceNavigationTests(TestCase):
                      "accounts:verification-dashboard"):
             with self.subTest(view=view):
                 self.assertEqual(self.client.get(reverse(view)).status_code, 403)
+
+
+    def test_merge_tool_is_visible_from_super_admin_dashboard_and_staff_navigation(self):
+        self.client.force_login(self.owner)
+        overview = self.client.get(reverse("accounts:verification-dashboard"))
+        self.assertContains(overview, 'href="/member/moderation/merge-dogs/"')
+        tool = self.client.get(reverse("accounts:merge-dogs"))
+        self.assertEqual(tool.status_code, 200)
+        self.assertContains(tool, "Merge duplicate pedigrees")
+        self.assertContains(tool, 'href="/member/moderation/merge-dogs/" aria-current="page"')
+
+    def test_merge_permissions_and_confirm_required(self):
+        from registry.models import Dog
+        survivor = Dog.objects.create(name="Merge Survivor", slug="merge-survivor", is_public=True)
+        retired = Dog.objects.create(name="Merge Duplicate", slug="merge-duplicate", is_public=True)
+        url = reverse("accounts:merge-dogs")
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.post(url, {}).status_code, 403)
+        self.client.force_login(self.moderator)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.post(url, {}).status_code, 403)
+        queue = self.client.get(reverse("accounts:moderation"))
+        self.assertNotContains(queue, "Open pedigree merge")
+
+        self.client.force_login(self.owner)
+        preview = self.client.get(url, {
+            "canonical": str(survivor.pk),
+            "duplicate": str(retired.pk),
+        })
+        self.assertEqual(preview.status_code, 200)
+        self.assertContains(preview, "Compare both pedigree records")
+        self.assertContains(preview, "Merge Survivor")
+        self.assertContains(preview, "Merge Duplicate")
+        self.assertContains(preview, str(survivor.pk))
+        self.assertTrue(Dog.objects.filter(pk=retired.pk).exists())
+        response = self.client.post(url, {
+            "canonical": str(survivor.pk),
+            "duplicate": str(retired.pk),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This field is required")
+        self.assertTrue(Dog.objects.filter(pk=retired.pk).exists())
+
+        response = self.client.post(url, {
+            "canonical": str(survivor.pk),
+            "duplicate": str(retired.pk),
+            "confirm_merge": "on",
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Merged Merge Duplicate into Merge Survivor")
+        self.assertFalse(Dog.objects.filter(pk=retired.pk).exists())
