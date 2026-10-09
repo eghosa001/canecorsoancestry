@@ -16,9 +16,6 @@ on:
       - "scripts/test_site_edge_cache.mjs"
       - "scripts/oracle_runner/edge_origin_mode.py"
       - ".github/workflows/cloudflare-site-edge.yml"
-  workflow_run:
-    workflows: ["Provision Northflank origin"]
-    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -30,13 +27,12 @@ concurrency:
 
 jobs:
   validate:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
+          ref: ${{ github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -51,26 +47,11 @@ jobs:
       - name: Test safe reversible edge origin rendering
         run: python3 -m unittest scripts.tests.test_edge_origin_mode
 
-      - name: Warm Northflank origin before cutover
-        shell: bash
-        run: |
-          origin="https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
-          status="$(curl --connect-timeout 5 --max-time 12 -sS -H 'X-CCA-Edge: 1' -o /tmp/northflank-origin.html -w '%{http_code}' "$origin/healthz/" || true)"
-          echo "/healthz/ -> HTTP $status"
-          if [ "$status" != "200" ]; then
-            echo "::warning::Origin is cold or still waking; deploying the edge keep-warm anyway."
-          fi
-
       - name: Validate Worker bundle
         run: npx --yes wrangler@4 deploy --dry-run --config wrangler.site.toml
 
   deploy:
-    if: >
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main') ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -78,13 +59,12 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 19a03bec57c0277e01e1e70e241576af
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-      APP_RELEASE_SHA: ${{ github.event.workflow_run.head_sha || '' }}
       EDGE_CACHE_VERSION: edge-${{ github.run_id }}
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
+          ref: ${{ github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -110,50 +90,8 @@ jobs:
           set -euo pipefail
           mode="$(python3 scripts/oracle_runner/edge_origin_mode.py live-mode)"
           echo "EDGE_ORIGIN_MODE=$mode" >> "$GITHUB_ENV"
-          echo "Preserving active production origin: $mode"
-
-      - name: Wait for exact Northflank release before edge cutover
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "${EDGE_ORIGIN_MODE:?}" = "oracle" ]; then
-            echo "Oracle is already the live origin; no Northflank release gate required."
-            exit 0
-          fi
-          origin="https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
-
-          if [ -n "$APP_RELEASE_SHA" ]; then
-            echo "Waiting for Northflank app release: $APP_RELEASE_SHA"
-            status=""
-            for attempt in $(seq 1 48); do
-              status="$(curl --connect-timeout 5 --max-time 15 -sS \
-                -H 'X-CCA-Edge: 1' \
-                -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
-                -o /tmp/origin-health.json \
-                -w '%{http_code}' "$origin/healthz/" || true)"
-              if [ "$status" = "200" ] &&
-                 grep -Eq "\"release\"[[:space:]]*:[[:space:]]*\"$APP_RELEASE_SHA\"" /tmp/origin-health.json; then
-                echo "Northflank origin is on exact app release $APP_RELEASE_SHA."
-                break
-              fi
-              if [ "$attempt" = "48" ]; then
-                echo "::error::Northflank origin did not expose app release $APP_RELEASE_SHA before edge cutover; HTTP $status"
-                cat /tmp/origin-health.json 2>/dev/null || true
-                exit 1
-              fi
-              sleep 5
-            done
-          else
-            status="$(curl --connect-timeout 5 --max-time 15 -sS \
-              -H 'X-CCA-Edge: 1' \
-              -o /tmp/origin-health.json \
-              -w '%{http_code}' "$origin/healthz/" || true)"
-            if [ "$status" != "200" ]; then
-              echo "::error::Northflank origin health failed before edge-only cutover; HTTP $status"
-              cat /tmp/origin-health.json 2>/dev/null || true
-              exit 1
-            fi
-          fi
+          test "$mode" = "oracle" || { echo "::error::Production origin is not Oracle; refusing to deploy."; exit 1; }
+          echo "Verified production origin: Oracle private VPC"
 
       - name: Build Worker secret file
         run: |
@@ -180,7 +118,7 @@ jobs:
               ]
               text = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
           else:
-              marker = 'ORIGIN_URL = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"'
+              marker = 'ORIGIN_URL = "http://127.0.0.1:18080"'
               if marker not in text:
                   raise SystemExit("wrangler.site.toml [vars] ORIGIN_URL marker is missing")
               text = text.replace(marker, marker + "\n" + line)
@@ -303,16 +241,7 @@ jobs:
             sleep 3
           done
 
-          origin="https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
-          if [ "${EDGE_ORIGIN_MODE:?}" = "northflank" ]; then
-            bypass_status="$(curl --connect-timeout 4 --max-time 10 -sS -H 'X-CCA-Edge: 1' -o /dev/null -w '%{http_code}' "$origin/statistics/" || true)"
-            if [ "$bypass_status" != "308" ]; then
-              echo "::error::Direct Northflank origin accepted an unauthenticated edge marker; HTTP $bypass_status"
-              exit 1
-            fi
-          else
-            echo "Oracle traffic uses private VPC; Northflank direct-origin check not applicable."
-          fi
+          echo "Oracle private-VPC origin verified; no legacy public origin checks."
 
           echo "Site edge, authenticated origin path, auth-first login UI, and readiness checks are healthy."
 
