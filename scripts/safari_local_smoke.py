@@ -132,7 +132,9 @@ def run():
             page.locator("input[name='password']").fill("safari-smoke-password")
             page.locator("input[name='username']").locator("xpath=ancestor::form").locator("button[type='submit']").click()
             page.wait_for_load_state("domcontentloaded")
-            assert "/accounts/login/" not in page.url, "Safari login did not complete"
+            if "/accounts/login/" in page.url:
+                problems = page.locator(".form-error, .errorlist").all_inner_texts()
+                raise AssertionError(f"Safari login did not complete, errors={problems}, url={page.url}")
 
             dog_id = os.environ["SAFARI_TEST_DOG_ID"]
             go(page, f"/member/dogs/{dog_id}/photo/")
