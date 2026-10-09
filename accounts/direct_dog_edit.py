@@ -26,6 +26,7 @@ from registry.models import (
     DogRegistration, DogSource, DogTitle, HealthRecord, Kennel, Litter,
     ModerationAudit,
 )
+from registry.public_freshness import invalidate_public_content
 from registry.permissions import can_manage_verification, can_review_submissions
 from registry.services import record_audit
 from .forms import validate_document_upload, validate_image_upload, normalize_image_upload
@@ -242,9 +243,16 @@ def _save_formsets(dog, sets):
             item.save()
             if name == "images" and form.cleaned_data.get("make_primary"):
                 chosen_primary = item.pk
-    DogImage.objects.filter(dog=dog, is_primary=True).update(is_primary=False)
     if chosen_primary is not None:
+        # Make the primary-image change explicit. Text edits must never
+        # silently clear the profile thumbnail.
+        DogImage.objects.filter(dog=dog, is_primary=True).exclude(pk=chosen_primary).update(is_primary=False)
         DogImage.objects.filter(dog=dog, pk=chosen_primary).update(is_primary=True)
+    elif not DogImage.objects.filter(dog=dog, is_primary=True).exists():
+        # If the former primary was deleted, pick an existing remaining photo.
+        replacement = DogImage.objects.filter(dog=dog).order_by("sort_order", "created_at").first()
+        if replacement:
+            DogImage.objects.filter(pk=replacement.pk).update(is_primary=True)
 
 
 def _restore(dog, target):
@@ -358,6 +366,7 @@ def dog_direct_edit(request, pk):
                     _save_formsets(locked, sets)
                     after = _snapshot(locked)
                     if before != after:
+                        invalidate_public_content()
                         record_audit(
                             action=ModerationAudit.Action.RECORD_CHANGED,
                             actor=request.user, dog=locked, kennel=locked.kennel,
@@ -404,6 +413,7 @@ def dog_review_edit(request, pk, audit_id):
                         "A later change has modified this record. To preserve those changes, review the newer revisions or make an explicit super-admin override."
                     )
                 _restore(dog, event.summary["before"])
+                invalidate_public_content()
             record_audit(
                 action=ModerationAudit.Action.RECORD_CHANGED,
                 actor=request.user, dog=dog, kennel=dog.kennel,
