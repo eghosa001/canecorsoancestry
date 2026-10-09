@@ -81,7 +81,7 @@ def run():
             ))
             field = page.locator("#q")
             field.fill("Safari")
-            suggestions = page.locator(".dog-suggestions--viewport")
+            suggestions = page.locator(".dog-suggestions--viewport:visible")
             suggestions.locator(".dog-suggestion").first.wait_for(state="visible")
             assert suggestions.evaluate("el => el.parentElement === document.body"), "Picker is clipped inside a form"
             page.evaluate("window.scrollTo(0, 30)")
