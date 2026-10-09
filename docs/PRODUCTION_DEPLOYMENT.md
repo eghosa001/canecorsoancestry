@@ -1,103 +1,56 @@
-# Production deployment
+# Production deployment runbook — Oracle + Cloudflare + R2
 
-## Active architecture
+## Active stack
 
-The live application currently uses:
+The public Cloudflare Workers site edge routes exclusively to Django on Oracle through the private VPC Service. Django uses the local `cca_live` PostgreSQL database. R2 remains the media and encrypted offsite-backup store.
 
-1. **Cloudflare Workers site edge** — public website endpoint and cache/warm-up layer
-2. **Northflank** — Django application origin
-3. **Supabase PostgreSQL** — canonical relational database
-4. **Cloudflare R2** — durable media storage through the R2 media Worker
+Source of truth: `infra/active-services.json` and `scripts/verify_active_services.py`.
 
-Public site:
+- Public site: `https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev`
+- R2 gateway: `https://canecorsoancestry-edge.aighewieghosa111.workers.dev`
+- Oracle Django service: `cca-oracle-staging.service` (historical service name, **production origin**)
+- Oracle PostgreSQL service: `cca-pg-shadow.service` (historical service name, **production primary**)
+- Database: `cca_live`; mode `/etc/cca/oracle-db-mode = local`
+- Private app listener: `127.0.0.1:18080` on Oracle, accessed through Cloudflare VPC only
 
-`https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev`
+## Deploy a Django release
 
-Northflank origin:
+1. Merge a reviewed PR to protected `main` after focused CI and DB/release checks.
+2. Run **Oracle Django staging (manual, no cutover)** → `stage-only` from `main` (`.github/workflows/oracle-stage-django.yml`). Despite the legacy workflow name, this **restarts the production Oracle Django container** while leaving Cloudflare routing unchanged.
+3. Confirm the workflow verifies the exact commit SHA, local database, sign-in and R2 media storage.
+4. Run the production smoke and production data-health workflow. Confirm `/__edge/health` reports `origin=http://127.0.0.1:18080` and `/healthz/` reports `database_backend=oracle-local`.
 
-`https://web--canecorsoancestry--4w9gl8jxj4yr.code.run`
+Do not infer Django deployment from a Cloudflare edge deployment. No Northflank workflow builds the live application.
 
-R2 media gateway:
+## Deploy a Cloudflare Worker
 
-`https://canecorsoancestry-edge.aighewieghosa111.workers.dev`
+- Public edge: `.github/workflows/cloudflare-site-edge.yml` (only on Worker/config changes or manual dispatch). It refuses to deploy if the existing live Cloudflare bindings are not for Oracle.
+- Media gateway: `.github/workflows/cloudflare-media.yml`; preserve existing R2 signing configuration.
 
-No custom domain is configured.
+Worker configuration pins Oracle's private VPC service. Never set the origin to the former Northflank public URL.
 
-## Northflank
+## Data protection and recovery
 
-The application runs with:
+- `.github/workflows/oracle-hourly-db-backups.yml`: hourly encrypted live local PostgreSQL snapshots to Cloudflare R2; rotating archives retained for seven days.
+- `.github/workflows/database-recovery-drill.yml`: monthly read-only download/decryption/archive integrity check of the latest offsite snapshot. **Not** a full isolated restore rehearsal.
+- `.github/workflows/production-data-health.yml`: checks the local primary, live Django schema, pedigree and ownership invariants plus public images and password recovery.
+- Restoring a database requires a separate isolated rehearsal and a controlled downtime/recovery plan. Never restore over `cca_live` in place without safeguards.
 
-`DJANGO_SETTINGS_MODULE=config.settings.northflank`
+The historical Supabase and Northflank stacks are not data-preserving rollback targets after Oracle accepted writes; their old database is not synchronized. Retired one-shot migrations must not be re-run.
 
-The current deployment workflow is:
+## Secrets and access
 
-`.github/workflows/provision-northflank.yml`
+Secrets remain in GitHub Actions and root-owned files under `/etc/cca/` on Oracle. Do not print credentials, put them in docs, or commit them.
 
-It builds the exact GitHub commit, deploys it to the Northflank service and verifies the origin health/application endpoints.
+Runtime uses `DJANGO_SECRET_KEY`, `PAYSTACK_SECRET_KEY` when billing is enabled, SMTP credentials for account recovery, and an authenticated R2 gateway signing key. Oracle-local DB credentials are VM-local and should **not** be copied to GitHub.
 
-## Supabase PostgreSQL
+Oracle VM application/database ports are not public, and the self-hosted runner should only execute trusted `main` production operations.
 
-GitHub Actions use the `SUPABASE_DATABASE_URL` secret and derive a reachable session-pooler URL with:
+## Checks
 
-`scripts/discover_supabase_session_pooler.py`
-
-Django uses:
-
-- schema `django_app`;
-- TLS;
-- extra schemas `extensions,public`.
-
-## Cloudflare site edge
-
-Configuration:
-
-- `src/site-edge.js`
-- `wrangler.site.toml`
-- `.github/workflows/cloudflare-site-edge.yml`
-
-The edge proxies to Northflank, caches eligible public GET responses, keeps private/authenticated routes uncached and handles origin warm-up/readiness.
-
-## Cloudflare R2
-
-R2 bucket:
-
-`canecorsoancestry-media`
-
-Configuration:
-
-- `src/r2-media.js`
-- `wrangler.r2.toml`
-- `.github/workflows/cloudflare-media.yml`
-
-The media Worker handles authenticated backend R2 operations and signed media delivery.
-
-## Required GitHub secrets
-
-Current production workflows use:
-
-- `NORTHFLANK_API_TOKEN`
-- `SUPABASE_DATABASE_URL`
-- `DJANGO_SECRET_KEY`
-- `CLOUDFLARE_API_TOKEN`
-- `PAYSTACK_SECRET_KEY` — required to enable live/test paid submissions; keep it server-side only
-
-## Deployment flow
-
-For ordinary application changes:
-
-1. merge/push to `main`;
-2. focused CI runs only for the changed surface;
-3. relevant Django changes trigger `provision-northflank.yml`;
-4. Northflank builds and deploys the exact commit.
-
-For site-edge changes, `cloudflare-site-edge.yml` deploys the public Worker.
-
-For R2 Worker/config changes, `cloudflare-media.yml` deploys the media Worker.
-
-Data import/seed/media-sync workflows remain explicit maintenance operations.
-
-## Expected health endpoints
-
-- public edge: `/__edge/health`
-- Northflank Django: `/healthz/`
-- R2 media Worker: `/healthz/`
+```bash
+python3 scripts/verify_active_services.py
+python3 scripts/fast_path_guard.py
+node scripts/test_site_edge_cache.mjs
+python3 -m unittest scripts.tests.test_edge_origin_mode
+```
