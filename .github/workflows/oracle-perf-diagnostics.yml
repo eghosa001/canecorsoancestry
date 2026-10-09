@@ -1,0 +1,48 @@
+name: Oracle read-only latency diagnosis
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/oracle_runner/oracle_perf_diagnostics.sh"
+      - ".github/workflows/oracle-perf-diagnostics.yml"
+  pull_request:
+    paths:
+      - "scripts/oracle_runner/oracle_perf_diagnostics.sh"
+      - ".github/workflows/oracle-perf-diagnostics.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-read-only-diagnosis
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check shell syntax and policy
+        run: |
+          bash -n scripts/oracle_runner/oracle_perf_diagnostics.sh
+          python3 scripts/fast_path_guard.py
+
+  diagnostics:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'eghosa001/canecorsoancestry'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 6
+    env:
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compare CPU, Django, Supabase and Cloudflare timings
+        shell: bash
+        run: bash scripts/oracle_runner/oracle_perf_diagnostics.sh
