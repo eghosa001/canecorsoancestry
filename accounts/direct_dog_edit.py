@@ -16,6 +16,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.forms import inlineformset_factory
+from django.core.paginator import Paginator
 from django.http import HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -332,6 +333,24 @@ def _review_states(events):
 def dog_edit_list(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
+    if request.GET.get("proposals") == "1":
+        proposal_query = (
+            ModerationAudit.objects.filter(
+                action=ModerationAudit.Action.RECORD_CHANGED,
+                summary__kind="direct_dog_proposal",
+            )
+            .select_related("dog", "actor")
+            .order_by("-created_at")
+        )
+        page = Paginator(proposal_query, 30).get_page(request.GET.get("page"))
+        proposals = list(page.object_list)
+        _review_states(proposals)
+        return render(request, "accounts/direct_dog_list.html", {
+            "dogs": [], "query": "", "revisions": proposals,
+            "is_owner": can_manage_verification(request.user),
+            "history_deferred": False, "proposal_page": page,
+            "show_proposals": True,
+        })
     q = request.GET.get("q", "").strip()[:160]
     ids = moderation_dog_ids(q, limit=30) if q else []
     # One narrow query after bounded ID discovery. Preserve relevance order;
