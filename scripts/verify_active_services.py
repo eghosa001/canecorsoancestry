@@ -70,6 +70,13 @@ for name in removed:
 stage=(ROOT / "scripts/oracle_runner/stage_django.sh").read_text()
 assert "SUPABASE_DATABASE_URL" not in stage and "discover_supabase" not in stage
 assert '[[ "$DB_MODE" == local ]]' in stage
+assert 'readonly VPC_SERVICE="cca-cloudflared-vpc.service"' in stage
+assert 'systemctl enable --now "$VPC_SERVICE"' in stage
+assert 'systemctl is-active --quiet "$VPC_SERVICE"' in stage
+assert 'assert payload.get("release") == sys.argv[2]' in stage
+assert 'assert payload.get("database_backend") == "oracle-local"' in stage
+assert 'Cloudflare public homepage HTTP 200' in stage
+
 assert "SUPABASE_DATABASE_URL" not in (ROOT / ".github/workflows/oracle-stage-django.yml").read_text()
 assert "Northflank is a retired" in (ROOT / "scripts/oracle_runner/edge_origin_mode.py").read_text()
 assert not (ROOT / "config/settings/northflank.py").exists()

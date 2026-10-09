@@ -14,6 +14,15 @@
       "workflow": ".github/workflows/cloudflare-site-edge.yml"
     },
     {
+      "id": "oracle-cloudflare-vpc",
+      "role": "private QUIC tunnel connecting the public Cloudflare Worker VPC binding to Oracle loopback Django; must survive every Django release",
+      "provider": "Cloudflare Tunnel / Oracle systemd",
+      "state": "active",
+      "source": "scripts/oracle_runner/stage_django.sh",
+      "config": "cca-cloudflared-vpc.service (VM systemd, enabled)",
+      "workflow": ".github/workflows/oracle-stage-django.yml"
+    },
+    {
       "id": "oracle-django",
       "role": "sole production Django/Gunicorn origin; exact main commit is deployed automatically after successful Full release audit, with manual protected fallback",
       "provider": "Oracle Cloud VM / Podman",
@@ -80,6 +89,7 @@
     "Never automatically write a legacy Supabase database from production maintenance jobs.",
     "Only Oracle-local PostgreSQL is authoritative; all production data-health probes must target it.",
     "Database backups and authenticated media delivery remain on Cloudflare R2.",
-    "Oracle Django deployments must be from protected main, follow successful full release audit, verify the exact checkout SHA, and reject outdated release attempts."
+    "Oracle Django deployments must be from protected main, follow successful full release audit, verify the exact checkout SHA, and reject outdated release attempts.",
+    "Every Oracle Django release must restore the Cloudflare private VPC tunnel and verify the live public homepage and exact Django commit; a local health check alone is insufficient."
   ]
 }
