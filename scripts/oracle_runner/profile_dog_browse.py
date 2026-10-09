@@ -15,7 +15,8 @@ from registry.models import Dog
 from registry.querysets import with_displayable_images, one_dog_per_kennel
 
 assert connection.vendor == "postgresql", "Read-only diagnosis requires PostgreSQL"
-assert "127.0.0.1" in str(connection.settings_dict.get("HOST", "")) or connection.settings_dict.get("HOST") in ("/var/run/postgresql", "localhost"), "Refusing nonlocal database"
+assert connection.settings_dict.get("HOST") == "cca-pg-shadow", "Refusing nonlocal database"
+assert connection.settings_dict.get("NAME") == "cca_live", "Refusing unexpected database"
 public = Dog.objects.filter(is_public=True)
 imaged = with_displayable_images(public)
 grouped = one_dog_per_kennel(imaged)
