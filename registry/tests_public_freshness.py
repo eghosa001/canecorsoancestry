@@ -72,3 +72,16 @@ class ApprovedChangesAppearImmediatelyTests(TestCase):
         self.assertContains(response, "Brand New Verified Dog")
         # The unfiltered gallery intentionally requires an image; explicit
         # search must find this approved dog regardless of photo availability.
+
+    def test_merge_invalidates_public_metadata(self):
+        from registry.services import merge_dogs
+        duplicate = Dog.objects.create(
+            name="Duplicate Dog", slug="duplicate-dog",
+            is_public=True, kennel=self.kennel,
+        )
+        key = "cca:home:public-stats:v4"
+        cache.set(key, {"dog_count": 999}, 300)
+        with self.captureOnCommitCallbacks(execute=True):
+            merge_dogs(self.dog, duplicate, performed_by=self.reviewer)
+        self.assertIsNone(cache.get(key))
+        self.assertFalse(Dog.objects.filter(pk=duplicate.pk).exists())
