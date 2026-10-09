@@ -1202,6 +1202,8 @@ def merge_dogs(canonical, duplicate, performed_by=None):
         },
     )
     duplicate.delete()
+    # Keep the next public page request consistent with the completed merge.
+    invalidate_public_content()
     return history
 
 
