@@ -23,6 +23,9 @@ for name in DJANGO_SECRET_KEY SUPABASE_DATABASE_URL; do
 done
 command -v sudo >/dev/null
 sudo -n true
+DB_MODE="$(sudo -n cat /etc/cca/oracle-db-mode 2>/dev/null || printf supabase)"
+[[ "$DB_MODE" == supabase || "$DB_MODE" == local ]] || { echo "::error::Invalid DB mode"; exit 1; }
+export CCA_ORACLE_DB_MODE="$DB_MODE"
 if ! command -v podman >/dev/null; then
   echo "Installing Oracle Linux Podman container engine."
   sudo -n dnf -y install podman >/dev/null
@@ -68,10 +71,10 @@ values = {
     ),
     "SITE_URL": "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",
     "DJANGO_DB_SCHEMA": "django_app",
-    "DJANGO_DB_SSLMODE": "require",
+    "DJANGO_DB_SSLMODE": "disable" if os.getenv("CCA_ORACLE_DB_MODE") == "local" else "require",
     "DJANGO_DB_EXTRA_SCHEMAS": "extensions,public",
     "DJANGO_DB_CONN_MAX_AGE": "300",
-    "DJANGO_DB_CONNECT_TIMEOUT": "5",
+    "DJANGO_DB_CONNECT_TIMEOUT": "3" if os.getenv("CCA_ORACLE_DB_MODE") == "local" else "5",
     "DJANGO_TIME_ZONE": "Africa/Lagos",
     "DJANGO_HSTS_SECONDS": "31536000",
     "DJANGO_HSTS_INCLUDE_SUBDOMAINS": "1",
@@ -114,6 +117,27 @@ chmod 600 "$temporary_env"
 echo "Building pinned CCA commit for linux/arm64 on Oracle."
 sudo -n "$PODMAN_BIN" build --pull=missing --tag "$IMAGE" .
 
+run_network=()
+if [[ "$DB_MODE" == local ]]; then
+  sudo -n test -s /etc/cca/pgshadow-private-django.env || {
+    echo "::error::Local DB mode requires a verified private Postgres connection"; exit 1;
+  }
+  sudo -n podman exec cca-pg-shadow pg_isready -h 127.0.0.1     -U cca_shadow_admin -d cca_live >/dev/null || {
+    echo "::error::Local primary database is unavailable"; exit 1;
+  }
+  run_network=(--network cca-private)
+  sudo -n python3 - "$temporary_env" /etc/cca/pgshadow-private-django.env <<'PY'
+from pathlib import Path
+import sys
+dst,src=map(Path,sys.argv[1:])
+urls=[line.split("=",1)[1] for line in src.read_text().splitlines() if line.startswith("DATABASE_URL=")]
+assert len(urls)==1
+assert urls[0].endswith("@cca-pg-shadow:5432/cca_shadow")
+local=urls[0].replace("@cca-pg-shadow:5432/cca_shadow","@cca-pg-shadow:5432/cca_live")
+with dst.open("a") as out:out.write("DATABASE_URL="+local+"\n")
+PY
+  echo "Using verified Oracle-local PostgreSQL primary via private network."
+else
 echo "Resolving the working Supabase session pooler from Oracle (no schema writes)."
 pooler_url="$(sudo -n "$PODMAN_BIN" run --rm \
   --env-file "$temporary_env" "$IMAGE" \
@@ -133,11 +157,15 @@ PY
 # The temporary discovery credential is not required by the running server.
 sed -i '/^SUPABASE_DATABASE_URL=/d' "$temporary_env"
 
+fi
+sed -i '/^SUPABASE_DATABASE_URL=/d' "$temporary_env"
+
 echo "Checking the production schema has no outstanding migrations."
-sudo -n "$PODMAN_BIN" run --rm --env-file "$temporary_env" \
+sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
   "$IMAGE" python manage.py migrate --check --noinput
 
 sudo -n install -d -m 700 /etc/cca
+sudo -n install -d -m 755 /var/lib/cca/control
 sudo -n install -o root -g root -m 600 "$temporary_env" "$APP_ENV"
 
 # Bind only on host loopback; Oracle ingress and Cloudflare routing remain
@@ -147,9 +175,11 @@ if sudo -n systemctl is-active --quiet "$APP_SERVICE"; then
 fi
 sudo -n "$PODMAN_BIN" rm -f "$APP_CONTAINER" >/dev/null 2>&1 || true
 sudo -n "$PODMAN_BIN" create \
+  "${run_network[@]}" \
   --name "$APP_CONTAINER" \
   --publish 127.0.0.1:18080:8080 \
   --env-file "$APP_ENV" \
+  --volume /var/lib/cca/control:/run/cca:ro,Z \
   --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=128m,mode=1777 \
   --user 65532:65532 \
@@ -213,6 +243,7 @@ code="$(curl --connect-timeout 2 --max-time 10 -sS -o /dev/null -w '%{http_code}
 code="$(curl --connect-timeout 2 --max-time 20 -sS -o /dev/null -w '%{http_code}' \
   -H 'X-CCA-Edge: 1' \
   -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
+  -H "X-CCA-Maintenance-Probe: $DJANGO_SECRET_KEY" \
   -H 'X-Forwarded-Proto: https' \
   "$URL/accounts/login/")"
 [[ "$code" == 200 ]] || { echo "::error::Staged Django sign-in failed: HTTP $code"; exit 1; }
@@ -220,6 +251,7 @@ code="$(curl --connect-timeout 2 --max-time 40 -sS -o "$probe_output" -w '%{http
   -X POST -H 'X-CCA-Edge: 1' \
   -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
   -H "X-CCA-Storage-Probe: $DJANGO_SECRET_KEY" \
+  -H "X-CCA-Maintenance-Probe: $DJANGO_SECRET_KEY" \
   -H 'X-Forwarded-Proto: https' \
   "$URL/__internal/storage-probe/")"
 if [[ "$code" != 200 ]] || ! python3 - "$probe_output" <<'PY'
@@ -241,7 +273,7 @@ echo "Oracle container updated; Cloudflare routing was not modified. If Oracle i
   echo "- ARM64 source commit: $GITHUB_SHA"
   echo "- Service: $APP_SERVICE (enabled)"
   echo "- Local origin: http://127.0.0.1:18080 (loopback only)"
-  echo "- Supabase: reachable, migrations current; schema unchanged"
+  echo "- Database backend: $DB_MODE; schema migrations current"
   echo "- Cloudflare R2: authenticated upload/read/delete probe passed"
   echo "- Edge authentication: direct access denied; trusted login succeeded"
   echo "- Public Cloudflare Worker origin: unchanged by this workflow; Oracle may already be the active production host"
