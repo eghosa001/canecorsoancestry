@@ -113,6 +113,7 @@
               <h3>{{ item.candidate.name }}</h3>
               <p>{{ item.reasons|join:" · " }}</p>
               <small>Reference UUID: {{ duplicate_reference.pk }} · Candidate UUID: {{ item.candidate.pk }}</small>
+              {% if can_merge_pedigrees %}<a class="text-link" href="{% url 'accounts:merge-dogs' %}?canonical={{ duplicate_reference.pk }}&duplicate={{ item.candidate.pk }}">Review these records for merging →</a>{% endif %}
             </div>
             <div class="duplicate-record-meta">
               <span>{% if item.candidate.kennel %}{{ item.candidate.kennel.name }}{% else %}Kennel unknown{% endif %}</span>
@@ -136,6 +137,7 @@
                 <strong>{{ item.reference.name }} ↔ {{ item.candidate.name }}</strong>
                 <p>{{ item.reasons|join:" · " }}</p>
                 <small>{{ item.reference.pk }} ↔ {{ item.candidate.pk }}</small>
+                {% if can_merge_pedigrees %}<a class="text-link" href="{% url 'accounts:merge-dogs' %}?canonical={{ item.reference.pk }}&duplicate={{ item.candidate.pk }}">Review this pair →</a>{% endif %}
               </div>
             </article>
           {% endfor %}
