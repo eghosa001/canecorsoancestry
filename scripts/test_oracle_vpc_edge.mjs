@@ -17,7 +17,7 @@ const env = {
   ORIGIN_EDGE_SECRET: "test-secret",
   ORIGIN_VPC: {
     async fetch(url, init) {
-      calls.push({ url: String(url), init });
+      calls.push({ url: url instanceof Request ? url.url : String(url), init });
       return new Response("ready", { status: 200, headers: { "x-request-id": "ok" } });
     },
   },
