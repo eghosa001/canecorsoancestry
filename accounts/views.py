@@ -98,7 +98,7 @@ def member_account_only(view_func):
     return wrapped
 
 
-from .models import PaymentSubmissionLink, Profile, SubmissionPayment
+from .models import PaymentSubmissionLink, Profile, SubmissionPayment, SavedPairing
 
 from .forms import (
     BulkModerationForm,
@@ -1909,6 +1909,75 @@ def verify_dog(request):
     messages.success(request, "Verification event recorded.")
     return redirect("accounts:moderation")
 
+
+
+@login_required
+@require_POST
+def save_research_pairing(request):
+    """Save a private analysis reference; no litter or pedigree is modified."""
+    if not can_use_member_features(request.user):
+        raise PermissionDenied
+    try:
+        sire_id = uuid.UUID(request.POST.get("sire", ""))
+        dam_id = uuid.UUID(request.POST.get("dam", ""))
+    except (TypeError, ValueError, AttributeError):
+        messages.error(request, "Choose an existing public sire and dam.")
+        return redirect("pedigrees:virtual-mating")
+    if sire_id == dam_id:
+        messages.error(request, "The sire and dam cannot be the same dog.")
+        return redirect("pedigrees:virtual-mating")
+    dogs = Dog.objects.filter(pk__in=(sire_id, dam_id), is_public=True).in_bulk()
+    sire, dam = dogs.get(sire_id), dogs.get(dam_id)
+    if (not sire or not dam or sire.sex == Dog.Sex.FEMALE
+            or dam.sex == Dog.Sex.MALE):
+        messages.error(request, "Both parents must be published dogs with compatible sexes.")
+        return redirect("pedigrees:virtual-mating")
+    label = request.POST.get("label", "").strip()[:120]
+    notes = request.POST.get("notes", "").strip()[:700]
+    with transaction.atomic():
+        # Lock the member row so concurrent saves cannot circumvent the cap.
+        get_user_model().objects.select_for_update().get(pk=request.user.pk)
+        existing = SavedPairing.objects.filter(
+            member=request.user, sire=sire, dam=dam
+        ).first()
+        if existing:
+            messages.info(request, "This pairing is already saved to your research.")
+        elif SavedPairing.objects.filter(member=request.user).count() >= 30:
+            messages.error(request, "Your research list is full (30). Remove a saved pairing first.")
+        else:
+            SavedPairing.objects.create(
+                member=request.user, sire=sire, dam=dam,
+                label=label, notes=notes,
+            )
+            messages.success(request, "Pairing saved privately to My research.")
+    return redirect("accounts:saved-pairings")
+
+
+@login_required
+def saved_pairings(request):
+    if not can_use_member_features(request.user):
+        raise PermissionDenied
+    pairings = list(
+        SavedPairing.objects.filter(member=request.user)
+        .select_related("sire", "dam")[:30]
+    )
+    return render(request, "accounts/saved_pairings.html", {
+        "pairings": pairings,
+        "workspace_section": "research",
+    })
+
+
+@login_required
+@require_POST
+def delete_saved_pairing(request, pk):
+    if not can_use_member_features(request.user):
+        raise PermissionDenied
+    saved = get_object_or_404(
+        SavedPairing.objects.filter(member=request.user), pk=pk
+    )
+    saved.delete()
+    messages.success(request, "Saved research pairing removed.")
+    return redirect("accounts:saved-pairings")
 
 
 @login_required
