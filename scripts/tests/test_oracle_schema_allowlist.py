@@ -50,6 +50,26 @@ class ApprovedSchemaMigrationTests(unittest.TestCase):
             script,
         )
 
+    def test_migration_privileges_are_temporary_and_reclaimed_on_exit(self):
+        script = (
+            Path(__file__).resolve().parents[1] / "oracle_runner"
+            / "stage_django.sh"
+        ).read_text()
+        self.assertIn("schema_privilege_armed=0", script)
+        self.assertIn("trap cleanup_stage EXIT", script)
+        self.assertIn("revoke_temporary_schema_create", script)
+        self.assertIn("GRANT CREATE ON SCHEMA django_app TO cca_app", script)
+        self.assertIn("REVOKE CREATE ON SCHEMA django_app FROM cca_app", script)
+        self.assertIn("has_schema_privilege('cca_app', 'django_app', 'CREATE')", script)
+        self.assertLess(
+            script.index("bash scripts/oracle_runner/backup_local_postgres.sh"),
+            script.index("GRANT CREATE ON SCHEMA django_app TO cca_app"),
+        )
+        self.assertLess(
+            script.index("REVOKE CREATE ON SCHEMA django_app FROM cca_app"),
+            script.index('sudo -n install -d -m 700 /etc/cca'),
+        )
+
     def test_unreviewed_operation_change_is_forbidden(self):
         changed = SimpleNamespace(
             app_label="accounts", name="0005_saved_pairing",
