@@ -38,6 +38,17 @@ for path in "/" "/accounts/login/" "/pedigrees/virtual-mating/" "/dogs/?q=" "/do
     app="$(tr -d '\r' < "$headers_file" | grep -i '^server-timing:' | head -1 | sed -E 's/^server-timing:[[:space:]]*//' || true)"
     rm -f "$headers_file"
     printf 'path=%s sample=%d %s app=%s\n' "$path" "$n" "$timing" "$app"
+    # On the real Oracle origin, unfiltered /dogs/ was previously >3 seconds
+    # because card SQL ran inside the kennel ranking. Keep a bounded check
+    # without a broad benchmark or extra production request.
+    if [[ "$path" == "/dogs/?q=" ]]; then
+      [[ "$timing" == http=200* ]] || { echo "::error::Public dog browse returned non-200"; exit 1; }
+      browse_ttfb="$(printf '%s\n' "$timing" | sed -n 's/.*ttfb=\([0-9.]*\).*/\1/p')"
+      awk -v t="$browse_ttfb" 'BEGIN { exit !(t > 0 && t < 1.5) }' || {
+        echo "::error::Dog browse TTFB exceeded 1.5s regression budget: $browse_ttfb seconds"
+        exit 1
+      }
+    fi
   done
 done
 echo "=== Active Oracle-local PostgreSQL SQL roundtrip (SELECT 1 only) ==="
