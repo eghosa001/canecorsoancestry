@@ -43,6 +43,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Compare CPU, Django, Supabase and Cloudflare timings
+      - name: Compare CPU, Django, Oracle-local PostgreSQL and Cloudflare timings
         shell: bash
         run: bash scripts/oracle_runner/oracle_perf_diagnostics.sh
