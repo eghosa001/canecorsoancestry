@@ -25,6 +25,16 @@ sudo -n journalctl -u cca-pg-shadow.service --since '20 min ago' --no-pager -o c
 echo "=== Live Django source marker ==="
 curl -fsS --connect-timeout 3 --max-time 10 http://127.0.0.1:18080/healthz/ \
   | python3 -c 'import json,sys;d=json.load(sys.stdin);print("django="+d.get("status","?")+" database_backend="+d.get("database_backend","?"))'
+echo "=== Exact guarded cutover prerequisite exit codes ==="
+set +e
+sudo -n podman container exists cca-pg-shadow >/dev/null 2>&1; echo "pg_exists_rc=$?"
+sudo -n systemctl is-active --quiet cca-oracle-staging.service; echo "django_unit_rc=$?"
+sudo -n systemctl is-active --quiet cca-cloudflared-vpc.service; echo "vpc_tunnel_unit_rc=$?"
+sudo -n podman inspect cca-oracle-staging --format '{{json .Mounts}}' | grep -q '"/run/cca"'; echo "control_mount_rc=$?"
+sudo -n test "$(df -Pk / | awk 'END{print $4}')" -gt 6291456; echo "disk_guard_rc=$?"
+sudo -n test "$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)" -gt 1000000; echo "ram_guard_rc=$?"
+sudo -n podman exec cca-pg-shadow pg_isready -h 127.0.0.1 -U cca_shadow_admin -d cca_shadow >/dev/null; echo "postgres_ready_rc=$?"
+set -e
 echo "=== Safe cutover markers (existence only) ==="
 for f in /etc/cca/oracle-db-mode /etc/cca/pg-live-app.env /var/lib/cca/control/maintenance.flag; do
  if sudo -n test -e "$f"; then echo "$f EXISTS"; else echo "$f absent"; fi
