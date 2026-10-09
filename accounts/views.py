@@ -19,7 +19,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch, Q
+from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Prefetch, Q
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -2508,65 +2508,61 @@ def verification_dashboard(request):
         get_user_model().objects.filter(is_superuser=True).values_list("pk", flat=True)
     )
     staff_users = list(
-        get_user_model().objects.filter(pk__in=staff_user_ids).order_by(
-            "-is_superuser", "username"
-        )
+        get_user_model().objects.filter(pk__in=staff_user_ids)
+        .order_by("-is_superuser", "username")
     )
-    decision_actions = {
+    # Aggregate reviewer activity in PostgreSQL, rather than loading every
+    # historical decision for each staff account on every admin page view.
+    decision_actions = (
         SubmissionReview.Action.APPROVED,
         SubmissionReview.Action.REJECTED,
         SubmissionReview.Action.OVERRIDE_APPROVED,
         SubmissionReview.Action.OVERRIDE_REQUESTED,
         SubmissionReview.Action.SECOND_APPROVED,
         SubmissionReview.Action.SECOND_REJECTED,
+    )
+    approved_actions = (
+        SubmissionReview.Action.APPROVED,
+        SubmissionReview.Action.OVERRIDE_APPROVED,
+        SubmissionReview.Action.SECOND_APPROVED,
+    )
+    rejected_actions = (
+        SubmissionReview.Action.REJECTED,
+        SubmissionReview.Action.SECOND_REJECTED,
+    )
+    override_actions = (
+        SubmissionReview.Action.OVERRIDE_APPROVED,
+        SubmissionReview.Action.OVERRIDE_REQUESTED,
+    )
+    reviewer_stats = {
+        result["reviewer_id"]: result
+        for result in SubmissionReview.objects.filter(
+            reviewer_id__in=staff_user_ids, action__in=decision_actions
+        )
+        .order_by()
+        .values("reviewer_id")
+        .annotate(
+            reviews=Count("pk"),
+            approved=Count("pk", filter=Q(action__in=approved_actions)),
+            rejected=Count("pk", filter=Q(action__in=rejected_actions)),
+            flagged=Count("pk", filter=~Q(warnings_snapshot=[])),
+            overrides=Count("pk", filter=Q(action__in=override_actions)),
+            high_risk_approved=Count(
+                "pk", filter=Q(action=SubmissionReview.Action.SECOND_APPROVED)
+            ),
+            average_duration=Avg(
+                ExpressionWrapper(
+                    F("created_at") - F("submission__created_at"),
+                    output_field=DurationField(),
+                )
+            ),
+        )
     }
     for user in staff_users:
-        decisions = list(
-            SubmissionReview.objects.filter(reviewer=user)
-            .select_related("submission")
-            .order_by("created_at")
-        )
-        decision_rows = [row for row in decisions if row.action in decision_actions]
-        approved = sum(
-            row.action
-            in {
-                SubmissionReview.Action.APPROVED,
-                SubmissionReview.Action.OVERRIDE_APPROVED,
-                SubmissionReview.Action.SECOND_APPROVED,
-            }
-            for row in decision_rows
-        )
-        rejected = sum(
-            row.action
-            in {
-                SubmissionReview.Action.REJECTED,
-                SubmissionReview.Action.SECOND_REJECTED,
-            }
-            for row in decision_rows
-        )
-        overrides = sum(
-            row.action
-            in {
-                SubmissionReview.Action.OVERRIDE_APPROVED,
-                SubmissionReview.Action.OVERRIDE_REQUESTED,
-            }
-            for row in decision_rows
-        )
-        flagged = sum(bool(row.warnings_snapshot) for row in decision_rows)
-        high_risk_approved = sum(
-            row.action == SubmissionReview.Action.SECOND_APPROVED
-            for row in decision_rows
-        )
-        durations = [
-            row.created_at - row.submission.created_at
-            for row in decision_rows
-            if row.created_at and row.submission.created_at
-        ]
-        avg_seconds = (
-            sum(item.total_seconds() for item in durations) / len(durations)
-            if durations
-            else 0
-        )
+        stats = reviewer_stats.get(user.pk, {})
+        reviews = stats.get("reviews", 0)
+        overrides = stats.get("overrides", 0)
+        avg_duration = stats.get("average_duration")
         reviewer_rows.append(
             {
                 "user": user,
@@ -2577,18 +2573,19 @@ def verification_dashboard(request):
                     ModerationRoleAssignment.Role.SENIOR: "Senior Moderator",
                     ModerationRoleAssignment.Role.REVIEWER: "Moderator",
                 }.get(moderation_role(user), "Suspended staff"),
-                "reviews": len(decision_rows),
-                "approved": approved,
-                "rejected": rejected,
-                "flagged": flagged,
+                "reviews": reviews,
+                "approved": stats.get("approved", 0),
+                "rejected": stats.get("rejected", 0),
+                "flagged": stats.get("flagged", 0),
                 "overrides": overrides,
                 "override_rate": (
-                    round((overrides / len(decision_rows)) * 100, 1)
-                    if decision_rows
-                    else 0
+                    round((overrides / reviews) * 100, 1) if reviews else 0
                 ),
-                "high_risk_approved": high_risk_approved,
-                "average_review_hours": round(avg_seconds / 3600, 1) if avg_seconds else 0,
+                "high_risk_approved": stats.get("high_risk_approved", 0),
+                "average_review_hours": (
+                    round(avg_duration.total_seconds() / 3600, 1)
+                    if avg_duration else 0
+                ),
                 "unusual_override": False,
             }
         )
@@ -2614,6 +2611,23 @@ def verification_dashboard(request):
             )
         else:
             row["unusual_override"] = False
+
+    # Give sensitive staff proposals a visible Super Admin inbox.
+    # This is an audit-backed workflow, not a second dog registry.
+    from .direct_dog_edit import _review_states
+    latest_proposals = list(
+        ModerationAudit.objects.filter(
+            action=ModerationAudit.Action.RECORD_CHANGED,
+            summary__kind="direct_dog_proposal",
+        )
+        .select_related("dog", "actor")
+        .order_by("-created_at")[:80]
+    )
+    _review_states(latest_proposals)
+    pending_proposals = [
+        event for event in latest_proposals
+        if not event.review_state and event.dog_id
+    ][:12]
 
     flagged_queue = list(
         pending.exclude(risk_level=SubmissionRiskLevel.GREEN)
@@ -2681,6 +2695,7 @@ def verification_dashboard(request):
             "second_count": second_count,
             "overrides_count": overrides_count,
             "reviewer_rows": reviewer_rows,
+            "pending_proposals": pending_proposals,
             "peer_override_average": round(peer_average, 1),
             "override_warning_threshold": round(warning_threshold, 1),
             "flagged_queue": flagged_queue,
