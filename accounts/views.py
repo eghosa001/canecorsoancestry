@@ -2612,22 +2612,10 @@ def verification_dashboard(request):
         else:
             row["unusual_override"] = False
 
-    # Give sensitive staff proposals a visible Super Admin inbox.
-    # This is an audit-backed workflow, not a second dog registry.
-    from .direct_dog_edit import _review_states
-    latest_proposals = list(
-        ModerationAudit.objects.filter(
-            action=ModerationAudit.Action.RECORD_CHANGED,
-            summary__kind="direct_dog_proposal",
-        )
-        .select_related("dog", "actor")
-        .order_by("-created_at")[:80]
-    )
-    _review_states(latest_proposals)
-    pending_proposals = [
-        event for event in latest_proposals
-        if not event.review_state and event.dog_id
-    ][:12]
+    # Older unresolved protected edits must never disappear simply because
+    # newer edits have been reviewed. Read the immutable audit in keyset pages.
+    from .direct_dog_edit import pending_proposals_for_dashboard
+    pending_proposals = pending_proposals_for_dashboard(limit=12)
 
     flagged_queue = list(
         pending.exclude(risk_level=SubmissionRiskLevel.GREEN)
