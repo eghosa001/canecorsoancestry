@@ -23,12 +23,8 @@ for name in DJANGO_SECRET_KEY; do
 done
 command -v sudo >/dev/null
 sudo -n true
-DB_MODE="$(sudo -n cat /etc/cca/oracle-db-mode 2>/dev/null || printf supabase)"
-[[ "$DB_MODE" == supabase || "$DB_MODE" == local ]] || { echo "::error::Invalid DB mode"; exit 1; }
-if [[ "$DB_MODE" == supabase && -z "${SUPABASE_DATABASE_URL:-}" ]]; then
-  echo "::error::Legacy Supabase recovery mode requires SUPABASE_DATABASE_URL." >&2
-  exit 1
-fi
+DB_MODE="$(sudo -n cat /etc/cca/oracle-db-mode)"
+[[ "$DB_MODE" == local ]] || { echo "::error::Only verified Oracle-local PostgreSQL is permitted in production."; exit 1; }
 export CCA_ORACLE_DB_MODE="$DB_MODE"
 if ! command -v podman >/dev/null; then
   echo "Installing Oracle Linux Podman container engine."
@@ -63,7 +59,6 @@ secret = os.environ["DJANGO_SECRET_KEY"]
 email_keys = ("EMAIL_HOST", "EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD")
 email_ready = all(os.environ.get(key, "") for key in email_keys)
 values = {
-    "SUPABASE_DATABASE_URL": os.environ.get("SUPABASE_DATABASE_URL", ""),
     "DJANGO_SETTINGS_MODULE": "scripts.oracle_runner.oracle_settings",
     "DJANGO_SECRET_KEY": secret,
     "DJANGO_ALLOWED_HOSTS": (
@@ -75,10 +70,10 @@ values = {
     ),
     "SITE_URL": "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",
     "DJANGO_DB_SCHEMA": "django_app",
-    "DJANGO_DB_SSLMODE": "disable" if os.getenv("CCA_ORACLE_DB_MODE") == "local" else "require",
+    "DJANGO_DB_SSLMODE": "disable",
     "DJANGO_DB_EXTRA_SCHEMAS": "extensions,public",
     "DJANGO_DB_CONN_MAX_AGE": "300",
-    "DJANGO_DB_CONNECT_TIMEOUT": "3" if os.getenv("CCA_ORACLE_DB_MODE") == "local" else "5",
+    "DJANGO_DB_CONNECT_TIMEOUT": "3",
     "DJANGO_TIME_ZONE": "Africa/Lagos",
     "DJANGO_HSTS_SECONDS": "31536000",
     "DJANGO_HSTS_INCLUDE_SUBDOMAINS": "1",
@@ -121,15 +116,13 @@ chmod 600 "$temporary_env"
 echo "Building pinned CCA commit for linux/arm64 on Oracle."
 sudo -n "$PODMAN_BIN" build --pull=missing --tag "$IMAGE" .
 
-run_network=()
-if [[ "$DB_MODE" == local ]]; then
+run_network=(--network cca-private)
   sudo -n test -s /etc/cca/pg-live-app.env || {
     echo "::error::Local DB mode requires a verified private Postgres connection"; exit 1;
   }
   sudo -n podman exec cca-pg-shadow pg_isready -h 127.0.0.1     -U cca_shadow_admin -d cca_live >/dev/null || {
     echo "::error::Local primary database is unavailable"; exit 1;
   }
-  run_network=(--network cca-private)
   # On hardened Oracle Linux, root cannot open an opc-owned mktemp(0600)
 # file in /tmp for writing (fs.protected_regular). Have the unprivileged
 # shell open the destination, while root *only* reads the 0600 live DB
@@ -147,28 +140,6 @@ assert not any(char in urls[0] for char in ("\n","\r","\0"))
 print("DATABASE_URL="+urls[0])
 PY
   echo "Using verified Oracle-local PostgreSQL primary via private network."
-else
-echo "Resolving the working Supabase session pooler from Oracle (no schema writes)."
-pooler_url="$(sudo -n "$PODMAN_BIN" run --rm \
-  --env-file "$temporary_env" "$IMAGE" \
-  python scripts/discover_supabase_session_pooler.py)"
-[[ "$pooler_url" == postgresql://* ]] || { echo "::error::Supabase pooler inaccessible from Oracle."; exit 1; }
-echo "::add-mask::$pooler_url"
-python3 - "$temporary_env" "$pooler_url" <<'PY'
-from pathlib import Path
-import sys
-
-path, url = sys.argv[1:3]
-if any(char in url for char in ("\r", "\n", "\0")):
-    raise SystemExit("Invalid database URL")
-with Path(path).open("a", encoding="utf-8") as stream:
-    stream.write(f"DATABASE_URL={url}\n")
-PY
-# The temporary discovery credential is not required by the running server.
-sed -i '/^SUPABASE_DATABASE_URL=/d' "$temporary_env"
-
-fi
-sed -i '/^SUPABASE_DATABASE_URL=/d' "$temporary_env"
 
 echo "Checking the production schema has no outstanding migrations."
 sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
@@ -203,17 +174,11 @@ sudo -n "$PODMAN_BIN" create \
   --workers 1 --threads 4 --timeout 60 --worker-tmp-dir /tmp \
   --access-logfile - --error-logfile - >/dev/null
 
-if [[ "$DB_MODE" == local ]]; then
-  sudo -n systemctl is-active --quiet cca-pg-shadow.service || {
-    echo "::error::Local DB requires the systemd-managed PostgreSQL service"
-    exit 1
-  }
-  db_after="cca-pg-shadow.service"
-  db_requires="Requires=cca-pg-shadow.service"
-else
-  db_after=""
-  db_requires=""
-fi
+sudo -n systemctl is-active --quiet cca-pg-shadow.service || {
+  echo "::error::Local DB requires systemd-managed PostgreSQL"; exit 1;
+}
+db_after="cca-pg-shadow.service"
+db_requires="Requires=cca-pg-shadow.service"
 cat > "$temporary_unit" <<UNIT
 [Unit]
 Description=Cane Corso Ancestry Django Oracle staging (loopback only)
