@@ -25,7 +25,7 @@ The machine-readable source of truth is [`infra/active-services.json`](infra/act
 - **Oracle Cloud VM** — sole live Django/Gunicorn application origin, running in Podman on loopback port 18080; see `scripts/oracle_runner/stage_django.sh`.
 - **Oracle-local PostgreSQL 17** — the authoritative `cca_live` database, reachable only through a private Podman network; no remote Supabase round trips in production.
 - **Cloudflare R2 + media Worker** — private dog media, verification evidence, and hourly encrypted offsite PostgreSQL backups.
-- **GitHub Actions / CCA-ORACLE runner** — focused CI, manual protected production app releases, hourly database backups, scheduled production integrity tests.
+- **GitHub Actions / CCA-ORACLE runner** — focused CI, test-gated production app releases from protected `main` (manual override remains available), hourly database backups, scheduled production integrity tests.
 - **Paystack** and **Gmail SMTP** — application integrations enabled only when their respective server credentials are configured.
 
 Public website: `https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev`
@@ -36,7 +36,7 @@ R2 media gateway: `https://canecorsoancestry-edge.aighewieghosa111.workers.dev`
 
 ### Releasing Django
 
-Deploy Django to the active Oracle VM through the protected, manual `oracle-stage-django.yml` workflow on `main`. A Cloudflare Worker deployment does not replace the Oracle Django container. Check the live release marker and production smoke afterwards. Keep the hourly encrypted R2 backups running.
+After the full release audit passes on protected `main`, `oracle-stage-django.yml` deploys that exact tested commit to Oracle (a protected manual dispatch remains available). A Cloudflare Worker deployment does not replace the Oracle Django container. Public database-backed pages are not cached at Cloudflare; successful approvals invalidate Django's public metadata on commit. Check the live release marker and production smoke afterwards. Keep the hourly encrypted R2 backups running.
 
 ## Technology
 
