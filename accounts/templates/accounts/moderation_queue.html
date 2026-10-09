@@ -146,15 +146,12 @@
     {% endif %}
   </section>
 
-  <section class="panel moderation-merge">
-    <div class="panel-heading"><h2>Merge duplicate dogs</h2><span>Use exact names or UUIDs from Duplicate intelligence. The duplicate is retired only after relationships and attached data are repointed.</span></div>
-    <form class="merge-form" method="post" action="{% url 'accounts:merge-dogs' %}">
-      {% csrf_token %}
-      <div><label for="{{ merge_form.canonical.id_for_label }}">Canonical dog</label>{{ merge_form.canonical }}</div>
-      <div><label for="{{ merge_form.duplicate.id_for_label }}">Duplicate to retire</label>{{ merge_form.duplicate }}</div>
-      <button class="btn btn-gold" type="submit">Merge safely</button>
-    </form>
+  {% if can_merge_pedigrees %}
+  <section class="panel moderation-merge" id="merge-dogs">
+    <div class="panel-heading"><h2>Merge duplicate pedigrees</h2><span>A dedicated, restricted merge workspace lets you review both records and confirm the merge before it runs.</span></div>
+    <a class="btn btn-gold" href="{% url 'accounts:merge-dogs' %}{% if duplicate_reference %}?canonical={{ duplicate_reference.pk }}{% endif %}">Open pedigree merge →</a>
   </section>
+  {% endif %}
 
   <section class="panel moderation-verify">
     <div class="panel-heading"><h2>Record verification</h2><span>Use an exact dog name or UUID. Optional source IDs are shown to staff on the dog profile.</span></div>
