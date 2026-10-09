@@ -15,19 +15,14 @@ class OriginModeTests(unittest.TestCase):
         self.assertIn(VPC_SERVICE_ID, updated)
         self.assertEqual(updated.count("[[vpc_services]]"), 1)
         self.assertEqual(render(updated, "oracle"), updated)
-    def test_restore_legacy(self):
-        original = render(render(self.source, "oracle"), "northflank")
-        self.assertIn(f'ORIGIN_URL = "{NORTHFLANK}"', original)
-        self.assertNotIn("private-vpc", original)
-        self.assertNotIn("[[vpc_services]]", original)
-        self.assertNotIn(VPC_SERVICE_ID, original)
-        self.assertEqual(render(original, "northflank"), original)
-    def test_authenticated_cloudflare_api_classifies_northflank(self):
+    def test_retired_provider_is_not_an_allowed_production_origin(self):
+        with self.assertRaises(ValueError):
+            render(self.source, "northflank")
         payload = {"success": True, "result": {"bindings": [
             {"name": "ORIGIN_URL", "type": "plain_text", "text": NORTHFLANK},
-            {"name": "ORIGIN_EDGE_SECRET", "type": "secret_text"},
         ]}}
-        self.assertEqual(parse_origin_bindings(payload), "northflank")
+        with self.assertRaisesRegex(RuntimeError, "retired"):
+            parse_origin_bindings(payload)
 
     def test_authenticated_cloudflare_api_classifies_oracle(self):
         payload = {"success": True, "result": {"bindings": [
