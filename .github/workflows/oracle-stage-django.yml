@@ -1,0 +1,62 @@
+name: Oracle Django staging (manual, no cutover)
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment:
+        description: "Prepare localhost-only Oracle staging; do not switch traffic"
+        required: true
+        type: choice
+        options: [stage-only]
+  pull_request:
+    paths:
+      - "config/oracle_middleware.py"
+      - "config/settings/oracle.py"
+      - "core/tests_oracle_origin.py"
+      - "scripts/oracle_runner/stage_django.sh"
+      - ".github/workflows/oracle-stage-django.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-django-stage-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  focused-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Focused Oracle script/security and owner CI policy checks
+        run: |
+          bash -n scripts/oracle_runner/stage_django.sh
+          python3 scripts/fast_path_guard.py
+          python3 -m pip install -q -r requirements.txt
+          python3 manage.py test core.tests_oracle_origin --noinput
+
+  oracle-stage:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.deployment == 'stage-only'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 40
+    env:
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
+      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+      EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+      DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Deploy and smoke-test Oracle staging without touching live origin
+        shell: bash
+        run: bash scripts/oracle_runner/stage_django.sh
