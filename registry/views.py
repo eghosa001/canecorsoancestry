@@ -401,12 +401,19 @@ def dog_detail(request, slug):
         return get_object_or_404(Dog.objects.filter(is_public=True), slug=slug)
 
 
+    # Public COI must never use private/unapproved ancestry. Zero means no
+    # inbreeding proven by the published links, not zero genetic inbreeding.
+    # Parents are select_related in _public_profile_dog, so this adds no query.
+    public_parent_count = sum(
+        bool(parent and parent.is_public) for parent in (dog.sire, dog.dam)
+    )
+    public_parentage_complete = public_parent_count == 2
     try:
         coi_percent = inbreeding_coefficient(dog, public_only=True) * 100
         coi_error = ""
     except PedigreeCycleError:
         coi_percent = None
-        coi_error = "Pedigree cycle detected"
+        coi_error = "Parentage contains a cycle; the records need correction before COI can be calculated."
 
     if request.GET.get("source") == "search":
         _record_search_hit_without_wait(dog.pk)
@@ -493,6 +500,7 @@ def dog_detail(request, slug):
             "relative_health": relative_health,
             "coi_percent": coi_percent,
             "coi_error": coi_error,
+            "public_parentage_complete": public_parentage_complete,
             "relation_limit": relation_limit,
             "can_contribute": can_contribute_to_dog(request.user, dog),
             "structured_data": json_ld(structured_data),
