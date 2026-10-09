@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Merge pedigrees · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell moderation-page">
+  <header class="page-heading">
+    <p class="eyebrow">Senior staff · Identity control</p>
+    <h1>Merge duplicate pedigrees</h1>
+    <p>Merge two database dog records only after confirming they represent the same real dog. This preserves the canonical dog's profile, updates offspring and ancestor links, and retires the duplicate with a redirect and an audit history.</p>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Find duplicates</a>
+      <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">Search dog records</a>
+      <a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a>
+    </div>
+  </header>
+  <section class="panel" aria-labelledby="merge-form-title">
+    <div class="panel-heading">
+      <div><h2 id="merge-form-title">Choose the surviving record</h2><span>Enter exact names or UUIDs. Use UUIDs whenever dogs share a name.</span></div>
+    </div>
+    {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <form class="merge-form" method="post" action="{% url 'accounts:merge-dogs' %}">
+      {% csrf_token %}
+      <div>
+        <label for="{{ form.canonical.id_for_label }}">Canonical dog — keep this record</label>
+        {{ form.canonical }}
+        {% for error in form.canonical.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+        <small>{{ form.canonical.help_text }}</small>
+      </div>
+      <div>
+        <label for="{{ form.duplicate.id_for_label }}">Duplicate dog — retire this record</label>
+        {{ form.duplicate }}
+        {% for error in form.duplicate.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+        <small>{{ form.duplicate.help_text }}</small>
+      </div>
+      <div class="notice">
+        Check kennel, date of birth, registration and parents on both original profiles first. Related ancestors/descendants cannot be merged into each other. An audit trail and a redirect are retained.
+      </div>
+      <div>
+        <label for="{{ form.confirm_merge.id_for_label }}">{{ form.confirm_merge }} {{ form.confirm_merge.label }}</label>
+        {% for error in form.confirm_merge.errors %}<small class="form-error">{{ error }}</small>{% endfor %}
+      </div>
+      <button type="submit" class="btn btn-gold">Confirm and merge pedigrees</button>
+    </form>
+  </section>
+</section>
+{% endblock %}
