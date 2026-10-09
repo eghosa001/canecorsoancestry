@@ -20,7 +20,7 @@ from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch, Q
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -1527,7 +1527,7 @@ def moderation_queue(request):
             "page_obj": page_obj,
             "querystring": query_params.urlencode(),
             "merge_form": MergeDogsForm(),
-            "can_merge_pedigrees": can_review_flagged_submissions(request.user),
+            "can_merge_pedigrees": can_manage_verification(request.user),
             "verification_form": VerificationEventForm(),
             "duplicate_candidates": automatic_duplicate_candidates,
             "duplicate_scan_loaded": duplicate_scan_loaded,
@@ -1789,13 +1789,10 @@ def review_submission(request, pk, decision):
 
 @login_required
 def merge_dogs_view(request):
-    """Dedicated, discoverable and restricted pedigree merge workspace.
-
-    A GET never changes pedigree records. POST invokes the existing atomic,
-    audited merge service only after explicit identity confirmation.
-    """
-    if not can_review_flagged_submissions(request.user):
+    """Dedicated Super Admin-only merge tool (also mounted inside /admin/)."""
+    if not request.user.is_superuser or not can_manage_verification(request.user):
         raise PermissionDenied
+    admin_workspace = request.path.startswith("/admin/")
     form = MergeDogsForm(
         request.POST if request.method == "POST" else None,
         initial={
@@ -1814,34 +1811,58 @@ def merge_dogs_view(request):
             messages.success(
                 request,
                 f"Merged {history.retired_name} into {history.canonical_dog.name}. "
-                "Pedigree links and attached records have been preserved.",
+                "Pictures, pedigrees and attached records have been preserved.",
             )
-            return redirect("accounts:merge-dogs")
+            return redirect("admin-merge-dogs" if admin_workspace else "accounts:merge-dogs")
+
+    inputs = request.POST if request.method == "POST" else request.GET
+    valid_ids = []
+    for key in ("canonical", "duplicate"):
+        try:
+            valid_ids.append(uuid.UUID(inputs.get(key, "")))
+        except (ValueError, TypeError, AttributeError):
+            continue
     preview = {}
-    if request.method == "GET":
-        valid_ids = []
-        for key in ("canonical", "duplicate"):
-            try:
-                valid_ids.append(uuid.UUID(request.GET.get(key, "")))
-            except (ValueError, TypeError, AttributeError):
-                continue
-        if valid_ids:
-            preview = {
-                str(row.pk): row
-                for row in Dog.objects.filter(pk__in=valid_ids)
-                .select_related("kennel", "sire", "dam")
-            }
+    if valid_ids:
+        preview = {
+            str(row.pk): row
+            for row in Dog.objects.filter(pk__in=valid_ids)
+            .select_related("kennel", "sire", "dam")
+            .prefetch_related("images", "registrations")
+        }
+    context = {
+        "form": form,
+        "workspace_section": "merge",
+        "canonical_preview": preview.get(inputs.get("canonical", "")),
+        "duplicate_preview": preview.get(inputs.get("duplicate", "")),
+        "admin_workspace": admin_workspace,
+    }
     return render(
         request,
-        "accounts/merge_dogs.html",
-        {
-            "form": form,
-            "workspace_section": "merge",
-            "canonical_preview": preview.get(request.GET.get("canonical", "")),
-            "duplicate_preview": preview.get(request.GET.get("duplicate", "")),
-        },
+        "admin/merge_dogs.html" if admin_workspace else "accounts/merge_dogs.html",
+        context,
     )
 
+
+@login_required
+def merge_dog_suggestions(request):
+    """Bounded, private search for selecting exact records before a merge."""
+    if not request.user.is_superuser or not can_manage_verification(request.user):
+        raise PermissionDenied
+    query = request.GET.get("q", "").strip()[:100]
+    if len(query) < 2:
+        return JsonResponse({"results": []})
+    rows = (
+        Dog.objects.filter(Q(name__icontains=query) | Q(slug__icontains=query))
+        .select_related("kennel").order_by("name", "pk")[:15]
+    )
+    return JsonResponse({"results": [
+        {"id": str(dog.pk), "name": dog.name,
+         "kennel": dog.kennel.name if dog.kennel else "",
+         "sex": dog.sex, "birth": dog.date_of_birth.isoformat() if dog.date_of_birth else "",
+         "photos": dog.images.count()}
+        for dog in rows
+    ]})
 
 
 @login_required
