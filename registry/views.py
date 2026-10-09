@@ -501,6 +501,8 @@ def dog_detail(request, slug):
             "coi_percent": coi_percent,
             "coi_error": coi_error,
             "public_parentage_complete": public_parentage_complete,
+            "verification_label": public_verification_label(dog.verification_state),
+            "has_source_attribution": dog._has_profile_sources,
             "relation_limit": relation_limit,
             "can_contribute": can_contribute_to_dog(request.user, dog),
             "structured_data": json_ld(structured_data),
