@@ -1,4 +1,7 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.http import HttpResponseRedirect
+from django.urls import reverse
+from urllib.parse import urlencode
 
 from .permissions import has_member_identity
 
@@ -14,6 +17,7 @@ def _super_admin_has_permission(request):
 
 
 admin.site.has_permission = _super_admin_has_permission
+admin.site.index_template = "admin/cca_index.html"
 
 
 from .models import (
@@ -84,6 +88,21 @@ class DogTitleInline(admin.TabularInline):
 
 @admin.register(Dog)
 class DogAdmin(admin.ModelAdmin):
+    change_list_template = "admin/registry/dog/change_list.html"
+    actions = ("compare_selected_for_merge",)
+
+    @admin.action(description="Compare two dogs for merging (Super Admin)")
+    def compare_selected_for_merge(self, request, queryset):
+        if not _super_admin_has_permission(request):
+            self.message_user(request, "Only Super Admin can merge dogs.", messages.ERROR)
+            return None
+        selected = list(queryset.order_by("name", "pk").values_list("pk", flat=True)[:3])
+        if len(selected) != 2:
+            self.message_user(request, "Select exactly two dogs to compare.", messages.ERROR)
+            return None
+        params = urlencode({"canonical": selected[0], "duplicate": selected[1]})
+        return HttpResponseRedirect(reverse("admin-merge-dogs") + "?" + params)
+
     list_display = ("name", "sex", "kennel", "verification_state", "is_public", "is_record_locked")
     list_filter = ("sex", "verification_state", "is_public", "country")
     search_fields = (
