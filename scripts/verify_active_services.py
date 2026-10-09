@@ -51,6 +51,11 @@ removed = (
     "oracle-production-cutover.yml",
     "oracle-public-card-rollout.yml",
     "oracle-temp-env-preflight.yml",
+    "oracle-private-vpc.yml",
+    "oracle-capacity-rollout.yml",
+    "oracle-db-route-probe.yml",
+    "oracle-pg-bridge-preflight.yml",
+    "oracle-r2-db-backup.yml",
     "backfill-canecorso-metadata.yml",
     "refresh-canecorso-latest.yml",
     "import-canecorso-archive.yml",
@@ -62,6 +67,12 @@ for name in removed:
     assert not (ROOT / ".github/workflows" / name).exists(), (
         "A retired/noncanonical service workflow was reintroduced", name
     )
+stage=(ROOT / "scripts/oracle_runner/stage_django.sh").read_text()
+assert "SUPABASE_DATABASE_URL" not in stage and "discover_supabase" not in stage
+assert '[[ "$DB_MODE" == local ]]' in stage
+assert "SUPABASE_DATABASE_URL" not in (ROOT / ".github/workflows/oracle-stage-django.yml").read_text()
+assert "Northflank is a retired" in (ROOT / "scripts/oracle_runner/edge_origin_mode.py").read_text()
+assert not (ROOT / "config/settings/northflank.py").exists()
 assert "SUPABASE_DATABASE_URL" not in (ROOT / ".github/workflows/database-recovery-drill.yml").read_text()
 assert "verify_offsite_recovery.sh" in (ROOT / ".github/workflows/database-recovery-drill.yml").read_text()
 print("PASS: runtime service inventory and active deployment paths match Oracle + Cloudflare + R2.")
