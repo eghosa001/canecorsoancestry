@@ -1,0 +1,61 @@
+name: Oracle local PostgreSQL production migration
+
+on:
+  pull_request:
+    paths:
+      - "scripts/oracle_runner/promote_local_postgres.sh"
+      - "scripts/oracle_runner/stage_django.sh"
+      - "scripts/oracle_runner/production_cutover.py"
+      - "scripts/tests/test_oracle_cutover_readiness.py"
+      - "core/views.py"
+      - ".github/workflows/oracle-local-postgres-production.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/oracle_runner/promote_local_postgres.sh"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-django-stage-refs/heads/main
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate freeze, rollback guards and migration shell
+        run: |
+          bash -n scripts/oracle_runner/promote_local_postgres.sh
+          bash -n scripts/oracle_runner/stage_django.sh
+          bash -n scripts/oracle_runner/backup_local_postgres.sh
+          python3 -m py_compile scripts/oracle_runner/production_cutover.py
+          python3 -m unittest scripts.tests.test_oracle_cutover_readiness
+          python3 scripts/fast_path_guard.py
+
+  migrate:
+    if: >-
+      github.event_name == 'push' &&
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 35
+    env:
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+      PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
+      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+      EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+      DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Freeze writes, verify off-VM source backup, promote local PG and restore service
+        shell: bash
+        run: bash scripts/oracle_runner/promote_local_postgres.sh

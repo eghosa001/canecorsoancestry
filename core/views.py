@@ -84,6 +84,12 @@ def healthz(request):
         response = JsonResponse({
             "status": "ok",
             "service": "canecorsoancestry",
+            # Used to prevent unsafe automatic rollback to a stale Supabase
+            # origin after the Oracle-local database accepts production writes.
+            "database_backend": (
+                "oracle-local" if connection.settings_dict.get("HOST") == "cca-pg-shadow"
+                else "supabase"
+            ),
             "release": (
                 os.getenv("RENDER_GIT_COMMIT")
                 or os.getenv("GIT_COMMIT_SHA")
