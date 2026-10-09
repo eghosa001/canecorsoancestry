@@ -85,3 +85,27 @@ class ApprovedChangesAppearImmediatelyTests(TestCase):
             merge_dogs(self.dog, duplicate, performed_by=self.reviewer)
         self.assertIsNone(cache.get(key))
         self.assertFalse(Dog.objects.filter(pk=duplicate.pk).exists())
+
+    def test_merge_immediately_updates_public_profile_search_and_old_url(self):
+        from registry.models import DogImage
+        from registry.services import merge_dogs
+
+        duplicate = Dog.objects.create(
+            name="Duplicate Photo Dog", slug="duplicate-photo-dog",
+            is_public=True, kennel=self.kennel,
+        )
+        DogImage.objects.create(dog=duplicate, image="dogs/merged-photo.jpg")
+        with self.captureOnCommitCallbacks(execute=True):
+            merge_dogs(self.dog, duplicate, performed_by=self.reviewer)
+
+        self.assertFalse(Dog.objects.filter(pk=duplicate.pk).exists())
+        self.assertEqual(self.dog.images.count(), 1)
+        old_profile = self.client.get(reverse("registry:dog-detail", kwargs={"slug": duplicate.slug}))
+        self.assertEqual(old_profile.status_code, 301)
+        self.assertEqual(old_profile.url, reverse("registry:dog-detail", kwargs={"slug": self.dog.slug}))
+        new_profile = self.client.get(reverse("registry:dog-detail", kwargs={"slug": self.dog.slug}))
+        self.assertEqual(new_profile.status_code, 200)
+        self.assertContains(new_profile, "merged-photo.jpg")
+        results = self.client.get(reverse("registry:dog-search"), {"q": duplicate.name})
+        self.assertEqual(results.status_code, 200)
+        self.assertContains(results, self.dog.name)

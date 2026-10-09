@@ -200,10 +200,12 @@ def assert_autocomplete_interactions(page, label):
 
     search.fill("Bran")
     page.locator(".dog-suggestion").first.wait_for(state="visible", timeout=10_000)
+    # iPhone and Android browsers may scroll the document when the keyboard
+    # appears. A focused dog picker must remain available for selection.
     page.evaluate("window.scrollTo(0, 260)")
     page.wait_for_timeout(150)
-    if page.locator(".dog-suggestion:visible").count():
-        raise AssertionError(f"{label} autocomplete does not dismiss on page scroll")
+    if not page.locator(".dog-suggestion:visible").count():
+        raise AssertionError(f"{label} focused autocomplete disappeared on keyboard scroll")
 
 
 def browser_contract(browser_type, name, axe_source, mobile_options):
