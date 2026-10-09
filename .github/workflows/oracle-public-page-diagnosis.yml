@@ -68,6 +68,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "Tunnel supervision state (no credentials):"
+          sudo -n systemctl show cca-cloudflared-vpc.service --property=ActiveState,SubState,UnitFileState,Restart,RestartUSec,Result,ExecMainStatus,ExecMainStartTimestamp,InactiveEnterTimestamp --no-pager || true
+          echo "Recent tunnel lifecycle messages (no unit command or environment):"
+          sudo -n journalctl -u cca-cloudflared-vpc.service --since "-75 minutes" --no-pager -o cat 2>/dev/null | grep -Ei '(starting|stopping|stopped|exited|active|connected|error|registered|unregistered|disconnected)' | sed -E 's/(token|secret|password|credential|authorization)[=: ][^[:space:]]+/[redacted]/Ig' | tail -25 || true
           echo "Cloudflared process count:"
           pgrep -ca cloudflared || true
           echo "Cloudflare-related systemd unit states:"
