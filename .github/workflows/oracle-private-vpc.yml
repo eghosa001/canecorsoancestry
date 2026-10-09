@@ -1,0 +1,151 @@
+name: Oracle private VPC candidate (manual, no cutover)
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Provision outbound tunnel and guarded candidate Worker"
+        type: choice
+        options: [prepare-candidate]
+        required: true
+  pull_request:
+    paths:
+      - "scripts/oracle_runner/provision_vpc.py"
+      - "scripts/oracle_runner/provision_tunnel.sh"
+      - "scripts/test_oracle_vpc_edge.mjs"
+      - "src/site-edge.js"
+      - "wrangler.oracle-candidate.toml"
+      - ".github/workflows/oracle-private-vpc.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oracle-vpc-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  focused-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check only Oracle VPC code and policy
+        run: |
+          bash -n scripts/oracle_runner/provision_tunnel.sh
+          python3 -m py_compile scripts/oracle_runner/provision_vpc.py
+          node --check src/site-edge.js
+          node scripts/test_oracle_vpc_edge.mjs
+          python3 scripts/fast_path_guard.py
+
+  private-tunnel:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.operation == 'prepare-candidate'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 12
+    outputs:
+      tunnel_id: ${{ steps.tunnel.outputs.tunnel_id }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 19a03bec57c0277e01e1e70e241576af
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: tunnel
+        name: Provision outbound Cloudflare Tunnel
+        shell: bash
+        run: bash scripts/oracle_runner/provision_tunnel.sh
+
+  oracle-candidate:
+    needs: private-tunnel
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 19a03bec57c0277e01e1e70e241576af
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      TUNNEL_ID: ${{ needs.private-tunnel.outputs.tunnel_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Create/reuse local-only VPC Service
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$DJANGO_SECRET_KEY"
+          service_id="$(python3 scripts/oracle_runner/provision_vpc.py service --tunnel-id "$TUNNEL_ID")"
+          [[ "$service_id" =~ ^[0-9a-fA-F-]{36}$ ]]
+          echo "CCA_VPC_SERVICE_ID=$service_id" >> "$GITHUB_ENV"
+      - name: Prepare guarded preview Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path("wrangler.oracle-candidate.toml")
+          original = path.read_text(encoding="utf-8")
+          marker = "REPLACE_WITH_PROVISIONED_ID"
+          assert original.count(marker) == 1
+          path.write_text(original.replace(marker, os.environ["CCA_VPC_SERVICE_ID"]), encoding="utf-8")
+          path = Path("/tmp/cca-candidate-secrets.json")
+          path.write_text(json.dumps({
+              "ORIGIN_EDGE_SECRET": os.environ["DJANGO_SECRET_KEY"],
+              "CANDIDATE_GUARD_KEY": os.environ["DJANGO_SECRET_KEY"],
+          }), encoding="utf-8")
+          path.chmod(0o600)
+          PY
+          node --check src/site-edge.js
+          node scripts/test_oracle_vpc_edge.mjs
+          npx --yes wrangler@4 deploy --dry-run --config wrangler.oracle-candidate.toml
+      - name: Deploy isolated Oracle candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'rm -f /tmp/cca-candidate-secrets.json' EXIT
+          npx --yes wrangler@4 deploy --config wrangler.oracle-candidate.toml --secrets-file /tmp/cca-candidate-secrets.json
+      - name: Verify private Oracle candidate without cutover
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://canecorsoancestry-oracle-candidate.aighewieghosa111.workers.dev"
+          unauth="$(curl -sS -o /dev/null -w '%{http_code}' "$base/" || true)"
+          if [[ "$unauth" != "404" ]]; then
+            echo "::error::Candidate is accessible without guard: HTTP $unauth"
+            exit 1
+          fi
+          ready=""
+          for attempt in $(seq 1 12); do
+            ready="$(curl --connect-timeout 5 --max-time 12 -sS -o /tmp/cca-ready.json -w '%{http_code}' \
+              -H "X-CCA-Candidate-Test: $DJANGO_SECRET_KEY" "$base/__edge/ready" || true)"
+            if [[ "$ready" == "200" ]] && grep -q '"ready":true' /tmp/cca-ready.json; then
+              break
+            fi
+            sleep 5
+          done
+          [[ "$ready" == "200" ]] || { echo "::error::Oracle candidate not ready"; exit 1; }
+          for path in "/" "/accounts/login/" "/pedigrees/virtual-mating/" "/static/core/site.css"; do
+            code="$(curl --connect-timeout 5 --max-time 30 -sS -o /tmp/cca-candidate-page -w '%{http_code}' \
+              -H "X-CCA-Candidate-Test: $DJANGO_SECRET_KEY" \
+              -H 'Accept: text/html' "$base$path" || true)"
+            echo "$path -> HTTP $code"
+            [[ "$code" == "200" ]] || {
+              echo "::error::Oracle candidate failure; public remains on Northflank"
+              exit 1
+            }
+          done
+          {
+            echo "## Oracle VPC candidate verified"
+            echo "- Tunnel: $TUNNEL_ID"
+            echo "- VPC Service: $CCA_VPC_SERVICE_ID"
+            echo "- Candidate: $base (guarded; untrusted visitors get 404)"
+            echo "- Public site: still on Northflank"
+            echo "- Production cutover: not performed"
+          } >> "$GITHUB_STEP_SUMMARY"
