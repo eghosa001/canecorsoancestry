@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Source evidence triage · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <div>
+      <p class="eyebrow">Internal pedigree integrity</p>
+      <h1>Evidence review worklist</h1>
+      <p>Investigate existing public dogs without a source or independent evidence-review marker. No new dog records are created by this list.</p>
+    </div>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'accounts:data-health' %}">← Data health</a>
+      <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Moderation</a>
+    </div>
+  </header>
+
+  <section class="panel">
+    <form method="get" class="button-row" aria-label="Select existing record issue">
+      <label for="evidence-issue">Evidence issue</label>
+      <select id="evidence-issue" name="issue">
+        {% for code, title in issue_filters.items %}
+          <option value="{{ code }}" {% if issue == code %}selected{% endif %}>{{ title }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-gold" type="submit">Show records</button>
+    </form>
+    <div class="panel-heading">
+      <div><h2>{{ issue_title }}</h2><span>{{ page_obj.paginator.count }} existing public record{{ page_obj.paginator.count|pluralize }}</span></div>
+      <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    </div>
+    <p class="muted">Source attribution means a reference exists, not that its facts are independently verified. “Reviewed source” means at least one source carries a verified-at marker; it is not a certification of the dog's health, identity or pedigree. Inspect documents and the complete record before recording any verification.</p>
+
+    <div class="moderation-list">
+      {% for dog in dogs %}
+        <article class="moderation-card">
+          <div class="moderation-card-content">
+            <div class="moderation-meta">
+              <div>
+                <h3><a href="{% url 'registry:dog-detail' dog.slug %}">{{ dog.name }}</a></h3>
+                <p>
+                  {% if dog.kennel %}{{ dog.kennel.name }}{% else %}Kennel not recorded{% endif %}
+                  · Sex: {{ dog.get_sex_display }}
+                  · {{ dog.get_verification_state_display }}
+                </p>
+                <p class="muted">
+                  {% if dog.has_source %}Source attribution on file{% else %}No source attribution{% endif %}
+                  ·
+                  {% if dog.has_reviewed_source %}At least one source has a review marker{% else %}No source independently reviewed in this record{% endif %}
+                </p>
+              </div>
+              <div class="button-row">
+                <a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">View public record</a>
+                {% if can_manage_sources %}
+                  <a class="btn btn-gold" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Review source evidence</a>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </article>
+      {% empty %}
+        <p class="muted">No public dogs match this evidence issue.</p>
+      {% endfor %}
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="button-row" aria-label="Evidence worklist pages">
+        {% if page_obj.has_previous %}<a class="btn btn-outline" href="?issue={{ issue }}&amp;page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+        <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a class="btn btn-outline" href="?issue={{ issue }}&amp;page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+      </nav>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}
