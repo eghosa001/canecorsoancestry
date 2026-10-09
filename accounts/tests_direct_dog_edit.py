@@ -41,6 +41,7 @@ class DirectDogEditTests(TestCase):
             "version": response.context["version"],
             "name": self.dog.name,
             "sex": self.dog.sex,
+            "verification_state": self.dog.verification_state,
             "reason": "Corrected against the documented dog record",
         }
         for name, formset in response.context["formsets"].items():
