@@ -4,8 +4,7 @@ Never allow an arbitrary pending migration to be applied by CI. This check
 inspects Django's actual migration graph and operation list against an explicit
 owner-reviewed allowlist. It does not run migrations or write to the database.
 """
-from django.db.migrations.operations.constraints import AddConstraint
-from django.db.migrations.operations.models import CreateModel
+from django.db.migrations.operations.models import AddConstraint, CreateModel
 
 ALLOWED_MIGRATION = ("accounts", "0005_saved_pairing")
 
