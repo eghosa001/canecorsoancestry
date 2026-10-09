@@ -1239,7 +1239,7 @@ def merge_dogs(canonical, duplicate, performed_by=None):
         ).exclude(pk=pairing.pk).first()
         if existing:
             if pairing.notes and pairing.notes not in existing.notes:
-                existing.notes = (existing.notes + "\\n" + pairing.notes).strip()[:700]
+                existing.notes = (existing.notes + "\n" + pairing.notes).strip()[:700]
             if not existing.label and pairing.label:
                 existing.label = pairing.label
             existing.save(update_fields=("notes", "label"))
