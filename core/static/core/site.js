@@ -27,7 +27,6 @@
       var openSuggestions = [];
       var pickerInteracting = false;
       var lastPanelScrollAt = 0;
-      var lastSearchFocusAt = 0;
 
       function closeMobileMenus() {
         document.querySelectorAll(".mobile-nav[open], .dashboard-mobile-nav[open]").forEach(function (menu) {
@@ -51,11 +50,12 @@
         // the field so mobile keyboards do not remain pinned over the page.
         // iOS Safari scrolls the page automatically while raising its keyboard.
         // Do not interpret that focus-induced movement as a dismiss gesture.
-        var keyboardFocusing = Date.now() - lastSearchFocusAt < 450 &&
-          document.activeElement &&
+        var searchFocused = document.activeElement &&
           document.activeElement.matches &&
           document.activeElement.matches("[data-dog-autocomplete]");
-        if (pickerInteracting || keyboardFocusing || Date.now() - lastPanelScrollAt < 180) {
+        // iPhone keyboard animations can scroll/rescale the visual viewport
+        // well after focus. Never dismiss a focused picker due to scrolling.
+        if (pickerInteracting || searchFocused || Date.now() - lastPanelScrollAt < 180) {
           return;
         }
         closeMobileMenus();
@@ -86,7 +86,54 @@
         panel.id = "dog-suggestions-" + (inputIndex + 1);
         panel.setAttribute("role", "listbox");
         panel.hidden = true;
-        host.appendChild(panel);
+        var useViewportPicker = window.matchMedia &&
+          window.matchMedia("(max-width: 980px)").matches;
+        if (useViewportPicker) {
+          // Safari clips absolute menus inside sticky header, form and scroll
+          // containers. Portalling only the small-screen picker avoids this.
+          panel.classList.add("dog-suggestions--viewport");
+          document.body.appendChild(panel);
+        } else {
+          host.appendChild(panel);
+        }
+
+        function placePicker() {
+          if (!useViewportPicker || panel.hidden) return;
+          var viewport = window.visualViewport;
+          var left = viewport ? viewport.offsetLeft : 0;
+          var top = viewport ? viewport.offsetTop : 0;
+          var width = viewport ? viewport.width : window.innerWidth;
+          var height = viewport ? viewport.height : window.innerHeight;
+          var visibleRight = left + width;
+          var visibleBottom = top + height;
+          var rect = input.getBoundingClientRect();
+          var panelWidth = Math.min(rect.width, width - 20);
+          var panelLeft = Math.max(left + 10, Math.min(rect.left, visibleRight - panelWidth - 10));
+          var roomBelow = Math.max(0, visibleBottom - rect.bottom - 8);
+          var roomAbove = Math.max(0, rect.top - top - 8);
+          var openAbove = roomBelow < 156 && roomAbove > roomBelow;
+          var room = openAbove ? roomAbove : roomBelow;
+          var panelHeight = Math.max(60, Math.min(340, room));
+          var panelTop = openAbove
+            ? Math.max(top + 4, rect.top - panelHeight - 4)
+            : Math.max(top + 4, rect.bottom + 4);
+          panel.style.setProperty("left", panelLeft + "px", "important");
+          panel.style.setProperty("width", panelWidth + "px", "important");
+          panel.style.setProperty("top", panelTop + "px", "important");
+          panel.style.setProperty("max-height", panelHeight + "px", "important");
+          panel.dataset.placement = openAbove ? "above" : "below";
+        }
+
+        // VisualViewport responds to actual iOS keyboard height/scroll.
+        // This does not move the document or alter the user's scroll position.
+        if (useViewportPicker) {
+          window.addEventListener("scroll", placePicker, { passive: true });
+          window.addEventListener("resize", placePicker, { passive: true });
+          if (window.visualViewport) {
+            window.visualViewport.addEventListener("resize", placePicker, { passive: true });
+            window.visualViewport.addEventListener("scroll", placePicker, { passive: true });
+          }
+        }
 
         input.setAttribute("role", "combobox");
         input.setAttribute("aria-autocomplete", "list");
@@ -248,7 +295,13 @@
           });
           var activeOption = options[activeIndex];
           input.setAttribute("aria-activedescendant", activeOption.id);
-          activeOption.scrollIntoView({ block: "nearest" });
+          // Only move the suggestion list, not the page behind iOS keyboard.
+          if (activeOption.offsetTop < panel.scrollTop) {
+            panel.scrollTop = activeOption.offsetTop;
+          } else if (activeOption.offsetTop + activeOption.offsetHeight >
+                     panel.scrollTop + panel.clientHeight) {
+            panel.scrollTop = activeOption.offsetTop + activeOption.offsetHeight - panel.clientHeight;
+          }
         }
 
         function render(results) {
@@ -305,6 +358,7 @@
 
           panel.hidden = false;
           input.setAttribute("aria-expanded", "true");
+          placePicker();
         }
 
         function refreshFromInput() {
@@ -316,13 +370,15 @@
         input.addEventListener("compositionend", refreshFromInput);
 
         input.addEventListener("focus", function () {
-          lastSearchFocusAt = Date.now();
-          if ((input.dataset.dogAutocompleteMode || "navigate") !== "fill") return;
-          if (!input.value.trim()) {
+          // Reopen the matching list after the keyboard returns, even for
+          // normal dog search (not just the parent/mating selection form).
+          if ((input.dataset.dogAutocompleteMode || "navigate") === "fill" &&
+              !input.value.trim()) {
             requestSuggestions("", true);
-          } else {
+          } else if (input.value.trim().length >= 2) {
             requestSuggestions(input.value.trim(), false);
           }
+          placePicker();
         });
 
         input.addEventListener("keydown", function (event) {
