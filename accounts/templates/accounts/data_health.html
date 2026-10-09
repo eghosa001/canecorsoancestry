@@ -32,6 +32,7 @@
       <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=unreviewed-source">Unreviewed sources</a>
       <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=community-only">Community-only records</a>
       <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=unknown-sex">Unknown sex ({{ counts.unknown_sex_public }})</a>
+      <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=missing-photo">Photo gaps in existing dogs</a>
     </div>
   </section>
 
