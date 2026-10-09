@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Manage {{ dog.name }} · Cane Corso Ancestry{% endblock %}
 {% block content %}
 <section class="page-shell">
@@ -36,6 +37,7 @@
       <div class="ux-disclosure-body">
         {{ formset.management_form }}
         {{ formset.non_form_errors }}
+        <div id="formset-items-{{ name }}">
         {% for related_form in formset %}
           <div class="panel" style="margin:1rem 0">
             {% for hidden in related_form.hidden_fields %}{{ hidden }}{% endfor %}
@@ -49,6 +51,18 @@
             </div>
           </div>
         {% endfor %}
+        </div>
+        <template id="formset-empty-{{ name }}">
+          <div class="panel" style="margin:1rem 0">
+            {% for hidden in formset.empty_form.hidden_fields %}{{ hidden }}{% endfor %}
+            <div class="profile-section-grid">
+              {% for field in formset.empty_form.visible_fields %}
+                <div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>
+              {% endfor %}
+            </div>
+          </div>
+        </template>
+        <button class="btn btn-outline" type="button" data-formset-add="{{ name }}">Add {{ name|title }} row</button>
       </div>
     </details>
     {% endfor %}
@@ -87,4 +101,5 @@
     {% empty %}<p>No direct editing revisions have been recorded for this dog.</p>{% endfor %}
   </section>
 </section>
+<script src="{% static 'accounts/direct-dog-edit.js' %}" defer></script>
 {% endblock %}
