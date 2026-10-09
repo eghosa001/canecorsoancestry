@@ -49,7 +49,24 @@ readonly APP_ENV="/etc/cca/oracle-stage.env"
 temporary_env="$(mktemp)"
 temporary_unit="$(mktemp)"
 probe_output="$(mktemp)"
-trap 'rm -f "$temporary_env" "$temporary_unit" "$probe_output"' EXIT
+# The runtime cca_app DB account must never keep DDL powers in production.
+# An explicit, backed-up and allowlisted migration may borrow schema CREATE
+# briefly; always revoke even if Django raises or the stage script fails.
+schema_privilege_armed=0
+revoke_temporary_schema_create() {
+  sudo -n "$PODMAN_BIN" exec cca-pg-shadow psql -X -v ON_ERROR_STOP=1 \
+    -U cca_shadow_admin -d cca_live \
+    -c 'REVOKE CREATE ON SCHEMA django_app FROM cca_app;' >/dev/null
+}
+cleanup_stage() {
+  if [[ "$schema_privilege_armed" == 1 ]]; then
+    if ! revoke_temporary_schema_create; then
+      echo "::error::Temporary DB schema CREATE could not be revoked: investigate immediately." >&2
+    fi
+  fi
+  rm -f "$temporary_env" "$temporary_unit" "$probe_output"
+}
+trap cleanup_stage EXIT
 
 # Credentials remain in the GitHub secret store and a root-owned 0600 runtime
 # file; never log, echo or upload environment content as an Actions artifact.
@@ -156,9 +173,32 @@ else
     "$IMAGE" python -m scripts.oracle_runner.allowlisted_schema_migration
   echo "Creating and verifying an encrypted off-VM production DB backup first."
   bash scripts/oracle_runner/backup_local_postgres.sh
+  # PostgreSQL intentionally grants the production app no schema DDL rights.
+  # Borrow CREATE on this schema for the reviewed transaction, then revoke it
+  # immediately; a trap also revokes it if the migration fails.
+  app_schema_can_create="$(sudo -n "$PODMAN_BIN" exec cca-pg-shadow \
+    psql -X -At -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+    -c "SELECT has_schema_privilege('cca_app', 'django_app', 'CREATE');")"
+  [[ "$app_schema_can_create" == f ]] || {
+    echo "::error::Production cca_app unexpectedly has schema CREATE already."; exit 1;
+  }
+  echo "Granting temporary CREATE on django_app only for reviewed private table."
+  sudo -n "$PODMAN_BIN" exec cca-pg-shadow \
+    psql -X -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+    -c 'GRANT CREATE ON SCHEMA django_app TO cca_app;' >/dev/null
+  schema_privilege_armed=1
   echo "Applying the one approved additive accounts migration."
   sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
     "$IMAGE" python manage.py migrate accounts 0005_saved_pairing --noinput
+  revoke_temporary_schema_create
+  schema_privilege_armed=0
+  app_schema_can_create="$(sudo -n "$PODMAN_BIN" exec cca-pg-shadow \
+    psql -X -At -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+    -c "SELECT has_schema_privilege('cca_app', 'django_app', 'CREATE');")"
+  [[ "$app_schema_can_create" == f ]] || {
+    echo "::error::Production schema DDL permissions were not revoked."; exit 1;
+  }
+  echo "PASS: Temporary schema permission revoked; cca_app remains non-DDL."
   sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
     "$IMAGE" python manage.py migrate --check --noinput
   echo "PASS: Additive saved-pairing migration and schema verification complete."
