@@ -1,4 +1,4 @@
-from django.db.models import F, Q, Subquery, Window
+from django.db.models import F, OuterRef, Q, Subquery, Window
 from django.db.models.functions import Coalesce, RowNumber
 
 from .models import Dog, DogAlias, DogImage, DogRegistration, DogSource
@@ -41,6 +41,23 @@ def with_displayable_images(queryset):
     )
     return queryset.filter(
         Q(pk__in=Subquery(managed_ids)) | Q(pk__in=Subquery(source_ids))
+    )
+
+
+def with_card_registration(queryset):
+    """Inline first registration label in each dog row instead of an extra SQL round trip.
+
+    List/card templates need only the authority code and number, not complete
+    registration objects. The indexed dog_id subquery runs inside the existing
+    page/card SELECT, saving one high-latency Supabase request.
+    """
+    first_registration = (
+        DogRegistration.objects.filter(dog_id=OuterRef("pk"))
+        .order_by("id")
+    )
+    return queryset.annotate(
+        card_registration_number=Subquery(first_registration.values("number")[:1]),
+        card_registration_code=Subquery(first_registration.values("authority__code")[:1]),
     )
 
 

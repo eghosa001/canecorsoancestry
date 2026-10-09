@@ -36,30 +36,34 @@ from .models import (
     public_verification_label,
 )
 from .permissions import can_contribute_to_dog
-from .querysets import one_dog_per_kennel, public_dog_match_filter, with_displayable_images, with_stored_images
+from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_registration, with_displayable_images, with_stored_images
 
 
 PROFILE_RELATION_PREVIEW_LIMIT = 18
 SEARCH_HIT_THROTTLE_SECONDS = 30
 
 
-def _dog_cards(queryset, *, include_parents=False, include_sources=True):
+def _dog_cards(queryset, *, include_parents=False, include_sources=True, include_registrations=True):
     related = ["kennel"]
     if include_parents:
         related.extend(["sire", "dam"])
 
-    queryset = queryset.select_related(*related).prefetch_related(
+    prefetches = [
         Prefetch(
             "images",
             queryset=DogImage.objects.order_by("-is_primary", "sort_order", "created_at"),
             to_attr="display_images",
-        ),
-        Prefetch(
-            "registrations",
-            queryset=DogRegistration.objects.select_related("authority"),
-            to_attr="display_registrations",
-        ),
-    )
+        )
+    ]
+    if include_registrations:
+        prefetches.append(
+            Prefetch(
+                "registrations",
+                queryset=DogRegistration.objects.select_related("authority"),
+                to_attr="display_registrations",
+            )
+        )
+    queryset = queryset.select_related(*related).prefetch_related(*prefetches)
     if include_sources:
         queryset = queryset.prefetch_related(
             Prefetch(
@@ -201,7 +205,9 @@ def dog_search(request):
         )
     else:
         base_dogs = _public_dogs_with_images()
-    dogs = _dog_cards(base_dogs, include_sources=False)
+    dogs = with_card_registration(
+        _dog_cards(base_dogs, include_sources=False, include_registrations=False)
+    )
     if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE, Dog.Sex.UNKNOWN}:
         dogs = dogs.filter(sex=sex)
     if country:
