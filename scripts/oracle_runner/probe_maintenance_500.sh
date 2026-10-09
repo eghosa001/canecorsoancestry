@@ -13,6 +13,20 @@ echo "before="$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
  -H "X-CCA-Edge: 1" -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
  -H "X-Forwarded-Proto: https" http://127.0.0.1:18080/accounts/login/)
 sudo -n install -o root -g root -m 644 /dev/null "$flag"
+echo "=== Host flag permissions and SELinux labels ==="
+sudo -n ls -ldZ /var/lib/cca /var/lib/cca/control "$flag" || true
+sudo -n namei -l "$flag" || true
+echo "=== Container mount, labels and access ==="
+sudo -n podman inspect cca-oracle-staging --format 'process_label={{.ProcessLabel}} mount_label={{.MountLabel}} mounts={{json .Mounts}}'
+sudo -n podman exec cca-oracle-staging python - <<'PY' || true
+import os
+for p in ("/run", "/run/cca", "/run/cca/maintenance.flag"):
+    try:
+        s=os.stat(p)
+        print("access_path="+p+" uid="+str(s.st_uid)+" gid="+str(s.st_gid)+" mode="+oct(s.st_mode & 0o777))
+    except OSError as e:
+        print("access_path="+p+" errno="+str(e.errno)+" type="+type(e).__name__)
+PY
 echo "inside_container_flag:"
 sudo -n podman exec cca-oracle-staging python -c \
  'from pathlib import Path; p=Path("/run/cca/maintenance.flag"); print("mounted="+str(p.parent.exists()),"flag="+str(p.exists()))' || true
