@@ -84,6 +84,34 @@ for item in approved.select_related("dog", "kennel", "litter", "document").order
 
 print("APPROVAL_ROWS_CHECKED", dict(sorted(sampled.items())), flush=True)
 print("HISTORICAL_REFERENCE_MISMATCH_COUNTS", dict(sorted(failures.items())), flush=True)
+# Also verify that actual approved new-dog records have HTML pages containing
+# their approved photo reference, not just an orphaned media object.
+import urllib.parse
+import urllib.request
+from html import escape
+base = "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+for index, row in enumerate(
+    approved.filter(kind=Submission.Kind.DOG, dog__is_public=True)
+    .select_related("dog").order_by("-reviewed_at")[:8], 1
+):
+    url = base + "/dogs/" + urllib.parse.quote(row.dog.slug) + "/"
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "Mozilla/5.0 CCA-Publication-Audit/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=16) as response:
+            body = response.read().decode("utf-8", errors="replace")
+            name_found = escape(row.dog.name) in body
+            image_found = (
+                not row.attachment
+                or urllib.parse.quote(row.attachment.name, safe="/") in body
+            )
+            print("APPROVED_DOG_PUBLIC_PROFILE", index,
+                  "PASS" if response.status == 200 and name_found and image_found else "FAIL",
+                  flush=True)
+    except Exception as exc:
+        print("APPROVED_DOG_PUBLIC_PROFILE_ERROR", index, type(exc).__name__, flush=True)
+
 print("IMAGE_R2_SAMPLE_SIZE", len(sample_images), flush=True)
 for i, name in enumerate(sample_images, 1):
     try:
