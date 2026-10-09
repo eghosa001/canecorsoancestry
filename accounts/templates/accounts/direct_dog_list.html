@@ -3,11 +3,16 @@
 {% block content %}
 <section class="page-shell">
   <header class="page-heading moderation-heading">
-    <div><p class="eyebrow">Internal moderation</p><h1>Manage dog records</h1>
-      <p>Open an existing dog, make a live, reasoned correction, and inspect the complete revision record. Member submissions continue through the normal review queue.</p>
+    <div><p class="eyebrow">Internal moderation</p><h1>{% if show_proposals %}Protected pedigree proposals{% else %}Manage dog records{% endif %}</h1>
+      <p>Routine authorized edits are live; sensitive ancestry changes from moderators require Super Admin approval before publication. Member submissions continue through the normal review queue.</p>
     </div>
-    <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Back to moderation</a>
+    <div class="button-row">
+      {% if is_owner %}<a class="btn btn-gold" href="{% url 'accounts:dog-edit-list' %}?proposals=1">Review protected proposals</a>{% endif %}
+      <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">Search dogs</a>
+      <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Back to moderation</a>
+    </div>
   </header>
+  {% if not show_proposals %}
   <form class="panel" method="get">
     <label for="dog-record-q">Find an existing dog by name, registration, slug or UUID</label>
     <div class="button-row"><input id="dog-record-q" name="q" value="{{ query }}" maxlength="160" placeholder="Search canonical dog records" autocomplete="off" style="flex:1;min-width:14rem">
@@ -25,19 +30,36 @@
     {% empty %}<p>No matching canonical dogs were found.</p>{% endfor %}
   </section>
   {% endif %}
+  {% endif %}
   <section class="panel">
-    <h2>Recent direct record changes</h2>
+    <h2>{% if show_proposals %}Proposal history and decisions{% else %}Recent direct record changes{% endif %}</h2>
     {% if history_deferred %}<p class="muted">Revision history is deferred while searching so results appear faster. <a class="text-link" href="?q={{ query|urlencode }}&history=1">Load recent revision history →</a></p>{% endif %}
-    <p class="muted">Moderator edits take effect immediately. Only the super admin can accept or reverse them.</p>
+    <p class="muted">Protected ancestry proposals are not published until approved by Super Admin. Routine corrections may take effect immediately and remain auditable.</p>
     {% for event in revisions %}
       <article style="padding:1rem 0;border-bottom:1px solid var(--border-color, #aaa)">
         <strong>{% if event.dog %}{{ event.dog.name }}{% else %}Dog {{ event.dog_id_snapshot }}{% endif %}</strong>
         <p class="muted">{{ event.created_at|date:"d M Y H:i" }} · {{ event.actor_admin_label }} ·
-          {% if event.summary.is_owner %}Super admin override{% elif event.review_state == "direct_dog_revert" %}Reverted{% elif event.review_state == "direct_dog_review" %}Reviewed{% else %}Awaiting super admin review{% endif %}
+          {% if event.summary.kind == "direct_dog_proposal" %}{% if event.review_state == "direct_dog_proposal_approved" %}Approved and published{% elif event.review_state == "direct_dog_proposal_rejected" %}Rejected without publication{% else %}Pending Super Admin approval — not public{% endif %}{% elif event.summary.is_owner %}Super Admin direct edit{% elif event.review_state == "direct_dog_revert" %}Reverted{% elif event.review_state == "direct_dog_review" %}Reviewed{% else %}Live edit awaiting review{% endif %}
         </p>
-        {% if event.dog %}<a class="text-link" href="{% url 'accounts:dog-direct-edit' event.dog.pk %}">Inspect changes →</a>{% endif %}
+        {% if event.summary.kind == "direct_dog_proposal" %}
+          <details class="ux-disclosure">
+            <summary>Compare existing and proposed values</summary>
+            <div class="ux-disclosure-body">
+              <p><strong>Existing:</strong> {{ event.summary.before_protected }}</p>
+              <p><strong>Proposed:</strong> {{ event.summary.proposed_changes }}</p>
+            </div>
+          </details>
+        {% endif %}
+        {% if event.dog %}<a class="text-link" href="{% url 'accounts:dog-direct-edit' event.dog.pk %}">{% if show_proposals and not event.review_state and is_owner %}Review proposal{% else %}Inspect changes{% endif %} →</a>{% endif %}
       </article>
     {% empty %}{% if not history_deferred %}<p>No direct dog edits yet.</p>{% endif %}{% endfor %}
+    {% if proposal_page and proposal_page.paginator.num_pages > 1 %}
+      <nav class="button-row" aria-label="Proposal history pages">
+        {% if proposal_page.has_previous %}<a class="btn btn-outline" href="?proposals=1&amp;page={{ proposal_page.previous_page_number }}">Previous</a>{% endif %}
+        <span class="muted">Page {{ proposal_page.number }} of {{ proposal_page.paginator.num_pages }}</span>
+        {% if proposal_page.has_next %}<a class="btn btn-outline" href="?proposals=1&amp;page={{ proposal_page.next_page_number }}">Next</a>{% endif %}
+      </nav>
+    {% endif %}
   </section>
 </section>
 {% endblock %}

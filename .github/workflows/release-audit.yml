@@ -103,7 +103,9 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:17
+        # Use the verified Docker Official Images mirror to avoid shared
+        # GitHub runner Docker Hub anonymous pull-rate failures.
+        image: public.ecr.aws/docker/library/postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
