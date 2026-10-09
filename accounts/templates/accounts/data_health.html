@@ -16,10 +16,24 @@
 
   <div class="analysis-grid analysis-grid-four">
     <article class="analysis-card"><p class="eyebrow">Critical</p><strong class="analysis-number">{{ critical_total }}</strong><span>Impossible relationship/date issues</span></article>
-    <article class="analysis-card"><p class="eyebrow">Source coverage</p><strong class="analysis-number">{{ report.source_coverage_percent|floatformat:1 }}%</strong><span>{{ report.verified_source_coverage_percent|floatformat:1 }}% have moderator-reviewed source evidence</span></article>
+    <article class="analysis-card"><p class="eyebrow">Source attribution</p><strong class="analysis-number">{{ report.source_coverage_percent|floatformat:2 }}%</strong><span>{{ counts.source_backed_public }} of {{ counts.public_dogs }} public dogs have a source reference. {{ counts.public_without_sources }} have none.</span></article>
     <article class="analysis-card"><p class="eyebrow">Pedigree linked</p><strong class="analysis-number">{{ report.pedigree_linkage_percent|floatformat:1 }}%</strong><span>Public dogs linked to sire or dam</span></article>
     <article class="analysis-card"><p class="eyebrow">Backlog</p><strong class="analysis-number">{{ counts.pending_submissions }}</strong><span>{{ counts.aging_submissions }} waiting 7+ days</span></article>
   </div>
+
+  <section class="panel section-spacer">
+    <div class="panel-heading">
+      <div><h2>Independent evidence review</h2><span>A reference is not proof of verification.</span></div>
+      <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=unreviewed-source">Review existing evidence gaps →</a>
+    </div>
+    <p><strong>{{ counts.verified_source_backed_public }} of {{ counts.public_dogs }}</strong> public dogs have at least one source carrying an independent-review marker ({{ report.verified_source_coverage_percent|floatformat:2 }}%). These markers must be recorded only after genuine human evidence review; imported references are not automatically verified.</p>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=missing-source">Missing sources ({{ counts.public_without_sources }})</a>
+      <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=unreviewed-source">Unreviewed sources</a>
+      <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=community-only">Community-only records</a>
+      <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=unknown-sex">Unknown sex ({{ counts.unknown_sex_public }})</a>
+    </div>
+  </section>
 
   <div class="profile-section-grid section-spacer">
     <article class="panel">
@@ -55,10 +69,11 @@
           <summary>{{ key|cut:"_"|title }} · {{ dogs|length }} sample{{ dogs|length|pluralize }}</summary>
           <div class="relationship-list">
             {% for dog in dogs %}
-              <a href="{% url 'registry:dog-detail' dog.slug %}">
-                <strong>{{ dog.name }}</strong>
+              <div>
+                <a href="{% url 'registry:dog-detail' dog.slug %}"><strong>{{ dog.name }}</strong></a>
                 <span>{% if dog.kennel %}{{ dog.kennel.name }}{% else %}Kennel unknown{% endif %}{% if dog.date_of_birth %} · {{ dog.date_of_birth }}{% endif %}</span>
-              </a>
+                {% if can_manage_sources %}<a href="{% url 'accounts:dog-direct-edit' dog.pk %}">Review evidence</a>{% endif %}
+              </div>
             {% endfor %}
           </div>
         </details>
