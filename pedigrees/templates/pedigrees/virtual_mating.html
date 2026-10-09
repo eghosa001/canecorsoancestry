@@ -63,6 +63,24 @@
         </article>
       </div>
 
+      {% if can_save_research %}
+      <section class="panel mating-section" aria-label="Save private breeding research">
+        <div class="panel-heading"><h2>Save this pairing</h2><span>Private to your member account</span></div>
+        <form method="post" action="{% url 'accounts:save-pairing' %}" class="member-form">
+          {% csrf_token %}
+          <input type="hidden" name="sire" value="{{ sire.pk }}">
+          <input type="hidden" name="dam" value="{{ dam.pk }}">
+          <label for="pairing-label">Research label (optional)</label>
+          <input id="pairing-label" name="label" maxlength="120" placeholder="e.g. Spring planning comparison">
+          <label for="pairing-notes">Private notes (optional)</label>
+          <textarea id="pairing-notes" name="notes" rows="2" maxlength="700" placeholder="What would you like to compare later?"></textarea>
+          <div class="button-row"><button class="btn btn-gold" type="submit">Save to My research</button>
+            <a class="btn btn-outline" href="{% url 'accounts:saved-pairings' %}">View saved pairings</a></div>
+        </form>
+        <p class="muted">Saving a pairing never creates an actual litter or changes the pedigree. Future analyses use the newest published ancestry.</p>
+      </section>
+      {% endif %}
+
       <div class="analysis-grid mating-metrics">
         <article class="analysis-card">
           <p class="eyebrow">Projected offspring COI</p>
