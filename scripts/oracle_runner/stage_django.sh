@@ -145,9 +145,24 @@ print("DATABASE_URL="+urls[0])
 PY
 echo "Using verified Oracle-local PostgreSQL primary via private network."
 
-echo "Checking the production schema has no outstanding migrations."
-sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
-  "$IMAGE" python manage.py migrate --check --noinput
+echo "Checking production schema. Unapproved migrations always block release."
+if sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
+  "$IMAGE" python manage.py migrate --check --noinput; then
+  echo "PASS: Production schema already matches this release."
+else
+  # Exactly one additive, reviewed table is permitted. Never run generic
+  # migrations against production merely because a new release includes them.
+  sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
+    "$IMAGE" python scripts/oracle_runner/allowlisted_schema_migration.py
+  echo "Creating and verifying an encrypted off-VM production DB backup first."
+  bash scripts/oracle_runner/backup_local_postgres.sh
+  echo "Applying the one approved additive accounts migration."
+  sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
+    "$IMAGE" python manage.py migrate accounts 0005_saved_pairing --noinput
+  sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
+    "$IMAGE" python manage.py migrate --check --noinput
+  echo "PASS: Additive saved-pairing migration and schema verification complete."
+fi
 
 sudo -n install -d -m 700 /etc/cca
 sudo -n install -d -m 755 /var/lib/cca/control
