@@ -2,6 +2,17 @@ name: Approved publication integrity diagnostic
 
 on:
   workflow_dispatch:
+  # Validate changed audit logic without running the production diagnostic on PRs.
+  pull_request:
+    paths:
+      - "scripts/oracle_runner/audit_approved_publication.py"
+      - ".github/workflows/approved-publication-audit.yml"
+  # Audit the live deployment exactly when this diagnostic changes.
+  push:
+    branches: [main]
+    paths:
+      - "scripts/oracle_runner/audit_approved_publication.py"
+      - ".github/workflows/approved-publication-audit.yml"
   schedule:
     - cron: "17 7 * * 5"
 
@@ -9,6 +20,17 @@ permissions:
   contents: read
 
 jobs:
+  syntax-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check publication audit syntax and fast-path policy
+        run: |
+          python3 -m py_compile scripts/oracle_runner/audit_approved_publication.py
+          python3 scripts/fast_path_guard.py
+
   read-only-publication-audit:
     if: >-
       github.repository == 'eghosa001/canecorsoancestry' &&

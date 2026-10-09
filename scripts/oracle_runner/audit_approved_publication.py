@@ -25,6 +25,7 @@ print("APPROVED_TYPE_COUNTS", dict(sorted(totals.items())), flush=True)
 failures = collections.Counter()
 sampled = collections.Counter()
 sample_images = []
+strict_failures = []
 # Old approved content may subsequently be amended or deliberately removed.
 # Collect all current mismatches; only recent live-image R2 probes are strict.
 for item in approved.select_related("dog", "kennel", "litter", "document").order_by("-reviewed_at").iterator(chunk_size=100):
@@ -91,9 +92,16 @@ import urllib.request
 from html import escape
 base = "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
 for index, row in enumerate(
-    approved.filter(kind=Submission.Kind.DOG, dog__is_public=True)
+    approved.filter(kind__in=(Submission.Kind.DOG, Submission.Kind.IMAGE), dog__is_public=True)
     .select_related("dog").order_by("-reviewed_at")[:8], 1
 ):
+    # A previously approved image may have been deliberately removed later.
+    # Only require public visibility for images still linked to the dog.
+    if row.kind == Submission.Kind.IMAGE and row.attachment and not DogImage.objects.filter(
+        dog=row.dog, image=row.attachment.name
+    ).exists():
+        print("APPROVED_IMAGE_NO_LONGER_LINKED", index, "historical", flush=True)
+        continue
     url = base + "/dogs/" + urllib.parse.quote(row.dog.slug) + "/"
     request = urllib.request.Request(
         url, headers={"User-Agent": "Mozilla/5.0 CCA-Publication-Audit/1.0"},
@@ -106,10 +114,13 @@ for index, row in enumerate(
                 not row.attachment
                 or urllib.parse.quote(row.attachment.name, safe="/") in body
             )
+            passed = response.status == 200 and name_found and image_found
             print("APPROVED_DOG_PUBLIC_PROFILE", index,
-                  "PASS" if response.status == 200 and name_found and image_found else "FAIL",
-                  flush=True)
+                  "PASS" if passed else "FAIL", flush=True)
+            if not passed:
+                strict_failures.append("public_profile")
     except Exception as exc:
+        strict_failures.append("public_profile_http")
         print("APPROVED_DOG_PUBLIC_PROFILE_ERROR", index, type(exc).__name__, flush=True)
 
 print("IMAGE_R2_SAMPLE_SIZE", len(sample_images), flush=True)
@@ -117,8 +128,11 @@ for i, name in enumerate(sample_images, 1):
     try:
         exists = default_storage.exists(name)
     except Exception as exc:
+        strict_failures.append("image_storage_error")
         print("IMAGE_R2_PROBE_ERROR", i, type(exc).__name__, flush=True)
         continue
+    if not exists:
+        strict_failures.append("image_missing_from_storage")
     print("IMAGE_R2_EXISTS", i, "yes" if exists else "NO", flush=True)
     if exists and i <= 5:
         import urllib.request
@@ -133,9 +147,16 @@ for i, name in enumerate(sample_images, 1):
                 head = response.read(16)
                 served = response.status == 200 and content_type.startswith("image/") and bool(head)
             print("IMAGE_PUBLIC_HTTP", i, "PASS" if served else "FAIL", flush=True)
+            if not served:
+                strict_failures.append("image_public_http")
         except Exception as exc:
+            strict_failures.append("image_public_http_error")
             print("IMAGE_PUBLIC_HTTP_ERROR", i, type(exc).__name__, flush=True)
 
 # The existence of a current public media DB reference and successful R2
 # storage read is necessary, but browser rendering is tested separately.
 print("READ_ONLY_AUDIT_DONE", flush=True)
+if strict_failures:
+    print("PUBLICATION_INTEGRITY_FAILURES", dict(collections.Counter(strict_failures)), flush=True)
+    sys.exit(1)
+print("PUBLICATION_INTEGRITY_PASS", flush=True)
