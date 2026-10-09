@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 """Manual, reversible Cloudflare Worker origin switch, no VM SSH needed."""
 import argparse
-import http.cookiejar
 import json
 import os
 import re
 import subprocess
 import tempfile
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 
 from scripts.oracle_runner.edge_origin_mode import (
@@ -21,15 +18,29 @@ CANDIDATE = "https://canecorsoancestry-oracle-candidate.aighewieghosa111.workers
 CONFIG = Path("wrangler.site.toml")
 
 
-def open_checked(url, *, headers=None, data=None, opener=None, expected=200):
-    req = urllib.request.Request(url, headers=headers or {}, data=data)
-    send = opener.open if opener else urllib.request.urlopen
-    with send(req, timeout=20) as response:
-        body = response.read()
-        if response.status != expected:
-            raise RuntimeError(f"HTTP {response.status} for {url}")
-        return body
+def open_checked(url, *, headers=None, data=None, cookie_file=None, expected=200):
+    """Use curl for live endpoint smoke checks (Python urllib is WAF-blocked).
 
+    No credential values or response bodies are logged.
+    """
+    cmd = ["curl", "-sS", "--connect-timeout", "5", "--max-time", "20",
+           "--output", "-", "--write-out", "\n__CCA_STATUS__%{http_code}"]
+    for name, value in (headers or {}).items():
+        cmd.extend(["-H", f"{name}: {value}"])
+    if cookie_file:
+        cmd.extend(["--cookie", cookie_file, "--cookie-jar", cookie_file])
+    if data is not None:
+        cmd.extend(["--data-binary", "@-"])
+    cmd.append(url)
+    process = subprocess.run(
+        cmd, input=data, capture_output=True, timeout=25, check=False,
+    )
+    if process.returncode:
+        raise RuntimeError(f"HTTP smoke request failed for {url}: curl exit {process.returncode}")
+    body, marker, status = process.stdout.rpartition(b"\n__CCA_STATUS__")
+    if not marker or status.decode("ascii").strip() != str(expected):
+        raise RuntimeError(f"Unexpected HTTP response for {url}: {status!r}")
+    return body
 
 def preflight_candidate(secret):
     headers = {"X-CCA-Candidate-Test": secret}
@@ -45,9 +56,16 @@ def preflight_candidate(secret):
         print(f"Oracle candidate {path}: PASS")
     # A deliberately invalid login is a safe way to verify real CSRF/form
     # submission before exposing Oracle to production logins.
-    jar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
-    html = open_checked(CANDIDATE + "/accounts/login/", headers=headers, opener=opener)
+    with tempfile.NamedTemporaryFile(prefix="cca-canary-cookie-", delete=False) as f:
+        cookie_path = f.name
+    try:
+        return _check_csrf_login(headers, cookie_path)
+    finally:
+        Path(cookie_path).unlink(missing_ok=True)
+
+
+def _check_csrf_login(headers, cookie_path):
+    html = open_checked(CANDIDATE + "/accounts/login/", headers=headers, cookie_file=cookie_path)
     match = re.search(rb'name="csrfmiddlewaretoken"\s+value="([^"]+)"', html)
     if match is None:
         raise RuntimeError("Candidate login CSRF token missing")
@@ -57,7 +75,7 @@ def preflight_candidate(secret):
         "password": "invalid-password-only",
     }).encode()
     answer = open_checked(
-        CANDIDATE + "/accounts/login/", opener=opener, data=post,
+        CANDIDATE + "/accounts/login/", cookie_file=cookie_path, data=post,
         headers={**headers, "Origin": PUBLIC_EDGE,
                  "Content-Type": "application/x-www-form-urlencoded"},
     )

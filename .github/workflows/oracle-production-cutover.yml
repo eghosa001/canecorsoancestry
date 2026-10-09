@@ -32,6 +32,7 @@ jobs:
       - name: Test origin mode and cutover script syntax
         run: |
           python3 -m py_compile scripts/oracle_runner/production_cutover.py
+          python3 -m scripts.oracle_runner.production_cutover --help
           python3 -m unittest scripts.tests.test_edge_origin_mode
           python3 scripts/fast_path_guard.py
 
@@ -64,5 +65,5 @@ jobs:
             rollback-to-northflank) target="northflank";;
             *) echo "::error::Unsupported operation"; exit 1;;
           esac
-          python3 scripts/oracle_runner/production_cutover.py \
+          python3 -m scripts.oracle_runner.production_cutover \
             --mode "$target" --cache-version "$CACHE_VERSION"

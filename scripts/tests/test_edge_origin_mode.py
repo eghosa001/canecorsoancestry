@@ -2,7 +2,7 @@
 import unittest
 from pathlib import Path
 from scripts.oracle_runner.edge_origin_mode import (
-    render, NORTHFLANK, ORACLE, VPC_SERVICE_ID,
+    render, parse_origin_bindings, NORTHFLANK, ORACLE, VPC_SERVICE_ID,
 )
 
 class OriginModeTests(unittest.TestCase):
@@ -22,6 +22,43 @@ class OriginModeTests(unittest.TestCase):
         self.assertNotIn("[[vpc_services]]", original)
         self.assertNotIn(VPC_SERVICE_ID, original)
         self.assertEqual(render(original, "northflank"), original)
+    def test_authenticated_cloudflare_api_classifies_northflank(self):
+        payload = {"success": True, "result": {"bindings": [
+            {"name": "ORIGIN_URL", "type": "plain_text", "text": NORTHFLANK},
+            {"name": "ORIGIN_EDGE_SECRET", "type": "secret_text"},
+        ]}}
+        self.assertEqual(parse_origin_bindings(payload), "northflank")
+
+    def test_authenticated_cloudflare_api_classifies_oracle(self):
+        payload = {"success": True, "result": {"bindings": [
+            {"name": "ORIGIN_URL", "type": "plain_text", "text": ORACLE},
+            {"name": "ORIGIN_TRANSPORT", "type": "plain_text", "text": "private-vpc"},
+            {"name": "ORIGIN_VPC", "type": "vpc_service", "service_id": VPC_SERVICE_ID},
+        ]}}
+        self.assertEqual(parse_origin_bindings(payload), "oracle")
+        for unsafe in (
+            {"name": "ORIGIN_VPC", "type": "vpc_service", "service_id": "wrong"},
+            {"name": "ORIGIN_VPC", "type": "secret_text"},
+        ):
+            invalid = {"success": True, "result": {"bindings": [*payload["result"]["bindings"][:2], unsafe]}}
+            with self.assertRaises(RuntimeError):
+                parse_origin_bindings(invalid)
+
+    def test_unknown_or_duplicate_mode_blocks_production_deployment(self):
+        for payload in (
+            {"success": False, "result": {}},
+            {"success": True, "result": {"bindings": []}},
+            {"success": True, "result": {"bindings": [
+                {"name": "ORIGIN_URL", "type": "plain_text", "text": NORTHFLANK},
+                {"name": "ORIGIN_URL", "type": "plain_text", "text": ORACLE},
+            ]}},
+            {"success": True, "result": {"bindings": [
+                {"name": "ORIGIN_URL", "type": "plain_text", "text": ORACLE},
+            ]}},
+        ):
+            with self.assertRaises(RuntimeError):
+                parse_origin_bindings(payload)
+
     def test_fail_on_wrong_worker(self):
         with self.assertRaises(ValueError):
             render('name = "wrong"\nORIGIN_URL = "x"\n', "oracle")
