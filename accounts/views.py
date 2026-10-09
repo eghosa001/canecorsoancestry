@@ -20,7 +20,7 @@ from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Prefetch, Q
-from django.http import FileResponse, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -83,7 +83,7 @@ from registry.services import (
 
 from registry.verification import current_findings, verification_checklist, verify_submission
 
-from pedigrees.services import pedigree_analysis, pedigree_export_rows
+from pedigrees.services import pedigree_analysis, pedigree_export_rows, virtual_mating_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -1963,6 +1963,84 @@ def saved_pairings(request):
     )
     return render(request, "accounts/saved_pairings.html", {
         "pairings": pairings,
+        "workspace_section": "research",
+    })
+
+
+@login_required
+def compare_saved_pairings(request):
+    """Private, bounded comparison of existing published ancestry.
+
+    No records are created, no live pedigrees are edited, and calculations
+    are scoped to public links rather than unpublished/private genealogy.
+    """
+    if not can_use_member_features(request.user):
+        raise PermissionDenied
+    raw = request.GET.getlist("pairing")
+    if not 2 <= len(raw) <= 3:
+        return HttpResponseBadRequest("Select two or three saved pairings to compare.")
+    try:
+        selected_ids = [uuid.UUID(value) for value in raw]
+    except (TypeError, ValueError, AttributeError):
+        return HttpResponseBadRequest("One or more pairing selections are invalid.")
+    if len(set(selected_ids)) != len(selected_ids):
+        return HttpResponseBadRequest("Choose different saved pairings.")
+
+    requested_depth = request.GET.get("generations", "8")
+    if requested_depth not in {"4", "6", "8", "10"}:
+        return HttpResponseBadRequest("Choose an analysis depth of 4, 6, 8 or 10.")
+    generations = int(requested_depth)
+
+    # Reject the whole request instead of silently excluding unowned UUIDs.
+    # This never reveals another member's research, even by comparing IDs.
+    owned = SavedPairing.objects.filter(
+        member=request.user, pk__in=selected_ids
+    ).select_related("sire", "dam").in_bulk()
+    if len(owned) != len(selected_ids):
+        raise Http404("Saved research pairing not found.")
+
+    comparisons = []
+    for pairing_id in selected_ids:
+        pairing = owned[pairing_id]
+        sire, dam = pairing.sire, pairing.dam
+        result = {"pairing": pairing, "sire": None, "dam": None,
+                  "analysis": None, "error": ""}
+        if not sire or not dam or not sire.is_public or not dam.is_public:
+            result["error"] = (
+                "A parent is retired, missing or no longer published. "
+                "This saved pairing cannot be compared until the public record is available."
+            )
+        elif sire.pk == dam.pk or sire.sex == Dog.Sex.FEMALE or dam.sex == Dog.Sex.MALE:
+            result["error"] = (
+                "The parent selections need correcting before this pairing can be analysed."
+            )
+        else:
+            result["sire"], result["dam"] = sire, dam
+            try:
+                analysis = virtual_mating_analysis(
+                    sire, dam, generations=generations, public_only=True
+                )
+                completeness = analysis["completeness"]
+                result["analysis"] = {
+                    "projected_percent": 100 * analysis["projected_inbreeding"],
+                    "relationship_percent": 100 * analysis["relationship"],
+                    "sire_percent": 100 * analysis["sire_inbreeding"],
+                    "dam_percent": 100 * analysis["dam_inbreeding"],
+                    "coverage_percent": completeness["coverage_percent"],
+                    "known_slots": completeness["known_slots"],
+                    "total_slots": completeness["total_slots"],
+                    "shared_ancestors": len(analysis["common"]),
+                    "deepest_generation": completeness["deepest_known_generation"],
+                }
+            except ValueError:
+                result["error"] = (
+                    "Pedigree links need correction before this pairing can be analysed."
+                )
+        comparisons.append(result)
+
+    return render(request, "accounts/compare_saved_pairings.html", {
+        "comparisons": comparisons,
+        "generations": generations,
         "workspace_section": "research",
     })
 
