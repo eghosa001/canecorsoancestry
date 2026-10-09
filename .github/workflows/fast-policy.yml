@@ -27,6 +27,9 @@ on:
       - 'GEMINI.md'
       - '.github/copilot-instructions.md'
       - 'scripts/fast_path_guard.py'
+      - 'scripts/verify_active_services.py'
+      - 'infra/active-services.json'
+      - 'scripts/oracle_runner/stage_django.sh'
   workflow_dispatch:
 
 permissions:

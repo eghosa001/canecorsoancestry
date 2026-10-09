@@ -13,6 +13,10 @@ on:
       - "Dockerfile"
       - "src/site-edge.js"
       - "scripts/test_site_edge_cache.mjs"
+      - "scripts/oracle_runner/stage_django.sh"
+      - "scripts/oracle_runner/oracle_settings.py"
+      - "scripts/oracle_runner/oracle_middleware.py"
+      - ".github/workflows/oracle-stage-django.yml"
       - ".github/workflows/release-audit.yml"
   push:
     branches: [main]
@@ -27,6 +31,10 @@ on:
       - "Dockerfile"
       - "src/site-edge.js"
       - "scripts/test_site_edge_cache.mjs"
+      - "scripts/oracle_runner/stage_django.sh"
+      - "scripts/oracle_runner/oracle_settings.py"
+      - "scripts/oracle_runner/oracle_middleware.py"
+      - ".github/workflows/oracle-stage-django.yml"
       - ".github/workflows/release-audit.yml"
   workflow_dispatch:
 
