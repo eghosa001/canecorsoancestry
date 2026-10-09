@@ -1,0 +1,31 @@
+name: Fast public dog-card query regression
+
+on:
+  pull_request:
+    paths:
+      - "core/views.py"
+      - "registry/views.py"
+      - "registry/querysets.py"
+      - "core/templates/core/home.html"
+      - "registry/templates/registry/dog_search.html"
+      - "registry/tests_fast_cards.py"
+      - ".github/workflows/fast-public-cards.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  card-queries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Only validate changed dog card/search query paths
+        run: |
+          pip install -q -r requirements.txt
+          python manage.py test registry.tests_fast_cards --noinput
+          python3 scripts/fast_path_guard.py
