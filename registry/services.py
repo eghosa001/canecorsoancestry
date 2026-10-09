@@ -1132,7 +1132,7 @@ def merge_dogs(canonical, duplicate, performed_by=None):
             summary["filled_fields"].append("bio")
     elif duplicate.bio and duplicate.bio.strip() != canonical.bio.strip():
         canonical.bio += (
-            "\\n\\nAdditional notes from merged record (" + retired_name + "):\\n"
+            "\n\nAdditional notes from merged record (" + retired_name + "):\n"
             + duplicate.bio
         )
         summary["filled_fields"].append("additional_bio")
