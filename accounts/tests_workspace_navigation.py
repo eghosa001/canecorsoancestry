@@ -108,6 +108,16 @@ class WorkspaceNavigationTests(TestCase):
         self.assertNotContains(queue, "Open pedigree merge")
 
         self.client.force_login(self.owner)
+        preview = self.client.get(url, {
+            "canonical": str(survivor.pk),
+            "duplicate": str(retired.pk),
+        })
+        self.assertEqual(preview.status_code, 200)
+        self.assertContains(preview, "Compare both pedigree records")
+        self.assertContains(preview, "Merge Survivor")
+        self.assertContains(preview, "Merge Duplicate")
+        self.assertContains(preview, str(survivor.pk))
+        self.assertTrue(Dog.objects.filter(pk=retired.pk).exists())
         response = self.client.post(url, {
             "canonical": str(survivor.pk),
             "duplicate": str(retired.pk),
