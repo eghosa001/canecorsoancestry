@@ -329,6 +329,44 @@ def _review_states(events):
     return events
 
 
+def pending_proposals_for_dashboard(*, limit=12, batch_size=80):
+    """Find unresolved ancestry proposals regardless of their age.
+
+    A fixed newest-80 query can conceal an older proposal whenever many later
+    edits have already been resolved. Walk the audit log in bounded keyset
+    batches, never loading the full audit trail into application memory.
+    Review decisions remain immutable audit rows, not mutable flags.
+    """
+    pending = []
+    cursor = None
+    while len(pending) < limit:
+        candidates = ModerationAudit.objects.filter(
+            action=ModerationAudit.Action.RECORD_CHANGED,
+            summary__kind="direct_dog_proposal",
+            dog__isnull=False,
+        )
+        if cursor is not None:
+            created_at, pk = cursor
+            candidates = candidates.filter(
+                Q(created_at__lt=created_at)
+                | Q(created_at=created_at, pk__lt=pk)
+            )
+        batch = list(
+            candidates.select_related("dog", "actor")
+            .order_by("-created_at", "-pk")[:batch_size]
+        )
+        if not batch:
+            break
+        _review_states(batch)
+        pending.extend(
+            event for event in batch if not event.review_state
+        )
+        if len(batch) < batch_size:
+            break
+        cursor = (batch[-1].created_at, batch[-1].pk)
+    return pending[:limit]
+
+
 @login_required
 def dog_edit_list(request):
     if not can_review_submissions(request.user):
