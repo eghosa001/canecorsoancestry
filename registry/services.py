@@ -1530,6 +1530,14 @@ def moderation_dog_ids(query, limit=30, *, fuzzy=True):
     except ValueError:
         pass
 
+    # A canonical slug is also accepted by Manage dog records. Exact slug
+    # lookup uses its unique index, without checking 35k dog rows.
+    if add(
+        Dog.objects.filter(slug__iexact=query)
+        .values_list("pk", flat=True)[:1]
+    ):
+        return ids
+
     # Most staff searches are exact names or the first characters of a name.
     # This fast path never needs registration/alias joins.
     for lookup in ("iexact", "istartswith", "icontains"):
@@ -1540,6 +1548,12 @@ def moderation_dog_ids(query, limit=30, *, fuzzy=True):
             return ids
 
     if len(query) >= 2:
+        # Partial slugs are uncommon; use only after indexed name matches.
+        if add(
+            Dog.objects.filter(slug__icontains=query)
+            .order_by("slug").values_list("pk", flat=True)[:limit]
+        ):
+            return ids
         for model, field in ((DogRegistration, "number"), (DogAlias, "name")):
             if add(
                 model.objects.filter(**{f"{field}__icontains": query})
