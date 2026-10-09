@@ -1,0 +1,44 @@
+name: Oracle PostgreSQL encrypted hourly backups
+on:
+  schedule:
+    - cron: "17 * * * *"
+  pull_request:
+    paths:
+      - "scripts/oracle_runner/backup_local_postgres.sh"
+      - "scripts/oracle_runner/r2_postgres_backup.py"
+      - ".github/workflows/oracle-hourly-db-backups.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/oracle_runner/backup_local_postgres.sh"
+permissions:
+  contents: read
+concurrency:
+  group: cca-local-postgres-hourly-backup
+  cancel-in-progress: false
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check backup and disaster recovery shell
+        run: |
+          bash -n scripts/oracle_runner/backup_local_postgres.sh
+          python3 -m py_compile scripts/oracle_runner/r2_postgres_backup.py
+          python3 scripts/fast_path_guard.py
+  backup:
+    if: >-
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'schedule')
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify local PostgreSQL backup in off-VM Cloudflare R2
+        shell: bash
+        run: bash scripts/oracle_runner/backup_local_postgres.sh
