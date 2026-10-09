@@ -172,11 +172,7 @@ jobs:
               targets+=("accounts.tests_moderation_intelligence")
               scoped_accounts=true
             fi
-
-            if grep -q '^accounts/tests_moderator_fast_review[.]py$' <<<"$changed"; then
-              targets+=("accounts.tests_moderator_fast_review")
-              scoped_accounts=true
-            fi
+            if grep -q '^accounts/tests_moderator_fast_review[.]py
 
             if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
               targets+=("accounts.tests_verification")
