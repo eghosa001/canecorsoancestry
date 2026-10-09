@@ -41,6 +41,7 @@ from .models import (
     VerificationEvent,
     VerificationState,
 )
+from .public_freshness import invalidate_public_content
 from .permissions import can_review_flagged_submissions, can_review_submissions, can_second_approve
 from .verification import verification_snapshot, verify_submission
 
@@ -925,18 +926,7 @@ def approve_submission(
             },
             note=resolution_notes,
         )
-    # Clearing Django's directory metadata after commit prevents a newly
-    # approved dog, photo, or kennel from leaving stale browse counts/filters.
-    # Public content at the Cloudflare edge has a separate freshness policy.
-    transaction.on_commit(
-        lambda: cache.delete_many(
-            [
-                "cca:dog-search:default-count:v1",
-                "cca:dog-search:countries:v3",
-                "cca:dog-search:kennels:v3",
-            ]
-        )
-    )
+    invalidate_public_content()
     return submission
 
 
