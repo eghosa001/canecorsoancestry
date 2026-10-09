@@ -1,0 +1,48 @@
+name: Oracle read-only public page exception diagnosis
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/oracle-public-page-diagnosis.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: >-
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.event.pull_request.head.repo.full_name == 'eghosa001/canecorsoancestry'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 5
+    steps:
+      - name: Verify public endpoints without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in "/healthz/" "/" "/dogs/" "/accounts/login/"; do
+            result="$(curl -sS --connect-timeout 3 --max-time 12 -o /dev/null -w '%{http_code}' "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev$path" || true)"
+            echo "public_route=$path status=$result"
+          done
+      - name: Run read-only in-process Django homepage and directory render with traceback
+        shell: bash
+        run: |
+          sudo -n podman exec -i cca-oracle-staging python - <<'PY'
+          import os, traceback, django
+          os.environ.setdefault("DJANGO_SETTINGS_MODULE", "scripts.oracle_runner.oracle_settings")
+          django.setup()
+          from django.test import RequestFactory
+          from core.views import home
+          from registry.views import dog_search
+          factory=RequestFactory()
+          for path, view in [("/", home), ("/dogs/", dog_search)]:
+              request=factory.get(path, secure=True, HTTP_HOST="canecorsoancestry-site-edge.aighewieghosa111.workers.dev")
+              print("IN_PROCESS_ROUTE", path, flush=True)
+              try:
+                  response=view(request)
+                  print("IN_PROCESS_STATUS", response.status_code, flush=True)
+              except Exception as exc:
+                  print("IN_PROCESS_EXCEPTION", type(exc).__name__, str(exc), flush=True)
+                  traceback.print_exc()
+          PY
+          echo "Read-only error diagnosis complete. No application or DB writes."
