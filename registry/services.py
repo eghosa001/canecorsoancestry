@@ -1548,9 +1548,9 @@ def moderation_dog_ids(query, limit=30, *, fuzzy=True):
             return ids
 
     if len(query) >= 2:
-        # Partial slugs are uncommon; use only after indexed name matches.
+        # Slug prefixes are a compatibility fallback for admin lookups.
         if add(
-            Dog.objects.filter(slug__icontains=query)
+            Dog.objects.filter(slug__istartswith=query)
             .order_by("slug").values_list("pk", flat=True)[:limit]
         ):
             return ids
