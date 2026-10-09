@@ -1,0 +1,27 @@
+name: Oracle moderator search latency spot check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    if: github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify live Oracle-local database (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = local
+          sudo -n systemctl is-active --quiet cca-pg-shadow.service
+          sudo -n systemctl is-active --quiet cca-oracle-staging.service
+      - name: Benchmark live moderator dog-search queries
+        shell: bash
+        run: sudo -n podman exec -i cca-oracle-staging python - < scripts/oracle_runner/benchmark_moderator_dogs.py
