@@ -212,12 +212,10 @@ def dog_search(request):
         )
     else:
         base_dogs = _public_dogs_with_images()
-    dogs = with_card_image(with_card_registration(
-        _dog_cards(
-            base_dogs, include_sources=False,
-            include_registrations=False, include_images=False,
-        )
-    ))
+    # Rank and paginate lightweight dog IDs first. Card image/registration
+    # subqueries must NOT be part of the ROW_NUMBER kennel ranking: doing so
+    # computed correlated card details for all matched dogs, costing seconds.
+    dogs = base_dogs
     if sex in {Dog.Sex.MALE, Dog.Sex.FEMALE, Dog.Sex.UNKNOWN}:
         dogs = dogs.filter(sex=sex)
     if country:
@@ -229,7 +227,7 @@ def dog_search(request):
         dogs = one_dog_per_kennel(dogs)
 
     dogs = dogs.order_by("name") if query else dogs.order_by("-search_count", "-updated_at", "name")
-    paginator = Paginator(dogs, 18)
+    paginator = Paginator(dogs.values_list("pk", flat=True), 18)
     if not query and not sex and not country and not kennel_slug:
         cached_count = cache.get("cca:dog-search:default-count:v1")
         # Corrupt/legacy cache values must never turn public browsing into
@@ -239,6 +237,20 @@ def dog_search(request):
             cache.set("cca:dog-search:default-count:v1", cached_count, 900)
         paginator.__dict__["count"] = cached_count
     page_obj = paginator.get_page(request.GET.get("page"))
+    page_ids = list(page_obj.object_list)
+    # Only the <=18 dogs on this page need their displayed media,
+    # registration and kennel. The order from the ranked ID query wins.
+    card_rows = with_card_image(with_card_registration(
+        _dog_cards(
+            Dog.objects.filter(pk__in=page_ids, is_public=True),
+            include_sources=False, include_registrations=False,
+            include_images=False,
+        )
+    ))
+    cards_by_id = {dog.pk: dog for dog in card_rows}
+    page_obj.object_list = [
+        cards_by_id[dog_id] for dog_id in page_ids if dog_id in cards_by_id
+    ]
     for dog in page_obj.object_list:
         dog.card_image_url = default_storage.url(dog.card_image_name) if dog.card_image_name else ""
     _attach_source_images_for_missing(page_obj.object_list)
