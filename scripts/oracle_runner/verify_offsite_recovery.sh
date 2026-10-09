@@ -66,5 +66,18 @@ sudo -n python3 scripts/oracle_runner/seal_postgres_backup.py open "$SEALED" "$D
 sudo -n podman run --rm --network host \
   -v "$TEMP:/backups:ro,Z" docker.io/library/postgres:17 \
   pg_restore --list /backups/recovered.dump > /dev/null
-echo "PASS: Oracle-primary R2 archive downloaded, SHA256 verified, authenticated, decrypted and parsed with pg_restore."
+# A decryptable but empty/schema-incomplete archive is not an acceptable
+# restore candidate. Ensure the main canonical and audit tables are present.
+sudo -n podman run --rm --network host \
+  -v "$TEMP:/backups:ro,Z" docker.io/library/postgres:17 \
+  pg_restore --list /backups/recovered.dump > "$RUNNER_TEMP/cca-restore-list-$GITHUB_RUN_ID.txt"
+for table in registry_dog registry_dogimage registry_submission django_migrations; do
+  if ! grep -Eq "TABLE DATA[[:space:]]+django_app[[:space:]]+${table}[[:space:]]" "$RUNNER_TEMP/cca-restore-list-$GITHUB_RUN_ID.txt"; then
+    echo "::error::Encrypted archive lacks required table data: $table"
+    rm -f "$RUNNER_TEMP/cca-restore-list-$GITHUB_RUN_ID.txt"
+    exit 1
+  fi
+done
+rm -f "$RUNNER_TEMP/cca-restore-list-$GITHUB_RUN_ID.txt"
+echo "PASS: Oracle-primary R2 archive downloaded, SHA256 verified, authenticated, decrypted and parsed with pg_restore; required application data tables are present."
 echo "Read-only recovery integrity check; no production tables or services modified."
