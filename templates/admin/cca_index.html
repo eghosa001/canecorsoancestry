@@ -1,0 +1,10 @@
+{% extends "admin/index.html" %}
+{% block content %}
+<section style="background:var(--body-bg);border:1px solid var(--hairline-color);padding:1.25rem;margin:0 0 1.5rem;border-radius:8px">
+  <h2 style="margin-top:0">Dog identity tools</h2>
+  <p>Found duplicate dog profiles? Compare the two records before combining their information, photos and pedigrees.</p>
+  <p><a class="button" href="{% url 'admin-merge-dogs' %}">Merge Dogs — Super Admin</a>
+     <a href="{% url 'admin:registry_mergehistory_changelist' %}" style="margin-left:1rem">View merge history</a></p>
+</section>
+{{ block.super }}
+{% endblock %}
