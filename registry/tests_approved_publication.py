@@ -80,6 +80,33 @@ class ApprovedPublicContentTests(TestCase):
         self.assertEqual(media.status_code, 200)
         self.assertTrue(media["Content-Type"].startswith("image/"))
 
+    def test_missing_uploaded_photo_cannot_be_approved_or_made_public(self, _verification):
+        sub = self.submission(
+            Submission.Kind.IMAGE, attachment=self.upload("now-missing.jpg"),
+            payload={"is_primary": True},
+        )
+        path = sub.attachment.name
+        sub.attachment.storage.delete(path)
+        with self.assertRaisesRegex(ValueError, "missing from media storage"):
+            self.approve(sub)
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, Submission.Status.PENDING)
+        self.assertFalse(DogImage.objects.filter(dog=self.dog).exists())
+        self.assertEqual(self.client.get("/media/" + path).status_code, 404)
+
+    def test_missing_new_dog_photo_blocks_approval_before_canonical_record_creation(self, _verification):
+        sub = self.submission(
+            Submission.Kind.DOG, attachment=self.upload("deleted-before-review.jpg"),
+            payload={"name": "Must Remain Pending", "sex": Dog.Sex.MALE},
+        )
+        sub.attachment.storage.delete(sub.attachment.name)
+        with self.assertRaisesRegex(ValueError, "missing from media storage"):
+            self.approve(sub)
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, Submission.Status.PENDING)
+        self.assertIsNone(sub.dog_id)
+        self.assertFalse(Dog.objects.filter(name="Must Remain Pending").exists())
+
     def test_non_primary_approved_photo_enters_gallery_without_replacing_main(self, _verification):
         primary = DogImage.objects.create(dog=self.dog, image="dogs/main.jpg", is_primary=True)
         sub = self.submission(
