@@ -403,8 +403,14 @@ def approve_submission(
     submission.refresh_from_db()
     resolution_notes = (resolution_notes or "").strip()
     if blocking_findings:
-        if allow_override and not can_review_flagged_submissions(reviewer):
-            raise ValueError("Only a Senior Moderator or Super Admin can override automated warnings.")
+        is_high_risk = (
+            submission.requires_second_review
+            or any(finding.risk_level == SubmissionRiskLevel.RED for finding in blocking_findings)
+        )
+        if allow_override and is_high_risk and not can_review_flagged_submissions(reviewer):
+            raise ValueError("Only a Senior Moderator or Super Admin can override red/high-risk warnings.")
+        if allow_override and not can_review_submissions(reviewer):
+            raise ValueError("An authorized Moderator must approve yellow warnings.")
         if not allow_override:
             raise ValueError(
                 "Automated verification warnings are present. Use Approve with override and provide a reason."
@@ -1493,50 +1499,87 @@ def duplicate_candidates(limit=30):
     return rows[:limit]
 
 
-def moderation_dog_search(query, limit=12):
-    """Search dog records for moderator duplicate review without loading the full database."""
-    query = (query or "").strip()
+def moderation_dog_ids(query, limit=30, *, fuzzy=True):
+    """Index-friendly, bounded dog lookup shared by moderation and edit screens.
+
+    Resolve exact/starts-with/substring/alias/registration matches FIRST using
+    existing name/alias/registration pg_trgm indexes. Only use fuzzy similarity
+    if no direct matches were found; do not join the ~35k-row dog table to two
+    one-to-many relations and apply a global similarity sort.
+    """
+    import uuid
+
+    query = (query or "").strip()[:160]
     if not query:
         return []
+    limit = max(1, min(int(limit), 50))
+    ids, seen = [], set()
 
-    base = (
-        Dog.objects.select_related("kennel", "sire", "dam")
-        .prefetch_related("registrations", "aliases")
-    )
+    def add(candidates):
+        for pk in candidates:
+            if pk not in seen:
+                seen.add(pk)
+                ids.append(pk)
+                if len(ids) >= limit:
+                    return True
+        return False
 
-    if connection.vendor == "postgresql":
-        rows = list(
-            base.annotate(name_similarity=TrigramSimilarity("name", query))
-            .filter(
-                Q(name_similarity__gte=0.16)
-                | Q(name__icontains=query)
-                | Q(aliases__name__icontains=query)
-                | Q(registrations__number__icontains=query)
+    try:
+        if add(Dog.objects.filter(pk=uuid.UUID(query)).values_list("pk", flat=True)[:1]):
+            return ids
+    except ValueError:
+        pass
+
+    # Most staff searches are exact names or the first characters of a name.
+    # This fast path never needs registration/alias joins.
+    for lookup in ("iexact", "istartswith", "icontains"):
+        if add(
+            Dog.objects.filter(**{f"name__{lookup}": query})
+            .order_by("name").values_list("pk", flat=True)[:limit]
+        ):
+            return ids
+
+    if len(query) >= 2:
+        for model, field in ((DogRegistration, "number"), (DogAlias, "name")):
+            if add(
+                model.objects.filter(**{f"{field}__icontains": query})
+                .order_by(field).values_list("dog_id", flat=True)[:limit]
+            ):
+                return ids
+
+    # Fuzzy typo search only after no direct match; PostgreSQL trigram operator
+    # uses the existing name GIN index instead of scanning similarity against
+    # every dog, and fetching only UUIDs avoids N+1 / wide data transfer.
+    if not ids and fuzzy and len(query) >= 3:
+        if connection.vendor == "postgresql":
+            candidates = (
+                Dog.objects.filter(name__trigram_similar=query)
+                .annotate(name_similarity=TrigramSimilarity("name", query))
+                .order_by("-name_similarity", "name")
+                .values_list("pk", flat=True)[:limit]
             )
-            .distinct()
-            .order_by("-name_similarity", "name")[:limit]
-        )
-        return rows
+            add(candidates)
+        else:
+            normalized_query = _normalized_name(query)
+            names = Dog.objects.order_by("name").values_list("pk", "name")[:1000]
+            scored = [
+                (SequenceMatcher(None, normalized_query, _normalized_name(name)).ratio(), pk)
+                for pk, name in names
+            ]
+            scored.sort(key=lambda row: -row[0])
+            add(pk for ratio, pk in scored if ratio >= 0.45)
+    return ids
 
-    direct = list(
-        base.filter(
-            Q(name__icontains=query)
-            | Q(aliases__name__icontains=query)
-            | Q(registrations__number__icontains=query)
-        )
-        .distinct()
-        .order_by("name")[:limit]
-    )
-    if direct:
-        return direct
 
-    normalized_query = _normalized_name(query)
-    scored = []
-    for dog in base.order_by("name")[:1000]:
-        ratio = SequenceMatcher(
-            None, normalized_query, _normalized_name(dog.name)
-        ).ratio()
-        if ratio >= 0.45:
-            scored.append((ratio, dog))
-    scored.sort(key=lambda item: (-item[0], item[1].name.lower()))
-    return [dog for _, dog in scored[:limit]]
+def moderation_dog_search(query, limit=12):
+    """Fetch only the few identified candidates after inexpensive ID lookup."""
+    ids = moderation_dog_ids(query, limit=limit)
+    if not ids:
+        return []
+    rows = {
+        dog.pk: dog for dog in
+        Dog.objects.filter(pk__in=ids)
+        .select_related("kennel", "sire", "dam")
+        .prefetch_related("registrations", "aliases")
+    }
+    return [rows[pk] for pk in ids if pk in rows]
