@@ -32,6 +32,7 @@ row = Dog.objects.order_by("name").values_list("name", flat=True).first()
 alias = DogAlias.objects.order_by("pk").values_list("name", flat=True).first()
 reg = DogRegistration.objects.order_by("pk").values_list("number", flat=True).first()
 print("SEARCH_BENCH_BACKEND=" + connection.vendor, flush=True)
+assert connection.vendor == "postgresql", "Only measure the authoritative PostgreSQL backend"
 median_probe("exact", row)
 median_probe("prefix", row[:7] if row else "")
 median_probe("alias", alias)
