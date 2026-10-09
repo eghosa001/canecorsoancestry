@@ -16,8 +16,27 @@
 
   <section class="panel">
     <div class="panel-heading"><h2>My saved pairings</h2><span>{{ pairings|length }} of 30</span></div>
+    {% if pairings|length >= 2 %}
+      <form id="saved-compare-form" method="get" action="{% url 'accounts:compare-saved-pairings' %}" class="member-form" aria-label="Compare private saved pairings">
+        <div class="button-row">
+          <label for="comparison-depth">Analysis depth</label>
+          <select name="generations" id="comparison-depth">
+            <option value="4">4 generations</option>
+            <option value="6">6 generations</option>
+            <option value="8" selected>8 generations</option>
+            <option value="10">10 generations</option>
+          </select>
+          <button class="btn btn-gold" type="submit">Compare 2–3 selected pairings</button>
+        </div>
+        <p class="muted">Tick two or three saved pairings below. The comparison is private and uses current published ancestry; it does not create a litter.</p>
+      </form>
+    {% endif %}
     {% for pairing in pairings %}
       <article class="panel" style="margin:1rem 0">
+        {% if pairings|length >= 2 %}
+          <div class="button-row"><input type="checkbox" id="compare-{{ pairing.pk }}" name="pairing" value="{{ pairing.pk }}" form="saved-compare-form">
+            <label for="compare-{{ pairing.pk }}">Include in side-by-side comparison</label></div>
+        {% endif %}
         <h3>{% if pairing.label %}{{ pairing.label }}{% else %}{{ pairing.sire.name|default:"Parent unavailable" }} × {{ pairing.dam.name|default:"Parent unavailable" }}{% endif %}</h3>
         <p><strong>Sire:</strong> {% if pairing.sire %}{{ pairing.sire.name }}{% else %}Previously saved sire retired{% endif %}
           &nbsp; · &nbsp; <strong>Dam:</strong> {% if pairing.dam %}{{ pairing.dam.name }}{% else %}Previously saved dam retired{% endif %}</p>

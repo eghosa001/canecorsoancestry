@@ -33,6 +33,7 @@ urlpatterns = [
     path("submit/kennel/", views.member_account_only(views.submit_kennel), name="submit-kennel"),
     path("research/pairings/", views.saved_pairings, name="saved-pairings"),
     path("research/pairings/save/", views.save_research_pairing, name="save-pairing"),
+    path("research/pairings/compare/", views.compare_saved_pairings, name="compare-saved-pairings"),
     path("research/pairings/<uuid:pk>/delete/", views.delete_saved_pairing, name="delete-saved-pairing"),
     path("pedigrees/", views.member_account_only(views.my_pedigrees), name="my-pedigrees"),
     path("pedigrees/<uuid:pk>/", views.member_account_only(views.member_pedigree_detail), name="member-pedigree"),
