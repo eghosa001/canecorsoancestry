@@ -8,6 +8,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 
 from registry.models import Dog
+from registry.permissions import can_use_member_features
 from registry.querysets import public_dog_match_filter
 
 from .services import (
@@ -261,5 +262,6 @@ def virtual_mating(request):
             "generations": generations,
             "generation_options": sorted(ALLOWED_GENERATIONS),
             "error": error,
+            "can_save_research": can_use_member_features(request.user),
         },
     )

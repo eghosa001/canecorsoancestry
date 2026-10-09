@@ -131,3 +131,43 @@ class PaymentSubmissionLink(models.Model):
 
     def __str__(self):
         return f"{self.payment.reference} · {self.get_slot_kind_display()}"
+
+
+class SavedPairing(models.Model):
+    """A private research bookmark, not a litter, submission or mating record."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    member = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="saved_ancestry_pairings",
+    )
+    sire = models.ForeignKey(
+        "registry.Dog", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    dam = models.ForeignKey(
+        "registry.Dog", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+    )
+    label = models.CharField(max_length=120, blank=True)
+    notes = models.CharField(max_length=700, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("member", "sire", "dam"), name="saved_pairing_member_parents_unique",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.sire_id and self.dam_id and self.sire_id == self.dam_id:
+            raise ValidationError("The saved sire and dam cannot be the same dog.")
+        # A retired duplicate can leave one parent blank until the member
+        # selects another parent. The bookmark stays private and is not deleted.
+
+    def __str__(self):
+        return self.label or f"Saved pairing {self.pk}"

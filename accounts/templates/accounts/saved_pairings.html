@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Saved pairing research · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <div>
+      <p class="eyebrow">Private member research</p>
+      <h1>Saved breeding comparisons</h1>
+      <p>Keep up to 30 hypothetical pairings for later research. These bookmarks never create a litter, register a dog, or publish member information.</p>
+    </div>
+    <div class="button-row">
+      <a class="btn btn-gold" href="{% url 'pedigrees:virtual-mating' %}">Explore a pairing</a>
+      <a class="btn btn-outline" href="{% url 'dashboard' %}">My dashboard</a>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="panel-heading"><h2>My saved pairings</h2><span>{{ pairings|length }} of 30</span></div>
+    {% for pairing in pairings %}
+      <article class="panel" style="margin:1rem 0">
+        <h3>{% if pairing.label %}{{ pairing.label }}{% else %}{{ pairing.sire.name|default:"Parent unavailable" }} × {{ pairing.dam.name|default:"Parent unavailable" }}{% endif %}</h3>
+        <p><strong>Sire:</strong> {% if pairing.sire %}{{ pairing.sire.name }}{% else %}Previously saved sire retired{% endif %}
+          &nbsp; · &nbsp; <strong>Dam:</strong> {% if pairing.dam %}{{ pairing.dam.name }}{% else %}Previously saved dam retired{% endif %}</p>
+        {% if pairing.notes %}<p>{{ pairing.notes }}</p>{% endif %}
+        {% if pairing.sire and pairing.dam and pairing.sire.is_public and pairing.dam.is_public %}
+          <p><a class="btn btn-outline" href="{% url 'pedigrees:virtual-mating' %}?sire={{ pairing.sire.pk }}&amp;dam={{ pairing.dam.pk }}&amp;generations=8">Reanalyse with current pedigree</a></p>
+        {% else %}
+          <p class="muted">This pairing needs a published parent before it can be analysed again; your private bookmark is retained.</p>
+        {% endif %}
+        <form action="{% url 'accounts:delete-saved-pairing' pairing.pk %}" method="post">
+          {% csrf_token %}
+          <button class="btn btn-outline" type="submit" onclick="return confirm('Remove this private saved pairing?')">Remove saved pairing</button>
+        </form>
+      </article>
+    {% empty %}
+      <p class="muted">No pairings saved yet. Analyse two published dogs using Virtual mating, then save the result here.</p>
+    {% endfor %}
+  </section>
+</section>
+{% endblock %}
