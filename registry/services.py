@@ -1096,17 +1096,46 @@ def merge_dogs(canonical, duplicate, performed_by=None):
             else None
         )
 
-    for field in (
-        "date_of_birth",
-        "colour",
-        "country",
-        "bloodline",
-        "kennel",
-        "litter",
-        "bio",
-    ):
-        if not getattr(canonical, field) and getattr(duplicate, field):
-            setattr(canonical, field, getattr(duplicate, field))
+    # A merge is a union of verified identity evidence, not a replacement.
+    # Keep existing canonical facts; fill gaps and record conflicting values
+    # in the immutable merge history so no competing evidence vanishes.
+    summary["field_conflicts"] = {}
+    summary["filled_fields"] = []
+    if canonical.sex == Dog.Sex.UNKNOWN and duplicate.sex != Dog.Sex.UNKNOWN:
+        canonical.sex = duplicate.sex
+        summary["filled_fields"].append("sex")
+    elif (canonical.sex != Dog.Sex.UNKNOWN and duplicate.sex != Dog.Sex.UNKNOWN
+          and canonical.sex != duplicate.sex):
+        raise ValueError("Conflicting recorded sexes. Resolve the sex before merging.")
+
+    for field in ("sire", "dam", "date_of_birth", "colour", "country",
+                  "bloodline", "kennel", "litter"):
+        original = getattr(canonical, field)
+        incoming = getattr(duplicate, field)
+        if not original and incoming:
+            if field in {"sire", "dam"} and _is_ancestor(canonical.pk, incoming.pk):
+                raise ValueError("The duplicate parentage would create a pedigree cycle.")
+            setattr(canonical, field, incoming)
+            summary["filled_fields"].append(field)
+        elif original and incoming and original != incoming:
+            if field in {"sire", "dam", "kennel", "litter"}:
+                original_value, incoming_value = str(original.pk), str(incoming.pk)
+            else:
+                original_value, incoming_value = str(original), str(incoming)
+            summary["field_conflicts"][field] = {
+                "kept": original_value, "retired_record": incoming_value,
+            }
+
+    if not canonical.bio:
+        canonical.bio = duplicate.bio
+        if duplicate.bio:
+            summary["filled_fields"].append("bio")
+    elif duplicate.bio and duplicate.bio.strip() != canonical.bio.strip():
+        canonical.bio += (
+            "\\n\\nAdditional notes from merged record (" + retired_name + "):\\n"
+            + duplicate.bio
+        )
+        summary["filled_fields"].append("additional_bio")
 
     verification_rank = {
         VerificationState.COMMUNITY: 0,
