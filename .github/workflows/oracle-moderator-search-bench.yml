@@ -2,6 +2,11 @@ name: Oracle moderator search latency spot check
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/oracle_runner/benchmark_moderator_dogs.py"
+      - ".github/workflows/oracle-moderator-search-bench.yml"
 
 permissions:
   contents: read
