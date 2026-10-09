@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Manual-only, non-cutover Oracle Django staging. Never opens public ports.
+# Manual-only Oracle Django update; never changes Cloudflare routing or opens public ports.
+# IMPORTANT: If Oracle is production, this briefly restarts the live Django origin.
 set -euo pipefail
 umask 077
 
@@ -233,9 +234,9 @@ then
 fi
 
 echo "PASS: Oracle CCA stage is healthy at 127.0.0.1:18080; DB and R2 work."
-echo "Production traffic STILL targets Northflank. No public ingress was opened."
+echo "Oracle container updated; Cloudflare routing was not modified. If Oracle is serving production, this was a live Django restart."
 {
-  echo "## Oracle staging completed (not traffic cutover)"
+  echo "## Oracle Django container update completed (Cloudflare routing unchanged)"
   echo ""
   echo "- ARM64 source commit: $GITHUB_SHA"
   echo "- Service: $APP_SERVICE (enabled)"
@@ -243,5 +244,5 @@ echo "Production traffic STILL targets Northflank. No public ingress was opened.
   echo "- Supabase: reachable, migrations current; schema unchanged"
   echo "- Cloudflare R2: authenticated upload/read/delete probe passed"
   echo "- Edge authentication: direct access denied; trusted login succeeded"
-  echo "- Public Cloudflare origin: Northflank, unchanged"
+  echo "- Public Cloudflare Worker origin: unchanged by this workflow; Oracle may already be the active production host"
 } >> "$GITHUB_STEP_SUMMARY"
