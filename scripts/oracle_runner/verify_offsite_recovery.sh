@@ -48,7 +48,7 @@ assert p.get("mode")=="local", "Backup pointer is not from Oracle primary"
 assert p.get("encrypted") is True and p.get("schema")=="django_app"
 key=p.get("archive_key","")
 sha=p.get("sha256","")
-assert re.fullmatch(r"private-cca-postgres-backups/v1/local-[A-Za-z0-9_.-]+\\.sealed",key), "Invalid archive key"
+assert re.fullmatch(r"private-cca-postgres-backups/v1/local-[A-Za-z0-9_.-]+[.]sealed",key), "Invalid archive key"
 assert re.fullmatch(r"[0-9a-f]{64}",sha), "Invalid checksum"
 age=(datetime.now(timezone.utc)-datetime.strptime(p["created_utc"],"%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)).total_seconds()
 assert -300 < age < 4*3600, "Most recent offsite backup is older than four hours"
