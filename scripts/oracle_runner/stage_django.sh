@@ -153,7 +153,7 @@ else
   # Exactly one additive, reviewed table is permitted. Never run generic
   # migrations against production merely because a new release includes them.
   sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
-    "$IMAGE" python scripts/oracle_runner/allowlisted_schema_migration.py
+    "$IMAGE" python -m scripts.oracle_runner.allowlisted_schema_migration
   echo "Creating and verifying an encrypted off-VM production DB backup first."
   bash scripts/oracle_runner/backup_local_postgres.sh
   echo "Applying the one approved additive accounts migration."
