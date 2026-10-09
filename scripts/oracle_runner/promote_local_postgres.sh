@@ -28,7 +28,18 @@ sudo -n podman container exists "$PG"
 sudo -n test -s /etc/cca/pgshadow-postgres.env
 sudo -n test -s /etc/cca/oracle-stage.env
 sudo -n systemctl is-active --quiet cca-oracle-staging.service
-sudo -n systemctl is-active --quiet cca-cloudflared-vpc.service
+# The Cloudflare VPC connector is a restartable systemd unit. It can be
+# inactive after an earlier safe rollback even while the public edge remains
+# healthy through another connector. Ensure this specific service is up
+# BEFORE the write-freeze (or abort without affecting production).
+if ! sudo -n systemctl is-active --quiet cca-cloudflared-vpc.service; then
+  echo "Oracle VPC tunnel unit inactive; starting it before any DB or site changes."
+  sudo -n systemctl start cca-cloudflared-vpc.service
+fi
+sudo -n systemctl is-active --quiet cca-cloudflared-vpc.service || {
+  echo "::error::Oracle private VPC connector service cannot be started; no cutover."
+  exit 1
+}
 sudo -n podman inspect cca-oracle-staging --format '{{json .Mounts}}' | grep -q '"/run/cca"'
 sudo -n test "$(df -Pk / | awk 'END{print $4}')" -gt 6291456
 sudo -n test "$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)" -gt 1000000
