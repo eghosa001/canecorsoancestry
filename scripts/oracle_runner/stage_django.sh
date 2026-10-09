@@ -117,13 +117,13 @@ echo "Building pinned CCA commit for linux/arm64 on Oracle."
 sudo -n "$PODMAN_BIN" build --pull=missing --tag "$IMAGE" .
 
 run_network=(--network cca-private)
-  sudo -n test -s /etc/cca/pg-live-app.env || {
-    echo "::error::Local DB mode requires a verified private Postgres connection"; exit 1;
+sudo -n test -s /etc/cca/pg-live-app.env || {
+  echo "::error::Local DB mode requires a verified private Postgres connection"; exit 1;
   }
-  sudo -n podman exec cca-pg-shadow pg_isready -h 127.0.0.1     -U cca_shadow_admin -d cca_live >/dev/null || {
-    echo "::error::Local primary database is unavailable"; exit 1;
+sudo -n podman exec cca-pg-shadow pg_isready -h 127.0.0.1     -U cca_shadow_admin -d cca_live >/dev/null || {
+  echo "::error::Local primary database is unavailable"; exit 1;
   }
-  # On hardened Oracle Linux, root cannot open an opc-owned mktemp(0600)
+# On hardened Oracle Linux, root cannot open an opc-owned mktemp(0600)
 # file in /tmp for writing (fs.protected_regular). Have the unprivileged
 # shell open the destination, while root *only* reads the 0600 live DB
 # credential and writes its validated value to that existing descriptor.
@@ -139,7 +139,7 @@ assert urls[0].startswith("postgresql://cca_app:")
 assert not any(char in urls[0] for char in ("\n","\r","\0"))
 print("DATABASE_URL="+urls[0])
 PY
-  echo "Using verified Oracle-local PostgreSQL primary via private network."
+echo "Using verified Oracle-local PostgreSQL primary via private network."
 
 echo "Checking the production schema has no outstanding migrations."
 sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
