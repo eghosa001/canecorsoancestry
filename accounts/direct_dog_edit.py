@@ -223,6 +223,8 @@ def _save_formsets(dog, sets):
         # Delete first, so unique registration/identity values can be reused.
         for form in formset.forms:
             if form.cleaned_data and form.cleaned_data.get("DELETE") and form.instance.pk:
+                if name in {"health_records", "sources"} and form.instance.verification_events.exists():
+                    raise ValidationError("This record has verification history. Update it rather than deleting linked evidence.")
                 form.instance.delete()
         for form in formset.forms:
             if not form.cleaned_data or form.cleaned_data.get("DELETE"):
@@ -255,6 +257,8 @@ def _restore(dog, target):
         existing = {item.pk: item for item in model.objects.filter(dog=dog)}
         for pk, item in existing.items():
             if pk not in incoming:
+                if name in {"health_records", "sources"} and item.verification_events.exists():
+                    raise ValidationError("Reversal would erase later verification history. Use a new super-admin override instead.")
                 item.delete()
         if name == "images":
             model.objects.filter(dog=dog, is_primary=True).update(is_primary=False)
