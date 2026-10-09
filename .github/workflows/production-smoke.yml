@@ -10,7 +10,7 @@ on:
       - "scripts/cross_browser_smoke.py"
       - ".github/workflows/production-smoke.yml"
   workflow_run:
-    workflows: ["Cloudflare site edge"]
+    workflows: ["Cloudflare site edge", "Oracle Django production release (CI-gated)"]
     types: [completed]
 
 permissions:
@@ -45,7 +45,7 @@ jobs:
     timeout-minutes: 18
     env:
       PRODUCTION_BASE_URL: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
-      EXPECTED_EDGE_CACHE_VERSION: ${{ github.event_name == 'workflow_run' && format('edge-{0}', github.event.workflow_run.id) || '' }}
+      EXPECTED_EDGE_CACHE_VERSION: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Cloudflare site edge' && format('edge-{0}', github.event.workflow_run.id) || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
