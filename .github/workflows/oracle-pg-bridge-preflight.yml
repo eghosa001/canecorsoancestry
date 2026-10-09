@@ -1,0 +1,39 @@
+name: Oracle private PostgreSQL bridge preflight
+on:
+  pull_request:
+    paths:
+      - "scripts/oracle_runner/preflight_pg_private_bridge.sh"
+      - ".github/workflows/oracle-pg-bridge-preflight.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/oracle_runner/preflight_pg_private_bridge.sh"
+permissions:
+  contents: read
+concurrency:
+  group: oracle-django-stage-refs/heads/main
+  cancel-in-progress: false
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          bash -n scripts/oracle_runner/preflight_pg_private_bridge.sh
+          python3 scripts/fast_path_guard.py
+  preflight:
+    if: >-
+      github.event_name == 'push' &&
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Probe Django, local PostgreSQL and outbound R2 from internal bridge
+        shell: bash
+        run: bash scripts/oracle_runner/preflight_pg_private_bridge.sh
