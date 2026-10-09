@@ -285,6 +285,10 @@ async function timedOriginGet(env, path, timeoutMs, userAgent, accept) {
       headers: {
         accept,
         "user-agent": userAgent,
+        // Production Django enforces HTTPS, even behind a private HTTP tunnel.
+        // Without this trusted proxy marker, login checks redirect to HTTPS
+        // and /__edge/auth-ready remains 202 while /healthz/ passes.
+        "x-forwarded-proto": "https",
         "x-cca-edge": "1",
         "x-cca-origin-secret": env.ORIGIN_EDGE_SECRET || "",
       },

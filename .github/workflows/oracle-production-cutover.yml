@@ -13,6 +13,8 @@ on:
       - "scripts/oracle_runner/edge_origin_mode.py"
       - "scripts/oracle_runner/production_cutover.py"
       - "scripts/tests/test_edge_origin_mode.py"
+      - "scripts/tests/test_oracle_cutover_readiness.py"
+      - "src/site-edge.js"
       - ".github/workflows/oracle-production-cutover.yml"
 
 permissions:
@@ -33,7 +35,7 @@ jobs:
         run: |
           python3 -m py_compile scripts/oracle_runner/production_cutover.py
           python3 -m scripts.oracle_runner.production_cutover --help
-          python3 -m unittest scripts.tests.test_edge_origin_mode
+          python3 -m unittest scripts.tests.test_edge_origin_mode scripts.tests.test_oracle_cutover_readiness
           python3 scripts/fast_path_guard.py
 
   switch:
