@@ -448,6 +448,20 @@ def main():
             raise AssertionError("Dog profile still shows the verification badge beside the name")
         if "SOURCE ATTACHED" in detail_page.locator("body").inner_text().upper():
             raise AssertionError("Dog profile still exposes the Source attached verification label")
+        # Production COI must be visible, and unknown links must never be
+        # misrepresented as proof that a dog has no genetic inbreeding.
+        facts = detail_page.locator(".profile-facts").inner_text()
+        if "COI" not in facts or not any(marker in facts for marker in ("%", "Cannot calculate")):
+            raise AssertionError(f"Public dog profile has no COI: {facts[:240]}")
+        profile_photo = detail_page.locator(".profile-photo img")
+        if profile_photo.count():
+            fidelity = profile_photo.first.evaluate("""img => ({
+              fit: getComputedStyle(img).objectFit,
+              transform: getComputedStyle(img).transform,
+              bg: getComputedStyle(img.parentElement).backgroundColor,
+            })""")
+            if fidelity["fit"] != "contain" or fidelity["transform"] != "none":
+                raise AssertionError(f"Public dog photo is cropped or zoomed: {fidelity}")
         detail_page.screenshot(path=OUT / "dog-profile-desktop.png", full_page=True)
         report["details"].append({
             "dog_profile": detail_page.url,
@@ -729,9 +743,15 @@ def main():
             pedigree_mobile.close()
 
         private = browser.new_page(viewport={"width": 390, "height": 844})
-        response = private.goto(f"{BASE_URL}/dashboard/", wait_until="domcontentloaded")
-        if not response or response.status >= 500 or "/accounts/login/" not in private.url:
-            raise AssertionError(f"Private dashboard did not redirect safely: {private.url}")
+        for protected_path in (
+            "/dashboard/",
+            "/member/moderation/merge-dogs/",
+            "/member/moderation/verification/",
+            "/member/moderation/dogs/",
+        ):
+            response = private.goto(f"{BASE_URL}{protected_path}", wait_until="domcontentloaded")
+            if not response or response.status >= 500 or "/accounts/login/" not in private.url:
+                raise AssertionError(f"Private {protected_path} did not redirect safely: {private.url}")
         private.close()
 
         browser.close()
