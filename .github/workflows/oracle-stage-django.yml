@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       deployment:
-        description: "Prepare localhost-only Oracle staging; do not switch traffic"
+        description: "Update Oracle Django container (live restart if Oracle serves production); no traffic cutover"
         required: true
         type: choice
         options: [stage-only]
@@ -57,6 +57,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Deploy and smoke-test Oracle staging without touching live origin
+      - name: Update and verify Oracle Django container; do not change Cloudflare routing
         shell: bash
         run: bash scripts/oracle_runner/stage_django.sh
