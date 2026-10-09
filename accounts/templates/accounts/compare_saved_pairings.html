@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Compare saved matings · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <div>
+      <p class="eyebrow">Private member research</p>
+      <h1>Compare saved matings</h1>
+      <p>Side-by-side ancestry measures for two or three hypothetical pairings. These are calculated now from public pedigree links, not from a saved or outdated result.</p>
+    </div>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'accounts:saved-pairings' %}">← Saved research</a>
+      <a class="btn btn-outline" href="{% url 'pedigrees:virtual-mating' %}">Virtual mating</a>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div><p class="eyebrow">Research comparison</p><h2>{{ generations }} generations</h2></div>
+      <span>{{ comparisons|length }} pairing{{ comparisons|length|pluralize }}</span>
+    </div>
+    <p class="muted">This is a comparison of recorded ancestry only, not a breeding recommendation, a health certificate or a guarantee of genetic diversity. A displayed 0.00% means no inbreeding was established from the linked ancestry; it does not establish zero genetic risk. The coverage figures show how much of the requested pedigree is known.</p>
+    <div class="table-scroll" role="region" tabindex="0" aria-label="Side-by-side saved mating comparison">
+      <table class="data-table">
+        <caption>Comparison of hypothetical matings based on current published ancestry</caption>
+        <thead>
+          <tr>
+            <th scope="col">Saved pairing</th>
+            <th scope="col">Parents</th>
+            <th scope="col">Projected offspring COI</th>
+            <th scope="col">Pedigree coverage</th>
+            <th scope="col">Known ancestor positions</th>
+            <th scope="col">Shared ancestors</th>
+            <th scope="col">Parent COIs</th>
+            <th scope="col">Parent relationship</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in comparisons %}
+            <tr>
+              <th scope="row">{{ row.pairing.label|default:"Untitled pairing" }}</th>
+              {% if row.analysis %}
+                <td>
+                  <a href="{% url 'registry:dog-detail' row.sire.slug %}">{{ row.sire.name }}</a>
+                  ×
+                  <a href="{% url 'registry:dog-detail' row.dam.slug %}">{{ row.dam.name }}</a>
+                  <p><a href="{% url 'pedigrees:virtual-mating' %}?sire={{ row.sire.pk }}&amp;dam={{ row.dam.pk }}&amp;generations={{ generations }}">Full analysis →</a></p>
+                </td>
+                <td><strong>{{ row.analysis.projected_percent|floatformat:2 }}%</strong></td>
+                <td>{{ row.analysis.coverage_percent|floatformat:1 }}%</td>
+                <td>{{ row.analysis.known_slots }} / {{ row.analysis.total_slots }}</td>
+                <td>{{ row.analysis.shared_ancestors }}</td>
+                <td>Sire: {{ row.analysis.sire_percent|floatformat:2 }}%
+                  <div>Dam: {{ row.analysis.dam_percent|floatformat:2 }}%</div>
+                </td>
+                <td>{{ row.analysis.relationship_percent|floatformat:2 }}%</td>
+              {% else %}
+                <td colspan="7"><span class="muted">Analysis unavailable: {{ row.error }}</span></td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted">Do not rank low-coverage pedigrees as safer. Health screening, DNA evidence, welfare, temperament and veterinary advice are separate considerations. No dog, litter or registration is created by this page.</p>
+  </section>
+</section>
+{% endblock %}
