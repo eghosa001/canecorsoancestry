@@ -1393,12 +1393,13 @@ def moderation_queue(request):
     if query:
         pending = pending.filter(
             Q(submitted_by__username__icontains=query)
+            | Q(payload__name__icontains=query)
             | Q(dog__name__icontains=query)
             | Q(kennel__name__icontains=query)
             | Q(litter__code__icontains=query)
             | Q(document__title__icontains=query)
             | Q(notes__icontains=query)
-        ).distinct()
+        )
     if kind in dict(Submission.Kind.choices):
         pending = pending.filter(kind=kind)
     if priority.isdigit() and int(priority) in dict(Submission.Priority.choices):
@@ -1578,6 +1579,9 @@ def moderation_submission_detail(request, pk):
         for finding in findings
         if finding.risk_level != SubmissionRiskLevel.GREEN
     ]
+    has_critical_warning = submission.requires_second_review or any(
+        finding.risk_level == SubmissionRiskLevel.RED for finding in blocking_findings
+    )
     check_rows = verification_checklist(submission)
 
     litter_submission = None
@@ -1657,6 +1661,12 @@ def moderation_submission_detail(request, pk):
             "audit_events": audit_events,
             "pending_override": pending_override,
             "can_review_flagged": can_review_flagged_submissions(request.user),
+            "can_approve_yellow": bool(
+                blocking_findings
+                and not has_critical_warning
+                and can_review_submissions(request.user)
+            ),
+            "has_critical_warning": has_critical_warning,
             "can_second_approve": bool(
                 pending_override
                 and pending_override.reviewer_id != request.user.pk
@@ -1690,6 +1700,9 @@ def review_submission(request, pk, decision):
         finding.risk_level != SubmissionRiskLevel.GREEN
         for finding in findings
     )
+    high_risk = submission.requires_second_review or any(
+        finding.risk_level == SubmissionRiskLevel.RED for finding in findings
+    )
     try:
         if decision == "approve":
             if flagged:
@@ -1700,9 +1713,9 @@ def review_submission(request, pk, decision):
             messages.success(request, "Submission approved.")
 
         elif decision == "reject":
-            if flagged and not can_review_flagged_submissions(request.user):
+            if high_risk and not can_review_flagged_submissions(request.user):
                 raise ValueError(
-                    "A Senior Moderator or Super Admin must decide a flagged submission."
+                    "A Senior Moderator or Super Admin must decide a red/high-risk submission."
                 )
             reject_submission(submission, request.user, notes)
             messages.success(request, "Submission rejected.")
@@ -1712,9 +1725,9 @@ def review_submission(request, pk, decision):
             messages.success(request, "Evidence requested from the submitting member.")
 
         elif decision == "override":
-            if not can_review_flagged_submissions(request.user):
+            if high_risk and not can_review_flagged_submissions(request.user):
                 raise ValueError(
-                    "Only a Senior Moderator or Super Admin can override an automated warning."
+                    "Red/high-risk warnings require a Senior Moderator or Super Admin."
                 )
             if not flagged:
                 raise ValueError("There is no current warning to override.")
