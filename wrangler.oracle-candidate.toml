@@ -1,0 +1,18 @@
+# Oracle candidate only. Production origin is still Northflank.
+name = "canecorsoancestry-oracle-candidate"
+main = "src/site-edge.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["global_fetch_strictly_public"]
+workers_dev = true
+
+[observability]
+enabled = true
+
+[vars]
+ORIGIN_URL = "http://127.0.0.1:18080"
+ORIGIN_TRANSPORT = "private-vpc"
+CANDIDATE_FORWARD_HOST = "canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+
+[[vpc_services]]
+binding = "ORIGIN_VPC"
+service_id = "REPLACE_WITH_PROVISIONED_ID"
