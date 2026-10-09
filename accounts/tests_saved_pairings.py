@@ -204,7 +204,7 @@ class SavedPairingTests(TestCase):
         }).status_code, 400)
         self.assertEqual(self.client.get(self.compare_url(first, first, depth=999)).status_code, 400)
         self.assertEqual(self.client.get(base, {
-            "pairing": [str(first.pk)] * 2000
+            "pairing": [str(first.pk)] * 4
         }).status_code, 400)
 
     def test_comparison_handles_unpublished_parent_without_leak_or_mutation(self):
