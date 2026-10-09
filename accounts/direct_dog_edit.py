@@ -497,14 +497,14 @@ def dog_review_edit(request, pk, audit_id):
                     raise ValidationError("Choose Approve or Reject for a pending proposal.")
                 if decision == "approve":
                     for field, original in event.summary["before_protected"].items():
-                        if _safe_value(getattr(dog, field)) != original:
+                        if _current_change(dog, field) != original:
                             raise ValidationError(
                                 "These ancestry values changed after the proposal. "
                                 "Review the latest dog record and resubmit instead."
                             )
                     before = _snapshot(dog)
                     for field, value in event.summary["proposed_changes"].items():
-                        setattr(dog, field, value)
+                        setattr(dog, Dog._meta.get_field(field).attname, value)
                     dog.full_clean()
                     dog.save()
                     after = _snapshot(dog)
