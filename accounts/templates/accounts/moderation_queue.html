@@ -8,7 +8,7 @@
       <h1>Fact-check & review queue</h1>
       <p>Check submitted facts and evidence before approval, compare proposed changes against canonical data, investigate disputes, and merge duplicates deliberately.</p>
     </div>
-    <div class="button-row">{% if can_manage_verification %}<a class="btn btn-gold" href="{% url 'accounts:verification-dashboard' %}">Verification control</a>{% endif %}<a class="btn btn-outline" href="{% url 'accounts:data-health' %}">Data health</a><a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a></div>
+    <div class="button-row"><a class="btn btn-gold" href="{% url 'accounts:dog-edit-list' %}">Manage dogs</a>{% if can_manage_verification %}<a class="btn btn-gold" href="{% url 'accounts:verification-dashboard' %}">Verification control</a>{% endif %}<a class="btn btn-outline" href="{% url 'accounts:data-health' %}">Data health</a><a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a></div>
   </header>
 
   <form class="moderation-filters" method="get">
