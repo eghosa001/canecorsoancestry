@@ -46,23 +46,44 @@ sudo -n test "$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)" -gt 1000000
 sudo -n podman exec "$PG" pg_isready -h 127.0.0.1 -U cca_shadow_admin -d "$SRC_DB" >/dev/null
 existing="$(sudo -n podman exec "$PG" psql -X -At -U cca_shadow_admin -d "$SRC_DB" -c \
   "SELECT COUNT(*) FROM pg_database WHERE datname='cca_live'")"
-[[ "$existing" == 0 ]] || { echo "::error::Live DB already exists, refusing replacement"; exit 1; }
-# A previous pre-write rollout may have restored data into cca_live but
-# safely reverted to Supabase. Only clean that unpromoted copy when the live
-# Django health marker explicitly proves Supabase is authoritative, and only
-# if there are no application connections to the orphaned local database.
-live_backend="$(curl -fsS --connect-timeout 3 --max-time 10 "$URL/healthz/" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("database_backend","unknown"))')"
+# A previous aborted *pre-write* cutover may have created cca_live.
+# Only discard that copy when production health proves Supabase is primary.
+live_backend="$(curl -fsS --connect-timeout 3 --max-time 10 "$URL/healthz/" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("database_backend","unknown"))')"
 [[ "$live_backend" == supabase ]] || {
-  echo "::error::Public Django does not report Supabase primary; refusing cleanup/cutover."
+  echo "::error::Oracle Django is not using Supabase; never overwrite local authoritative data."
   exit 1
 }
-test "$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$PUBLIC/accounts/login/")" = 200
+test "$(curl -sS --connect-timeout 3 --max-time 15 -o /dev/null -w '%{http_code}' "$PUBLIC/accounts/login/")" = 200
 if sudo -n test -e "$LIVE_ENV" || [[ "$existing" == 1 ]]; then
-  [[ "$existing" == 1 ]] && sudo -n test -s "$LIVE_ENV" || {
-    echo "::error::Partial local DB preparation doesn't match expected state."
+  if [[ "$existing" != 1 ]] || ! sudo -n test -s "$LIVE_ENV"; then
+    echo "::error::Unrecognized partial DB state; no changes made."
+    exit 1
+  fi
+  # Inspect only known path/role; never echo the password.
+  sudo -n python3 - "$LIVE_ENV" <<'PY'
+from pathlib import Path
+import sys
+lines=Path(sys.argv[1]).read_text().splitlines()
+assert len(lines)==1 and lines[0].startswith("DATABASE_URL=postgresql://cca_app:")
+assert lines[0].endswith("@cca-pg-shadow:5432/cca_live")
+PY
+  sessions="$(sudo -n podman exec "$PG" psql -X -At -U cca_shadow_admin -d "$SRC_DB" -c "SELECT COUNT(*) FROM pg_stat_activity WHERE datname='cca_live'")"
+  [[ "$sessions" == 0 ]] || {
+    echo "::error::Local DB still has active connections; never discard it."
     exit 1
   }
-  sudo -n grep -Eq '^DATABASE_URL=postgresql://cca_app:.*@cca-pg-shadow:5432/cca_live
+  echo "Removing abandoned never-primary local DB copy after verified Supabase rollback."
+  sudo -n podman exec "$PG" dropdb -U cca_shadow_admin cca_live
+  sudo -n podman exec "$PG" psql -X -v ON_ERROR_STOP=1 -U cca_shadow_admin -d "$SRC_DB" \
+    -c "DROP ROLE IF EXISTS cca_app" >/dev/null
+  sudo -n rm -f "$LIVE_ENV"
+  existing=0
+fi
+[[ "$existing" == 0 ]] || {
+  echo "::error::Unexpected local DB state; refusing overwrite."
+  exit 1
+}
+echo "PASS: Supabase authoritative, local retry state verified clean."
 
 # Make the standby Postgres a persistent systemd service BEFORE it becomes
 # authoritative. Failures here do not interrupt production.
