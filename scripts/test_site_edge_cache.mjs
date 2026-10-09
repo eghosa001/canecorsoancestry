@@ -187,18 +187,21 @@ assert.match(
   /EDGE_CACHE_VERSION: edge-\$\{\{ github\.run_id \}\}/,
   "Cloudflare cache namespace must be unique to the edge workflow run",
 );
-assert.match(
-  cloudflareWorkflow,
-  /test "\\$mode" = "oracle"/,
+assert.ok(
+  cloudflareWorkflow.includes('test "$mode" = "oracle"'),
   "Cloudflare must refuse to deploy against retired origins",
 );
-assert.doesNotMatch(cloudflareWorkflow, /Provision Northflank origin/,
-  "Retired provider must not trigger public edge deploys");
+assert.doesNotMatch(
+  cloudflareWorkflow, /Provision Northflank origin/,
+  "Retired provider must not trigger public edge deploys",
+);
 assert.match(
   smokeWorkflow,
-  /EXPECTED_EDGE_CACHE_VERSION: \$\{\{ github\.event_name == 'workflow_run' && format\('edge-\{0\}', github\.event\.workflow_run\.id\) \|\| '' \}\}/,
-  "Production smoke must verify the exact Cloudflare cutover run namespace",
+  /EXPECTED_EDGE_CACHE_VERSION: \$\\{\\{ github\\.event_name == 'workflow_run' && format\\('edge-\\{0\\}', github\\.event\\.workflow_run\\.id\\) \\|\\| '' \\}\\}/,
+  "Production smoke must verify the exact Cloudflare cache namespace",
 );
-assert.match(cloudflareWorkflow, /ORIGIN_URL = "http:\\/\\/127\\.0\\.0\\.1:18080"/,
-  "Oracle private loopback address should be pinned in edge deploys");
+assert.ok(
+  cloudflareWorkflow.includes('ORIGIN_URL = "http://127.0.0.1:18080"'),
+  "Oracle private loopback address should be pinned in edge deploys",
+);
 console.log("release handshake workflow assertions passed");
