@@ -2,9 +2,13 @@ name: Production data health
 
 on:
   workflow_run:
-    workflows: ["Cloudflare site edge"]
+    workflows: ["Cloudflare site edge", "Oracle Django production release (CI-gated)"]
     types: [completed]
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/production-data-health.yml"
   schedule:
     - cron: "43 5 * * 4"
 
@@ -59,6 +63,18 @@ jobs:
         run: sudo -n podman exec cca-oracle-staging python manage.py audit_pedigree_data --fail-on-critical
       - name: Audit live owner production invariants
         run: sudo -n podman exec cca-oracle-staging python manage.py audit_production_invariants --fail-on-critical
+      - name: Check COI computation using published live pedigree links
+        run: |
+          sudo -n podman exec cca-oracle-staging python manage.py shell -c "
+          from registry.models import Dog
+          from pedigrees.services import inbreeding_coefficient
+          dogs = list(Dog.objects.filter(is_public=True, sire__is_public=True, dam__is_public=True).only('pk', 'sire_id', 'dam_id').order_by('pk')[:3])
+          assert dogs, 'No public records with published sire and dam'
+          for dog in dogs:
+              value = inbreeding_coefficient(dog, public_only=True)
+              assert 0 <= value <= 1, 'COI calculation returned an invalid value'
+          print(f'PASS: COI computed on {len(dogs)} actual published pedigrees')
+          "
       - name: Verify one production dog image end to end
         shell: bash
         run: |
@@ -86,7 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           browser_ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36'
-          for asset in             "/static/core/cane-corso-logo.webp"             "/static/core/cane-corso-header-mark.webp"             "/static/core/site.css"; do
+          for asset in             "/static/core/cane-corso-logo.webp"             "/static/core/cane-corso-header-mark.webp"             "/static/core/site.css"             "/static/core/dog-photo-safari.css"             "/static/core/site.js"; do
             result="$(curl -L --connect-timeout 10 --max-time 30 -sS -A "$browser_ua" -o /tmp/static-probe -w '%{http_code}|%{content_type}|%{size_download}' "$PUBLIC_SITE$asset" || true)"
             echo "$asset -> $result"
             status="${result%%|*}"
@@ -98,6 +114,7 @@ jobs:
             case "$asset" in
               *.webp) [[ "$content_type" == image/* ]] ;;
               *.css) [[ "$content_type" == text/css* ]] ;;
+              *.js) [[ "$content_type" == *javascript* ]] ;;
             esac
           done
       - name: Verify rendered dog images end to end

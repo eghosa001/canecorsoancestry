@@ -2,6 +2,10 @@ name: Oracle PostgreSQL encrypted hourly backups
 on:
   schedule:
     - cron: "17 * * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Oracle Django production release (CI-gated)"]
+    types: [completed]
   pull_request:
     paths:
       - "scripts/oracle_runner/backup_local_postgres.sh"
@@ -11,6 +15,7 @@ on:
     branches: [main]
     paths:
       - "scripts/oracle_runner/backup_local_postgres.sh"
+      - ".github/workflows/oracle-hourly-db-backups.yml"
 permissions:
   contents: read
 concurrency:
@@ -32,7 +37,7 @@ jobs:
     if: >-
       github.repository == 'eghosa001/canecorsoancestry' &&
       github.ref == 'refs/heads/main' &&
-      (github.event_name == 'push' || github.event_name == 'schedule')
+      (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'))
     runs-on: [self-hosted, linux, arm64, cca-oracle]
     timeout-minutes: 20
     steps:
