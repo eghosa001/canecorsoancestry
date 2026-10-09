@@ -159,7 +159,7 @@ function originRequest(request, env, pathOverride = null) {
   const headers = new Headers(request.headers);
   headers.delete("host");
   headers.set("x-forwarded-proto", "https");
-  headers.set("x-forwarded-host", incoming.host);
+  headers.set("x-forwarded-host", env.CANDIDATE_FORWARD_HOST || incoming.host);
   const clientIp = request.headers.get("cf-connecting-ip");
   if (clientIp) headers.set("x-forwarded-for", clientIp);
   headers.set("x-cca-edge", "1");
@@ -262,15 +262,25 @@ function cachedForVisitor(cached, freshness, request) {
   });
 }
 
+async function transportFetch(request, env, init) {
+  if (env.ORIGIN_TRANSPORT === "private-vpc") {
+    if (!env.ORIGIN_VPC || typeof env.ORIGIN_VPC.fetch !== "function") {
+      throw new Error("Oracle private VPC binding is not configured");
+    }
+    return env.ORIGIN_VPC.fetch(request, init);
+  }
+  return fetch(request, init);
+}
+
 async function fetchOrigin(request, env, pathOverride = null) {
-  return fetch(originRequest(request, env, pathOverride));
+  return transportFetch(originRequest(request, env, pathOverride), env);
 }
 
 async function timedOriginGet(env, path, timeoutMs, userAgent, accept) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(new URL(path, env.ORIGIN_URL || DEFAULT_ORIGIN), {
+    return await transportFetch(new URL(path, env.ORIGIN_URL || DEFAULT_ORIGIN), env, {
       method: "GET",
       headers: {
         accept,
@@ -487,6 +497,17 @@ async function refreshCachedPage(request, env, cache, key) {
 }
 
 async function handleRequest(request, env, ctx) {
+  // Preview Worker is private to smoke-test callers, not a second public site.
+  if (env.CANDIDATE_GUARD_KEY &&
+      request.headers.get("x-cca-candidate-test") !== env.CANDIDATE_GUARD_KEY) {
+    return new Response("Not found", {
+      status: 404,
+      headers: {
+        "cache-control": "no-store",
+        "x-robots-tag": "noindex, nofollow",
+      },
+    });
+  }
   const url = new URL(request.url);
 
   if (url.pathname === "/__edge/health") {
@@ -581,7 +602,7 @@ async function handleRequest(request, env, ctx) {
   return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
 
-export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, shouldWaitForOrigin, edgeCacheVersion, cacheKey, originRequest, timedOriginGet, authWarmingPage };
+export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, shouldWaitForOrigin, edgeCacheVersion, cacheKey, originRequest, timedOriginGet, transportFetch, authWarmingPage };
 
 export default {
   fetch(request, env, ctx) {
