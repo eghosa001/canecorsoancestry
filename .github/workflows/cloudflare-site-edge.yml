@@ -304,10 +304,14 @@ jobs:
           done
 
           origin="https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
-          bypass_status="$(curl --connect-timeout 4 --max-time 10 -sS -H 'X-CCA-Edge: 1' -o /dev/null -w '%{http_code}' "$origin/statistics/" || true)"
-          if [ "$bypass_status" != "308" ]; then
-            echo "::error::Direct origin accepted an unauthenticated edge marker; HTTP $bypass_status"
-            exit 1
+          if [ "${EDGE_ORIGIN_MODE:?}" = "northflank" ]; then
+            bypass_status="$(curl --connect-timeout 4 --max-time 10 -sS -H 'X-CCA-Edge: 1' -o /dev/null -w '%{http_code}' "$origin/statistics/" || true)"
+            if [ "$bypass_status" != "308" ]; then
+              echo "::error::Direct Northflank origin accepted an unauthenticated edge marker; HTTP $bypass_status"
+              exit 1
+            fi
+          else
+            echo "Oracle traffic uses private VPC; Northflank direct-origin check not applicable."
           fi
 
           echo "Site edge, authenticated origin path, auth-first login UI, and readiness checks are healthy."
