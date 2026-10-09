@@ -158,6 +158,7 @@
 
         var timer = null;
         var requestSerial = 0;
+        var inFlightController = null;
 
         function suggestionUrl(value, browse) {
           var url = "/dogs/suggestions/?q=" + encodeURIComponent(value || "");
@@ -170,6 +171,12 @@
 
         function requestSuggestions(value, browse) {
           clearTimeout(timer);
+          // Cancel a superseded request so fast typing does not keep stale
+          // database lookups running after the results are no longer useful.
+          if (inFlightController) {
+            inFlightController.abort();
+            inFlightController = null;
+          }
           // Invalidate any in-flight response immediately, even while the
           // latest keystroke is still in its debounce window.
           var serial = ++requestSerial;
@@ -181,9 +188,12 @@
 
           panel.setAttribute("aria-busy", "true");
           timer = setTimeout(function () {
+            var controller = new AbortController();
+            inFlightController = controller;
             fetch(suggestionUrl(expected, browse), {
               headers: { "Accept": "application/json" },
-              credentials: "same-origin"
+              credentials: "same-origin",
+              signal: controller.signal
             })
               .then(function (response) { return response.ok ? response.json() : { results: [] }; })
               .then(function (data) {
@@ -191,11 +201,13 @@
                 if (!browse && input.value.trim() !== expected) return;
                 render(data.results || []);
               })
-              .catch(function () {
-                // A failed old request must not dismiss a newer valid picker.
+              .catch(function (error) {
+                // Abort is expected when the user types again or closes the list.
+                if (error && error.name === "AbortError") return;
                 if (serial === requestSerial) close();
               })
               .finally(function () {
+                if (inFlightController === controller) inFlightController = null;
                 if (serial === requestSerial) panel.setAttribute("aria-busy", "false");
               });
           }, browse ? 0 : 100);
@@ -203,6 +215,10 @@
 
         function close() {
           clearTimeout(timer);
+          if (inFlightController) {
+            inFlightController.abort();
+            inFlightController = null;
+          }
           requestSerial += 1;
           activeIndex = -1;
           input.removeAttribute("aria-activedescendant");
