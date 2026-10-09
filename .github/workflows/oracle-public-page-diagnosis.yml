@@ -20,9 +20,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in "/healthz/" "/" "/dogs/" "/accounts/login/"; do
-            result="$(curl -sS --connect-timeout 3 --max-time 12 -o /dev/null -w '%{http_code}' "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev$path" || true)"
+          for path in "/__edge/health" "/healthz/" "/" "/dogs/" "/accounts/login/"; do
+            result="$(curl -sS --connect-timeout 3 --max-time 12 -D /tmp/cca-public-headers -o /tmp/cca-public-body -w '%{http_code}' "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev$path" || true)"
             echo "public_route=$path status=$result"
+            if [ "$result" != "200" ]; then
+              grep -Ei "^(server|cf-ray|content-type|x-request-id|cache-control):" /tmp/cca-public-headers | head -10 || true
+              head -c 350 /tmp/cca-public-body | tr "\\n" " " || true
+              echo
+            fi
           done
       - name: Run read-only in-process Django homepage and directory render with traceback
         shell: bash
@@ -32,11 +37,13 @@ jobs:
           os.environ.setdefault("DJANGO_SETTINGS_MODULE", "scripts.oracle_runner.oracle_settings")
           django.setup()
           from django.test import RequestFactory
+          from django.contrib.auth.models import AnonymousUser
           from core.views import home
           from registry.views import dog_search
           factory=RequestFactory()
           for path, view in [("/", home), ("/dogs/", dog_search)]:
               request=factory.get(path, secure=True, HTTP_HOST="canecorsoancestry-site-edge.aighewieghosa111.workers.dev")
+              request.user = AnonymousUser()
               print("IN_PROCESS_ROUTE", path, flush=True)
               try:
                   response=view(request)
