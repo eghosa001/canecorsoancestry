@@ -46,7 +46,7 @@ def parse_origin_bindings(payload):
     transport = selected.get("ORIGIN_TRANSPORT")
     vpc = selected.get("ORIGIN_VPC")
     if value == NORTHFLANK and transport is None and vpc is None:
-        return "northflank"
+        raise RuntimeError("Northflank is a retired, stale origin and cannot serve Oracle-local production")
     if (value == ORACLE and transport is not None
             and transport.get("type") == "plain_text"
             and transport.get("text") == "private-vpc"
@@ -77,8 +77,8 @@ def live_mode():
     return parse_origin_bindings(payload)
 
 def render(text, mode):
-    if mode not in ("oracle", "northflank"):
-        raise ValueError("Invalid origin mode")
+    if mode != "oracle":
+        raise ValueError("Oracle private VPC is the only authorized production mode")
     if text.count('name = "canecorsoancestry-site-edge"') != 1:
         raise ValueError("Not the CCA production Worker")
     if text.count('main = "src/site-edge.js"') != 1:
@@ -98,16 +98,15 @@ def render(text, mode):
             continue
         kept.append(line)
     text = "\n".join(kept).rstrip() + "\n"
-    target = ORACLE if mode == "oracle" else NORTHFLANK
+    target = ORACLE
     text, count = re.subn(
         r'(?m)^ORIGIN_URL = "[^"]+"$',
-        f'ORIGIN_URL = "{target}"' + ('\nORIGIN_TRANSPORT = "private-vpc"' if mode == "oracle" else ""),
+        f'ORIGIN_URL = "{target}"\nORIGIN_TRANSPORT = "private-vpc"',
         text,
     )
     if count != 1:
         raise ValueError(f"Expected one ORIGIN_URL, got {count}")
-    if mode == "oracle":
-        text += f'\n[[vpc_services]]\nbinding = "ORIGIN_VPC"\nservice_id = "{VPC_SERVICE_ID}"\n'
+    text += f'\n[[vpc_services]]\nbinding = "ORIGIN_VPC"\nservice_id = "{VPC_SERVICE_ID}"\n'
     return text
 
 def main():
@@ -115,7 +114,7 @@ def main():
     sub = p.add_subparsers(dest="action", required=True)
     sub.add_parser("live-mode")
     r = sub.add_parser("render")
-    r.add_argument("--mode", choices=["oracle", "northflank"], required=True)
+    r.add_argument("--mode", choices=["oracle"], required=True)
     r.add_argument("--config", default="wrangler.site.toml")
     args = p.parse_args()
     if args.action == "live-mode":
