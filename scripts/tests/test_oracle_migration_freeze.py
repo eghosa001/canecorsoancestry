@@ -44,6 +44,13 @@ class OracleMigrationFreezeTests(SimpleTestCase):
                  "X-CCA-Maintenance-Probe":settings.SECRET_KEY}
         self.assertEqual(self.middleware(self.request("/accounts/login/","get",headers)).status_code,200)
 
+    def test_permission_error_cannot_allow_requests_through(self):
+        headers={"X-CCA-Edge":"1","X-CCA-Origin-Secret":settings.SECRET_KEY}
+        with patch.object(Path, "exists", side_effect=PermissionError("SELinux denied")):
+            response=self.middleware(self.request("/member/submit/","post",headers))
+        self.assertEqual(response.status_code,503)
+        self.assertEqual(response["Retry-After"],"120")
+
     def test_direct_origin_cannot_bypass(self):
         self.assertEqual(self.middleware(self.request("/accounts/login/")).status_code,403)
 

@@ -48,7 +48,15 @@ class OracleMigrationMaintenanceMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path == "/healthz/" or not self.FLAG.exists():
+        if request.path == "/healthz/":
+            return self.get_response(request)
+        try:
+            frozen = self.FLAG.exists()
+        except PermissionError:
+            # Fail closed rather than returning HTTP 500 and potentially
+            # allowing writes during a split-brain database migration.
+            frozen = True
+        if not frozen:
             return self.get_response(request)
         probe = request.headers.get("X-CCA-Maintenance-Probe", "")
         if (probe and request.headers.get("X-CCA-Edge") == "1"

@@ -110,6 +110,14 @@ trap rollback EXIT
 # Freeze new requests before the final consistent snapshot. This means payment
 # POSTs get 503+Retry-After (not false success); they must be retried.
 sudo -n install -o root -g root -m 644 /dev/null "$CONTROL"
+# SELinux labels freshly created files var_lib_t, while Podman private
+# :Z volume uses container_file_t with a per-container MCS category.
+# Copy the already-relabelled parent directory context to this file,
+# otherwise Django sees PermissionError and returns 500 instead of 503.
+sudo -n chcon --reference="$(dirname "$CONTROL")" "$CONTROL"
+[[ "$(sudo -n stat -c %C "$CONTROL")" == "$(sudo -n stat -c %C "$(dirname "$CONTROL")")" ]] || {
+  echo "::error::Maintenance flag SELinux label differs from container mount; refusing cutover"; exit 1;
+}
 code="$(curl -sS --connect-timeout 3 --max-time 10 -o /dev/null -w '%{http_code}' \
   -H 'X-CCA-Edge: 1' -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
   -H 'X-Forwarded-Proto: https' "$URL/accounts/login/")"
