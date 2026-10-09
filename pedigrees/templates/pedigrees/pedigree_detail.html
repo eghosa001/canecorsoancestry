@@ -3,8 +3,14 @@
 {% block content %}
 <section class="pedigree-page">
 <header class="pedigree-toolbar page-shell"><div><p class="eyebrow">Pedigree</p><h1>{{ dog.name }}</h1><p>{{ generations }} generation view</p></div><div class="generation-switch no-print" aria-label="Pedigree depth">{% for option in generation_options %}<a class="{% if generations == option %}active{% endif %}" href="?generations={{ option }}">{{ option }} generations</a>{% endfor %}</div></header>
+<nav class="page-shell button-row no-print" aria-label="Pedigree research navigation">
+  <a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">← Dog profile</a>
+  <a class="btn btn-outline" href="{% url 'pedigrees:reverse' dog.slug %}">Explore descendants</a>
+  <a class="btn btn-outline" href="#advanced-analysis-title">Jump to analysis</a>
+</nav>
+<p class="page-shell muted no-print" id="pedigree-navigation-help">Swipe sideways to explore generations. Keyboard users can focus the pedigree tree and use the arrow keys to scroll. Parent and repeated-ancestor cards open individual published dog profiles.</p>
 {% if cycle_error %}<div class="notice error page-shell">{{ cycle_error }}</div>{% endif %}
-<div class="pedigree-scroll" aria-label="{{ generations }} generation pedigree for {{ dog.name }}"><div class="pedigree-board">{% for layer in layers %}<section class="pedigree-column"><h2>{{ layer.label }}</h2><div class="pedigree-nodes">{% for node in layer.nodes %}{% if node.dog %}<a class="pedigree-node {% if node.repeated %}repeated{% endif %}" href="{% url 'registry:dog-detail' node.dog.slug %}"><small class="pedigree-relationship">{{ node.relationship }}</small><strong>{{ node.dog.name }}</strong><span>{{ node.dog.get_sex_display }}{% if node.dog.colour %} · {{ node.dog.colour }}{% endif %}</span>{% if node.repeated %}<small>Repeated ancestor</small>{% endif %}</a>{% else %}<div class="pedigree-node missing"><small class="pedigree-relationship">{{ node.relationship }}</small><strong>Unknown</strong><span>Unknown ancestor</span></div>{% endif %}{% endfor %}</div></section>{% endfor %}</div></div>
+<div class="pedigree-scroll" role="region" tabindex="0" aria-describedby="pedigree-navigation-help" aria-label="{{ generations }} generation pedigree for {{ dog.name }}"><div class="pedigree-board">{% for layer in layers %}<section class="pedigree-column"><h2>{{ layer.label }}</h2><div class="pedigree-nodes">{% for node in layer.nodes %}{% if node.dog %}<a class="pedigree-node {% if node.repeated %}repeated{% endif %}" href="{% url 'registry:dog-detail' node.dog.slug %}"><small class="pedigree-relationship">{{ node.relationship }}</small><strong>{{ node.dog.name }}</strong><span>{{ node.dog.get_sex_display }}{% if node.dog.colour %} · {{ node.dog.colour }}{% endif %}</span>{% if node.repeated %}<small>Repeated ancestor</small>{% endif %}</a>{% else %}<div class="pedigree-node missing"><small class="pedigree-relationship">{{ node.relationship }}</small><strong>Unknown</strong><span>Unknown ancestor</span></div>{% endif %}{% endfor %}</div></section>{% endfor %}</div></div>
 {% include "pedigrees/_analysis_report.html" %}
 </section>
 {% endblock %}

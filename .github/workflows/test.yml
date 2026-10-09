@@ -69,8 +69,11 @@ jobs:
 
           targets=()
 
-          if grep -q '^pedigrees/' <<<"$changed"; then
+          if grep -Eq '^pedigrees/.*\.py$' <<<"$changed"; then
             targets+=("pedigrees.tests.PedigreeServiceTests")
+          fi
+          if grep -q '^pedigrees/tests_pedigree_navigation\.py$' <<<"$changed"; then
+            targets+=("pedigrees.tests_pedigree_navigation")
           fi
 
           if grep -Eq '^registry/(management/commands/(import_canecorso_archive|refresh_canecorso_latest)\.py|tests_canecorso_(import|latest)\.py)$' <<<"$changed"; then
@@ -98,7 +101,7 @@ jobs:
             )
           fi
 
-          if grep -q '^accounts/' <<<"$changed"; then
+          if grep -Eq '^accounts/.*\.py$' <<<"$changed"; then
             scoped_accounts=false
 
             if grep -q '^accounts/tests_workspace_navigation[.]py$' <<<"$changed"; then
