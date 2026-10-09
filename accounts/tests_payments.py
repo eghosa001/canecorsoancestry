@@ -345,6 +345,7 @@ class PaidSubmissionTests(TestCase):
             package=SubmissionPayment.Package.SINGLE_DOG,
             dog_count=1, amount_kobo=50000,
             reference="CCA-signed-event",
+            status=SubmissionPayment.Status.PENDING,
         )
         event = {"event": "charge.success", "data": {
             "id": 34567, "reference": payment.reference, "status": "success",
@@ -388,6 +389,7 @@ class PaidSubmissionTests(TestCase):
             package=SubmissionPayment.Package.SINGLE_DOG,
             dog_count=1, amount_kobo=50000,
             reference="CCA-wrong-webhook-amount",
+            status=SubmissionPayment.Status.PENDING,
         )
         event = {"event": "charge.success", "data": {
             "id": 9876, "reference": payment.reference,
