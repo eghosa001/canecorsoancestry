@@ -1527,6 +1527,7 @@ def moderation_queue(request):
             "page_obj": page_obj,
             "querystring": query_params.urlencode(),
             "merge_form": MergeDogsForm(),
+            "can_merge_pedigrees": can_review_flagged_submissions(request.user),
             "verification_form": VerificationEventForm(),
             "duplicate_candidates": automatic_duplicate_candidates,
             "duplicate_scan_loaded": duplicate_scan_loaded,
@@ -1788,27 +1789,39 @@ def review_submission(request, pk, decision):
 
 @login_required
 def merge_dogs_view(request):
+    """Dedicated, discoverable and restricted pedigree merge workspace.
+
+    A GET never changes pedigree records. POST invokes the existing atomic,
+    audited merge service only after explicit identity confirmation.
+    """
     if not can_review_flagged_submissions(request.user):
         raise PermissionDenied
-    if request.method != "POST":
-        return redirect("accounts:moderation")
-    form = MergeDogsForm(request.POST)
-    if not form.is_valid():
-        messages.error(request, "Choose two different dog records.")
-        return redirect("accounts:moderation")
-
-    canonical = form.cleaned_data["canonical"]
-    duplicate = form.cleaned_data["duplicate"]
-    try:
-        history = merge_dogs(canonical, duplicate, performed_by=request.user)
-    except (ValueError, ValidationError, IntegrityError) as exc:
-        messages.error(request, str(exc))
-    else:
-        messages.success(
-            request,
-            f"Merged {history.retired_name} into {history.canonical_dog.name}.",
-        )
-    return redirect("accounts:moderation")
+    form = MergeDogsForm(
+        request.POST if request.method == "POST" else None,
+        initial={
+            "canonical": request.GET.get("canonical", ""),
+            "duplicate": request.GET.get("duplicate", ""),
+        } if request.method == "GET" else None,
+    )
+    if request.method == "POST" and form.is_valid():
+        canonical = form.cleaned_data["canonical"]
+        duplicate = form.cleaned_data["duplicate"]
+        try:
+            history = merge_dogs(canonical, duplicate, performed_by=request.user)
+        except (ValueError, ValidationError, IntegrityError) as exc:
+            form.add_error(None, str(exc))
+        else:
+            messages.success(
+                request,
+                f"Merged {history.retired_name} into {history.canonical_dog.name}. "
+                "Pedigree links and attached records have been preserved.",
+            )
+            return redirect("accounts:merge-dogs")
+    return render(
+        request,
+        "accounts/merge_dogs.html",
+        {"form": form, "workspace_section": "merge"},
+    )
 
 
 
