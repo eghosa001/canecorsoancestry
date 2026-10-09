@@ -479,7 +479,7 @@ def dog_review_edit(request, pk, audit_id):
         raise PermissionDenied
     decision = request.POST.get("decision")
     note = request.POST.get("reason", "").strip()
-    if decision not in {"accept", "revert"} or len(note) < 5:
+    if decision not in {"accept", "revert", "approve", "reject"} or len(note) < 5:
         messages.error(request, "Choose an action and explain your decision (at least 5 characters).")
         return redirect("accounts:dog-direct-edit", pk=pk)
     try:
@@ -529,6 +529,8 @@ def dog_review_edit(request, pk, audit_id):
                     "Proposed pedigree changes rejected; public data was unchanged."
                 )
                 return redirect("accounts:dog-direct-edit", pk=pk)
+            if decision not in {"accept", "revert"}:
+                raise ValidationError("Only Accept or Revert applies to completed live edits.")
             if decision == "revert":
                 current = _snapshot(dog)
                 if current != event.summary["after"]:
