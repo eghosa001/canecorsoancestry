@@ -21,18 +21,22 @@ from django.urls import reverse
 
 from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
 from registry.permissions import can_manage_verification, can_review_submissions, is_staff_identity
-from registry.querysets import one_dog_per_kennel, with_stored_images
+from registry.querysets import one_dog_per_kennel, with_card_registration, with_stored_images
 
 from .seo import json_ld
 
 logger = logging.getLogger(__name__)
 
 
-def _display_dogs(queryset, *, include_sources=True):
-    queryset = queryset.select_related("kennel").prefetch_related(
+def _display_dogs(queryset, *, include_sources=True, include_registrations=True):
+    prefetches = [
         Prefetch("images", queryset=DogImage.objects.order_by("-is_primary", "sort_order", "created_at"), to_attr="display_images"),
-        Prefetch("registrations", queryset=DogRegistration.objects.select_related("authority"), to_attr="display_registrations"),
-    )
+    ]
+    if include_registrations:
+        prefetches.append(
+            Prefetch("registrations", queryset=DogRegistration.objects.select_related("authority"), to_attr="display_registrations")
+        )
+    queryset = queryset.select_related("kennel").prefetch_related(*prefetches)
     if include_sources:
         queryset = queryset.prefetch_related(
             Prefetch("sources", queryset=DogSource.objects.order_by("-verified_at", "-created_at"), to_attr="display_source_media")
@@ -200,9 +204,12 @@ def _load_featured_dogs():
         if not ids:
             return []
         rows = list(
-            _display_dogs(
-                Dog.objects.filter(pk__in=ids, is_public=True),
-                include_sources=False,
+            with_card_registration(
+                _display_dogs(
+                    Dog.objects.filter(pk__in=ids, is_public=True),
+                    include_sources=False,
+                    include_registrations=False,
+                )
             )
         )
         by_id = {dog.pk: dog for dog in rows}
