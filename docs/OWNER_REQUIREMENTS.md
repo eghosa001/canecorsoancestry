@@ -131,7 +131,7 @@ Member identities and moderation/administration identities are permanently separ
 - A Member account must never receive Moderator, Senior Moderator, or Super Admin authority. A kennel/member username or email cannot be promoted into staff authority.
 - A person who is both a breeder/member and part of the moderation team must use **two different accounts and two different login identities**: one Member account and one dedicated staff account.
 - A **Moderator** is a dedicated non-member staff identity. It may review ordinary submissions, request evidence, handle disputes, and record verification events. It has no member/kennel ownership tools and no Django Admin access.
-- A **Senior Moderator** is a dedicated non-member staff identity. It has Moderator abilities plus flagged/high-risk decisions, overrides, duplicate merges, and second approvals. It cannot create staff accounts, change system verification rules, or use Django Admin.
+- A **Senior Moderator** is a dedicated non-member staff identity. It has Moderator abilities plus flagged/high-risk decisions, overrides and second approvals. Canonical duplicate merges are reserved for dedicated Super Admin identities. It cannot create staff accounts, change system verification rules, or use Django Admin.
 - A **Super Admin** is a dedicated Django superuser identity. It can manage staff accounts/roles, verification rules, protected-record locks, and Django Admin in addition to moderation authority.
 - Django `is_staff` alone must never grant moderation authority. Moderation authority comes only from an explicit dedicated staff-role assignment.
 - Django Admin is reserved for Super Admin identities only.

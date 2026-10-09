@@ -36,6 +36,28 @@ DOG_FIELDS = (
     "name", "sex", "date_of_birth", "colour", "country", "bloodline",
     "kennel", "sire", "dam", "litter", "bio", "verification_state",
 )
+# Changing published identity or ancestry must require independent Super Admin
+# confirmation rather than appearing publicly merely because a staff form saved.
+PROTECTED_DOG_FIELDS = frozenset({
+    "sex", "date_of_birth", "sire", "dam", "litter", "kennel",
+    "verification_state",
+})
+PROTECTED_RELATED = frozenset({
+    "registrations", "identity_numbers", "external_keys", "health_records", "sources",
+})
+
+
+def _candidate_change(field, value):
+    if field in {"sire", "dam", "kennel", "litter"}:
+        return str(value.pk) if value is not None else None
+    return _safe_value(value)
+
+
+def _current_change(dog, field):
+    column = Dog._meta.get_field(field).attname
+    return _safe_value(getattr(dog, column))
+
+
 RELATED = {
     "aliases": (DogAlias, ("name",)),
     "titles": (DogTitle, ("name", "source_text")),
@@ -282,7 +304,8 @@ def _restore(dog, target):
 def _revision_events(dog=None):
     events = ModerationAudit.objects.filter(
         action=ModerationAudit.Action.RECORD_CHANGED,
-        summary__kind="direct_dog_edit",
+    ).filter(
+        Q(summary__kind="direct_dog_edit") | Q(summary__kind="direct_dog_proposal")
     ).select_related("dog", "actor")
     if dog is not None:
         events = events.filter(dog=dog)
@@ -358,6 +381,66 @@ def dog_direct_edit(request, pk):
                         raise ValidationError("The dog changed while this form was open. Reload and review the latest values.")
                     if locked.is_record_locked and not owner:
                         raise PermissionDenied("This record is locked by the super admin.")
+                    # Only canonical facts that are deliberately low-risk may
+                    # save directly for a moderator. Sensitive published
+                    # ancestry goes through a separate human approval.
+                    if locked.is_public and not owner:
+                        protected = {
+                            field: _candidate_change(field, form.cleaned_data[field])
+                            for field in PROTECTED_DOG_FIELDS
+                            if _current_change(locked, field)
+                            != _candidate_change(field, form.cleaned_data[field])
+                        }
+                        restricted_related = [
+                            name for name in PROTECTED_RELATED if sets[name].has_changed()
+                        ]
+                        if restricted_related:
+                            raise ValidationError(
+                                "Changes to registration, identity, source or health evidence "
+                                "on a published dog require Super Admin editing. "
+                                "Do not combine them with ordinary direct edits."
+                            )
+                        if protected:
+                            ordinary_changed = [
+                                field for field in DOG_FIELDS
+                                if field not in PROTECTED_DOG_FIELDS
+                                and _current_change(locked, field)
+                                != _candidate_change(field, form.cleaned_data[field])
+                            ]
+                            changed_formsets = [
+                                name for name, group in sets.items() if group.has_changed()
+                            ]
+                            if ordinary_changed or changed_formsets:
+                                raise ValidationError(
+                                    "Send protected ancestry changes for review separately "
+                                    "from ordinary details, photos or related records. "
+                                    "No changes were published."
+                                )
+                            candidate = Dog.objects.get(pk=locked.pk)
+                            for field, value in protected.items():
+                                setattr(candidate, Dog._meta.get_field(field).attname, value)
+                            candidate.full_clean()
+                            before_protected = {
+                                field: _current_change(locked, field)
+                                for field in protected
+                            }
+                            record_audit(
+                                action=ModerationAudit.Action.RECORD_CHANGED,
+                                actor=request.user, dog=locked, kennel=locked.kennel,
+                                summary={
+                                    "kind": "direct_dog_proposal",
+                                    "before_protected": before_protected,
+                                    "proposed_changes": protected,
+                                    "base_version": locked.updated_at.isoformat(),
+                                },
+                                note=form.cleaned_data["reason"],
+                            )
+                            messages.success(
+                                request,
+                                "Protected pedigree changes sent to Super Admin for "
+                                "approval. The public dog record is unchanged."
+                            )
+                            return redirect("accounts:dog-direct-edit", pk=pk)
                     before = _snapshot(locked)
                     for field in DOG_FIELDS:
                         if field in {"kennel", "sire", "dam", "litter"}:
@@ -396,7 +479,7 @@ def dog_review_edit(request, pk, audit_id):
         raise PermissionDenied
     decision = request.POST.get("decision")
     note = request.POST.get("reason", "").strip()
-    if decision not in {"accept", "revert"} or len(note) < 5:
+    if decision not in {"accept", "revert", "approve", "reject"} or len(note) < 5:
         messages.error(request, "Choose an action and explain your decision (at least 5 characters).")
         return redirect("accounts:dog-direct-edit", pk=pk)
     try:
@@ -409,6 +492,45 @@ def dog_review_edit(request, pk, audit_id):
             ).exists()
             if already_reviewed:
                 raise ValidationError("This revision has already been reviewed.")
+            if event.summary.get("kind") == "direct_dog_proposal":
+                if decision not in {"approve", "reject"}:
+                    raise ValidationError("Choose Approve or Reject for a pending proposal.")
+                if decision == "approve":
+                    for field, original in event.summary["before_protected"].items():
+                        if _current_change(dog, field) != original:
+                            raise ValidationError(
+                                "These ancestry values changed after the proposal. "
+                                "Review the latest dog record and resubmit instead."
+                            )
+                    before = _snapshot(dog)
+                    for field, value in event.summary["proposed_changes"].items():
+                        setattr(dog, Dog._meta.get_field(field).attname, value)
+                    dog.full_clean()
+                    dog.save()
+                    after = _snapshot(dog)
+                    invalidate_public_content()
+                else:
+                    before = after = None
+                record_audit(
+                    action=ModerationAudit.Action.RECORD_CHANGED,
+                    actor=request.user, dog=dog, kennel=dog.kennel,
+                    summary={
+                        "kind": "direct_dog_proposal_approved" if decision == "approve"
+                                else "direct_dog_proposal_rejected",
+                        "original_audit_id": str(event.pk),
+                        "before": before, "after": after,
+                    },
+                    note=note,
+                )
+                messages.success(
+                    request,
+                    "Protected pedigree changes approved and published."
+                    if decision == "approve" else
+                    "Proposed pedigree changes rejected; public data was unchanged."
+                )
+                return redirect("accounts:dog-direct-edit", pk=pk)
+            if decision not in {"accept", "revert"}:
+                raise ValidationError("Only Accept or Revert applies to completed live edits.")
             if decision == "revert":
                 current = _snapshot(dog)
                 if current != event.summary["after"]:

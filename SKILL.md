@@ -1,5 +1,7 @@
 # Cane Corso Ancestry Working Rules
 
+**Permanent 9+/10 comparison benchmark:** `docs/COMPARATIVE_QUALITY_9PLUS.md`. Review every feature against its 54 subcategories, existing competitor benchmarks, role boundaries, provenance rules and measurable release gates. Never claim 9+ without tested production evidence. Never introduce new providers/systems or break approved workflows merely to increase a score.
+
 Use this file for future implementation work in this repository.
 
 ## Non-negotiable product rules

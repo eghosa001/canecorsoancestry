@@ -47,6 +47,8 @@
             <small class="muted">{{ coi_error }} Ask a moderator to review parent links.</small>
           {% endif %}
         </dd>
+        <dt>Evidence review</dt><dd><strong>{{ verification_label }}</strong><small class="muted">This describes independent review of the available record, not registration by Cane Corso Ancestry.</small></dd>
+        <dt>Historical source</dt><dd>{% if has_source_attribution %}Source attribution on file{% else %}No source attribution recorded{% endif %}<small class="muted">A linked or imported source is not proof that identity, health or ancestry was independently verified.</small></dd>
         <dt>Country</dt><dd>{{ dog.country|default:"Not recorded" }}</dd>
         <dt>Kennel</dt>
         <dd>{% if dog.kennel %}<a class="text-link" href="{% url 'registry:kennel-detail' dog.kennel.slug %}">{{ dog.kennel.name }}</a>{% else %}Not recorded{% endif %}</dd>
