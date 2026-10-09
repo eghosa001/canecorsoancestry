@@ -30,7 +30,7 @@ for path in "/" "/accounts/login/" "/pedigrees/virtual-mating/" "/dogs/?q=Branco
   done
 done
 echo "=== Supabase SQL roundtrip from Oracle container (SELECT 1 only) ==="
-sudo -n podman exec cca-oracle-staging python - <<'PY'
+sudo -n podman exec -i cca-oracle-staging python - <<'PY'
 import os, time, django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'scripts.oracle_runner.oracle_settings')
 django.setup()
