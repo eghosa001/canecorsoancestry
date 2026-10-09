@@ -30,6 +30,17 @@ class OracleCutoverReadinessTests(unittest.TestCase):
                 c.require_auth_ready("https://candidate.test/__edge/auth-ready",
                                      attempts=2, pause_seconds=0)
 
+    def test_http_only_northflank_rollback_refused_for_local_db(self):
+        import os
+        with patch.object(c, "live_mode", return_value="oracle"), \
+             patch.object(c, "open_checked", return_value=b'{"database_backend":"oracle-local"}'), \
+             patch.object(c, "deploy") as deploy, \
+             patch.dict(os.environ, {"DJANGO_SECRET_KEY": "test-secret", "CLOUDFLARE_API_TOKEN": "test-token"}), \
+             patch("sys.argv", ["cutover.py", "--mode", "northflank", "--cache-version", "test"]):
+            with self.assertRaisesRegex(RuntimeError, "Refusing Northflank"):
+                c.main()
+            deploy.assert_not_called()
+
     def test_candidate_redeployment_does_not_target_live_worker(self):
         deployed = []
         class FakeRunner:
