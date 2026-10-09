@@ -1,5 +1,7 @@
 # Production quality standards
 
+The owner-approved comparative baseline and 54-subcategory 9+ assessment are in `docs/COMPARATIVE_QUALITY_9PLUS.md`. Any claim that the site has reached 9+ must meet that benchmark as well as the technical gates below.
+
 These are acceptance criteria, not achieved scores. A green workflow is not proof of a 9/10 user experience.
 
 ## Performance and reliability
