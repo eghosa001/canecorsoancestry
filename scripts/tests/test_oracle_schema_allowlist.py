@@ -1,6 +1,7 @@
 """Oracle deployment must never silently apply unapproved production changes."""
 import importlib
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
 from scripts.oracle_runner.allowlisted_schema_migration import validate_pending_schema_changes
@@ -37,6 +38,17 @@ class ApprovedSchemaMigrationTests(unittest.TestCase):
                     operations=[],
                 ), False),
             ])
+
+    def test_oracle_stage_invokes_preflight_as_importable_package(self):
+        script = (
+            Path(__file__).resolve().parents[1]
+            / "oracle_runner"
+            / "stage_django.sh"
+        ).read_text()
+        self.assertIn(
+            "python -m scripts.oracle_runner.allowlisted_schema_migration",
+            script,
+        )
 
     def test_unreviewed_operation_change_is_forbidden(self):
         changed = SimpleNamespace(
