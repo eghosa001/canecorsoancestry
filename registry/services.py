@@ -1570,13 +1570,17 @@ def moderation_dog_ids(query, limit=30, *, fuzzy=True):
     # every dog, and fetching only UUIDs avoids N+1 / wide data transfer.
     if not ids and fuzzy and len(query) >= 3:
         if connection.vendor == "postgresql":
-            candidates = (
-                Dog.objects.filter(name__trigram_similar=query)
-                .annotate(name_similarity=TrigramSimilarity("name", query))
-                .order_by("-name_similarity", "name")
-                .values_list("pk", flat=True)[:limit]
-            )
-            add(candidates)
+            # The Django trigram_similar lookup is not registered in the
+            # production Django app configuration. Parameterized SQL uses the
+            # PostgreSQL pg_trgm % operator and the deployed name GIN index.
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT id FROM registry_dog "
+                    "WHERE name % %s "
+                    "ORDER BY similarity(name, %s) DESC, name LIMIT %s",
+                    [query, query, limit],
+                )
+                add(row[0] for row in cursor.fetchall())
         else:
             normalized_query = _normalized_name(query)
             names = Dog.objects.order_by("name").values_list("pk", "name")[:1000]
