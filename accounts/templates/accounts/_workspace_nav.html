@@ -16,6 +16,7 @@
       {% else %}
         <a href="{% url 'dashboard' %}">Overview</a>
         <a href="{% url 'accounts:my-pedigrees' %}" {% if workspace_section == "dogs" %}aria-current="page"{% endif %}>My dogs</a>
+        <a href="{% url 'accounts:saved-pairings' %}" {% if workspace_section == "research" %}aria-current="page"{% endif %}>Saved pairings</a>
         <a href="{% url 'accounts:my-litters' %}" {% if workspace_section == "litters" %}aria-current="page"{% endif %}>Litters</a>
         <a href="{% url 'accounts:submissions' %}" {% if workspace_section == "submissions" %}aria-current="page"{% endif %}>Submissions</a>
         <a href="{% url 'accounts:profile' %}" {% if workspace_section == "profile" %}aria-current="page"{% endif %}>Profile</a>
