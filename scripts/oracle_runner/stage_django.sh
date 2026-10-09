@@ -126,15 +126,21 @@ if [[ "$DB_MODE" == local ]]; then
     echo "::error::Local primary database is unavailable"; exit 1;
   }
   run_network=(--network cca-private)
-  sudo -n python3 - "$temporary_env" /etc/cca/pg-live-app.env <<'PY'
+  # On hardened Oracle Linux, root cannot open an opc-owned mktemp(0600)
+# file in /tmp for writing (fs.protected_regular). Have the unprivileged
+# shell open the destination, while root *only* reads the 0600 live DB
+# credential and writes its validated value to that existing descriptor.
+# The URL never enters argv, job logs, or shell tracing.
+sudo -n python3 - /etc/cca/pg-live-app.env >> "$temporary_env" <<'PY'
 from pathlib import Path
 import sys
-dst,src=map(Path,sys.argv[1:])
+src=Path(sys.argv[1])
 urls=[line.split("=",1)[1] for line in src.read_text().splitlines() if line.startswith("DATABASE_URL=")]
 assert len(urls)==1
 assert urls[0].endswith("@cca-pg-shadow:5432/cca_live")
-assert "cca_app:" in urls[0]
-with dst.open("a") as out:out.write("DATABASE_URL="+urls[0]+"\n")
+assert urls[0].startswith("postgresql://cca_app:")
+assert not any(char in urls[0] for char in ("\n","\r","\0"))
+print("DATABASE_URL="+urls[0])
 PY
   echo "Using verified Oracle-local PostgreSQL primary via private network."
 else
