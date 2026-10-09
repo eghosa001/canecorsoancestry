@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "scripts/oracle_runner/oracle_perf_diagnostics.sh"
+      - "scripts/oracle_runner/profile_dog_browse.py"
       - ".github/workflows/oracle-perf-diagnostics.yml"
   pull_request:
     paths:
       - "scripts/oracle_runner/oracle_perf_diagnostics.sh"
+      - "scripts/oracle_runner/profile_dog_browse.py"
       - ".github/workflows/oracle-perf-diagnostics.yml"
 
 permissions:
@@ -45,4 +47,6 @@ jobs:
           persist-credentials: false
       - name: Compare CPU, Django, Oracle-local PostgreSQL and Cloudflare timings
         shell: bash
-        run: bash scripts/oracle_runner/oracle_perf_diagnostics.sh
+        run: |
+          bash scripts/oracle_runner/oracle_perf_diagnostics.sh
+          sudo -n podman exec -i cca-oracle-staging python - < scripts/oracle_runner/profile_dog_browse.py
