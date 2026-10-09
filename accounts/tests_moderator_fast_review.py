@@ -44,6 +44,11 @@ class ModeratorYellowApprovalTests(TestCase):
         sub = self.submission(risk=SubmissionRiskLevel.YELLOW)
         res = self.client.get(reverse("accounts:moderation-submission", args=[sub.pk]))
         self.assertEqual(res.status_code, 200)
+        self.assertTrue(
+            res.context["can_approve_yellow"],
+            f"yellow_enabled={res.context.get('can_approve_yellow')} findings={[(f.code, f.risk_level) for f in res.context['blocking_findings']]} "
+            f"high_risk={res.context['has_critical_warning']} reviewer={res.context['reviewer_role']}",
+        )
         self.assertContains(res, "Approve yellow warning")
         self.assertContains(res, "Red/high-risk findings still require Senior Moderator")
 
