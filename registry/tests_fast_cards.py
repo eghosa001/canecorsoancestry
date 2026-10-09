@@ -66,6 +66,40 @@ class FastPublicDogCardTests(TestCase):
         self.assertContains(home, "primary-picture.jpg")
         self.assertContains(home, "CARD-001")
 
+    def test_browse_paginates_ids_before_loading_card_subqueries(self):
+        from registry.models import Kennel
+        kennel = Kennel.objects.create(name="Browse Perf Kennel", slug="browse-perf-kennel")
+        Dog.objects.filter(pk=self.dog.pk).update(kennel=kennel, search_count=10)
+        DogImage.objects.create(
+            dog=self.dog, image="dogs/2026/10/browse-photo.jpg",
+            is_primary=True,
+        )
+        other = Dog.objects.create(
+            name="Second Browse Perf Dog", slug="second-browse-perf-dog",
+            is_public=True, kennel=kennel, search_count=5,
+        )
+        DogImage.objects.create(
+            dog=other, image="dogs/2026/10/second-browse-photo.jpg", is_primary=True,
+        )
+        cache.clear()
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get("/dogs/?q=")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.dog.name)
+        self.assertContains(response, "browse-photo.jpg")
+        self.assertContains(response, "CARD-001")
+        self.assertNotContains(response, "Second Browse Perf Dog")
+        window_queries = [
+            item["sql"] for item in queries
+            if "ROW_NUMBER()" in item["sql"].upper()
+        ]
+        self.assertTrue(window_queries, "The one-dog-per-kennel ranking must remain")
+        for sql in window_queries:
+            self.assertNotIn(
+                "registry_dogregistration", sql,
+                "Registration card subqueries must run only after pagination",
+            )
+
     def test_public_search_still_renders_registration_and_dog(self):
         cache.clear()
         response = self.client.get("/dogs/?q=Card%20Performance")
