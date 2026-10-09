@@ -157,7 +157,7 @@ sudo -n "$PODMAN_BIN" create \
   --security-opt no-new-privileges \
   --pids-limit 128 \
   --memory 1800m \
-  --cpus 0.75 \
+  --cpus 0.90 \
   "$IMAGE" \
   gunicorn config.wsgi:application --bind 0.0.0.0:8080 \
   --workers 1 --threads 4 --timeout 60 --worker-tmp-dir /tmp \
