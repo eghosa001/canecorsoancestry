@@ -26,7 +26,21 @@ const csrfRequest = new Request(publicUrl, {
   headers: { cookie: "csrftoken=anonymous-token" },
 });
 assert.equal(hasPrivateCookie(csrfRequest), false);
-assert.equal(isCacheablePublicPath(publicUrl, csrfRequest), true);
+assert.equal(isCacheablePublicPath(publicUrl, csrfRequest), false);
+for (const path of [
+  "/", "/dogs/", "/kennels/", "/statistics/", "/pedigrees/",
+  "/litters/", "/dogs/suggestions/", "/sitemap.xml",
+  "/sitemap-dogs.xml", "/pedigrees/virtual-mating/",
+]) {
+  const url = new URL(path, "https://example.test");
+  assert.equal(isCacheablePublicPath(url, new Request(url)), false,
+    `Approval-sensitive public route must bypass Cloudflare cache: ${path}`);
+}
+const staticUrl = new URL("https://example.test/static/core/site.css");
+assert.equal(isCacheablePublicPath(staticUrl, new Request(staticUrl)), true);
+assert.equal(isCacheablePublicPath(staticUrl, new Request(staticUrl, {
+  headers: {cookie: "sessionid=member-session"}
+})), false);
 assert.equal(
   shouldWaitForOrigin(
     new Request(publicUrl, { headers: { accept: "text/html" } }),
@@ -95,7 +109,7 @@ assert.equal(
   "https://example.test/dogs/example-dog/?__cca_edge_v=release-sha-123",
 );
 
-console.log("site-edge cache policy tests passed");
+console.log("Approval-sensitive pages bypass all Cloudflare HTML caching; static assets remain cached.");
 
 const proxied = originRequest(
   new Request("https://example.test/media/dogs/example.jpg"),

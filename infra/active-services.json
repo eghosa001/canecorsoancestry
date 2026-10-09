@@ -15,7 +15,7 @@
     },
     {
       "id": "oracle-django",
-      "role": "sole production Django/Gunicorn origin, loopback 18080",
+      "role": "sole production Django/Gunicorn origin; exact main commit is deployed automatically after successful Full release audit, with manual protected fallback",
       "provider": "Oracle Cloud VM / Podman",
       "state": "active",
       "source": "scripts/oracle_runner/stage_django.sh",
@@ -80,6 +80,6 @@
     "Never automatically write a legacy Supabase database from production maintenance jobs.",
     "Only Oracle-local PostgreSQL is authoritative; all production data-health probes must target it.",
     "Database backups and authenticated media delivery remain on Cloudflare R2.",
-    "Oracle Django deployments stay protected, explicit and release-verified."
+    "Oracle Django deployments must be from protected main, follow successful full release audit, verify the exact checkout SHA, and reject outdated release attempts."
   ]
 }

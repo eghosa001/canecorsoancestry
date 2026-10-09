@@ -1,4 +1,4 @@
-name: Oracle Django staging (manual, no cutover)
+name: Oracle Django production release (CI-gated)
 
 on:
   workflow_dispatch:
@@ -8,6 +8,9 @@ on:
         required: true
         type: choice
         options: [stage-only]
+  workflow_run:
+    workflows: ["Full release audit"]
+    types: [completed]
   pull_request:
     paths:
       - "scripts/oracle_runner/oracle_middleware.py"
@@ -40,10 +43,15 @@ jobs:
 
   oracle-stage:
     if: >-
-      github.event_name == 'workflow_dispatch' &&
       github.repository == 'eghosa001/canecorsoancestry' &&
       github.ref == 'refs/heads/main' &&
-      inputs.deployment == 'stage-only'
+      (
+        (github.event_name == 'workflow_dispatch' && inputs.deployment == 'stage-only') ||
+        (github.event_name == 'workflow_run' &&
+         github.event.workflow_run.head_branch == 'main' &&
+         github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push')
+      )
     runs-on: [self-hosted, linux, arm64, cca-oracle]
     timeout-minutes: 40
     env:
@@ -56,7 +64,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
+      - name: Only update the current protected main commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected="$(git rev-parse HEAD)"
+          current="$(git ls-remote https://github.com/eghosa001/canecorsoancestry.git refs/heads/main | cut -f1)"
+          if [ -z "$current" ] || [ "$selected" != "$current" ]; then
+            echo "::warning::A newer main commit exists. Skipping outdated Oracle release."
+            echo "CCA_SKIP_RELEASE=1" >> "$GITHUB_ENV"
+          else
+            echo "Verified protected main release: $selected"
+          fi
       - name: Update and verify Oracle Django container; do not change Cloudflare routing
+        if: env.CCA_SKIP_RELEASE != '1'
         shell: bash
         run: bash scripts/oracle_runner/stage_django.sh

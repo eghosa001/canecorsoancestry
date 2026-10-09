@@ -38,7 +38,11 @@ if [[ "$(df -Pk / | awk 'END {print $4}')" -lt 6291456 ]]; then
   exit 1
 fi
 
-readonly IMAGE="localhost/cca-oracle:$(printf '%s' "$GITHUB_SHA" | cut -c1-12)"
+# The event SHA differs from the triggering commit for workflow_run events.
+# Always build and publish the commit actually checked out on protected main.
+export CCA_RELEASE_SHA="$(git rev-parse HEAD)"
+[[ "$CCA_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+readonly IMAGE="localhost/cca-oracle:$(printf '%s' "$CCA_RELEASE_SHA" | cut -c1-12)"
 readonly APP_SERVICE="cca-oracle-staging.service"
 readonly APP_CONTAINER="cca-oracle-staging"
 readonly APP_ENV="/etc/cca/oracle-stage.env"
@@ -101,7 +105,7 @@ values = {
     "GUNICORN_WORKERS": "1",
     "GUNICORN_THREADS": "4",
     "GUNICORN_TIMEOUT": "60",
-    "GIT_COMMIT_SHA": os.environ["GITHUB_SHA"],
+    "GIT_COMMIT_SHA": os.environ["CCA_RELEASE_SHA"],
 }
 for key, value in values.items():
     if any(char in str(value) for char in ("\r", "\n", "\0")):
@@ -210,7 +214,7 @@ for attempt in $(seq 1 25); do
   status="$(curl --connect-timeout 2 --max-time 8 -sS -o "$probe_output" -w '%{http_code}' \
       "$URL/healthz/" || true)"
   if [[ "$status" == 200 ]] && \
-     python3 - "$probe_output" "$GITHUB_SHA" <<'PY'
+     python3 - "$probe_output" "$CCA_RELEASE_SHA" <<'PY'
 import json
 import sys
 payload = json.load(open(sys.argv[1], encoding="utf-8"))
@@ -257,7 +261,7 @@ echo "Oracle container updated; Cloudflare routing was not modified. If Oracle i
 {
   echo "## Oracle Django container update completed (Cloudflare routing unchanged)"
   echo ""
-  echo "- ARM64 source commit: $GITHUB_SHA"
+  echo "- ARM64 source commit: $CCA_RELEASE_SHA"
   echo "- Service: $APP_SERVICE (enabled)"
   echo "- Local origin: http://127.0.0.1:18080 (loopback only)"
   echo "- Database backend: $DB_MODE; schema migrations current"
