@@ -61,8 +61,8 @@
     {% for dog in featured_dogs %}
       <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
         <div class="dog-card-media">
-          {% if dog.display_images %}
-            <img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async">
+          {% if dog.card_image_url %}
+            <img src="{{ dog.card_image_url }}?v=20261002-2" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async">
           {% elif dog.source_image_url %}
             <img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async" referrerpolicy="no-referrer">
           {% else %}
