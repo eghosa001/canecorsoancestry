@@ -232,7 +232,9 @@ def dog_search(request):
     paginator = Paginator(dogs, 18)
     if not query and not sex and not country and not kennel_slug:
         cached_count = cache.get("cca:dog-search:default-count:v1")
-        if cached_count is None:
+        # Corrupt/legacy cache values must never turn public browsing into
+        # a 500. Only a nonnegative integer is a valid cached paginator count.
+        if type(cached_count) is not int or cached_count < 0:
             cached_count = paginator.count
             cache.set("cca:dog-search:default-count:v1", cached_count, 900)
         paginator.__dict__["count"] = cached_count
