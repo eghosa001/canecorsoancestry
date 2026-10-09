@@ -11,6 +11,8 @@ printf 'host_cpus='; nproc
 grep -m1 -E 'MemTotal:' /proc/meminfo
 printf 'host_load='; cat /proc/loadavg | cut -d' ' -f1-3
 printf 'available_disk='; df -h / | tail -1 | awk '{print $4}'
+echo "=== Active Django release after CPU tune ==="
+curl --connect-timeout 3 --max-time 8 -fsS http://127.0.0.1:18080/healthz/ | python3 -c 'import json,sys; p=json.load(sys.stdin); print("release="+str(p.get("release", "unknown"))+" status="+str(p.get("status", "unknown")))'
 echo "=== Oracle Django container ==="
 sudo -n podman inspect cca-oracle-staging --format 'cpus={{.HostConfig.NanoCpus}} memory={{.HostConfig.Memory}} command={{.Config.Cmd}}'
 sudo -n podman stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}' cca-oracle-staging
