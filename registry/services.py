@@ -1576,7 +1576,7 @@ def moderation_dog_ids(query, limit=30, *, fuzzy=True):
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT id FROM registry_dog "
-                    "WHERE name % %s "
+                    "WHERE name %% %s "
                     "ORDER BY similarity(name, %s) DESC, name LIMIT %s",
                     [query, query, limit],
                 )
