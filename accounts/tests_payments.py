@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import json
 from unittest.mock import patch
 
 from django.conf import settings
@@ -337,3 +338,72 @@ class PaidSubmissionTests(TestCase):
             signature = hmac.new(secret.encode(), body, hashlib.sha512).hexdigest()
             self.assertTrue(webhook_signature_valid(body, signature))
             self.assertFalse(webhook_signature_valid(body, "bad"))
+
+    def test_signed_webhook_confirms_once_and_rejects_forgery(self):
+        payment = SubmissionPayment.objects.create(
+            user=self.user, kennel=self.kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1, amount_kobo=50000,
+            reference="CCA-signed-event",
+            status=SubmissionPayment.Status.PENDING,
+        )
+        event = {"event": "charge.success", "data": {
+            "id": 34567, "reference": payment.reference, "status": "success",
+            "amount": 50000, "currency": "NGN",
+            "metadata": {"payment_id": str(payment.pk)},
+        }}
+        body = json.dumps(event).encode()
+        secret = "sk_test_webhook_signing"
+        signature = hmac.new(secret.encode(), body, hashlib.sha512).hexdigest()
+        url = reverse("accounts:paystack-webhook")
+
+        with self.settings(PAYSTACK_SECRET_KEY=secret):
+            invalid = self.client.post(
+                url, body, content_type="application/json",
+                HTTP_X_PAYSTACK_SIGNATURE="forged-signature",
+            )
+            payment.refresh_from_db()
+            self.assertEqual(invalid.status_code, 400)
+            self.assertEqual(payment.status, SubmissionPayment.Status.PENDING)
+
+            accepted = self.client.post(
+                url, body, content_type="application/json",
+                HTTP_X_PAYSTACK_SIGNATURE=signature,
+            )
+            payment.refresh_from_db()
+            self.assertEqual(accepted.status_code, 200)
+            self.assertEqual(payment.status, SubmissionPayment.Status.PAID)
+            first_paid_at = payment.paid_at
+
+            replay = self.client.post(
+                url, body, content_type="application/json",
+                HTTP_X_PAYSTACK_SIGNATURE=signature,
+            )
+            payment.refresh_from_db()
+            self.assertEqual(replay.status_code, 200)
+            self.assertEqual(payment.paid_at, first_paid_at)
+
+    def test_signed_webhook_does_not_accept_wrong_amount(self):
+        payment = SubmissionPayment.objects.create(
+            user=self.user, kennel=self.kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1, amount_kobo=50000,
+            reference="CCA-wrong-webhook-amount",
+            status=SubmissionPayment.Status.PENDING,
+        )
+        event = {"event": "charge.success", "data": {
+            "id": 9876, "reference": payment.reference,
+            "status": "success", "amount": 1000, "currency": "NGN",
+        }}
+        body = json.dumps(event).encode()
+        secret = "sk_test_webhook_signing"
+        signature = hmac.new(secret.encode(), body, hashlib.sha512).hexdigest()
+        with self.settings(PAYSTACK_SECRET_KEY=secret):
+            response = self.client.post(
+                reverse("accounts:paystack-webhook"), body,
+                content_type="application/json",
+                HTTP_X_PAYSTACK_SIGNATURE=signature,
+            )
+        payment.refresh_from_db()
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(payment.status, SubmissionPayment.Status.PENDING)
