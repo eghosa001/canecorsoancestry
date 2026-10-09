@@ -36,13 +36,16 @@ All relevant new features and page changes must work on iPhone/iPad Safari as we
 The current production stack is:
 
 - Cloudflare Workers public site edge: `canecorsoancestry-site-edge.aighewieghosa111.workers.dev`
-- Northflank Django origin
-- Supabase PostgreSQL
-- Cloudflare R2 media gateway/storage
+- Oracle VM Django/Gunicorn origin over **private Cloudflare VPC routing**; do not open VM public application ports.
+- Oracle-local PostgreSQL 17 is the **sole authoritative production database**.
+- Cloudflare R2 media gateway/storage and encrypted offsite database backups.
+- The Oracle runner supports CI and protected main-branch releases.
+
+**Northflank and Supabase are retired production services, not rollback targets.** Never deploy production Django there or write new data to the old Supabase database. Follow `ARCHITECTURE.md` and `infra/active-services.json` for the authoritative current service inventory. Preserve the Oracle live database; never restore over it or rerun one-time migrations without a verified recovery plan.
 
 No custom domain is currently configured. Do not add a custom domain or another hosting/database provider unless the owner explicitly requests it.
 
-Keep private/authenticated routes uncached at the Cloudflare site edge.
+Keep all authenticated routes and database-backed public pages uncached at the Cloudflare site edge so approved changes appear on the next public GET. Cache only safe static assets.
 
 ## Engineering rules
 
