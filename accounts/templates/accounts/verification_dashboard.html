@@ -23,6 +23,42 @@
     <article><strong>{{ overrides_count }}</strong><span>Override decisions</span></article>
   </div>
 
+  <section class="panel" aria-labelledby="protected-pedigree-proposals">
+    <div class="panel-heading">
+      <div>
+        <h2 id="protected-pedigree-proposals">Published pedigree changes awaiting approval</h2>
+        <span>Moderator proposals are not public. Review the exact old and proposed ancestry values before accepting them.</span>
+      </div>
+      <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}?proposals=1">Review all proposals →</a>
+    </div>
+    <div class="moderation-list">
+      {% for event in pending_proposals %}
+        <article class="moderation-card">
+          <div class="moderation-card-content">
+            <div class="moderation-meta">
+              <div>
+                <span class="eyebrow">{{ event.actor_admin_label }} · {{ event.created_at|date:"d M Y H:i" }}</span>
+                <h3>{{ event.dog.name }}</h3>
+                <p>{{ event.note }}</p>
+              </div>
+              <span class="submission-state yellow">Awaiting Super Admin</span>
+            </div>
+            <details class="ux-disclosure">
+              <summary>Compare protected pedigree values</summary>
+              <div class="ux-disclosure-body">
+                <p><strong>Current:</strong> {{ event.summary.before_protected }}</p>
+                <p><strong>Proposed:</strong> {{ event.summary.proposed_changes }}</p>
+              </div>
+            </details>
+            <a class="btn btn-gold" href="{% url 'accounts:dog-direct-edit' event.dog.pk %}">Review and decide</a>
+          </div>
+        </article>
+      {% empty %}
+        <p class="muted">No unreviewed proposals among the most recent 80; use “Review all proposals” for full history.</p>
+      {% endfor %}
+    </div>
+  </section>
+
   <section class="panel">
     <div class="panel-heading">
       <div><h2>Flagged submissions</h2><span>Yellow and red cases waiting for human review. Warnings are evidence signals, not accusations.</span></div>
