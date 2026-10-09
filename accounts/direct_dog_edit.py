@@ -171,7 +171,7 @@ FORMSETS = {
             ManagedSourceForm if key == "sources" else
             ManagedDocumentForm if key == "documents" else forms.ModelForm
         ),
-        extra=1, can_delete=True,
+        extra=0, can_delete=True,
     )
     for key, (model, fields) in RELATED.items()
 }
