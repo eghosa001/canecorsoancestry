@@ -57,7 +57,10 @@ def _find_reference(model, text, *, fields):
     except ValueError:
         key = None
     if key:
-        return model.objects.filter(pk=key).first()
+        match = model.objects.filter(pk=key).first()
+        if match is None:
+            raise ValidationError("No record has that UUID.")
+        return match
     query = Q()
     for field in fields:
         query |= Q(**{field + "__iexact": text})
@@ -117,9 +120,16 @@ class DirectDogEditForm(forms.ModelForm):
 
 
 class ManagedImageForm(forms.ModelForm):
+    make_primary = forms.BooleanField(required=False, label="Primary photo")
+
     class Meta:
         model = DogImage
-        fields = RELATED["images"][1]
+        fields = ("image", "caption", "sort_order")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and not self.is_bound:
+            self.fields["make_primary"].initial = self.instance.is_primary
 
     def clean_image(self):
         upload = self.cleaned_data.get("image")
@@ -128,10 +138,6 @@ class ManagedImageForm(forms.ModelForm):
             return normalize_image_upload(upload)
         return upload
 
-    def validate_constraints(self):
-        # The old primary is cleared atomically before saving all image rows.
-        # A cross-row primary check is performed separately before that transaction.
-        pass
 
 
 class ManagedSourceForm(forms.ModelForm):
@@ -160,7 +166,7 @@ class ManagedDocumentForm(forms.ModelForm):
 
 FORMSETS = {
     key: inlineformset_factory(
-        Dog, model, fields=fields, form=(
+        Dog, model, fields=(tuple(f for f in fields if f != "is_primary") if key == "images" else fields), form=(
             ManagedImageForm if key == "images" else
             ManagedSourceForm if key == "sources" else
             ManagedDocumentForm if key == "documents" else forms.ModelForm
@@ -210,10 +216,9 @@ def _save_formsets(dog, sets):
         if form.cleaned_data and not form.cleaned_data.get("DELETE")
         and (form.instance.pk or form.has_changed())
     ]
-    if sum(bool(form.cleaned_data.get("is_primary")) for form in image_forms) > 1:
+    if sum(bool(form.cleaned_data.get("make_primary")) for form in image_forms) > 1:
         raise ValidationError("Only one photograph can be selected as primary.")
-    # Remove old primary first to prevent a temporary partial-unique-index conflict.
-    DogImage.objects.filter(dog=dog, is_primary=True).update(is_primary=False)
+    chosen_primary = None
     for name, formset in sets.items():
         # Delete first, so unique registration/identity values can be reused.
         for form in formset.forms:
@@ -233,6 +238,11 @@ def _save_formsets(dog, sets):
                     upload.seek(0)
             item.full_clean(validate_constraints=name != "images")
             item.save()
+            if name == "images" and form.cleaned_data.get("make_primary"):
+                chosen_primary = item.pk
+    DogImage.objects.filter(dog=dog, is_primary=True).update(is_primary=False)
+    if chosen_primary is not None:
+        DogImage.objects.filter(dog=dog, pk=chosen_primary).update(is_primary=True)
 
 
 def _restore(dog, target):
