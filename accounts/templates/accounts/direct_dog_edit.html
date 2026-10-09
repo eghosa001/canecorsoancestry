@@ -6,7 +6,7 @@
   <header class="page-heading moderation-heading">
     <div><p class="eyebrow">Canonical dog administration</p><h1>Edit {{ dog.name }}</h1>
       <p>{% if dog.is_public %}Published profile{% else %}Unpublished record{% endif %} · UUID {{ dog.pk }} {% if dog.is_record_locked %}· Super-admin locked{% endif %}</p>
-      <p>Changes save to the live site immediately. Every field and related-record change is compared against its previous value and permanently audited.</p>
+      <p>Routine, authorized changes appear on the live site after saving. For published dogs, changes to sex, birth date, parents, kennel, litter or verification state require Super Admin approval before the public record changes. Every decision is audited.</p>
     </div>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">All dogs</a>
@@ -18,6 +18,7 @@
     <input type="hidden" name="version" value="{{ version }}">
     {{ form.non_field_errors }}
     <h2>Identity & pedigree</h2>
+    {% if not owner and dog.is_public %}<p class="muted"><strong>Protected ancestry:</strong> Change sex, birth date, sire, dam, kennel, litter or verification state in a separate save. The proposal will wait for Super Admin approval; other edits should be saved separately. Registration, microchip, source and health evidence edits must be handled by Super Admin.</p>{% endif %}
     <p class="muted">Parent, kennel and litter fields accept an exact name/code or UUID. Use a UUID when names are duplicated. Leave blank to unlink. A new dog must still use the member submission workflow.</p>
     <div class="profile-section-grid">
       {% for field in form %}
@@ -67,7 +68,7 @@
     </details>
     {% endfor %}
     <div class="button-row">
-      <button class="btn btn-gold" type="submit">Save live changes</button>
+      <button class="btn btn-gold" type="submit">Save changes or request protected review</button>
       <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Discard edits</a>
     </div>
     <p class="muted">Publication and record locking remain controlled by the existing verification workflow; editing a dog's profile does not bypass a pending member submission.</p>
@@ -79,12 +80,17 @@
       <article style="border-bottom:1px solid var(--border-color, #aaa);padding:1rem 0">
         <strong>{{ event.created_at|date:"d M Y H:i" }} · {{ event.actor_admin_label }}</strong>
         <p>{{ event.note }}</p>
-        <p class="muted">{% if event.summary.is_owner %}Super admin direct edit{% elif event.review_state == "direct_dog_revert" %}Reverted by super admin{% elif event.review_state == "direct_dog_review" %}Accepted by super admin{% else %}Pending super admin review{% endif %}</p>
+        <p class="muted">{% if event.summary.kind == "direct_dog_proposal" %}{% if event.review_state == "direct_dog_proposal_approved" %}Protected proposal approved and published{% elif event.review_state == "direct_dog_proposal_rejected" %}Protected proposal rejected; not published{% else %}Awaiting Super Admin approval — not public{% endif %}{% elif event.summary.is_owner %}Super Admin direct edit{% elif event.review_state == "direct_dog_revert" %}Reverted by Super Admin{% elif event.review_state == "direct_dog_review" %}Accepted by Super Admin{% else %}Live change awaiting Super Admin review{% endif %}</p>
         <details class="ux-disclosure"><summary>Compare recorded before and after values</summary>
           <div class="ux-disclosure-body">
             <div class="profile-section-grid">
+              {% if event.summary.kind == "direct_dog_proposal" %}
+              <div><h3>Existing public values</h3><pre class="payload-preview" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ event.summary.before_protected }}</pre></div>
+              <div><h3>Proposed values (not yet public)</h3><pre class="payload-preview" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ event.summary.proposed_changes }}</pre></div>
+              {% else %}
               <div><h3>Before</h3><pre class="payload-preview" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ event.summary.before }}</pre></div>
               <div><h3>After</h3><pre class="payload-preview" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ event.summary.after }}</pre></div>
+              {% endif %}
             </div>
           </div>
         </details>
@@ -93,8 +99,13 @@
           {% csrf_token %}
           <label for="reason-{{ event.pk }}">Review decision reason</label>
           <textarea id="reason-{{ event.pk }}" name="reason" rows="2" maxlength="2000" required minlength="5" placeholder="Why this edit is appropriate or should be reversed"></textarea>
+          {% if event.summary.kind == "direct_dog_proposal" %}
+          <div class="button-row"><button class="btn btn-gold" type="submit" name="decision" value="approve">Approve and publish</button>
+            <button class="btn btn-outline" type="submit" name="decision" value="reject">Reject proposal</button></div>
+          {% else %}
           <div class="button-row"><button class="btn btn-outline" type="submit" name="decision" value="accept">Accept edit</button>
             <button class="btn btn-gold" type="submit" name="decision" value="revert" onclick="return confirm('Reverse this live change? Later changes are protected and cannot be overwritten.');">Revert edit</button></div>
+          {% endif %}
         </form>
         {% endif %}
       </article>
