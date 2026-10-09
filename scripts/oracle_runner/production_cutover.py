@@ -193,6 +193,16 @@ def main():
         raise RuntimeError("Cloudflare token and Django origin secret are required")
     before = live_mode()
     print(f"Live origin before operation: {before}")
+    if args.mode == "northflank":
+        # Northflank continues using Supabase. Once Oracle uses a local
+        # PostgreSQL primary, switching HTTP alone would silently show stale
+        # accounts, submissions, and payment records. Never permit that.
+        health = json.loads(open_checked(PUBLIC_EDGE + "/healthz/"))
+        if health.get("database_backend") != "supabase":
+            raise RuntimeError(
+                "Refusing Northflank HTTP-only rollback: Oracle-local DB is primary. "
+                "Reconcile the databases and use the disaster-recovery procedure."
+            )
     if before == args.mode:
         print("Already in requested mode; no production change needed.")
         return
