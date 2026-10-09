@@ -2,7 +2,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from registry.models import Dog, DogIdentityNumber, DisputeCase, ModerationAudit
+from registry.models import Dog, DogImage, DogIdentityNumber, DisputeCase, ModerationAudit
 from registry.services import merge_dogs
 
 
@@ -40,3 +40,44 @@ class MergePreservationTests(TestCase):
             row.refresh_from_db()
             self.assertEqual(row.dog_id, canonical.pk)
         self.assertEqual(chip.normalized_value, "CCAMICROCHIP77")
+
+    def test_merge_combines_photos_parents_bio_and_retains_conflicts(self):
+        actor = get_user_model().objects.create_superuser(
+            username="merge-photo-admin", email="merge-photo@example.com", password="test-pass"
+        )
+        sire = Dog.objects.create(name="Sire Test", slug="sire-test", sex=Dog.Sex.MALE)
+        dam = Dog.objects.create(name="Dam Test", slug="dam-test", sex=Dog.Sex.FEMALE)
+        kept = Dog.objects.create(
+            name="Real Dog", slug="real-dog", colour="Black", bio="Verified history"
+        )
+        duplicate = Dog.objects.create(
+            name="Real Dog Alternative", slug="real-dog-alt", sex=Dog.Sex.MALE,
+            sire=sire, dam=dam, colour="Blue", bio="Second source history"
+        )
+        first = DogImage.objects.create(
+            dog=kept, image="dogs/primary.jpg", is_primary=True
+        )
+        second = DogImage.objects.create(
+            dog=duplicate, image="dogs/secondary.jpg", is_primary=True
+        )
+        puppy = Dog.objects.create(name="Related Puppy", slug="related-puppy", sire=duplicate)
+
+        history = merge_dogs(kept, duplicate, performed_by=actor)
+
+        kept.refresh_from_db()
+        puppy.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(kept.sex, Dog.Sex.MALE)
+        self.assertEqual(kept.sire_id, sire.pk)
+        self.assertEqual(kept.dam_id, dam.pk)
+        self.assertEqual(puppy.sire_id, kept.pk)
+        self.assertIn("Verified history", kept.bio)
+        self.assertIn("Second source history", kept.bio)
+        self.assertEqual(kept.images.count(), 2)
+        self.assertEqual(kept.images.filter(is_primary=True).count(), 1)
+        self.assertEqual(second.image.name, "dogs/secondary.jpg")
+        self.assertEqual(second.dog_id, kept.pk)
+        self.assertEqual(first.dog_id, kept.pk)
+        self.assertEqual(history.summary["field_conflicts"]["colour"]["kept"], "Black")
+        self.assertEqual(history.summary["field_conflicts"]["colour"]["retired_record"], "Blue")
+        self.assertIn("sire", history.summary["filled_fields"])

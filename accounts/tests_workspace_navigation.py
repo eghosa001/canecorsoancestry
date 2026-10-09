@@ -134,3 +134,59 @@ class WorkspaceNavigationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Merged Merge Duplicate into Merge Survivor")
         self.assertFalse(Dog.objects.filter(pk=retired.pk).exists())
+
+    def test_super_admin_merge_is_visible_in_django_admin_and_searchable(self):
+        from registry.models import Dog
+        Dog.objects.create(name="Duplicate Blue", slug="duplicate-blue")
+        Dog.objects.create(name="Duplicate Black", slug="duplicate-black")
+        self.client.force_login(self.owner)
+        home = self.client.get(reverse("admin:index"))
+        self.assertContains(home, "Merge Dogs — Super Admin")
+        dog_list = self.client.get(reverse("admin:registry_dog_changelist"))
+        self.assertContains(dog_list, 'href="/admin/merge-dogs/"')
+        results = self.client.get(reverse("admin-merge-dogs-search"), {"q": "Duplicate"})
+        self.assertEqual(results.status_code, 200)
+        self.assertEqual(len(results.json()["results"]), 2)
+        names = {row["name"] for row in results.json()["results"]}
+        self.assertEqual(names, {"Duplicate Blue", "Duplicate Black"})
+
+    def test_senior_moderator_cannot_access_merge_tools(self):
+        User = get_user_model()
+        senior = User.objects.create_user(username="senior-no-merge")
+        ModerationRoleAssignment.objects.create(
+            user=senior, role=ModerationRoleAssignment.Role.SENIOR,
+            assigned_by=self.owner,
+        )
+        self.client.force_login(senior)
+        self.assertEqual(self.client.get(reverse("accounts:merge-dogs")).status_code, 403)
+        self.assertEqual(self.client.post(reverse("accounts:merge-dogs"), {}).status_code, 403)
+        for route in ("admin-merge-dogs", "admin-merge-dogs-search"):
+            self.assertNotEqual(self.client.get(reverse(route)).status_code, 200)
+        queue = self.client.get(reverse("accounts:moderation"))
+        self.assertNotContains(queue, "Open pedigree merge")
+
+    def test_admin_merge_previews_both_records_before_confirm(self):
+        from registry.models import Dog, DogImage
+        survivor = Dog.objects.create(name="Keep Record", slug="keep-record")
+        duplicate = Dog.objects.create(name="Retire Record", slug="retire-record")
+        DogImage.objects.create(dog=duplicate, image="dogs/retire-photo.jpg")
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse("admin-merge-dogs"), {
+            "canonical": str(survivor.pk),
+            "duplicate": str(duplicate.pk),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Keep Record")
+        self.assertContains(response, "Retire Record")
+        self.assertContains(response, "Photos to transfer")
+        self.assertContains(response, "retire-photo.jpg")
+        self.assertTrue(Dog.objects.filter(pk=duplicate.pk).exists())
+        response = self.client.post(reverse("admin-merge-dogs"), {
+            "canonical": str(survivor.pk),
+            "duplicate": str(duplicate.pk),
+            "confirm_merge": "on",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("admin-merge-dogs"))
+        self.assertEqual(DogImage.objects.filter(dog=survivor).count(), 1)
+        self.assertFalse(Dog.objects.filter(pk=duplicate.pk).exists())

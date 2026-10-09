@@ -6,6 +6,7 @@ from django.contrib.sitemaps.views import index as sitemap_index, sitemap as sit
 from django.urls import include, path
 
 from accounts.forms import EmailAuthenticationForm
+from accounts.views import merge_dogs_view, merge_dog_suggestions
 from accounts.views import AccountPasswordResetView
 from core.media_views import media_file
 from core.sitemaps import SITEMAPS
@@ -52,6 +53,8 @@ urlpatterns = [
     path("accounts/reset/<uidb64>/<token>/", PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
     path("accounts/reset/done/", PasswordResetCompleteView.as_view(), name="password_reset_complete"),
     path("member/", include("accounts.urls")),
+    path("admin/merge-dogs/search/", admin.site.admin_view(merge_dog_suggestions), name="admin-merge-dogs-search"),
+    path("admin/merge-dogs/", admin.site.admin_view(merge_dogs_view), name="admin-merge-dogs"),
     path("admin/", admin.site.urls),
     path("pedigrees/", include("pedigrees.urls")),
     path("", include("registry.urls")),
