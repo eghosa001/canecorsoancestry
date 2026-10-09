@@ -11,7 +11,7 @@ import urllib.parse
 from pathlib import Path
 
 from scripts.oracle_runner.edge_origin_mode import (
-    NORTHFLANK, ORACLE, PUBLIC_EDGE, live_mode, render,
+    NORTHFLANK, ORACLE, PUBLIC_EDGE, VPC_SERVICE_ID, live_mode, render,
 )
 
 CANDIDATE = "https://canecorsoancestry-oracle-candidate.aighewieghosa111.workers.dev"
@@ -38,15 +38,69 @@ def open_checked(url, *, headers=None, data=None, cookie_file=None, expected=200
     if process.returncode:
         raise RuntimeError(f"HTTP smoke request failed for {url}: curl exit {process.returncode}")
     body, marker, status = process.stdout.rpartition(b"\n__CCA_STATUS__")
-    if not marker or status.decode("ascii").strip() != str(expected):
+    allowed = (expected,) if isinstance(expected, int) else tuple(expected)
+    if not marker or int(status.decode("ascii").strip() or 0) not in allowed:
         raise RuntimeError(f"Unexpected HTTP response for {url}: {status!r}")
     return body
 
+
+def refresh_candidate(secret):
+    """Redeploy the latest guarded candidate before checking auth readiness.
+
+    The candidate previously ran an older Worker bundle even after its
+    source was patched on main. This operation never deploys the public Worker.
+    """
+    config = Path("wrangler.oracle-candidate.toml")
+    original = config.read_text(encoding="utf-8")
+    placeholder = "REPLACE_WITH_PROVISIONED_ID"
+    if original.count(placeholder) != 1:
+        raise RuntimeError("Unexpected guarded Oracle candidate config")
+    if 'name = "canecorsoancestry-oracle-candidate"' not in original:
+        raise RuntimeError("Refusing to deploy a non-candidate Worker")
+    with tempfile.NamedTemporaryFile(
+        mode="w", prefix="cca-guarded-candidate-", suffix=".json", delete=False,
+    ) as f:
+        secret_path = f.name
+        os.chmod(secret_path, 0o600)
+        json.dump({
+            "ORIGIN_EDGE_SECRET": secret,
+            "CANDIDATE_GUARD_KEY": secret,
+        }, f)
+    try:
+        config.write_text(original.replace(placeholder, VPC_SERVICE_ID), encoding="utf-8")
+        subprocess.run(
+            ["npx", "--yes", "wrangler@4", "deploy", "--config", str(config),
+             "--secrets-file", secret_path],
+            check=True, timeout=150,
+        )
+        print("Guarded Oracle candidate refreshed with current Worker code.", flush=True)
+    finally:
+        config.write_text(original, encoding="utf-8")
+        Path(secret_path).unlink(missing_ok=True)
+
+
+def require_auth_ready(url, headers=None, *, attempts=12, pause_seconds=3):
+    """A 202 is a pending readiness response, not a fatal exception.
+
+    Never pass the gate unless the Worker returns its JSON ready:true.
+    """
+    for attempt in range(attempts):
+        try:
+            payload = json.loads(open_checked(
+                url, headers=headers, expected=(200, 202),
+            ))
+            if payload.get("ready") is True:
+                return
+        except (ValueError, RuntimeError) as exc:
+            if attempt == attempts - 1:
+                raise RuntimeError("Oracle auth readiness request failed") from exc
+        if attempt != attempts - 1:
+            time.sleep(pause_seconds)
+    raise RuntimeError("Oracle auth readiness stayed pending after bounded retries")
+
 def preflight_candidate(secret):
     headers = {"X-CCA-Candidate-Test": secret}
-    ready = json.loads(open_checked(CANDIDATE + "/__edge/auth-ready", headers=headers))
-    if not ready.get("ready"):
-        raise RuntimeError("Oracle auth readiness returned false")
+    require_auth_ready(CANDIDATE + "/__edge/auth-ready", headers)
     for path in ["/", "/accounts/login/", "/pedigrees/virtual-mating/",
                  "/dogs/suggestions/?q=&browse=1&sex=male",
                  "/static/core/site.css"]:
@@ -145,6 +199,7 @@ def main():
         print("Already in requested mode; no production change needed.")
         return
     if args.mode == "oracle":
+        refresh_candidate(secret)
         preflight_candidate(secret)
 
     with tempfile.NamedTemporaryFile(mode="w", prefix="cca-worker-secret-",
