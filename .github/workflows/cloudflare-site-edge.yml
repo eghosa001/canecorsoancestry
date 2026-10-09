@@ -6,6 +6,7 @@ on:
       - "src/site-edge.js"
       - "wrangler.site.toml"
       - "scripts/test_site_edge_cache.mjs"
+      - "scripts/oracle_runner/edge_origin_mode.py"
       - ".github/workflows/cloudflare-site-edge.yml"
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - "src/site-edge.js"
       - "wrangler.site.toml"
       - "scripts/test_site_edge_cache.mjs"
+      - "scripts/oracle_runner/edge_origin_mode.py"
       - ".github/workflows/cloudflare-site-edge.yml"
   workflow_run:
     workflows: ["Provision Northflank origin"]
@@ -24,7 +26,7 @@ permissions:
 
 concurrency:
   group: cloudflare-site-edge
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   validate:
@@ -45,6 +47,9 @@ jobs:
 
       - name: Test public edge cache policy
         run: node scripts/test_site_edge_cache.mjs
+
+      - name: Test safe reversible edge origin rendering
+        run: python3 -m unittest scripts.tests.test_edge_origin_mode
 
       - name: Warm Northflank origin before cutover
         shell: bash
@@ -99,10 +104,22 @@ jobs:
           done
           exit "$missing"
 
+      - name: Preserve the current live origin across future Worker deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          mode="$(python3 scripts/oracle_runner/edge_origin_mode.py live-mode)"
+          echo "EDGE_ORIGIN_MODE=$mode" >> "$GITHUB_ENV"
+          echo "Preserving active production origin: $mode"
+
       - name: Wait for exact Northflank release before edge cutover
         shell: bash
         run: |
           set -euo pipefail
+          if [ "${EDGE_ORIGIN_MODE:?}" = "oracle" ]; then
+            echo "Oracle is already the live origin; no Northflank release gate required."
+            exit 0
+          fi
           origin="https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
 
           if [ -n "$APP_RELEASE_SHA" ]; then
@@ -171,6 +188,10 @@ jobs:
           path.write_text(text, encoding="utf-8")
           print(f"Edge cache namespace: {release}")
           PY
+
+      - name: Preserve the current site origin in the deployment config
+        shell: bash
+        run: python3 scripts/oracle_runner/edge_origin_mode.py render --mode "${EDGE_ORIGIN_MODE:?}"
 
       - name: Deploy site edge
         run: npx --yes wrangler@4 deploy --config wrangler.site.toml --secrets-file /tmp/site-edge-secrets.json
