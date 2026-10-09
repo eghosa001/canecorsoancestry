@@ -101,11 +101,7 @@ jobs:
           if grep -q '^accounts/' <<<"$changed"; then
             scoped_accounts=false
 
-            if grep -Eq '^accounts/(direct_dog_edit|tests_direct_dog_edit|urls)[.]py$' <<<"$changed"; then
-              targets+=("accounts.tests_direct_dog_edit" "accounts.tests_role_separation")
-              scoped_accounts=true
-            fi
-
+            if grep -Eq '^accounts/(direct_dog_edit|tests_direct_dog_edit|urls)[.]py
             if grep -Eq '^accounts/(admin\.py|tests_admin_surfaces\.py)$' <<<"$changed"; then
               targets+=("accounts.tests_admin_surfaces")
               scoped_accounts=true
