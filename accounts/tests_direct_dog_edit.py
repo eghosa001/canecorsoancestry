@@ -81,7 +81,7 @@ class DirectDogEditTests(TestCase):
     def test_super_admin_can_revert_a_moderator_edit_and_new_related_title(self):
         self.client.force_login(self.moderator)
         self.client.post(
-            self.editor(), self.submission(name="Mistaken Name", **{"titles-0-name": "Wrong title"})
+            self.editor(), self.submission(name="Mistaken Name", **{"titles-TOTAL_FORMS": "1", "titles-0-name": "Wrong title"})
         )
         self.dog.refresh_from_db()
         self.assertEqual(self.dog.name, "Mistaken Name")
