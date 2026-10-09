@@ -61,6 +61,21 @@ def with_card_registration(queryset):
     )
 
 
+def with_card_image(queryset):
+    """Inline the first R2-backed image path without another Supabase round trip.
+
+    Match the existing presentation order exactly: primary first, then
+    sort_order, then created_at. No result caching or stale moderation state.
+    """
+    first_image = (
+        DogImage.objects.filter(dog_id=OuterRef("pk"))
+        .order_by("-is_primary", "sort_order", "created_at")
+    )
+    return queryset.annotate(
+        card_image_name=Subquery(first_image.values("image")[:1])
+    )
+
+
 def one_dog_per_kennel(queryset):
     group = Coalesce("kennel_id", "id")
     return queryset.annotate(
