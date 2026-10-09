@@ -37,14 +37,14 @@ sample("grouped_count", lambda: grouped.count())
 sample("imaged_page", lambda: list(imaged.order_by("-search_count", "-updated_at", "name").values_list("pk", flat=True)[:18]))
 sample("grouped_page", lambda: list(grouped.order_by("-search_count", "-updated_at", "name").values_list("pk", flat=True)[:18]))
 
-# Match the real view's card annotations and joined kennel columns. A simple
-# values_list query does not reveal expensive correlated card subqueries.
-cards = with_card_image(with_card_registration(_dog_cards(
-    imaged, include_sources=False, include_registrations=False,
-    include_images=False,
+# Match the optimized view: only hydrate the first 18 ranked dogs.
+# Do not run the historical 3.4-second pre-pagination card query in diagnostics.
+first_page_ids = list(grouped.order_by("-search_count", "-updated_at", "name").values_list("pk", flat=True)[:18])
+page_cards = with_card_image(with_card_registration(_dog_cards(
+    Dog.objects.filter(pk__in=first_page_ids, is_public=True),
+    include_sources=False, include_registrations=False, include_images=False,
 )))
-grouped_cards = one_dog_per_kennel(cards).order_by("-search_count", "-updated_at", "name")[:18]
-sample("grouped_full_cards", lambda: list(grouped_cards))
+sample("hydrated_page_cards", lambda: list(page_cards))
 
 sample("countries", lambda: list(
     imaged.exclude(country="").values_list("country", flat=True)
@@ -56,7 +56,7 @@ kennel_ids = with_displayable_images(
 kennels = Kennel.objects.filter(pk__in=Subquery(kennel_ids)).order_by("name").values("name", "slug")
 sample("kennel_options", lambda: list(kennels))
 
-for label, queryset in (("imaged_page", imaged.order_by("-search_count", "-updated_at", "name").values_list("pk", flat=True)[:18]), ("grouped_page", grouped.order_by("-search_count", "-updated_at", "name").values_list("pk", flat=True)[:18]), ("grouped_full_cards", grouped_cards), ("kennel_options", kennels)):
+for label, queryset in (("imaged_page", imaged.order_by("-search_count", "-updated_at", "name").values_list("pk", flat=True)[:18]), ("grouped_page", grouped.order_by("-search_count", "-updated_at", "name").values_list("pk", flat=True)[:18]), ("hydrated_page_cards", page_cards), ("kennel_options", kennels)):
     # Django's explain() cannot wrap the qualified subselect used when filtering
     # a window function. EXPLAIN the compiled read-only SQL directly instead.
     sql, params = queryset.query.get_compiler(connection=connection).as_sql()
