@@ -205,7 +205,7 @@
       </div>
 
       {% if blocking_findings and submission.verification_status != "awaiting_second" %}
-      {% if can_review_yellow or can_review_flagged %}
+      {% if can_approve_yellow or can_review_flagged %}
         <div class="section-spacer-tight">
           <h3>{% if can_approve_yellow %}Approve yellow warning{% else %}Approve with override{% endif %}</h3>
           <p class="muted">{% if can_approve_yellow %}Moderators may approve non-critical yellow warnings after recording the evidence and reason. Red/high-risk findings still require Senior Moderator review.{% else %}The critical warning remains in history and may require a different second reviewer. Record why the evidence supports approval.{% endif %}</p>
