@@ -1,0 +1,157 @@
+{% extends "admin/base_site.html" %}
+{% block title %}Merge Dogs | Cane Corso Ancestry Admin{% endblock %}
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Admin</a> &rsaquo; Merge Dogs</div>
+{% endblock %}
+{% block content %}
+<style>
+.cca-merge {max-width:1120px}
+.cca-merge .panel {background:var(--body-bg);border:1px solid var(--hairline-color);border-radius:9px;padding:20px;margin:16px 0}
+.cca-merge .twocol {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.cca-merge .picker {position:relative}
+.cca-merge .picker input {box-sizing:border-box;width:100%;padding:11px;min-height:42px;max-width:100%}
+.cca-merge .results {position:absolute;z-index:20;top:100%;left:0;right:0;max-height:260px;overflow-y:auto;background:var(--body-bg);border:1px solid var(--hairline-color);box-shadow:0 10px 22px #0002}
+.cca-merge .results:empty {display:none}
+.cca-merge .results button {display:block;box-sizing:border-box;border:0;border-bottom:1px solid var(--hairline-color);width:100%;padding:11px;text-align:left;background:var(--body-bg);color:var(--body-fg);cursor:pointer}
+.cca-merge .results button:hover,.cca-merge .results button:focus {background:var(--darkened-bg)}
+.cca-merge .dog-photos {display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.cca-merge .dog-photos img {width:105px;height:105px;object-fit:contain;background:var(--darkened-bg);border-radius:6px}
+.cca-merge .metadata {display:grid;grid-template-columns:minmax(95px,auto) 1fr;gap:7px 12px}
+.cca-merge .metadata dt {font-weight:600}.cca-merge .metadata dd {margin:0;overflow-wrap:anywhere}
+.cca-merge .warning {border-left:4px solid #b88422;padding:12px;background:var(--darkened-bg)}
+.cca-merge .actions {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
+.cca-merge h2 {margin-top:0}.cca-merge .selected-note {font-size:12px;color:var(--body-quiet-color);margin:5px 0 0}
+@media(max-width:700px){.cca-merge .twocol {grid-template-columns:1fr}.cca-merge .panel {padding:14px}}
+</style>
+<div class="cca-merge">
+  <h1>Merge Dogs</h1>
+  <p>Combine two records for <strong>the same real dog</strong>. One profile stays; the duplicate is retired. Photos, registration details, health records, source evidence, offspring links and history are transferred. This action is audited and cannot simply be undone.</p>
+  <p><a href="{% url 'admin:registry_dog_changelist' %}">Find dogs in admin</a> · <a href="{% url 'admin:registry_mergehistory_changelist' %}">Merge history</a></p>
+
+  <div class="panel">
+    <h2>1. Find the two dog records</h2>
+    <p>Search by dog name and select the exact record. If you arrived from the dog list, both records are already selected. The survivor can be changed before confirming.</p>
+    <form method="get" action="{% url 'admin-merge-dogs' %}" autocomplete="off">
+      <div class="twocol">
+        <div class="picker" data-dog-picker>
+          <label for="merge-canonical"><strong>KEEP — canonical dog</strong></label>
+          <input id="merge-canonical" name="canonical" type="text" value="{{ form.canonical.value|default:'' }}" required placeholder="Type a dog's name or paste its UUID" aria-describedby="canonical-help">
+          <div class="results" role="listbox" aria-label="Surviving dog matches"></div>
+          <p class="selected-note" id="canonical-help">Select the profile whose URL and identity will remain.</p>
+        </div>
+        <div class="picker" data-dog-picker>
+          <label for="merge-duplicate"><strong>RETIRE — duplicate dog</strong></label>
+          <input id="merge-duplicate" name="duplicate" type="text" value="{{ form.duplicate.value|default:'' }}" required placeholder="Type a dog's name or paste its UUID" aria-describedby="duplicate-help">
+          <div class="results" role="listbox" aria-label="Duplicate dog matches"></div>
+          <p class="selected-note" id="duplicate-help">All attached photos and records transfer to the kept profile.</p>
+        </div>
+      </div>
+      <div class="actions"><button class="button default" type="submit">Compare both records</button>
+        {% if canonical_preview and duplicate_preview %}
+        <a href="{% url 'admin-merge-dogs' %}?canonical={{ duplicate_preview.pk }}&amp;duplicate={{ canonical_preview.pk }}">Swap which record survives</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  {% if canonical_preview or duplicate_preview %}
+  <div class="twocol" aria-label="Dog merge comparison">
+    {% if canonical_preview %}
+    <div class="panel">
+      <h2>KEEP · {{ canonical_preview.name }}</h2>
+      <dl class="metadata">
+        <dt>UUID</dt><dd>{{ canonical_preview.pk }}</dd>
+        <dt>Sex</dt><dd>{{ canonical_preview.get_sex_display }}</dd>
+        <dt>Birth</dt><dd>{{ canonical_preview.date_of_birth|default:"Not recorded" }}</dd>
+        <dt>Kennel</dt><dd>{{ canonical_preview.kennel.name|default:"Not recorded" }}</dd>
+        <dt>Sire</dt><dd>{{ canonical_preview.sire.name|default:"Not recorded" }}</dd>
+        <dt>Dam</dt><dd>{{ canonical_preview.dam.name|default:"Not recorded" }}</dd>
+        <dt>Photos</dt><dd>{{ canonical_preview.images.count }}</dd>
+        <dt>Public</dt><dd>{{ canonical_preview.is_public|yesno:"Yes,No" }}</dd>
+      </dl>
+      <div class="dog-photos">{% for photo in canonical_preview.images.all|slice:":6" %}
+        <a href="{{ photo.image.url }}" target="_blank" rel="noopener"><img src="{{ photo.image.url }}" alt="Photo of {{ canonical_preview.name }}" loading="lazy"></a>
+      {% empty %}<span>No stored photos</span>{% endfor %}</div>
+      <p><a href="{% url 'admin:registry_dog_change' canonical_preview.pk %}">Open record for review</a></p>
+    </div>
+    {% endif %}
+    {% if duplicate_preview %}
+    <div class="panel">
+      <h2>RETIRE · {{ duplicate_preview.name }}</h2>
+      <dl class="metadata">
+        <dt>UUID</dt><dd>{{ duplicate_preview.pk }}</dd>
+        <dt>Sex</dt><dd>{{ duplicate_preview.get_sex_display }}</dd>
+        <dt>Birth</dt><dd>{{ duplicate_preview.date_of_birth|default:"Not recorded" }}</dd>
+        <dt>Kennel</dt><dd>{{ duplicate_preview.kennel.name|default:"Not recorded" }}</dd>
+        <dt>Sire</dt><dd>{{ duplicate_preview.sire.name|default:"Not recorded" }}</dd>
+        <dt>Dam</dt><dd>{{ duplicate_preview.dam.name|default:"Not recorded" }}</dd>
+        <dt>Photos to transfer</dt><dd>{{ duplicate_preview.images.count }}</dd>
+        <dt>Public</dt><dd>{{ duplicate_preview.is_public|yesno:"Yes,No" }}</dd>
+      </dl>
+      <div class="dog-photos">{% for photo in duplicate_preview.images.all|slice:":6" %}
+        <a href="{{ photo.image.url }}" target="_blank" rel="noopener"><img src="{{ photo.image.url }}" alt="Photo of {{ duplicate_preview.name }}" loading="lazy"></a>
+      {% empty %}<span>No stored photos</span>{% endfor %}</div>
+      <p><a href="{% url 'admin:registry_dog_change' duplicate_preview.pk %}">Open record for review</a></p>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if form.non_field_errors %}
+  <div class="errornote" role="alert">{{ form.non_field_errors }}</div>
+  {% endif %}
+  {% if canonical_preview and duplicate_preview and canonical_preview.pk != duplicate_preview.pk %}
+  <div class="panel">
+    <h2>2. Confirm the merge</h2>
+    <p class="warning">Make sure these records describe the same dog. Existing canonical facts take precedence; missing facts and photos from the retired record are added. Any conflicting facts are recorded in merge history for later inspection. A merge is not a substitute for correcting an incorrect pedigree.</p>
+    <form action="{% url 'admin-merge-dogs' %}" method="post">
+      {% csrf_token %}
+      <input type="hidden" name="canonical" value="{{ canonical_preview.pk }}">
+      <input type="hidden" name="duplicate" value="{{ duplicate_preview.pk }}">
+      <p><label>{{ form.confirm_merge }} <strong>{{ form.confirm_merge.label }}</strong></label></p>
+      {% for error in form.confirm_merge.errors %}<p class="errornote">{{ error }}</p>{% endfor %}
+      <div class="actions"><button type="submit" class="button default">Merge into {{ canonical_preview.name }}</button>
+        <a href="{% url 'admin:registry_dog_changelist' %}">Cancel</a></div>
+    </form>
+  </div>
+  {% endif %}
+</div>
+<script>
+(() => {
+  const url = "{% url 'admin-merge-dogs-search' %}";
+  for (const picker of document.querySelectorAll("[data-dog-picker]")) {
+    const input = picker.querySelector("input");
+    const output = picker.querySelector(".results");
+    let serial = 0, timer;
+    input.addEventListener("input", () => {
+      clearTimeout(timer);
+      output.replaceChildren();
+      const q = input.value.trim(), token = ++serial;
+      if (q.length < 2 || /^[0-9a-f-]{36}$/i.test(q)) return;
+      timer = setTimeout(async () => {
+        try {
+          const response = await fetch(url + "?q=" + encodeURIComponent(q), {credentials:"same-origin"});
+          if (!response.ok) return;
+          const data = await response.json();
+          if (token !== serial) return;
+          for (const dog of data.results || []) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.setAttribute("role", "option");
+            button.textContent = dog.name + " · " + (dog.kennel || "No kennel") +
+              " · " + (dog.birth || "DOB unknown") + " · " + dog.photos + " photos · " + dog.id;
+            button.addEventListener("click", () => {
+              input.value = dog.id;
+              output.replaceChildren();
+              picker.querySelector(".selected-note").textContent = "Selected: " + dog.name + " (" + dog.id + ")";
+            });
+            output.appendChild(button);
+          }
+        } catch (e) { output.replaceChildren(); }
+      }, 180);
+    });
+    input.addEventListener("keydown", e => { if (e.key === "Escape") output.replaceChildren(); });
+  }
+})();
+</script>
+{% endblock %}
