@@ -111,39 +111,12 @@ function isSearchTrackingUrl(url) {
 }
 
 function isCacheablePublicPath(url, request) {
+  // Approved moderation changes must be visible on the very next public GET.
+  // Do not cache any database-backed HTML, JSON, browse, sitemap or dog page;
+  // a 20s fresh window and stale-while-revalidate previously concealed edits.
+  // Fingerprinted static assets are immutable and safe to cache at the edge.
   if (request.method !== "GET" || hasPrivateCookie(request)) return false;
-  if (
-    url.search &&
-    !url.pathname.startsWith("/static/") &&
-    url.pathname !== "/dogs/" &&
-    url.pathname !== "/dogs/suggestions/" &&
-    url.pathname !== "/kennels/" &&
-    url.pathname !== "/pedigrees/virtual-mating/" &&
-    !isSearchTrackingUrl(url)
-  ) return false;
-  const path = url.pathname;
-  if (isPrivatePath(path)) return false;
-  if (path.startsWith("/static/")) return true;
-  // Never serve a stale approved photo, corrected dog name, health result,
-  // kennel/litter edit or pedigree update from an edge HTML cache. Search
-  // results and autocomplete must likewise reflect moderation immediately.
-  if (
-    path === "/dogs/suggestions/" ||
-    (path === "/dogs/" && url.search) ||
-    path === "/pedigrees/virtual-mating/" ||
-    /^\/dogs\/[-a-z0-9]+\/$/i.test(path) ||
-    /^\/kennels\/[-a-z0-9]+\/$/i.test(path) ||
-    /^\/litters\/[0-9a-f-]+\/$/i.test(path) ||
-    /^\/pedigrees\/[-a-z0-9]+\/(?:descendants\/)?$/i.test(path)
-  ) return false;
-  if (path === "/" || path === "/dogs/" || path === "/dogs/suggestions/" || path === "/kennels/" || path === "/statistics/" || path === "/pedigrees/" || path === "/pedigrees/virtual-mating/") return true;
-  if (/^\/dogs\/[-a-z0-9]+\/$/i.test(path)) return true;
-  if (/^\/kennels\/[-a-z0-9]+\/$/i.test(path)) return true;
-  if (/^\/litters\/[0-9a-f-]+\/$/i.test(path)) return true;
-  if (/^\/pedigrees\/[-a-z0-9]+\/$/i.test(path)) return true;
-  if (/^\/pedigrees\/[-a-z0-9]+\/descendants\/$/i.test(path)) return true;
-  if (path === "/robots.txt" || path === "/sitemap.xml" || /^\/sitemap-[^/]+\.xml$/.test(path)) return true;
-  return false;
+  return url.pathname.startsWith("/static/") && !url.search;
 }
 
 function originUrlFor(request, env, pathOverride = null) {
@@ -193,6 +166,13 @@ function rewriteForVisitor(response, request, env, extraHeaders = {}) {
     if (location.startsWith(originBase)) {
       headers.set("location", `${visitorBase}${location.slice(originBase.length)}`);
     }
+  }
+  // Even an upstream accidental public max-age must not keep approved dog,
+  // image, pedigree, kennel or listing HTML stale in the browser/proxy.
+  if (!new URL(request.url).pathname.startsWith("/static/")) {
+    headers.set("cache-control", "private, no-store, max-age=0");
+    headers.delete("expires");
+    headers.delete("etag");
   }
   for (const [key, value] of Object.entries(extraHeaders)) headers.set(key, value);
   return new Response(response.body, {
