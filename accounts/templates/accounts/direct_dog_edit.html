@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Manage {{ dog.name }} · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading moderation-heading">
+    <div><p class="eyebrow">Canonical dog administration</p><h1>Edit {{ dog.name }}</h1>
+      <p>{% if dog.is_public %}Published profile{% else %}Unpublished record{% endif %} · UUID {{ dog.pk }} {% if dog.is_record_locked %}· Super-admin locked{% endif %}</p>
+      <p>Changes save to the live site immediately. Every field and related-record change is compared against its previous value and permanently audited.</p>
+    </div>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">All dogs</a>
+      {% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">Public profile</a>{% endif %}
+    </div>
+  </header>
+  <form method="post" enctype="multipart/form-data" class="panel" autocomplete="off">
+    {% csrf_token %}
+    <input type="hidden" name="version" value="{{ version }}">
+    {{ form.non_field_errors }}
+    <h2>Identity & pedigree</h2>
+    <p class="muted">Parent, kennel and litter fields accept an exact name/code or UUID. Use a UUID when names are duplicated. Leave blank to unlink. A new dog must still use the member submission workflow.</p>
+    <div class="profile-section-grid">
+      {% for field in form %}
+        <div>
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}
+          {{ field.errors }}
+        </div>
+      {% endfor %}
+    </div>
+    <h2>Related information</h2>
+    <p class="muted">Expand only the sections you need. Use “Delete” to remove a row; a removed file reference remains in the audit snapshot so a super admin can reverse the edit.</p>
+    {% for name, formset in formsets.items %}
+    <details class="panel ux-disclosure" style="margin:1rem 0">
+      <summary><strong>{{ name|title }}</strong> <small class="muted">Edit existing items, add a row, or mark a row for deletion</small></summary>
+      <div class="ux-disclosure-body">
+        {{ formset.management_form }}
+        {{ formset.non_form_errors }}
+        <div id="formset-items-{{ name }}">
+        {% for related_form in formset %}
+          <div class="panel" style="margin:1rem 0">
+            {% for hidden in related_form.hidden_fields %}{{ hidden }}{% endfor %}
+            {{ related_form.non_field_errors }}
+            <div class="profile-section-grid">
+              {% for field in related_form.visible_fields %}
+              <div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}
+                {% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+        </div>
+        <template id="formset-empty-{{ name }}">
+          <div class="panel" style="margin:1rem 0">
+            {% for hidden in formset.empty_form.hidden_fields %}{{ hidden }}{% endfor %}
+            <div class="profile-section-grid">
+              {% for field in formset.empty_form.visible_fields %}
+                <div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>
+              {% endfor %}
+            </div>
+          </div>
+        </template>
+        <button class="btn btn-outline" type="button" data-formset-add="{{ name }}">Add {{ name|title }} row</button>
+      </div>
+    </details>
+    {% endfor %}
+    <div class="button-row">
+      <button class="btn btn-gold" type="submit">Save live changes</button>
+      <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Discard edits</a>
+    </div>
+    <p class="muted">Publication and record locking remain controlled by the existing verification workflow; editing a dog's profile does not bypass a pending member submission.</p>
+  </form>
+  <section class="panel">
+    <h2>Revision history and super-admin review</h2>
+    <p class="muted">A reversal is allowed only while the entire dog record still matches the change being reversed. This protects later edits from being silently overwritten.</p>
+    {% for event in revisions %}
+      <article style="border-bottom:1px solid var(--border-color, #aaa);padding:1rem 0">
+        <strong>{{ event.created_at|date:"d M Y H:i" }} · {{ event.actor_admin_label }}</strong>
+        <p>{{ event.note }}</p>
+        <p class="muted">{% if event.summary.is_owner %}Super admin direct edit{% elif event.review_state == "direct_dog_revert" %}Reverted by super admin{% elif event.review_state == "direct_dog_review" %}Accepted by super admin{% else %}Pending super admin review{% endif %}</p>
+        <details class="ux-disclosure"><summary>Compare recorded before and after values</summary>
+          <div class="ux-disclosure-body">
+            <div class="profile-section-grid">
+              <div><h3>Before</h3><pre class="payload-preview" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ event.summary.before }}</pre></div>
+              <div><h3>After</h3><pre class="payload-preview" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ event.summary.after }}</pre></div>
+            </div>
+          </div>
+        </details>
+        {% if owner and not event.summary.is_owner and not event.review_state %}
+        <form method="post" action="{% url 'accounts:dog-review-edit' dog.pk event.pk %}" style="margin-top:.8rem">
+          {% csrf_token %}
+          <label for="reason-{{ event.pk }}">Review decision reason</label>
+          <textarea id="reason-{{ event.pk }}" name="reason" rows="2" maxlength="2000" required minlength="5" placeholder="Why this edit is appropriate or should be reversed"></textarea>
+          <div class="button-row"><button class="btn btn-outline" type="submit" name="decision" value="accept">Accept edit</button>
+            <button class="btn btn-gold" type="submit" name="decision" value="revert" onclick="return confirm('Reverse this live change? Later changes are protected and cannot be overwritten.');">Revert edit</button></div>
+        </form>
+        {% endif %}
+      </article>
+    {% empty %}<p>No direct editing revisions have been recorded for this dog.</p>{% endfor %}
+  </section>
+</section>
+<script src="{% static 'accounts/direct-dog-edit.js' %}" defer></script>
+{% endblock %}
