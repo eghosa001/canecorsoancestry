@@ -1817,10 +1817,29 @@ def merge_dogs_view(request):
                 "Pedigree links and attached records have been preserved.",
             )
             return redirect("accounts:merge-dogs")
+    preview = {}
+    if request.method == "GET":
+        valid_ids = []
+        for key in ("canonical", "duplicate"):
+            try:
+                valid_ids.append(uuid.UUID(request.GET.get(key, "")))
+            except (ValueError, TypeError, AttributeError):
+                continue
+        if valid_ids:
+            preview = {
+                str(row.pk): row
+                for row in Dog.objects.filter(pk__in=valid_ids)
+                .select_related("kennel", "sire", "dam")
+            }
     return render(
         request,
         "accounts/merge_dogs.html",
-        {"form": form, "workspace_section": "merge"},
+        {
+            "form": form,
+            "workspace_section": "merge",
+            "canonical_preview": preview.get(request.GET.get("canonical", "")),
+            "duplicate_preview": preview.get(request.GET.get("duplicate", "")),
+        },
     )
 
 
