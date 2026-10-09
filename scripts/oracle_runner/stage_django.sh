@@ -207,6 +207,19 @@ sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now "$APP_SERVICE"
 sudo -n systemctl is-active --quiet "$APP_SERVICE"
 
+# The Oracle application restart can stop the dependent Cloudflare VPC tunnel
+# cleanly. systemd Restart=always does not revive a service explicitly stopped
+# by a dependent unit. Bring the private ingress back on EVERY Django release.
+readonly VPC_SERVICE="cca-cloudflared-vpc.service"
+sudo -n systemctl cat "$VPC_SERVICE" >/dev/null 2>&1 || {
+  echo "::error::Production Cloudflare VPC tunnel systemd unit is missing."; exit 1;
+}
+sudo -n systemctl enable --now "$VPC_SERVICE"
+sudo -n systemctl is-active --quiet "$VPC_SERVICE" || {
+  echo "::error::Private Cloudflare VPC connector did not restart after Django."; exit 1;
+}
+echo "PASS: Oracle private Cloudflare VPC connector is active and boot-enabled."
+
 readonly URL="http://127.0.0.1:18080"
 echo "Checking release, direct-origin access, sign-in, and R2 upload/read/delete."
 ready=0
@@ -256,6 +269,35 @@ then
   exit 1
 fi
 
+# A local Django 200 is not proof that the public Worker can reach Oracle.
+# Fail the release if the user-facing route is not reachable or still serves
+# the previous commit. Public /healthz/ is uncached and discloses no secrets.
+readonly PUBLIC_EDGE="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+public_ready=0
+for attempt in $(seq 1 20); do
+  public_status="$(curl --connect-timeout 4 --max-time 12 -sS -o "$probe_output" -w '%{http_code}' "$PUBLIC_EDGE/healthz/" || true)"
+  if [[ "$public_status" == 200 ]] && python3 - "$probe_output" "$CCA_RELEASE_SHA" <<'PY'
+import json
+import sys
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+assert payload.get("status") == "ok"
+assert payload.get("release") == sys.argv[2]
+assert payload.get("database_backend") == "oracle-local"
+PY
+  then
+    home_status="$(curl --connect-timeout 4 --max-time 15 -sS -o /dev/null -w '%{http_code}' "$PUBLIC_EDGE/" || true)"
+    if [[ "$home_status" == 200 ]]; then
+      public_ready=1
+      break
+    fi
+  fi
+  sleep 3
+done
+[[ "$public_ready" == 1 ]] || {
+  echo "::error::Cloudflare public homepage or release identity is not healthy after Oracle deployment."; exit 1;
+}
+echo "PASS: Cloudflare public homepage HTTP 200 and exact Django release SHA verified."
+
 echo "PASS: Oracle CCA stage is healthy at 127.0.0.1:18080; DB and R2 work."
 echo "Oracle container updated; Cloudflare routing was not modified. If Oracle is serving production, this was a live Django restart."
 {
@@ -267,5 +309,7 @@ echo "Oracle container updated; Cloudflare routing was not modified. If Oracle i
   echo "- Database backend: $DB_MODE; schema migrations current"
   echo "- Cloudflare R2: authenticated upload/read/delete probe passed"
   echo "- Edge authentication: direct access denied; trusted login succeeded"
-  echo "- Public Cloudflare Worker origin: unchanged by this workflow; Oracle may already be the active production host"
+  echo "- Cloudflare private VPC tunnel: active and enabled after app restart"
+  echo "- Cloudflare public homepage: HTTP 200; exact Django SHA verified"
+  echo "- Public Cloudflare Worker origin: unchanged (Oracle)"
 } >> "$GITHUB_STEP_SUMMARY"
