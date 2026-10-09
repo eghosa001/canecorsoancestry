@@ -91,6 +91,60 @@ class OwnerPedigreeInboxTests(TestCase):
         self.dog.refresh_from_db()
         self.assertEqual(self.dog.sex, Dog.Sex.MALE)
 
+    def test_very_old_unreviewed_proposal_survives_many_newer_decisions(self):
+        # The former 80-record cap hid old protected edits indefinitely.
+        oldest = ModerationAudit.objects.create(
+            action=ModerationAudit.Action.RECORD_CHANGED,
+            actor=self.mod, dog=self.dog,
+            summary={
+                "kind": "direct_dog_proposal",
+                "before_protected": {"sex": Dog.Sex.UNKNOWN},
+                "proposed_changes": {"sex": Dog.Sex.MALE},
+            },
+            note="Old breeder document needing independent approval",
+        )
+        for n in range(90):
+            review_source = ModerationAudit.objects.create(
+                action=ModerationAudit.Action.RECORD_CHANGED,
+                actor=self.mod, dog=self.dog,
+                summary={
+                    "kind": "direct_dog_proposal",
+                    "before_protected": {"sex": Dog.Sex.UNKNOWN},
+                    "proposed_changes": {"sex": Dog.Sex.FEMALE},
+                },
+                note=f"Later reviewed proposal {n}",
+            )
+            ModerationAudit.objects.create(
+                action=ModerationAudit.Action.RECORD_CHANGED,
+                actor=self.owner, dog=self.dog,
+                summary={
+                    "kind": "direct_dog_proposal_rejected",
+                    "original_audit_id": str(review_source.pk),
+                },
+                note="Reviewed without publication",
+            )
+        self.client.force_login(self.owner)
+        overview = self.client.get(reverse("accounts:verification-dashboard"))
+        self.assertEqual(overview.status_code, 200)
+        self.assertEqual(
+            [e.pk for e in overview.context["pending_proposals"]], [oldest.pk]
+        )
+        self.assertContains(overview, "Old breeder document")
+        # The decision is recorded, not retroactively made public.
+        self.dog.refresh_from_db()
+        self.assertEqual(self.dog.sex, Dog.Sex.UNKNOWN)
+        ModerationAudit.objects.create(
+            action=ModerationAudit.Action.RECORD_CHANGED,
+            actor=self.owner, dog=self.dog,
+            summary={
+                "kind": "direct_dog_proposal_rejected",
+                "original_audit_id": str(oldest.pk),
+            },
+            note="Old evidence reviewed and rejected",
+        )
+        updated = self.client.get(reverse("accounts:verification-dashboard"))
+        self.assertEqual(updated.context["pending_proposals"], [])
+
     def test_non_superadmin_has_no_owner_inbox(self):
         for user in (self.member, self.mod):
             self.client.force_login(user)
