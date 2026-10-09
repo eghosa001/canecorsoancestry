@@ -23,12 +23,19 @@ readonly APP_CONTAINER="cca-oracle-staging"
 sudo -n systemctl is-active --quiet cca-oracle-staging.service
 sudo -n systemctl is-active --quiet cca-cloudflared-vpc.service
 curl -fsS --connect-timeout 2 --max-time 10 http://127.0.0.1:18080/healthz/ >/dev/null
-[[ ! -e "$PG_ENV" && ! -e "$DJANGO_ENV" ]] || {
-  echo "::error::Trial already provisioned; refusing to overwrite secrets or snapshot"; exit 1;
-}
 if sudo -n podman container exists "$DB_CONTAINER"; then
-  echo "::error::Shadow Postgres container already exists"; exit 1;
-fi
+  sudo -n test -s "$PG_ENV" || { echo "::error::Existing shadow has no credentials"; exit 1; }
+  sudo -n test -s "$ROOT/backup/source.dump" || { echo "::error::Existing shadow has no backup"; exit 1; }
+  if sudo -n test -e "$DJANGO_ENV"; then
+    echo "::error::Shadow Django env already exists; refusing accidental re-import."
+    exit 1
+  fi
+  echo "Resuming previously initialized shadow database without overwriting data."
+else
+  if sudo -n test -e "$PG_ENV" || sudo -n test -e "$DJANGO_ENV"; then
+    echo "::error::Partial shadow credential state without a container; inspect manually."
+    exit 1
+  fi
 sudo -n install -d -m 0700 /etc/cca "$ROOT" "$ROOT/data" "$ROOT/backup"
 sudo -n python3 - "$PG_ENV" <<'PY'
 import secrets,sys
@@ -57,13 +64,18 @@ sudo -n podman run -d \
   -c max_connections=40 -c shared_buffers=96MB \
   -c synchronous_commit=on -c fsync=on \
   >/dev/null
+fi
 for i in $(seq 1 24); do
-  if sudo -n podman exec "$DB_CONTAINER" pg_isready -U cca_shadow_admin -d "$DB_NAME" >/dev/null 2>&1; then
+  if sudo -n podman exec "$DB_CONTAINER" pg_isready -h 127.0.0.1 -U cca_shadow_admin -d "$DB_NAME" >/dev/null 2>&1; then
     break
   fi
   [[ "$i" -ne 24 ]] || { echo "::error::Shadow PostgreSQL did not become ready"; exit 1; }
   sleep 2
 done
+# Wait for Postgres's FINAL TCP-serving post-init server (not temporary initdb socket).
+# Never restore into an existing Django schema, even when resuming.
+has_django="$(sudo -n podman exec "$DB_CONTAINER" psql -X -At -v ON_ERROR_STOP=1 -U cca_shadow_admin -d "$DB_NAME" -c "SELECT count(*) FROM pg_namespace WHERE nspname='django_app'")"
+[[ "$has_django" == "0" ]] || { echo "::error::Shadow schema already exists, refusing overwrite"; exit 1; }
 sudo -n podman exec "$DB_CONTAINER" psql -X -v ON_ERROR_STOP=1 \
   -U cca_shadow_admin -d "$DB_NAME" -c \
   'CREATE SCHEMA IF NOT EXISTS extensions;
