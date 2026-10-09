@@ -15,10 +15,10 @@ Source of truth: `infra/active-services.json` and `scripts/verify_active_service
 
 ## Deploy a Django release
 
-1. Merge a reviewed PR to protected `main` after focused CI and DB/release checks.
-2. Run **Oracle Django staging (manual, no cutover)** → `stage-only` from `main` (`.github/workflows/oracle-stage-django.yml`). Despite the legacy workflow name, this **restarts the production Oracle Django container** while leaving Cloudflare routing unchanged.
-3. Confirm the workflow verifies the exact commit SHA, local database, sign-in and R2 media storage.
-4. Run the production smoke and production data-health workflow. Confirm `/__edge/health` reports `origin=http://127.0.0.1:18080` and `/healthz/` reports `database_backend=oracle-local`.
+1. Merge a reviewed PR to protected `main` after focused CI checks.
+2. The successful **Full release audit** on `main` triggers `.github/workflows/oracle-stage-django.yml`. The Oracle release gate verifies its checkout still matches the current protected `main` commit before restarting Django, and does not alter the database or Cloudflare route. An older queued build is skipped.
+3. Confirm the exact release SHA, local database, sign-in and R2 media storage checks.
+4. Run the production smoke and production data-health workflow. Manual `stage-only` dispatch is retained for controlled recovery/redeployment. Confirm `/__edge/health` reports `origin=http://127.0.0.1:18080` and `/healthz/` reports `database_backend=oracle-local`.
 
 Do not infer Django deployment from a Cloudflare edge deployment. No Northflank workflow builds the live application.
 
@@ -54,3 +54,7 @@ python3 scripts/fast_path_guard.py
 node scripts/test_site_edge_cache.mjs
 python3 -m unittest scripts.tests.test_edge_origin_mode
 ```
+
+## Approval visibility guarantee
+
+A successfully committed moderator approval or direct staff edit is available to the next public request. Cloudflare caches fingerprinted `/static/` resources only, not dog profiles, the home page, search, kennel/litter pages, directory filters, or sitemaps. Django's homepage selection/count and directory metadata cache keys are invalidated after the approval transaction commits. A newly published dog without a displayable photo is searchable by name but intentionally omitted from the unfiltered photo-card gallery. For live troubleshooting, verify the submission is really `approved`, inspect the profile by its stable slug, and compare `/healthz/` release SHA with the latest successful Oracle release.
