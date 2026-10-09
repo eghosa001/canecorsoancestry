@@ -3039,6 +3039,7 @@ def data_health(request):
             "report": report,
             "counts": counts,
             "critical_total": critical_total,
+            "can_manage_sources": can_manage_verification(request.user),
         },
     )
 
