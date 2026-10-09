@@ -1,0 +1,31 @@
+name: Oracle root-owned local DB credential append preflight
+on:
+  pull_request:
+    paths:
+      - "scripts/oracle_runner/probe_local_db_temp_append.sh"
+      - ".github/workflows/oracle-temp-env-preflight.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/oracle_runner/probe_local_db_temp_append.sh"
+permissions:
+  contents: read
+concurrency:
+  group: oracle-django-stage-refs/heads/main
+  cancel-in-progress: false
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          bash -n scripts/oracle_runner/probe_local_db_temp_append.sh
+          python3 scripts/fast_path_guard.py
+  probe:
+    if: github.event_name == 'push' && github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/oracle_runner/probe_local_db_temp_append.sh
