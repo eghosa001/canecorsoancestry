@@ -44,7 +44,8 @@ class ApprovedPublicContentTests(TestCase):
     def submission(self, kind, *, dog=None, attachment=None, payload=None, **fields):
         values = {
             "kind": kind, "submitted_by": self.member,
-            "dog": self.dog if dog is None else dog,
+            "dog": (self.dog if kind != Submission.Kind.DOG else None)
+            if dog is None else dog,
             "kennel": self.kennel, "payload": payload or {},
             **fields,
         }
