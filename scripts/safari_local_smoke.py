@@ -104,9 +104,8 @@ def run():
             # zoom/crop, hard grey matte or CSS image scaling on profiles.
             photo = page.locator(".profile-photo img")
             photo.wait_for(state="visible")
-            page.wait_for_function(
-                "() => document.querySelector('.profile-photo img').naturalWidth > 0"
-            )
+            photo.evaluate("img => img.decode()")
+            assert photo.evaluate("img => img.naturalWidth > 0"), "Dog photo failed to load"
             fidelity = photo.evaluate("""img => {
               const style = getComputedStyle(img);
               const frame = getComputedStyle(img.closest('.profile-photo'));
