@@ -3060,6 +3060,7 @@ def data_health_evidence(request):
         "unreviewed-source": "No independently reviewed source",
         "community-only": "Community-submitted verification state",
         "unknown-sex": "Unknown sex on a public record",
+        "missing-photo": "No displayable public photograph",
     }
     if issue not in choices:
         return HttpResponseBadRequest("Choose a supported evidence review filter.")
@@ -3076,8 +3077,25 @@ def data_health_evidence(request):
         public = public.filter(has_reviewed_source=False)
     elif issue == "community-only":
         public = public.filter(verification_state="community")
-    else:
+    elif issue == "unknown-sex":
         public = public.filter(sex=Dog.Sex.UNKNOWN)
+    else:
+        # Match the established public card/photo policy. Managed R2 uploads
+        # and approved legacy archive references count; arbitrary external
+        # image URLs do not. This is a read-only worklist, not an image import.
+        managed = DogImage.objects.filter(dog_id=OuterRef("pk"))
+        trusted = sources.filter(
+            Q(raw_payload__image_url__startswith=(
+                "https://canecorsopedigree.com/static/images/animal/"
+            ))
+            | Q(raw_payload__image_url__startswith=(
+                "https://www.canecorsopedigree.com/static/images/animal/"
+            ))
+        )
+        public = public.annotate(
+            has_managed_photo=Exists(managed),
+            has_trusted_archive_photo=Exists(trusted),
+        ).filter(has_managed_photo=False, has_trusted_archive_photo=False)
 
     # Bound each request to 30 existing dogs, rather than materializing 33k
     # source/history rows or inspecting every public photo.

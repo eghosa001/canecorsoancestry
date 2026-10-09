@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from registry.models import (
-    Dog, DogSource, ModerationRoleAssignment, VerificationState,
+    Dog, DogImage, DogSource, ModerationRoleAssignment, VerificationState,
 )
 
 
@@ -97,6 +97,61 @@ class EvidenceTriageTests(TestCase):
         self.assertEqual(len(second.context["dogs"]), 7)
         self.assertContains(first, "Next")
         self.assertContains(second, "Previous")
+
+    def test_missing_photo_triage_uses_same_trusted_sources_as_public_cards(self):
+        managed = Dog.objects.create(
+            name="Managed Photograph", slug="managed-photograph",
+            sex=Dog.Sex.MALE, is_public=True,
+        )
+        DogImage.objects.create(
+            dog=managed, image="dogs/testing/managed.jpg",
+            is_primary=True,
+        )
+        legacy = Dog.objects.create(
+            name="Trusted Archive Photograph", slug="trusted-archive-photo",
+            sex=Dog.Sex.MALE, is_public=True,
+        )
+        DogSource.objects.create(
+            dog=legacy, source_type=DogSource.SourceType.PEDIGREE,
+            title="Archive identity reference",
+            raw_payload={
+                "image_url": "https://canecorsopedigree.com/static/images/animal/73.jpg"
+            },
+        )
+        untrusted = Dog.objects.create(
+            name="Arbitrary External Photo", slug="arbitrary-external-photo",
+            sex=Dog.Sex.FEMALE, is_public=True,
+        )
+        DogSource.objects.create(
+            dog=untrusted, source_type=DogSource.SourceType.PEDIGREE,
+            title="Other imported reference",
+            raw_payload={"image_url": "https://example.net/images/dog.jpg"},
+        )
+        old_count = Dog.objects.count()
+        self.client.force_login(self.mod)
+        response = self.client.get(self.base, {"issue": "missing-photo"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.missing.name)
+        self.assertContains(response, self.unreviewed.name)
+        self.assertContains(response, untrusted.name)
+        self.assertNotContains(response, managed.name)
+        self.assertNotContains(response, legacy.name)
+        self.assertNotContains(response, self.private.name)
+        self.assertContains(response, "Review image options")
+        self.assertNotContains(response, "Review source evidence")
+        self.assertEqual(Dog.objects.count(), old_count)
+        self.client.force_login(self.superadmin)
+        dashboard = self.client.get(reverse("accounts:data-health"), {"refresh": "1"})
+        self.assertContains(dashboard, "Photo gaps in existing dogs")
+
+    def test_locked_dog_photo_remains_superadmin_only(self):
+        Dog.objects.filter(pk=self.missing.pk).update(is_record_locked=True)
+        self.client.force_login(self.mod)
+        response = self.client.get(self.base, {"issue": "missing-photo"})
+        self.assertContains(response, "Record locked")
+        self.client.force_login(self.superadmin)
+        response = self.client.get(self.base, {"issue": "missing-photo"})
+        self.assertContains(response, "Review image options")
 
     def test_staff_read_access_never_grants_source_editing(self):
         self.client.force_login(self.mod)
