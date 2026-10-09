@@ -33,7 +33,7 @@ sudo -n podman exec cca-oracle-staging python -c \
  'from pathlib import Path; p=Path("/run/cca/maintenance.flag"); print("mounted="+str(p.parent.exists()),"flag="+str(p.exists()))' || true
 status="$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
  -H "X-CCA-Edge: 1" -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
- -H "X-Forwarded-Proto: https" http://127.0.0.1:18080/accounts/login/)
+ -H "X-Forwarded-Proto: https" http://127.0.0.1:18080/accounts/login/)"
 echo "maintenance_request=$status"
 [[ "$status" == 503 ]] || { echo "::error::Expected 503 with correctly labelled flag, got $status"; exit 1; }
 echo "recent_error_categories:"
