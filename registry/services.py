@@ -402,6 +402,10 @@ def approve_submission(
     ]
     submission.refresh_from_db()
     resolution_notes = (resolution_notes or "").strip()
+    # A review initiated through the override action must never become a
+    # silent normal approval if server re-verification clears the warning.
+    if allow_override and not resolution_notes:
+        raise ValueError("An override reason is required.")
     if blocking_findings:
         is_high_risk = (
             submission.requires_second_review
