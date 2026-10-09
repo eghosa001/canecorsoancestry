@@ -1529,40 +1529,51 @@ def moderation_dog_ids(query, limit=30, *, fuzzy=True):
         return False
 
     try:
-        if add(Dog.objects.filter(pk=uuid.UUID(query)).values_list("pk", flat=True)[:1]):
+        add(Dog.objects.filter(pk=uuid.UUID(query)).values_list("pk", flat=True)[:1])
+        if ids:
             return ids
     except ValueError:
         pass
 
-    # A canonical slug is also accepted by Manage dog records. Exact slug
-    # lookup uses its unique index, without checking 35k dog rows.
-    if add(
-        Dog.objects.filter(slug__iexact=query)
-        .values_list("pk", flat=True)[:1]
-    ):
+    # Only investigate slugs first when the query looks like one. Both exact
+    # slug and UUID are unique-index checks, so return after the first hit.
+    if "-" in query:
+        add(Dog.objects.filter(slug__iexact=query).values_list("pk", flat=True)[:1])
+        if ids:
+            return ids
+
+    # A prefix query also includes exact matches (sorted first). Avoid two
+    # unnecessary extra DB round trips for exact name and substring after a
+    # useful prefix hit; one small indexed SELECT is enough.
+    add(
+        Dog.objects.filter(name__istartswith=query)
+        .order_by("name").values_list("pk", flat=True)[:limit]
+    )
+    if ids:
         return ids
-
-    # Most staff searches are exact names or the first characters of a name.
-    # This fast path never needs registration/alias joins.
-    for lookup in ("iexact", "istartswith", "icontains"):
-        if add(
-            Dog.objects.filter(**{f"name__{lookup}": query})
-            .order_by("name").values_list("pk", flat=True)[:limit]
-        ):
-            return ids
-
     if len(query) >= 2:
-        # Slug prefixes are a compatibility fallback for admin lookups.
-        if add(
-            Dog.objects.filter(slug__istartswith=query)
-            .order_by("slug").values_list("pk", flat=True)[:limit]
-        ):
+        add(
+            Dog.objects.filter(name__icontains=query)
+            .order_by("name").values_list("pk", flat=True)[:limit]
+        )
+        if ids:
             return ids
+        if "-" in query:
+            add(
+                Dog.objects.filter(slug__istartswith=query)
+                .order_by("slug").values_list("pk", flat=True)[:limit]
+            )
+            if ids:
+                return ids
+
+        # Registration and alias queries are only required if name and slug
+        # lookup returned nothing; each branch has a separate trigram index.
         for model, field in ((DogRegistration, "number"), (DogAlias, "name")):
-            if add(
+            add(
                 model.objects.filter(**{f"{field}__icontains": query})
                 .order_by(field).values_list("dog_id", flat=True)[:limit]
-            ):
+            )
+            if ids:
                 return ids
 
     # Fuzzy typo search only after no direct match; PostgreSQL trigram operator

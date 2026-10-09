@@ -3,6 +3,8 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from registry.models import (
@@ -113,6 +115,17 @@ class ModeratorDogSearchTests(TestCase):
         self.assertIn(self.dog.pk, moderation_dog_ids("Delta Champion"))
         self.assertIn(self.private.pk, moderation_dog_ids("FCI-LOOKUP-991"))
         self.assertEqual(moderation_dog_ids(str(self.private.pk)), [self.private.pk])
+
+    def test_prefix_and_uuid_search_stop_after_one_database_lookup(self):
+        with CaptureQueriesContext(connection) as prefix_queries:
+            prefix_results = moderation_dog_ids("Legend Of", limit=12)
+        self.assertEqual(prefix_results, [self.dog.pk])
+        self.assertEqual(len(prefix_queries), 1, "Prefix search must not execute unrelated alias/fuzzy queries")
+
+        with CaptureQueriesContext(connection) as uuid_queries:
+            uuid_results = moderation_dog_ids(str(self.dog.pk), limit=12)
+        self.assertEqual(uuid_results, [self.dog.pk])
+        self.assertEqual(len(uuid_queries), 1, "UUID lookups should return immediately")
 
     def test_moderation_search_includes_private_dogs_and_bounded_results(self):
         matches = moderation_dog_search("Private Legend", limit=5)
