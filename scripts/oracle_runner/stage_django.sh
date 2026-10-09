@@ -119,22 +119,22 @@ sudo -n "$PODMAN_BIN" build --pull=missing --tag "$IMAGE" .
 
 run_network=()
 if [[ "$DB_MODE" == local ]]; then
-  sudo -n test -s /etc/cca/pgshadow-private-django.env || {
+  sudo -n test -s /etc/cca/pg-live-app.env || {
     echo "::error::Local DB mode requires a verified private Postgres connection"; exit 1;
   }
   sudo -n podman exec cca-pg-shadow pg_isready -h 127.0.0.1     -U cca_shadow_admin -d cca_live >/dev/null || {
     echo "::error::Local primary database is unavailable"; exit 1;
   }
   run_network=(--network cca-private)
-  sudo -n python3 - "$temporary_env" /etc/cca/pgshadow-private-django.env <<'PY'
+  sudo -n python3 - "$temporary_env" /etc/cca/pg-live-app.env <<'PY'
 from pathlib import Path
 import sys
 dst,src=map(Path,sys.argv[1:])
 urls=[line.split("=",1)[1] for line in src.read_text().splitlines() if line.startswith("DATABASE_URL=")]
 assert len(urls)==1
-assert urls[0].endswith("@cca-pg-shadow:5432/cca_shadow")
-local=urls[0].replace("@cca-pg-shadow:5432/cca_shadow","@cca-pg-shadow:5432/cca_live")
-with dst.open("a") as out:out.write("DATABASE_URL="+local+"\n")
+assert urls[0].endswith("@cca-pg-shadow:5432/cca_live")
+assert "cca_app:" in urls[0]
+with dst.open("a") as out:out.write("DATABASE_URL="+urls[0]+"\n")
 PY
   echo "Using verified Oracle-local PostgreSQL primary via private network."
 else
@@ -193,11 +193,23 @@ sudo -n "$PODMAN_BIN" create \
   --workers 1 --threads 4 --timeout 60 --worker-tmp-dir /tmp \
   --access-logfile - --error-logfile - >/dev/null
 
+if [[ "$DB_MODE" == local ]]; then
+  sudo -n systemctl is-active --quiet cca-pg-shadow.service || {
+    echo "::error::Local DB requires the systemd-managed PostgreSQL service"
+    exit 1
+  }
+  db_after="cca-pg-shadow.service"
+  db_requires="Requires=cca-pg-shadow.service"
+else
+  db_after=""
+  db_requires=""
+fi
 cat > "$temporary_unit" <<UNIT
 [Unit]
 Description=Cane Corso Ancestry Django Oracle staging (loopback only)
-After=network-online.target
+After=network-online.target $db_after
 Wants=network-online.target
+$db_requires
 
 [Service]
 Type=simple
