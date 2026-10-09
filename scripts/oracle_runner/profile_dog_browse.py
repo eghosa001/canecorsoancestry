@@ -35,7 +35,12 @@ sample("grouped_count", lambda: grouped.count())
 sample("imaged_page", lambda: list(imaged.order_by("-search_count", "-updated_at", "name").values_list("pk", flat=True)[:18]))
 sample("grouped_page", lambda: list(grouped.order_by("-search_count", "-updated_at", "name").values_list("pk", flat=True)[:18]))
 for label, queryset in (("imaged_page", imaged.order_by("-search_count", "-updated_at", "name").values_list("pk", flat=True)[:18]), ("grouped_page", grouped.order_by("-search_count", "-updated_at", "name").values_list("pk", flat=True)[:18])):
-    plan = queryset.explain(analyze=False, verbose=False, costs=True)
+    # Django's explain() cannot wrap the qualified subselect used when filtering
+    # a window function. EXPLAIN the compiled read-only SQL directly instead.
+    sql, params = queryset.query.get_compiler(connection=connection).as_sql()
+    with connection.cursor() as cursor:
+        cursor.execute("EXPLAIN (COSTS TRUE) " + sql, params)
+        plan = "\n".join(row[0] for row in cursor.fetchall())
     print(f"DOG_BROWSE_{label}_EXPLAIN_BEGIN", flush=True)
     print(plan[:12000], flush=True)
     print(f"DOG_BROWSE_{label}_EXPLAIN_END", flush=True)

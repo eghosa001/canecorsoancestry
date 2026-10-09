@@ -26,7 +26,7 @@ echo "=== Oracle Django container ==="
 sudo -n podman inspect cca-oracle-staging --format 'cpus={{.HostConfig.NanoCpus}} memory={{.HostConfig.Memory}} command={{.Config.Cmd}}'
 sudo -n podman stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}' cca-oracle-staging
 echo "=== Local Django request timings (2 samples/path) ==="
-for path in "/" "/accounts/login/" "/pedigrees/virtual-mating/" "/dogs/?q=Branco" "/dogs/suggestions/?q=gar&sex=male"; do
+for path in "/" "/accounts/login/" "/pedigrees/virtual-mating/" "/dogs/?q=" "/dogs/?q=Branco" "/dogs/suggestions/?q=gar&sex=male"; do
   for n in 1 2; do
     headers_file="$(mktemp)"
     timing="$(curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -D "$headers_file" -w 'http=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}' \
@@ -60,7 +60,7 @@ print(f'active_database_sql_median_ms={median(elapsed):.3f}',flush=True)
 assert median(elapsed)<20, "Local SQL median exceeded 20ms; investigate VM contention."
 PY
 echo "=== Public routes and database post-cutover smoke ==="
-for path in "/" "/accounts/login/" "/pedigrees/virtual-mating/" "/dogs/?q=Branco"; do
+for path in "/" "/accounts/login/" "/pedigrees/virtual-mating/" "/dogs/?q=" "/dogs/?q=Branco"; do
   code="$(curl -sS --connect-timeout 5 --max-time 20 -o /dev/null -w '%{http_code}' \
     "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev$path" || true)"
   echo "public_smoke=$path http=$code"
