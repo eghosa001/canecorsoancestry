@@ -319,6 +319,20 @@ async function wakeCriticalOrigin(env) {
       "text/html",
     ),
   ]);
+
+  // Prime the Django per-process public metadata caches before their next
+  // visitor expires them (homepage 300s; dog-search filters 900s).
+  // These pages remain live DB-backed for edits, moderation and privacy.
+  // Run sequentially to avoid burdening the single-core Oracle origin.
+  for (const path of ["/", "/dogs/"]) {
+    await timedOriginGet(
+      env,
+      path,
+      12000,
+      "CaneCorsoAncestry-Public-Cache-Warmup/1.0",
+      "text/html",
+    );
+  }
 }
 
 async function originReady(env) {

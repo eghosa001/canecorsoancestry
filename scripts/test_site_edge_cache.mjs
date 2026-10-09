@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 // This smoke-policy test is intentionally part of the Cloudflare edge deploy gate.
 // It also gives us a safe no-behavior-change path to re-run edge cutover verification.
-import {
+import edge, {
   cacheKey,
   edgeCacheVersion,
   hasPrivateCookie,
@@ -140,6 +140,39 @@ try {
   globalThis.fetch = realFetch;
 }
 
+
+// Production Cloudflare cron must prime Django homepage/search metadata, not
+// merely Django health and login, to avoid avoidable cold-cache DB round trips.
+const scheduledCalls = [];
+let scheduledTask;
+const scheduleEnv = {
+  ORIGIN_URL: "http://127.0.0.1:18080",
+  ORIGIN_TRANSPORT: "private-vpc",
+  ORIGIN_EDGE_SECRET: "test-secret",
+  ORIGIN_VPC: {
+    async fetch(url, init) {
+      scheduledCalls.push({ path: new URL(url).pathname, headers: init.headers });
+      return new Response("ready", {
+        status: 200,
+        headers: { "x-request-id": "cache-prime-test" },
+      });
+    },
+  },
+};
+edge.scheduled({}, scheduleEnv, {
+  waitUntil(p) { scheduledTask = p; },
+});
+await scheduledTask;
+assert.deepEqual(
+  scheduledCalls.map((call) => call.path).slice(-2),
+  ["/", "/dogs/"],
+  "Cloudflare cron should warm Django public home and filter metadata",
+);
+for (const call of scheduledCalls) {
+  assert.equal(call.headers["x-forwarded-proto"], "https");
+  assert.equal(call.headers["x-cca-origin-secret"], "test-secret");
+}
+console.log("Cloudflare cron primes Django public metadata safely");
 
 const cloudflareWorkflow = readFileSync(
   new URL("../.github/workflows/cloudflare-site-edge.yml", import.meta.url),
