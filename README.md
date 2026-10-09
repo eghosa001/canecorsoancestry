@@ -17,28 +17,26 @@ The supplied design references are authoritative:
 
 Keep the black/charcoal, warm ivory and restrained gold visual language unless the owner explicitly changes the brief.
 
-## Active production stack
+## Active production stack (verified 9 October 2026)
 
-The live system currently uses:
+The machine-readable source of truth is [`infra/active-services.json`](infra/active-services.json). Run `python3 scripts/verify_active_services.py` to check that deployment configuration still matches this inventory.
 
-- **Cloudflare Workers site edge** — public website endpoint, public-page cache and origin warm-up
-- **Northflank** — Django/Gunicorn application origin and static files
-- **Supabase PostgreSQL** — canonical relational database through the session pooler
-- **Cloudflare R2** — uploaded dog photos, evidence and documents through the media Worker
+- **Cloudflare Workers site edge** — public endpoint, caching, and a **private VPC binding** to Oracle; see `src/site-edge.js`, `wrangler.site.toml`.
+- **Oracle Cloud VM** — sole live Django/Gunicorn application origin, running in Podman on loopback port 18080; see `scripts/oracle_runner/stage_django.sh`.
+- **Oracle-local PostgreSQL 17** — the authoritative `cca_live` database, reachable only through a private Podman network; no remote Supabase round trips in production.
+- **Cloudflare R2 + media Worker** — private dog media, verification evidence, and hourly encrypted offsite PostgreSQL backups.
+- **GitHub Actions / CCA-ORACLE runner** — focused CI, manual protected production app releases, hourly database backups, scheduled production integrity tests.
+- **Paystack** and **Gmail SMTP** — application integrations enabled only when their respective server credentials are configured.
 
-Public website:
+Public website: `https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev`
 
-`https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev`
+R2 media gateway: `https://canecorsoancestry-edge.aighewieghosa111.workers.dev`
 
-Northflank origin:
+**Retired from production:** Northflank (former Django deployment) and Supabase (frozen historical PostgreSQL source). Neither may receive live writes or be used as an automatic fallback: after local-primary writes, a rollback to old Supabase would lose data. Older setup/migration documents are historical, not current deployment instructions.
 
-`https://web--canecorsoancestry--4w9gl8jxj4yr.code.run`
+### Releasing Django
 
-R2 media gateway:
-
-`https://canecorsoancestry-edge.aighewieghosa111.workers.dev`
-
-No custom domain is configured or assumed.
+Deploy Django to the active Oracle VM through the protected, manual `oracle-stage-django.yml` workflow on `main`. A Cloudflare Worker deployment does not replace the Oracle Django container. Check the live release marker and production smoke afterwards. Keep the hourly encrypted R2 backups running.
 
 ## Technology
 

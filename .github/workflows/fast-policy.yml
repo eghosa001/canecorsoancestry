@@ -12,6 +12,9 @@ on:
       - 'GEMINI.md'
       - '.github/copilot-instructions.md'
       - 'scripts/fast_path_guard.py'
+      - 'scripts/verify_active_services.py'
+      - 'infra/active-services.json'
+      - 'wrangler.site.toml'
   push:
     branches: [main]
     paths:
@@ -42,3 +45,4 @@ jobs:
         with:
           fetch-depth: 1
       - run: python3 scripts/fast_path_guard.py
+      - run: python3 scripts/verify_active_services.py

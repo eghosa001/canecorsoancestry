@@ -182,40 +182,26 @@ const smokeWorkflow = readFileSync(
   new URL("../.github/workflows/production-smoke.yml", import.meta.url),
   "utf8",
 );
-const northflankWorkflow = readFileSync(
-  new URL("../.github/workflows/provision-northflank.yml", import.meta.url),
-  "utf8",
-);
-
 assert.match(
   cloudflareWorkflow,
   /EDGE_CACHE_VERSION: edge-\$\{\{ github\.run_id \}\}/,
   "Cloudflare cache namespace must be unique to the edge workflow run",
 );
-assert.match(
-  cloudflareWorkflow,
-  /APP_RELEASE_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \|\| '' \}\}/,
-  "Cloudflare must retain the triggering Northflank app release identity",
+assert.ok(
+  cloudflareWorkflow.includes('test "$mode" = "oracle"'),
+  "Cloudflare must refuse to deploy against retired origins",
 );
-assert.match(
-  cloudflareWorkflow,
-  /ref: \$\{\{ github\.event_name == 'workflow_run' && 'main' \|\| github\.sha \}\}/,
-  "Post-Northflank edge deploys must use the latest Worker source from main",
+assert.doesNotMatch(
+  cloudflareWorkflow, /Provision Northflank origin/,
+  "Retired provider must not trigger public edge deploys",
 );
 assert.match(
   smokeWorkflow,
-  /EXPECTED_EDGE_CACHE_VERSION: \$\{\{ github\.event_name == 'workflow_run' && format\('edge-\{0\}', github\.event\.workflow_run\.id\) \|\| '' \}\}/,
-  "Production smoke must verify the exact Cloudflare cutover run namespace",
+  /EXPECTED_EDGE_CACHE_VERSION: \$\\{\\{ github\\.event_name == 'workflow_run' && format\\('edge-\\{0\\}', github\\.event\\.workflow_run\\.id\\) \\|\\| '' \\}\\}/,
+  "Production smoke must verify the exact Cloudflare cache namespace",
 );
-assert.match(
-  northflankWorkflow,
-  /GIT_COMMIT_SHA:\$git_sha/,
-  "Northflank runtime must expose its exact deployed Git SHA",
+assert.ok(
+  cloudflareWorkflow.includes('ORIGIN_URL = "http://127.0.0.1:18080"'),
+  "Oracle private loopback address should be pinned in edge deploys",
 );
-assert.match(
-  northflankWorkflow,
-  /Northflank health release marker/,
-  "Northflank deploy must verify its health release marker before succeeding",
-);
-
 console.log("release handshake workflow assertions passed");

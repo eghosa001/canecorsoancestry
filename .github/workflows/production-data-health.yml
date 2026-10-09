@@ -18,69 +18,52 @@ concurrency:
 jobs:
   audit:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 15
     env:
-      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
-      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-      DJANGO_SETTINGS_MODULE: config.settings.production
-      DJANGO_DB_SCHEMA: django_app
-      DJANGO_DB_SSLMODE: require
-      DJANGO_DB_EXTRA_SCHEMAS: extensions,public
-      DJANGO_ALLOWED_HOSTS: .code.run,127.0.0.1,localhost
-      DJANGO_CSRF_TRUSTED_ORIGINS: https://web--canecorsoancestry--4w9gl8jxj4yr.code.run,https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
-      DJANGO_REQUIRE_OBJECT_STORAGE: "0"
-      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
-      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
-      EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
-      DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
       PUBLIC_SITE: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
-          cache: pip
-      - name: Verify database audit secrets
+          persist-credentials: false
+      - name: Confirm audited database is the Oracle-local production primary
         shell: bash
         run: |
           set -euo pipefail
-          missing=0
-          for name in SUPABASE_DATABASE_URL DJANGO_SECRET_KEY; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Required production database secret is missing: $name"
-              missing=1
-            else
-              echo "::add-mask::${!name}"
-            fi
-          done
-          test "$missing" -eq 0
-      - run: pip install -r requirements.txt
-      - name: Discover reachable Supabase session pooler
-        shell: bash
+          test "$GITHUB_REPOSITORY" = "eghosa001/canecorsoancestry"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(uname -m)" = aarch64
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = local
+          sudo -n systemctl is-active --quiet cca-oracle-staging.service
+          sudo -n systemctl is-active --quiet cca-pg-shadow.service
+          curl --fail --silent --show-error --connect-timeout 3 --max-time 12             http://127.0.0.1:18080/healthz/ > /tmp/cca-live-health.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          health=json.loads(Path("/tmp/cca-live-health.json").read_text())
+          assert health["status"] == "ok", "Oracle application is unhealthy"
+          assert health["database_backend"] == "oracle-local", "Refusing to audit historical database"
+          print("PASS: audited backend is Oracle-local PostgreSQL")
+          PY
+      - name: Check running production migrations (no schema changes)
+        run: sudo -n podman exec cca-oracle-staging python manage.py migrate --check
+      - name: Verify production size in the live primary
         run: |
-          target_url="$(python scripts/discover_supabase_session_pooler.py)"
-          echo "::add-mask::$target_url"
-          echo "DATABASE_URL=$target_url" >> "$GITHUB_ENV"
-      - name: Check deployed schema expectation
-        run: python manage.py migrate --check
-      - name: Verify canonical production size
-        run: |
-          python manage.py shell -c "
+          sudo -n podman exec cca-oracle-staging python manage.py shell -c "
           from registry.models import Dog
           count = Dog.objects.count()
           assert count >= 33000, count
-          print(f'Production dogs: {count}')
+          print(f'Oracle-local production dogs: {count}')
           "
-      - name: Audit pedigree integrity
-        run: python manage.py audit_pedigree_data --fail-on-critical
-      - name: Audit owner production invariants
-        run: python manage.py audit_production_invariants --fail-on-critical
+      - name: Audit live pedigree integrity
+        run: sudo -n podman exec cca-oracle-staging python manage.py audit_pedigree_data --fail-on-critical
+      - name: Audit live owner production invariants
+        run: sudo -n podman exec cca-oracle-staging python manage.py audit_production_invariants --fail-on-critical
       - name: Verify one production dog image end to end
         shell: bash
         run: |
           set -euo pipefail
-          media_path="$(python manage.py shell -c "
+          media_path="$(sudo -n podman exec cca-oracle-staging python manage.py shell -c "
           from registry.models import DogImage
           value = DogImage.objects.filter(dog__is_public=True).order_by('pk').values_list('image', flat=True).first()
           assert value, 'No public DogImage rows found'

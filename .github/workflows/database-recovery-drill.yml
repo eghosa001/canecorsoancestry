@@ -1,91 +1,45 @@
-name: Database recovery drill
+name: Oracle offsite PostgreSQL recovery integrity
 
 on:
   workflow_dispatch:
   schedule:
     - cron: "27 4 1 * *"
+  pull_request:
+    paths:
+      - "scripts/oracle_runner/verify_offsite_recovery.sh"
+      - "scripts/oracle_runner/r2_postgres_backup.py"
+      - "scripts/oracle_runner/seal_postgres_backup.py"
+      - ".github/workflows/database-recovery-drill.yml"
 
 permissions:
   contents: read
 
+concurrency:
+  group: cca-oracle-offsite-recovery
+  cancel-in-progress: false
+
 jobs:
-  restore-test:
+  verify-script:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: restore
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d restore"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
-      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - run: |
+          bash -n scripts/oracle_runner/verify_offsite_recovery.sh
+          python3 -m py_compile scripts/oracle_runner/r2_postgres_backup.py scripts/oracle_runner/seal_postgres_backup.py
+          python3 scripts/fast_path_guard.py
+
+  verify-offsite:
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
         with:
-          python-version: "3.13"
-          cache: pip
-      - name: Verify required secrets
-        shell: bash
-        run: |
-          test -n "$SUPABASE_DATABASE_URL" || { echo "::error::SUPABASE_DATABASE_URL is missing"; exit 1; }
-          test -n "$DJANGO_SECRET_KEY" || { echo "::error::DJANGO_SECRET_KEY is missing"; exit 1; }
-      - name: Install app dependencies
-        run: pip install -r requirements.txt
-      - name: Discover reachable Supabase session pooler
-        shell: bash
-        run: |
-          target_url="$(python scripts/discover_supabase_session_pooler.py)"
-          echo "::add-mask::$target_url"
-          echo "SOURCE_DATABASE_URL=$target_url" >> "$GITHUB_ENV"
-      - name: Create and validate private-schema backup
-        shell: bash
-        run: |
-          mkdir -p "$RUNNER_TEMP/recovery"
-          docker run --rm \
-            -e SOURCE_DATABASE_URL \
-            -e PGSSLMODE=require \
-            -v "$RUNNER_TEMP/recovery:/work" \
-            postgres:17-alpine \
-            sh -ec 'pg_dump "$SOURCE_DATABASE_URL" --format=custom --no-owner --no-acl --schema=django_app --file=/work/canecorso.dump && pg_restore --list /work/canecorso.dump >/work/restore-list.txt'
-          test -s "$RUNNER_TEMP/recovery/canecorso.dump"
-          test -s "$RUNNER_TEMP/recovery/restore-list.txt"
-      - name: Prepare isolated PostgreSQL
-        shell: bash
-        run: |
-          docker run --rm --network host \
-            -e PGPASSWORD=postgres \
-            postgres:17-alpine \
-            sh -ec 'psql postgresql://postgres:postgres@127.0.0.1:5432/restore -v ON_ERROR_STOP=1 -c "CREATE SCHEMA IF NOT EXISTS extensions;" -c "CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;"'
-      - name: Restore backup into isolated PostgreSQL
-        shell: bash
-        run: |
-          docker run --rm --network host \
-            -e PGPASSWORD=postgres \
-            -v "$RUNNER_TEMP/recovery:/work" \
-            postgres:17-alpine \
-            sh -ec 'pg_restore --dbname=postgresql://postgres:postgres@127.0.0.1:5432/restore --no-owner --no-acl --exit-on-error /work/canecorso.dump'
-      - name: Verify restored Django database
-        env:
-          DJANGO_SETTINGS_MODULE: config.settings.production
-          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/restore
-          DJANGO_DB_SCHEMA: django_app
-          DJANGO_DB_EXTRA_SCHEMAS: extensions,public
-          DJANGO_ALLOWED_HOSTS: testserver
-          DJANGO_CSRF_TRUSTED_ORIGINS: https://testserver
-          SITE_URL: https://testserver
-        run: |
-          python manage.py migrate --check
-          python manage.py audit_pedigree_data --fail-on-critical
-      - name: Remove temporary backup
-        if: always()
-        run: rm -rf "$RUNNER_TEMP/recovery"
+          persist-credentials: false
+      - name: Verify latest offsite Oracle production archive is decryptable
+        run: bash scripts/oracle_runner/verify_offsite_recovery.sh

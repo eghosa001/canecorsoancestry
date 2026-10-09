@@ -1,34 +1,11 @@
-# Cloudflare production origin migration and rollback
+# Oracle production origin: current state and decommission warning
 
-Oracle Django staging, private Tunnel, VPC Service and guarded Oracle Worker
-were verified successfully on 9 October 2026. The public Worker currently
-uses Northflank until an explicit production cutover.
+As of 9 October 2026, Cloudflare's public Worker is **already** routed to Oracle via the private VPC Service (verified by Cloudflare edge deployment run 37904020566 and production smoke 37904137735). Oracle also hosts the **authoritative local PostgreSQL** database.
 
-The regular Cloudflare site-edge workflow now **preserves whichever origin is
-live**, determined by the production /__edge/health endpoint before each
-Worker deployment. If the endpoint fails or reports an unexpected origin, the
-workflow stops rather than silently changing production back to Northflank.
+The earlier Northflank-to-Oracle cutover procedure has completed. Its one-time manual cutover/rollback workflow was removed during infrastructure consolidation.
 
-## Manual cutover
+**Never use the old Northflank/Supabase instance as a production rollback target.** Since the local database became authoritative, new dog, membership, login, payment and moderation data are in Oracle-local `cca_live`. The frozen Supabase source and an older Northflank deployment are stale, not lossless replicas. Switching traffic to them would expose outdated application records.
 
-1. Merge the reviewed production-cutover preparation PR on main.
-2. GitHub Actions → **Oracle production cutover / Northflank rollback
-   (manual)** → Run workflow → main → **switch-to-oracle**.
-3. The job tests the authenticated-ready private Oracle candidate, performs
-   an invalid login POST to confirm CSRF and form handling, then deploys the
-   **existing public Worker** bound to the tested private Oracle VPC Service.
-4. It verifies exact origin/version, authenticated readiness, home, login,
-   virtual mating, and CSS on the public workers.dev URL. On validation
-   failure it attempts to restore the previous origin automatically.
+For releases use `.github/workflows/oracle-stage-django.yml` on protected `main`; it updates the Oracle production container and does not change Cloudflare routing. For media recovery and database integrity use the hourly encrypted R2 archives, the recovery-integrity workflow, and the documented controlled restore process.
 
-For emergency rollback run the same workflow selecting
-**rollback-to-northflank**. Northflank remains live until separately retired.
-
-**Operations:** Oracle Django staging remains a manual, protected-main
-workflow. Before application releases while Oracle is production, run that
-staging workflow on the intended main revision; Northflank auto-deploying
-alone does not update the Oracle container. Monitor password reset SMTP,
-Paystack callbacks, authenticated uploads/R2 and real sessions before
-decommissioning Northflank.
-
-No public VM web ports, separate domain or self-hosted PR runner required.
+See `infra/active-services.json`, `ARCHITECTURE.md` and `docs/PRODUCTION_DEPLOYMENT.md` for the current authoritative configuration.

@@ -8,9 +8,13 @@ workers_dev = true
 enabled = true
 
 [vars]
-ORIGIN_URL = "https://web--canecorsoancestry--4w9gl8jxj4yr.code.run"
+ORIGIN_URL = "http://127.0.0.1:18080"
+ORIGIN_TRANSPORT = "private-vpc"
 
 
 [triggers]
 crons = ["*/4 * * * *"]
 
+[[vpc_services]]
+binding = "ORIGIN_VPC"
+service_id = "01a11f0b-aa4d-7fd1-840b-8d7c0221f481"

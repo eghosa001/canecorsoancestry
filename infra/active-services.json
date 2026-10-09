@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "verified_at_utc": "2026-10-09",
+  "verification_basis": "Cloudflare site-edge deployment run 37904020566 identified mode oracle; public production smoke 37904137735 reported the private Oracle origin; Oracle-local database migration and offsite-backup scripts are in the repository.",
+  "public_endpoint": "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",
+  "services": [
+    {
+      "id": "cloudflare-site-edge",
+      "role": "public proxy, cache and VPC origin routing",
+      "provider": "Cloudflare Workers",
+      "state": "active",
+      "source": "src/site-edge.js",
+      "config": "wrangler.site.toml",
+      "workflow": ".github/workflows/cloudflare-site-edge.yml"
+    },
+    {
+      "id": "oracle-django",
+      "role": "sole production Django/Gunicorn origin, loopback 18080",
+      "provider": "Oracle Cloud VM / Podman",
+      "state": "active",
+      "source": "scripts/oracle_runner/stage_django.sh",
+      "config": "scripts/oracle_runner/oracle_settings.py",
+      "workflow": ".github/workflows/oracle-stage-django.yml"
+    },
+    {
+      "id": "oracle-local-postgres",
+      "role": "authoritative read/write PostgreSQL in cca-private network; database cca_live",
+      "provider": "Oracle Cloud VM / Podman",
+      "state": "active",
+      "config": "/etc/cca/oracle-db-mode = local (VM-local, not committed)",
+      "workflow": ".github/workflows/oracle-hourly-db-backups.yml"
+    },
+    {
+      "id": "r2-media",
+      "role": "durable dog photos, health files and encrypted database backups",
+      "provider": "Cloudflare R2 and media Worker",
+      "state": "active",
+      "source": "src/r2-media.js",
+      "config": "wrangler.r2.toml",
+      "workflow": ".github/workflows/cloudflare-media.yml"
+    },
+    {
+      "id": "github-actions",
+      "role": "CI, protected Oracle release, offsite backup/health schedules",
+      "provider": "GitHub Actions + CCA-ORACLE runner",
+      "state": "active",
+      "config": ".github/workflows"
+    },
+    {
+      "id": "paystack",
+      "role": "paid dog/litter packages",
+      "provider": "Paystack",
+      "state": "configured_if_secret_present",
+      "config": "PAYSTACK_SECRET_KEY"
+    },
+    {
+      "id": "email",
+      "role": "password-reset and account verification",
+      "provider": "Gmail SMTP",
+      "state": "configured_if_credentials_present",
+      "config": "EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD"
+    }
+  ],
+  "retired": [
+    {
+      "id": "northflank",
+      "role": "former Django origin",
+      "state": "retired_from_production",
+      "reason": "Cloudflare is routed to Oracle; its Supabase-backed copy cannot safely accept rollback after new local-primary writes"
+    },
+    {
+      "id": "supabase",
+      "role": "former canonical PostgreSQL",
+      "state": "frozen_historical_source",
+      "reason": "No longer a writable production primary; can be retained temporarily for forensics only"
+    }
+  ],
+  "invariants": [
+    "Never route live HTTP traffic to Northflank or the frozen Supabase database.",
+    "Never automatically write a legacy Supabase database from production maintenance jobs.",
+    "Only Oracle-local PostgreSQL is authoritative; all production data-health probes must target it.",
+    "Database backups and authenticated media delivery remain on Cloudflare R2.",
+    "Oracle Django deployments stay protected, explicit and release-verified."
+  ]
+}
