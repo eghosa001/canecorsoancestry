@@ -3,6 +3,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
@@ -315,7 +316,9 @@ class DogModelTests(TestCase):
         submission = Submission.objects.create(
             kind=Submission.Kind.IMAGE, submitted_by=member, dog=dog,
             payload={"caption": "New official photo", "is_primary": True},
-            attachment="dogs/new-official-photo.jpg",
+            attachment=SimpleUploadedFile(
+                "new-official-photo.jpg", b"photo-fixture-data", content_type="image/jpeg",
+            ),
         )
         cache_keys = (
             "cca:dog-search:default-count:v1",
@@ -330,7 +333,7 @@ class DogModelTests(TestCase):
         self.assertEqual(submission.status, Submission.Status.APPROVED)
         self.assertEqual(
             DogImage.objects.get(dog=dog, is_primary=True).image.name,
-            "dogs/new-official-photo.jpg",
+            submission.attachment.name,
         )
         for key in cache_keys:
             self.assertIsNone(cache.get(key))
