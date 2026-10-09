@@ -92,6 +92,21 @@ for i, name in enumerate(sample_images, 1):
         print("IMAGE_R2_PROBE_ERROR", i, type(exc).__name__, flush=True)
         continue
     print("IMAGE_R2_EXISTS", i, "yes" if exists else "NO", flush=True)
+    if exists and i <= 5:
+        import urllib.request
+        public_url = ("https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+                      + default_storage.url(name))
+        req = urllib.request.Request(
+            public_url, headers={"User-Agent": "Mozilla/5.0 CCA-Publication-Audit/1.0"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=14) as response:
+                content_type = response.headers.get("Content-Type", "")
+                head = response.read(16)
+                served = response.status == 200 and content_type.startswith("image/") and bool(head)
+            print("IMAGE_PUBLIC_HTTP", i, "PASS" if served else "FAIL", flush=True)
+        except Exception as exc:
+            print("IMAGE_PUBLIC_HTTP_ERROR", i, type(exc).__name__, flush=True)
 
 # The existence of a current public media DB reference and successful R2
 # storage read is necessary, but browser rendering is tested separately.
