@@ -38,6 +38,18 @@ jobs:
             code="$(curl -sS --connect-timeout 3 --max-time 12 -o /dev/null -w '%{http_code}' "http://127.0.0.1:18080$path" || true)"
             echo "oracle_loopback=$path status=$code"
           done
+      - name: Diagnose Cloudflare Tunnel connector and private transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Cloudflared process count:"
+          pgrep -ca cloudflared || true
+          echo "Cloudflare-related systemd unit states:"
+          sudo -n systemctl list-units --all --type=service --no-pager --no-legend | grep -Ei '(cloudflared|tunnel|vpc|mesh)' | head -25 || true
+          echo "Cloudflare connector versions:"
+          command -v cloudflared >/dev/null && cloudflared --version || true
+          echo "Tunnel errors from the past 25 minutes (filter credentials):"
+          sudo -n journalctl --since "-25 min" --no-pager -o cat -p err --system 2>/dev/null | grep -Ei '(cloudflared|cloudflare tunnel|vpc.service)' | sed -E 's/(token|secret|password|credential|authorization)=?[^[:space:]]+/[redacted]/Ig' | tail -20 || true
       - name: Run read-only in-process Django homepage and directory render with traceback
         shell: bash
         run: |
