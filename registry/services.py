@@ -1214,6 +1214,46 @@ def merge_dogs(canonical, duplicate, performed_by=None):
     summary["moderation_audit"] = ModerationAudit.objects.filter(
         dog=duplicate
     ).update(dog=canonical)
+    # Member research is private, and merging duplicate identities must not
+    # silently erase it. Repoint saved parent selections before retiring this
+    # dog; preserve a bookmark even if it becomes an invalid self-pairing.
+    from accounts.models import SavedPairing
+    saved_repointed = 0
+    saved_consolidated = 0
+    saved_needing_review = 0
+    pairings = list(
+        SavedPairing.objects.select_for_update()
+        .filter(Q(sire=duplicate) | Q(dam=duplicate))
+        .order_by("created_at", "pk")
+    )
+    for pairing in pairings:
+        next_sire = canonical.pk if pairing.sire_id == duplicate.pk else pairing.sire_id
+        next_dam = canonical.pk if pairing.dam_id == duplicate.pk else pairing.dam_id
+        if next_sire == next_dam:
+            # Two names proved to be one dog: keep the research notes and
+            # require the member to select another dam rather than invent one.
+            next_dam = None
+            saved_needing_review += 1
+        existing = SavedPairing.objects.filter(
+            member_id=pairing.member_id, sire_id=next_sire, dam_id=next_dam
+        ).exclude(pk=pairing.pk).first()
+        if existing:
+            if pairing.notes and pairing.notes not in existing.notes:
+                existing.notes = (existing.notes + "\\n" + pairing.notes).strip()[:700]
+            if not existing.label and pairing.label:
+                existing.label = pairing.label
+            existing.save(update_fields=("notes", "label"))
+            pairing.delete()
+            saved_consolidated += 1
+        else:
+            pairing.sire_id = next_sire
+            pairing.dam_id = next_dam
+            pairing.save(update_fields=("sire", "dam"))
+            saved_repointed += 1
+    summary["saved_pairings_repointed"] = saved_repointed
+    summary["saved_pairings_combined"] = saved_consolidated
+    summary["saved_pairings_needing_review"] = saved_needing_review
+
     MergeHistory.objects.filter(canonical_dog=duplicate).update(
         canonical_dog=canonical
     )
