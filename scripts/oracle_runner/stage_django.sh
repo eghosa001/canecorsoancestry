@@ -53,15 +53,33 @@ probe_output="$(mktemp)"
 # An explicit, backed-up and allowlisted migration may borrow schema CREATE
 # briefly; always revoke even if Django raises or the stage script fails.
 schema_privilege_armed=0
-revoke_temporary_schema_create() {
-  sudo -n "$PODMAN_BIN" exec cca-pg-shadow psql -X -v ON_ERROR_STOP=1 \
-    -U cca_shadow_admin -d cca_live \
-    -c 'REVOKE CREATE ON SCHEMA django_app FROM cca_app;' >/dev/null
+sire_reference_granted=0
+member_reference_granted=0
+revoke_temporary_migration_permissions() {
+  local result=0
+  # A foreign-key constraint needs REFERENCES on the pre-existing canonical
+  # tables; only remove the grants this migration itself created.
+  if [[ "$sire_reference_granted" == 1 ]]; then
+    sudo -n "$PODMAN_BIN" exec cca-pg-shadow psql -X -v ON_ERROR_STOP=1 \
+      -U cca_shadow_admin -d cca_live \
+      -c 'REVOKE REFERENCES ON TABLE django_app.registry_dog FROM cca_app;' >/dev/null || result=1
+  fi
+  if [[ "$member_reference_granted" == 1 ]]; then
+    sudo -n "$PODMAN_BIN" exec cca-pg-shadow psql -X -v ON_ERROR_STOP=1 \
+      -U cca_shadow_admin -d cca_live \
+      -c 'REVOKE REFERENCES ON TABLE django_app.auth_user FROM cca_app;' >/dev/null || result=1
+  fi
+  if [[ "$schema_privilege_armed" == 1 ]]; then
+    sudo -n "$PODMAN_BIN" exec cca-pg-shadow psql -X -v ON_ERROR_STOP=1 \
+      -U cca_shadow_admin -d cca_live \
+      -c 'REVOKE CREATE ON SCHEMA django_app FROM cca_app;' >/dev/null || result=1
+  fi
+  return "$result"
 }
 cleanup_stage() {
-  if [[ "$schema_privilege_armed" == 1 ]]; then
-    if ! revoke_temporary_schema_create; then
-      echo "::error::Temporary DB schema CREATE could not be revoked: investigate immediately." >&2
+  if [[ "$schema_privilege_armed" == 1 || "$sire_reference_granted" == 1 || "$member_reference_granted" == 1 ]]; then
+    if ! revoke_temporary_migration_permissions; then
+      echo "::error::One or more temporary migration DB grants could not be revoked: investigate immediately." >&2
     fi
   fi
   rm -f "$temporary_env" "$temporary_unit" "$probe_output"
@@ -187,11 +205,34 @@ else
     psql -X -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
     -c 'GRANT CREATE ON SCHEMA django_app TO cca_app;' >/dev/null
   schema_privilege_armed=1
+  # Do not modify existing canonical dogs or user rows. CREATE TABLE with
+  # foreign keys needs REFERENCES authority on just those two parent tables.
+  # Existing rights are preserved; only missing rights are borrowed and revoked.
+  for reference_table in registry_dog auth_user; do
+    existing_reference="$(sudo -n "$PODMAN_BIN" exec cca-pg-shadow \
+      psql -X -At -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+      -c "SELECT has_table_privilege('cca_app', 'django_app.$reference_table', 'REFERENCES');")"
+    [[ "$existing_reference" == t || "$existing_reference" == f ]] || {
+      echo "::error::Could not verify REFERENCES rights on $reference_table"; exit 1;
+    }
+    if [[ "$existing_reference" == f ]]; then
+      sudo -n "$PODMAN_BIN" exec cca-pg-shadow \
+        psql -X -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+        -c "GRANT REFERENCES ON TABLE django_app.$reference_table TO cca_app;" >/dev/null
+      if [[ "$reference_table" == registry_dog ]]; then
+        sire_reference_granted=1
+      else
+        member_reference_granted=1
+      fi
+    fi
+  done
   echo "Applying the one approved additive accounts migration."
   sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
     "$IMAGE" python manage.py migrate accounts 0005_saved_pairing --noinput
-  revoke_temporary_schema_create
+  revoke_temporary_migration_permissions
   schema_privilege_armed=0
+  sire_reference_granted=0
+  member_reference_granted=0
   app_schema_can_create="$(sudo -n "$PODMAN_BIN" exec cca-pg-shadow \
     psql -X -At -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
     -c "SELECT has_schema_privilege('cca_app', 'django_app', 'CREATE');")"
