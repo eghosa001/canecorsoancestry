@@ -204,10 +204,11 @@
         </form>
       </div>
 
-      {% if blocking_findings and can_review_flagged and submission.verification_status != "awaiting_second" %}
+      {% if blocking_findings and submission.verification_status != "awaiting_second" %}
+      {% if can_approve_yellow or can_review_flagged %}
         <div class="section-spacer-tight">
-          <h3>Approve with override</h3>
-          <p class="muted">The warning remains in history. Enter why the evidence supports approval despite the automated finding.</p>
+          <h3>{% if can_approve_yellow %}Approve yellow warning{% else %}Approve with override{% endif %}</h3>
+          <p class="muted">{% if can_approve_yellow %}Moderators may approve non-critical yellow warnings after recording the evidence and reason. Red/high-risk findings still require Senior Moderator review.{% else %}The critical warning remains in history and may require a different second reviewer. Record why the evidence supports approval.{% endif %}</p>
           <form method="post" action="{% url 'accounts:review-submission' submission.pk 'override' %}">
             {% csrf_token %}
             <textarea name="resolution_notes" rows="4" required placeholder="Required override reason and evidence considered" aria-label="Override reason"></textarea>
@@ -216,6 +217,9 @@
             </button>
           </form>
         </div>
+      {% else %}
+        <p class="muted">Red or high-risk finding: only a Senior Moderator or Super Admin may approve with override. You may request more evidence or escalate to a senior reviewer.</p>
+      {% endif %}
       {% endif %}
 
       {% if submission.verification_status == "awaiting_second" %}

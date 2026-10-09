@@ -28,7 +28,7 @@ from registry.models import (
 )
 from registry.public_freshness import invalidate_public_content
 from registry.permissions import can_manage_verification, can_review_submissions
-from registry.services import record_audit
+from registry.services import record_audit, moderation_dog_ids
 from .forms import validate_document_upload, validate_image_upload, normalize_image_upload
 
 
@@ -310,21 +310,24 @@ def dog_edit_list(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
     q = request.GET.get("q", "").strip()[:160]
-    dogs = Dog.objects.select_related("kennel").order_by("name")
-    if q:
-        filter_query = Q(name__icontains=q) | Q(slug__icontains=q) | Q(registrations__number__icontains=q)
-        try:
-            filter_query |= Q(pk=uuid.UUID(q))
-        except ValueError:
-            pass
-        dogs = dogs.filter(filter_query).distinct()[:30]
-    else:
-        dogs = dogs.none()
-    revisions = list(_revision_events()[:60])
-    _review_states(revisions)
+    ids = moderation_dog_ids(q, limit=30) if q else []
+    # One narrow query after bounded ID discovery. Preserve relevance order;
+    # never run DISTINCT across all dogs and registration joins.
+    found = {
+        dog.pk: dog for dog in Dog.objects.filter(pk__in=ids)
+        .select_related("kennel")
+    }
+    dogs = [found[pk] for pk in ids if pk in found]
+    # Dog lookup should not synchronously load the full revision history on
+    # every query. Staff may request it explicitly after finding the dog.
+    show_history = not q or request.GET.get("history") == "1"
+    revisions = list(_revision_events()[:25]) if show_history else []
+    if revisions:
+        _review_states(revisions)
     return render(request, "accounts/direct_dog_list.html", {
         "dogs": dogs, "query": q, "revisions": revisions,
         "is_owner": can_manage_verification(request.user),
+        "history_deferred": bool(q and not show_history),
     })
 
 
