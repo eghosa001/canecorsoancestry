@@ -95,7 +95,9 @@ class MemberAccessFlowTests(TestCase):
                 "photo_caption": "Stacked portrait",
                 "photo_sha256": "abc123",
             },
-            attachment="submissions/2026/10/member-dog.jpg",
+            attachment=SimpleUploadedFile(
+                "member-dog.jpg", b"photo-fixture-data", content_type="image/jpeg",
+            ),
         )
         PaymentSubmissionLink.objects.create(
             payment=payment,
@@ -110,7 +112,7 @@ class MemberAccessFlowTests(TestCase):
         submission.refresh_from_db()
         self.assertTrue(submission.dog.is_public)
         image = DogImage.objects.get(dog=submission.dog)
-        self.assertEqual(image.image.name, "submissions/2026/10/member-dog.jpg")
+        self.assertEqual(image.image.name, submission.attachment.name)
         self.assertEqual(image.caption, "Stacked portrait")
         self.assertTrue(image.is_primary)
 

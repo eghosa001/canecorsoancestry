@@ -427,6 +427,31 @@ def approve_submission(
     payload = submission.payload or {}
     review_diff = submission_diff(submission)
 
+    # An approved record must not point to an attachment that R2 cannot serve.
+    # The pending media reference is still private before this transaction.
+    # A storage outage/missing upload must fail the review, not falsely report
+    # "approved" and leave a broken public image or evidence link.
+    if submission.attachment and submission.kind in {
+        Submission.Kind.DOG,
+        Submission.Kind.IMAGE,
+        Submission.Kind.DOCUMENT,
+        Submission.Kind.HEALTH,
+    }:
+        try:
+            attachment_exists = submission.attachment.storage.exists(
+                submission.attachment.name
+            )
+        except (OSError, TimeoutError, ValueError) as exc:
+            raise ValueError(
+                "Cannot approve: the uploaded file could not be verified in media storage. "
+                "Retry after storage is healthy."
+            ) from exc
+        if not attachment_exists:
+            raise ValueError(
+                "Cannot approve: the uploaded file is missing from media storage. "
+                "Ask the member to supply the attachment again."
+            )
+
     if submission.kind == Submission.Kind.DOG:
         kennel = submission.kennel
         sire = _resolve_dog(payload.get("sire_id"))

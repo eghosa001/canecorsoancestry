@@ -1,0 +1,31 @@
+name: Approved publication integrity diagnostic
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * 5"
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-publication-audit:
+    if: >-
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Ensure Oracle is the sole production database
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(sudo -n cat /etc/cca/oracle-db-mode)" == local ]]
+          sudo -n systemctl is-active --quiet cca-pg-shadow.service
+          sudo -n systemctl is-active --quiet cca-oracle-staging.service
+      - name: Check approved row references and public photo availability without changes
+        shell: bash
+        run: sudo -n podman exec -i cca-oracle-staging python - < scripts/oracle_runner/audit_approved_publication.py
