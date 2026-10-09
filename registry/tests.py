@@ -889,3 +889,54 @@ class DogModelTests(TestCase):
         self.assertContains(response, "Show 1 more sibling")
         self.assertContains(response, 'class="relationship-more"', html=False)
 
+
+
+    def test_profile_zero_coi_is_displayed_but_not_misrepresented_as_full_coverage(self):
+        no_parents = Dog.objects.create(
+            name="Unlinked COI Dog", slug="unlinked-coi-dog", is_public=True
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[no_parents.slug]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "0.00%")
+        self.assertContains(response, "incomplete public parentage")
+        self.assertContains(response, "does not prove no inbreeding")
+
+    def test_profile_coi_excludes_private_ancestry(self):
+        ancestor = Dog.objects.create(
+            name="Private Founder", slug="coi-private-founder", is_public=False
+        )
+        sire = Dog.objects.create(
+            name="COI Public Sire", slug="coi-public-sire-private",
+            sire=ancestor, is_public=True,
+        )
+        dam = Dog.objects.create(
+            name="COI Public Dam", slug="coi-public-dam-private",
+            sire=ancestor, is_public=True,
+        )
+        child = Dog.objects.create(
+            name="Private Lineage Child", slug="private-lineage-child",
+            sire=sire, dam=dam, is_public=True,
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[child.slug]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "0.00%")
+        self.assertNotContains(response, "12.50%")
+        self.assertContains(response, "Missing ancestors can make the estimate too low")
+
+    def test_profile_cycle_shows_actionable_coi_error_not_fabricated_number(self):
+        father = Dog.objects.create(
+            name="Cycle Father", slug="coi-cycle-father", is_public=True
+        )
+        mother = Dog.objects.create(
+            name="Cycle Mother", slug="coi-cycle-mother", is_public=True
+        )
+        child = Dog.objects.create(
+            name="Cycle Child", slug="coi-cycle-child",
+            sire=father, dam=mother, is_public=True,
+        )
+        # Simulate malformed legacy imported graph that bypasses full_clean.
+        Dog.objects.filter(pk=father.pk).update(sire=child)
+        response = self.client.get(reverse("registry:dog-detail", args=[child.slug]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Cannot calculate")
+        self.assertContains(response, "Parentage contains a cycle")
