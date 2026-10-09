@@ -18,6 +18,8 @@ on:
       - "scripts/tests/test_oracle_origin.py"
       - "scripts/tests/test_oracle_migration_freeze.py"
       - "scripts/oracle_runner/stage_django.sh"
+      - "scripts/oracle_runner/allowlisted_schema_migration.py"
+      - "scripts/tests/test_oracle_schema_allowlist.py"
       - ".github/workflows/oracle-stage-django.yml"
 
 permissions:
@@ -39,7 +41,7 @@ jobs:
           bash -n scripts/oracle_runner/stage_django.sh
           python3 scripts/fast_path_guard.py
           python3 -m pip install -q -r requirements.txt
-          python3 manage.py test scripts.tests.test_oracle_origin scripts.tests.test_oracle_migration_freeze --noinput
+          python3 manage.py test scripts.tests.test_oracle_origin scripts.tests.test_oracle_migration_freeze scripts.tests.test_oracle_schema_allowlist --noinput
 
   oracle-stage:
     if: >-
