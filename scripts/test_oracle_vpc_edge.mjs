@@ -27,6 +27,14 @@ await transportFetch(forwarded, env);
 assert.equal(calls[0].url, "http://127.0.0.1:18080/pedigrees/");
 await timedOriginGet(env, "/healthz/", 3000, "oracle-probe", "application/json");
 assert.equal(calls[1].url, "http://127.0.0.1:18080/healthz/");
+assert.equal(calls[1].init.headers["x-forwarded-proto"], "https",
+  "Readiness requests must not be redirected by Django SECURE_SSL_REDIRECT");
+assert.equal(calls[1].init.headers["x-cca-origin-secret"], "test-secret",
+  "Readiness requests must retain trusted edge authentication");
+await timedOriginGet(env, "/accounts/login/", 4500, "auth-readiness-check", "text/html");
+assert.equal(calls[2].init.headers["x-forwarded-proto"], "https",
+  "The auth endpoint must see HTTPS through the private VPC");
+assert.equal(calls[2].url, "http://127.0.0.1:18080/accounts/login/");
 
 await assert.rejects(() => transportFetch(forwarded, {
   ORIGIN_TRANSPORT: "private-vpc",
