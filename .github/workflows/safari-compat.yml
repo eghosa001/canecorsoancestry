@@ -5,6 +5,7 @@ on:
     paths:
       - "core/static/core/site.css"
       - "core/static/core/site.js"
+      - "core/static/core/dog-photo-safari.css"
       - "core/static/core/premium-polish.css"
       - "templates/base.html"
       - "accounts/templates/accounts/submission_form.html"
