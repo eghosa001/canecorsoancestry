@@ -172,9 +172,7 @@ def verify(expected, cache_version):
     else:
         raise RuntimeError("Production edge origin/version mismatch after deploy")
 
-    ready = json.loads(open_checked(PUBLIC_EDGE + "/__edge/auth-ready"))
-    if not ready.get("ready"):
-        raise RuntimeError("Live auth readiness is false")
+    require_auth_ready(PUBLIC_EDGE + "/__edge/auth-ready", attempts=8, pause_seconds=2)
     for path in ("/", "/accounts/login/", "/pedigrees/virtual-mating/",
                  "/static/core/site.css"):
         body = open_checked(PUBLIC_EDGE + path, headers={"Accept": "text/html"})
