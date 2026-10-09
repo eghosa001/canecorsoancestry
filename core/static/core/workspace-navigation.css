@@ -1,0 +1,60 @@
+/* Compact cross-page workspace navigation; scrolls horizontally on small phones. */
+.workspace-shortcuts {
+  width: 100%;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+.workspace-shortcuts-inner {
+  max-width: var(--max);
+  margin: auto;
+  min-width: 0;
+  padding: 10px 24px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.workspace-shortcuts-label {
+  flex: none;
+  font-size: .75rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.workspace-shortcuts-links {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.workspace-shortcuts-links a {
+  white-space: nowrap;
+  flex: none;
+  scroll-snap-align: start;
+  font-size: .84rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  min-height: 40px;
+}
+.workspace-shortcuts-links a:hover,
+.workspace-shortcuts-links a:focus-visible {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.workspace-shortcuts-links a[aria-current="page"] {
+  color: var(--gold-soft);
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+@media (max-width: 700px) {
+  .workspace-shortcuts-inner { padding: 8px 12px; display: block; }
+  .workspace-shortcuts-label { display: block; margin: 0 0 3px 8px; }
+  .workspace-shortcuts-links a { min-height: 44px; }
+}

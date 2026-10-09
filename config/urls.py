@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.contrib.auth.views import LoginView
+from django.contrib.auth.views import (LoginView, LogoutView, PasswordChangeView, PasswordChangeDoneView, PasswordResetConfirmView, PasswordResetDoneView, PasswordResetCompleteView)
 from django.contrib.sitemaps.views import index as sitemap_index, sitemap as sitemap_view
 from django.urls import include, path
 
@@ -43,7 +43,14 @@ urlpatterns = [
         AccountPasswordResetView.as_view(),
         name="password_reset",
     ),
-    path("accounts/", include("django.contrib.auth.urls")),
+    # Explicitly register each auth endpoint once: login and password_reset
+    # are customized above, so including auth.urls would shadow duplicates.
+    path("accounts/logout/", LogoutView.as_view(), name="logout"),
+    path("accounts/password_change/", PasswordChangeView.as_view(), name="password_change"),
+    path("accounts/password_change/done/", PasswordChangeDoneView.as_view(), name="password_change_done"),
+    path("accounts/password_reset/done/", PasswordResetDoneView.as_view(), name="password_reset_done"),
+    path("accounts/reset/<uidb64>/<token>/", PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
+    path("accounts/reset/done/", PasswordResetCompleteView.as_view(), name="password_reset_complete"),
     path("member/", include("accounts.urls")),
     path("admin/", admin.site.urls),
     path("pedigrees/", include("pedigrees.urls")),

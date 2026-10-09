@@ -30,6 +30,7 @@
   <link rel="icon" href="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v46" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261008-safari-v87">
   <link rel="stylesheet" href="{% static 'core/premium-polish.css' %}?v=20261007-interaction-v50">
+  <link rel="stylesheet" href="{% static 'core/workspace-navigation.css' %}?v=20261009-workspaces-v1">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -43,7 +44,7 @@
       <div class="header-actions">
         <form class="header-search" action="{% url 'registry:dog-search' %}" method="get"><label class="sr-only" for="header-q">Search dogs</label><input id="header-q" name="q" data-dog-autocomplete placeholder="Search dog, kennel, registration" autocomplete="off"></form>
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode">Light mode</button>
-        {% if user.is_authenticated %}{% if staff_identity and staff_role %}<a class="account-link" href="{% url 'accounts:moderation' %}">{{ staff_role_label }} workspace</a>{% endif %}<a class="account-link" href="{% url 'dashboard' %}">{% if staff_identity %}{{ account_name }} · {{ staff_role_label }}{% else %}{{ account_name }}{% endif %}</a><form class="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'home' %}"><button class="account-link logout-button" type="submit">Log out</button></form>{% else %}<a class="account-link" href="{% url 'login' %}">Sign in</a><a class="account-link" href="{% url 'accounts:signup' %}">Join</a>{% endif %}
+        {% if user.is_authenticated %}<a class="account-link" href="{% url 'dashboard' %}">{% if staff_identity %}{{ staff_role_label }} workspace{% else %}{{ account_name }}{% endif %}</a><form class="logout-form" method="post" action="{% url 'logout' %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'home' %}"><button class="account-link logout-button" type="submit">Log out</button></form>{% else %}<a class="account-link" href="{% url 'login' %}">Sign in</a><a class="account-link" href="{% url 'accounts:signup' %}">Join</a>{% endif %}
       </div>
       <button class="theme-toggle mobile-header-theme" type="button" data-theme-toggle aria-label="Switch to light mode">Light</button>
       <details class="mobile-nav">
@@ -65,8 +66,7 @@
           <button class="theme-toggle mobile-theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode">Light mode</button>
           <div class="mobile-account-actions">
             {% if user.is_authenticated %}
-              {% if staff_identity and staff_role %}<a href="{% url 'accounts:moderation' %}">{{ staff_role_label }} workspace</a>{% endif %}
-              <a class="mobile-account-primary" href="{% url 'dashboard' %}">{% if staff_identity %}Staff account · {{ account_name }}{% else %}My account · {{ account_name }}{% endif %}</a>
+              <a class="mobile-account-primary" href="{% url 'dashboard' %}">{% if staff_identity %}{{ staff_role_label }} workspace{% else %}My account · {{ account_name }}{% endif %}</a>
               <form class="mobile-logout-form" method="post" action="{% url 'logout' %}">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{% url 'home' %}">
@@ -82,6 +82,7 @@
     </div>
   </header>
   <main id="main-content" tabindex="-1">
+  {% include "accounts/_workspace_nav.html" %}
   {% if messages %}<div class="flash-stack" aria-live="polite">{% for message in messages %}<div class="flash {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
   {% block content %}{% endblock %}
   </main>
