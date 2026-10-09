@@ -87,6 +87,7 @@ urlpatterns = [
     path("moderation/bulk/", views.bulk_moderation, name="bulk-moderation"),
     path("moderation/audit/", views.moderation_audit, name="moderation-audit"),
     path("moderation/data-health/", views.data_health, name="data-health"),
+    path("moderation/data-health/evidence/", views.data_health_evidence, name="data-health-evidence"),
     path(
         "moderation/submissions/<uuid:pk>/",
         views.moderation_submission_detail,
