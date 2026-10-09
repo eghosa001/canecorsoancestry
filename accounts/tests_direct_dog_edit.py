@@ -47,19 +47,18 @@ class DirectDogEditTests(TestCase):
             for field, value in formset.management_form.initial.items():
                 payload[f"{name}-{field}"] = str(value)
             for index, form in enumerate(formset.forms):
-                if not form.instance.pk:
-                    continue
-                payload[f"{name}-{index}-id"] = str(form.instance.pk)
                 for field_name in form.fields:
-                    if field_name in {"id", "DELETE", "dog"}:
+                    if field_name in {"DELETE", "dog"}:
                         continue
-                    value = getattr(form.instance, field_name, None)
+                    # The browser submits default select/number values even
+                    # for untouched extra forms. Mirror that behavior.
+                    value = form[field_name].value()
                     if value is None or value is False:
                         continue
-                    if hasattr(value, "pk"):
-                        value = value.pk
                     if hasattr(value, "name") and hasattr(value, "storage"):
                         continue
+                    if value is True:
+                        value = "on"
                     payload[f"{name}-{index}-{field_name}"] = str(value)
         payload.update(updates)
         return payload
