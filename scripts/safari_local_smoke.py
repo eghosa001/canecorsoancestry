@@ -71,6 +71,63 @@ def run():
             page.wait_for_timeout(250)
             assert not page.locator(".dog-suggestion:visible").count(), "Safari stale picker reopened after dismissal"
 
+            # The iOS keyboard changes VisualViewport size and Safari can
+            # scroll the document while the user types. Keep results open and
+            # selectable rather than hiding the picker during those changes.
+            go(page, "/dogs/?q=")
+            page.route("**/dogs/suggestions/**", lambda route: route.fulfill(
+                status=200, content_type="application/json",
+                body='{"results":[{"id":"safari-fixture","slug":"safari-dog","name":"Safari Dog","registration":"","kennel":"","sex":"Male"}]}',
+            ))
+            field = page.locator("#q")
+            field.fill("Safari")
+            suggestions = page.locator(".dog-suggestions--viewport")
+            suggestions.locator(".dog-suggestion").first.wait_for(state="visible")
+            assert suggestions.evaluate("el => el.parentElement === document.body"), "Picker is clipped inside a form"
+            page.evaluate("window.scrollTo(0, 30)")
+            page.set_viewport_size({"width": 390, "height": 560})
+            page.evaluate("""() => {
+              if (window.visualViewport) {
+                visualViewport.dispatchEvent(new Event('resize'));
+                visualViewport.dispatchEvent(new Event('scroll'));
+              }
+            }""")
+            page.wait_for_timeout(160)
+            assert suggestions.is_visible(), "iPhone keyboard/scroll closed the dog result list"
+            assert field.get_attribute("aria-expanded") == "true", "Safari lost active suggestions"
+            bounds = suggestions.bounding_box()
+            assert bounds and bounds["height"] >= 54, "Suggestions are not tappable above keyboard"
+            suggestions.locator(".dog-suggestion").first.tap()
+            page.wait_for_url("**/dogs/safari-dog/**", timeout=10_000)
+
+            # Dog photos retain their native landscape aspect ratio; no
+            # zoom/crop, hard grey matte or CSS image scaling on profiles.
+            photo = page.locator(".profile-photo img")
+            photo.wait_for(state="visible")
+            page.wait_for_function(
+                "() => document.querySelector('.profile-photo img').naturalWidth > 0"
+            )
+            fidelity = photo.evaluate("""img => {
+              const style = getComputedStyle(img);
+              const frame = getComputedStyle(img.closest('.profile-photo'));
+              const box = img.getBoundingClientRect();
+              return {
+                fit: style.objectFit, transform: style.transform,
+                background: frame.backgroundColor, width: box.width,
+                height: box.height, naturalRatio: img.naturalWidth / img.naturalHeight
+              };
+            }""")
+            assert fidelity["fit"] == "contain", f"Photo is cropped: {fidelity}"
+            assert fidelity["transform"] == "none", f"Photo is zoomed: {fidelity}"
+            assert fidelity["background"] == "rgba(0, 0, 0, 0)", f"Gray photo frame: {fidelity}"
+            assert abs(fidelity["width"] / fidelity["height"] - fidelity["naturalRatio"]) < .06, f"Dog aspect ratio distorted: {fidelity}"
+
+            go(page, "/dogs/?q=Safari")
+            thumb = page.locator(".search-result-media img")
+            assert thumb.count() == 1, "Approved dog image missing from search"
+            assert thumb.evaluate("el => getComputedStyle(el).objectFit") == "contain"
+            assert thumb.evaluate("el => getComputedStyle(el).transform") == "none"
+
             go(page, "/accounts/login/")
             page.locator("input[name='username']").fill("safari-smoke@example.test")
             page.locator("input[name='password']").fill("safari-smoke-password")
@@ -110,7 +167,7 @@ def run():
                 assert page.locator(".site-header").is_visible()
 
             assert not errors, f"WebKit JavaScript exceptions: {errors[:3]}"
-            print("PASS: WebKit touch navigation, stale suggestions, no zoom, member login, JPG/PDF upload, responsive widths")
+            print("PASS: WebKit scrolling/keyboard picker, selectable dogs, uncropped natural photos, member login, uploads, responsive widths")
         finally:
             browser.close()
 
