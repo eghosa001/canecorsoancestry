@@ -13,6 +13,7 @@ echo "before="$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
  -H "X-CCA-Edge: 1" -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
  -H "X-Forwarded-Proto: https" http://127.0.0.1:18080/accounts/login/)
 sudo -n install -o root -g root -m 644 /dev/null "$flag"
+sudo -n chcon --reference="$(dirname "$flag")" "$flag"
 echo "=== Host flag permissions and SELinux labels ==="
 sudo -n ls -ldZ /var/lib/cca /var/lib/cca/control "$flag" || true
 sudo -n namei -l "$flag" || true
@@ -30,14 +31,18 @@ PY
 echo "inside_container_flag:"
 sudo -n podman exec cca-oracle-staging python -c \
  'from pathlib import Path; p=Path("/run/cca/maintenance.flag"); print("mounted="+str(p.parent.exists()),"flag="+str(p.exists()))' || true
-echo "maintenance_request="$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
+status="$(curl --max-time 10 -sS -o /dev/null -w '%{http_code}' \
  -H "X-CCA-Edge: 1" -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
- -H "X-Forwarded-Proto: https" http://127.0.0.1:18080/accounts/login/)
+ -H "X-Forwarded-Proto: https" http://127.0.0.1:18080/accounts/login/)"
+echo "maintenance_request=$status"
+[[ "$status" == 503 ]] || { echo "::error::Expected 503 with correctly labelled flag, got $status"; exit 1; }
 echo "recent_error_categories:"
 sudo -n journalctl -u cca-oracle-staging.service --since "45 seconds ago" \
   --no-pager -o cat | grep -E "Traceback|Error:|Exception:|Permission denied|failed|500" | tail -25 || true
 sudo -n rm -f "$flag"
 trap - EXIT
-echo "after="$(curl --max-time 12 -sS -o /dev/null -w '%{http_code}' \
+after="$(curl --max-time 12 -sS -o /dev/null -w '%{http_code}' \
  -H "X-CCA-Edge: 1" -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
- -H "X-Forwarded-Proto: https" http://127.0.0.1:18080/accounts/login/)
+ -H "X-Forwarded-Proto: https" http://127.0.0.1:18080/accounts/login/)"
+echo "after=$after"
+[[ "$after" == 200 ]] || { echo "::error::Expected normal login HTTP 200 after flag removal"; exit 1; }
