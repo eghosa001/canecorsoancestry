@@ -1,0 +1,111 @@
+/* Full-fidelity Cane Corso photos + iPhone Safari picker.
+   Never crop a dog photo or paint artificial charcoal/grey matte around it. */
+
+.dog-profile .profile-photo {
+  display: block;
+  min-height: 0;
+  align-self: start;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+.dog-profile .profile-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
+  object-position: center;
+  transform: none;
+  filter: none;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+/* Cards and thumbnails follow source image proportions instead of cutting
+   off the head/paws or adding large grey/dark letterbox regions. */
+.dog-card .dog-card-media,
+.search-result-card .search-result-media,
+.dashboard-dog-media,
+.member-form-target-media {
+  background: transparent;
+}
+.dog-card .dog-card-media {
+  aspect-ratio: auto;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+.dog-card .dog-card-media img,
+.search-result-card .search-result-media img,
+.dashboard-dog-media img,
+.member-form-target-media img {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  object-fit: contain;
+  object-position: center;
+  transform: none !important;
+  filter: none;
+  background: transparent;
+}
+.search-result-card .search-result-media {
+  height: auto;
+  min-height: 0;
+  align-self: center;
+  overflow: visible;
+}
+.dashboard-dog-media img,
+.member-form-target-media img { height: auto; }
+.dog-photo-gallery-item {
+  background: transparent;
+}
+.dog-photo-gallery-item img {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  object-fit: contain;
+  background: transparent;
+}
+@media (max-width: 760px) {
+  .featured-dog-grid .dog-card-media,
+  .dog-card-grid.compact .dog-card-media {
+    height: auto;
+    min-height: 0;
+    align-self: center;
+  }
+  .search-result-card .search-result-media {
+    height: auto;
+  }
+  .dog-profile .profile-photo { min-height: 0; }
+}
+
+/* Render picker on top of sticky headers and page content. Only mobile Safari
+   uses the viewport portal; desktop keeps its existing inline dropdown. */
+.dog-suggestions--viewport {
+  position: fixed !important;
+  z-index: 10000 !important;
+  right: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  box-sizing: border-box;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-gutter: auto;
+}
+.dog-suggestions--viewport[hidden] { display: none !important; }
+.dog-suggestions--viewport .dog-suggestion {
+  touch-action: manipulation;
+  min-height: 54px;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (max-width: 980px) {
+  input[data-dog-autocomplete] { font-size: 16px !important; }
+}

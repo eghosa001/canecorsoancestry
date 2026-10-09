@@ -5,6 +5,7 @@ on:
     paths:
       - "core/static/core/site.css"
       - "core/static/core/site.js"
+      - "core/static/core/dog-photo-safari.css"
       - "core/static/core/premium-polish.css"
       - "templates/base.html"
       - "accounts/templates/accounts/submission_form.html"
@@ -57,6 +58,18 @@ jobs:
               slug="safari-dog",
               kennel=kennel,
               is_public=True,
+          )
+          # A landscape photo exposes unwanted CSS cover-cropping,
+          # artificial matte and unintended zoom in the profile test.
+          import io
+          from PIL import Image
+          from django.core.files.base import ContentFile
+          from registry.models import DogImage
+          jpeg = io.BytesIO()
+          Image.new("RGB", (160, 96), (112, 125, 135)).save(jpeg, format="JPEG")
+          DogImage.objects.create(
+              dog=dog, image=ContentFile(jpeg.getvalue(), name="safari-landscape.jpg"),
+              is_primary=True,
           )
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as out:
               out.write(f"SAFARI_TEST_DOG_ID={dog.pk}\n")
