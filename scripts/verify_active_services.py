@@ -67,6 +67,13 @@ for name in removed:
     assert not (ROOT / ".github/workflows" / name).exists(), (
         "A retired/noncanonical service workflow was reintroduced", name
     )
+audit_workflow = (ROOT / ".github/workflows/release-audit.yml").read_text()
+assert audit_workflow.count('      - "scripts/oracle_runner/stage_django.sh"') == 2, (
+    "Oracle deployment script changes must run full release audit on PR and protected main"
+)
+assert audit_workflow.count('      - ".github/workflows/oracle-stage-django.yml"') == 2, (
+    "Oracle release workflow changes must trigger full release audit on main"
+)
 stage=(ROOT / "scripts/oracle_runner/stage_django.sh").read_text()
 assert "SUPABASE_DATABASE_URL" not in stage and "discover_supabase" not in stage
 assert '[[ "$DB_MODE" == local ]]' in stage
