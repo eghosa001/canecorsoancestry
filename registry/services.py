@@ -1173,6 +1173,18 @@ def merge_dogs(canonical, duplicate, performed_by=None):
     summary["verification_events"] = VerificationEvent.objects.filter(
         dog=duplicate
     ).update(dog=canonical)
+    # Preserve identity, open disputes and moderation history before cascade
+    # deletion retires the duplicate. Microchips are globally unique, so
+    # repointing them cannot introduce a per-dog uniqueness conflict.
+    summary["identity_numbers"] = DogIdentityNumber.objects.filter(
+        dog=duplicate
+    ).update(dog=canonical)
+    summary["disputes"] = DisputeCase.objects.filter(dog=duplicate).update(
+        dog=canonical
+    )
+    summary["moderation_audit"] = ModerationAudit.objects.filter(
+        dog=duplicate
+    ).update(dog=canonical)
     MergeHistory.objects.filter(canonical_dog=duplicate).update(
         canonical_dog=canonical
     )
