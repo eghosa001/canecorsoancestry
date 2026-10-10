@@ -5,7 +5,7 @@
 {% block og_title %}{{ dog.name }} · Cane Corso Pedigree{% endblock %}
 {% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and health information.{% endblock %}
 {% block extra_head %}
-  <link rel="stylesheet" href="{% static 'core/dog-portrait-gallery.css' %}?v=20261010-portrait-v4">
+  <link rel="stylesheet" href="{% static 'core/dog-portrait-gallery.css' %}?v=20261010-gallery-gesture-v5">
   {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}?v=20261002-2">{% elif dog.source_image_url %}<meta property="og:image" content="{{ dog.source_image_url }}">{% endif %}
   <script type="application/ld+json">{{ structured_data }}</script>
 {% endblock %}
@@ -133,14 +133,6 @@
         <a class="btn btn-outline" href="#offspring">View offspring</a>
         <a class="btn btn-outline" href="{% url 'pedigrees:reverse' dog.slug %}">Reverse pedigree</a>
       </div>
-      <details class="profile-record-notes ux-disclosure">
-        <summary>About COI &amp; sources</summary>
-        <div class="profile-record-notes-body">
-          <p><strong>COI:</strong> {% if coi_percent != None %}Calculated from all reachable, linked, published ancestors. Missing ancestors can make the estimate too low; 0.00% does not prove no inbreeding.{% else %}{{ coi_error }} Ask a moderator to review parent links.{% endif %}</p>
-          <p><strong>Evidence:</strong> {{ verification_label }}. This describes independent review of the available record, not registration by Cane Corso Ancestry.</p>
-          <p><strong>Source:</strong> {% if has_source_attribution %}Source attribution on file{% else %}No source attribution recorded{% endif %}. A linked or imported source is not proof that identity, health or ancestry was independently verified.</p>
-        </div>
-      </details>
       {% if can_contribute or user.is_authenticated %}
         <details class="profile-manage-actions ux-disclosure">
           <summary><span><strong>Contribute or request review</strong><small>Corrections, evidence and review requests stay separate from public browsing.</small></span></summary>
@@ -175,12 +167,17 @@
         </header>
         <div class="dog-photo-lightbox-stage" data-dog-photo-stage>
           <button class="dog-photo-lightbox-nav" type="button" data-dog-photo-prev aria-label="Previous photograph" {% if dog.display_images|length <= 1 %}hidden{% endif %}>‹</button>
-          <img data-dog-lightbox-image
-               src="{% if dog.display_images %}{{ dog.display_images.0.image.url }}{% else %}{{ dog.source_image_url }}{% endif %}"
-               alt="{{ dog.name }}" loading="lazy" decoding="async" draggable="false"{% if not dog.display_images %} referrerpolicy="no-referrer"{% endif %}>
+          <div class="dog-photo-lightbox-viewport" data-dog-photo-viewport role="group"
+               aria-label="Dog photo — pinch to zoom, drag to explore, tap to reset or close, swipe down to dismiss">
+            <img data-dog-lightbox-image
+                 src="{% if dog.display_images %}{{ dog.display_images.0.image.url }}{% else %}{{ dog.source_image_url }}{% endif %}"
+                 alt="{{ dog.name }}" loading="lazy" decoding="async" draggable="false"{% if not dog.display_images %} referrerpolicy="no-referrer"{% endif %}>
+          </div>
           <button class="dog-photo-lightbox-nav" type="button" data-dog-photo-next aria-label="Next photograph" {% if dog.display_images|length <= 1 %}hidden{% endif %}>›</button>
         </div>
-        <p class="dog-photo-lightbox-caption" data-dog-lightbox-caption></p>
+        <p class="dog-photo-lightbox-caption" data-dog-lightbox-caption>
+          <span data-dog-photo-help>Swipe down to close · Pinch to zoom · Drag to explore · Tap photo to return</span>
+        </p>
       </div>
     </dialog>
   {% endif %}
@@ -376,5 +373,5 @@
   {% endif %}
 
 </section>
-<script src="{% static 'core/dog-portrait-gallery.js' %}?v=20261010-swipe-v4" defer></script>
+<script src="{% static 'core/dog-portrait-gallery.js' %}?v=20261010-gallery-gesture-v5" defer></script>
 {% endblock %}
