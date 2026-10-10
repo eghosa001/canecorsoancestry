@@ -2374,7 +2374,6 @@ def open_dispute(request, pk):
                     opened_by=request.user,
                     reason=form.cleaned_data["reason"],
                     details=form.cleaned_data["details"],
-                    target_image=form.cleaned_data["target_image"],
                     attachment=form.cleaned_data["attachment"] or "",
                 )
         except (OSError, urllib.error.URLError) as exc:
@@ -2386,7 +2385,7 @@ def open_dispute(request, pk):
                 dog=dog,
                 kennel=dog.kennel,
                 dispute=dispute,
-                summary={"reason": dispute.reason},
+                summary={"reason": dispute.reason, "target_image_id": form.cleaned_data["target_image"].pk if form.cleaned_data["target_image"] else None},
             )
             messages.success(request, "Review case opened. A moderator can now investigate it.")
             return redirect("accounts:my-disputes")
