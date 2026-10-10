@@ -1,6 +1,6 @@
 # Cane Corso Ancestry — Implementation Status
 
-Updated: 3 October 2026
+Updated: 10 October 2026
 
 ## Current state
 
@@ -8,7 +8,7 @@ Cane Corso Ancestry is a production Django pedigree/ancestry platform with publi
 
 The active production path is:
 
-`Cloudflare workers.dev site edge → Northflank Django → Supabase PostgreSQL`
+`Cloudflare Workers site edge → private Cloudflare VPC → Oracle VM Django/Gunicorn → Oracle-local PostgreSQL 17`
 
 Uploaded media is stored in Cloudflare R2 and served through the dedicated R2 media Worker.
 
@@ -45,11 +45,11 @@ No custom domain is configured.
 ## Active infrastructure
 
 - **Cloudflare Workers site edge** — public endpoint, cache and warm-up layer;
-- **Northflank** — Django/Gunicorn origin;
-- **Supabase PostgreSQL** — canonical application database using the `django_app` schema;
+- **Oracle VM** — Django/Gunicorn production origin and GitHub Actions runner;
+- **Oracle-local PostgreSQL 17** — canonical authoritative live database; Supabase is a frozen old source and must not receive production writes;
 - **Cloudflare R2** — durable media storage.
 
-Current infrastructure documentation is maintained in `ARCHITECTURE.md` and `docs/PRODUCTION_DEPLOYMENT.md`.
+Northflank is retired, and reconnecting it to Supabase would risk stale writes. Current infrastructure documentation is maintained in `ARCHITECTURE.md` and `docs/PRODUCTION_DEPLOYMENT.md`.
 
 ## Acceptance baseline
 
