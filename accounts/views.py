@@ -1164,7 +1164,11 @@ def submit_document(request, pk):
     if not can_contribute_to_dog(request.user, dog):
         raise PermissionDenied
 
-    form = DogDocumentSubmissionForm(request.POST or None, request.FILES or None)
+    form = DogDocumentSubmissionForm(
+        request.POST or None, request.FILES or None,
+        initial={"document_type": DogDocument.DocumentType.TITLE_CERTIFICATE}
+        if request.GET.get("type") == DogDocument.DocumentType.TITLE_CERTIFICATE else None,
+    )
     if request.method == "POST" and form.is_valid():
         try:
             with transaction.atomic():
@@ -1177,6 +1181,12 @@ def submit_document(request, pk):
                         "title": form.cleaned_data["title"],
                         "document_type": form.cleaned_data["document_type"],
                         "is_public": form.cleaned_data["is_public"],
+                        "achievement_title": form.cleaned_data["achievement_title"],
+                        "certificate_issuer": form.cleaned_data["certificate_issuer"],
+                        "certificate_awarded_on": (
+                            form.cleaned_data["certificate_awarded_on"].isoformat()
+                            if form.cleaned_data["certificate_awarded_on"] else ""
+                        ),
                     },
                     attachment=form.cleaned_data["attachment"],
                     notes=form.cleaned_data["notes"],
