@@ -313,6 +313,9 @@ def _save_formsets(dog, sets):
 def _restore(dog, target):
     for field, value in target["dog"].items():
         setattr(dog, field, value)
+    if "publication" in target:
+        # Old revisions lack this key: leave their visibility unchanged.
+        dog.is_public = target["publication"]["is_public"]
     dog.full_clean()
     dog.save()
     for name, (model, fields) in RELATED.items():
@@ -609,26 +612,56 @@ def dog_direct_edit(request, pk):
                                 "approval. The public dog record is unchanged."
                             )
                             return redirect("accounts:dog-direct-edit", pk=pk)
+                    make_public = (
+                        bool(form.cleaned_data["visibility_public"])
+                        if owner else locked.is_public
+                    )
+                    visibility_changed = owner and make_public != locked.is_public
                     before = _snapshot(locked)
+                    if visibility_changed:
+                        before["publication"] = {"is_public": locked.is_public}
                     for field in DOG_FIELDS:
                         if field in {"kennel", "sire", "dam", "litter"}:
                             setattr(locked, field, form.cleaned_data[field])
                         else:
                             setattr(locked, field, form.cleaned_data[field])
+                    if visibility_changed:
+                        locked.is_public = make_public
                     locked.full_clean()
                     locked.save()
                     _save_formsets(locked, sets)
                     after = _snapshot(locked)
+                    if visibility_changed:
+                        after["publication"] = {"is_public": locked.is_public}
                     if before != after:
                         invalidate_public_content()
                         record_audit(
                             action=ModerationAudit.Action.RECORD_CHANGED,
                             actor=request.user, dog=locked, kennel=locked.kennel,
-                            summary={"kind": "direct_dog_edit", "before": before, "after": after,
-                                     "is_owner": owner},
+                            summary={
+                                "kind": "direct_dog_edit", "before": before, "after": after,
+                                "is_owner": owner,
+                                **({"publication_action": "publish" if make_public else "unpublish"}
+                                   if visibility_changed else {}),
+                            },
                             note=form.cleaned_data["reason"],
                         )
-                messages.success(request, "Dog information saved live with an audit trail. Super admin may review or reverse it.")
+                if visibility_changed and make_public:
+                    if DogImage.objects.filter(dog_id=pk).exists():
+                        messages.success(request, "Saved and published. This dog is now visible on the public website.")
+                    else:
+                        messages.warning(
+                            request,
+                            "Saved and published. The dog can be found by exact name or its profile link. "
+                            "Add a genuine photograph in Images to include it in the photo-only browse gallery.",
+                        )
+                elif visibility_changed:
+                    messages.success(
+                        request,
+                        "Saved as Private. The dog is no longer shown on public profiles or search.",
+                    )
+                else:
+                    messages.success(request, "Dog details saved with an audit trail.")
                 return redirect("accounts:dog-direct-edit", pk=pk)
             except (IntegrityError, ValidationError) as exc:
                 form.add_error(None, str(exc))
@@ -701,6 +734,8 @@ def dog_review_edit(request, pk, audit_id):
                 raise ValidationError("Only Accept or Revert applies to completed live edits.")
             if decision == "revert":
                 current = _snapshot(dog)
+                if "publication" in event.summary.get("after", {}):
+                    current["publication"] = {"is_public": dog.is_public}
                 if current != event.summary["after"]:
                     raise ValidationError(
                         "A later change has modified this record. To preserve those changes, review the newer revisions or make an explicit super-admin override."
