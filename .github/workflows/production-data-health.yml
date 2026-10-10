@@ -74,6 +74,28 @@ jobs:
               value = inbreeding_coefficient(dog, public_only=True)
               assert 0 <= value <= 1, 'COI calculation returned an invalid value'
           print(f'PASS: COI computed on {len(dogs)} actual published pedigrees')
+          # Diagnose representative live published dogs without modifying ancestry.
+          from django.db.models import Q
+          sample = list(
+              Dog.objects.filter(is_public=True, sire__is_public=True, dam__is_public=True)
+              .only('id', 'sire_id', 'dam_id').order_by('-date_of_birth', 'pk')[:24]
+          )
+          positives = sum(inbreeding_coefficient(dog, public_only=True) > 0 for dog in sample)
+          print(f'COI sample: {positives} positive, {len(sample)-positives} zero among {len(sample)} known-parent profiles')
+          # The reported mobile profile shows a male born 25 May 2021,
+          # bloodline/kennel Custodi Nos. Report matching *public* record
+          # links so a genuine zero can be distinguished from missing ancestry.
+          matched = list(
+              Dog.objects.filter(is_public=True, date_of_birth='2021-05-25', sex='male')
+              .filter(Q(bloodline__icontains='Custodi Nos') | Q(kennel__name__icontains='Custodi Nos'))
+              .select_related('sire', 'dam').order_by('name')[:20]
+          )
+          print(f'Custodi Nos 25-May-2021 public candidates: {len(matched)}')
+          for dog in matched:
+              sire_ok = bool(dog.sire and dog.sire.is_public)
+              dam_ok = bool(dog.dam and dog.dam.is_public)
+              percent = round(inbreeding_coefficient(dog, public_only=True) * 100, 6) if sire_ok and dam_ok else None
+              print(f'COI record: name={dog.name!r} slug={dog.slug} sire_public={sire_ok} dam_public={dam_ok} coi_percent={percent}')
           "
       - name: Verify one production dog image end to end
         shell: bash
