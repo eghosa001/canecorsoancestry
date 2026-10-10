@@ -421,6 +421,83 @@ def dog_edit_list(request):
 
 
 @login_required
+@require_POST
+def dog_set_public_visibility(request, pk):
+    """Only the Super Admin deliberately publishes direct Django Admin records.
+
+    Creating a canonical dog through Advanced Admin is NOT member moderation.
+    There is no member-submission approval to process for this record.
+    Keep the act of publication separate, explicit, version-safe and audited.
+    """
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+    action = request.POST.get("action", "")
+    note = request.POST.get("reason", "").strip()
+    if action not in {"publish", "unpublish"}:
+        messages.error(request, "Choose Publish or Unpublish.")
+        return redirect("accounts:dog-direct-edit", pk=pk)
+    if request.POST.get("confirm_visibility") != "yes" or len(note) < 5:
+        messages.error(
+            request,
+            "Confirm the visibility change and provide a reason of at least 5 characters.",
+        )
+        return redirect("accounts:dog-direct-edit", pk=pk)
+
+    try:
+        with transaction.atomic():
+            dog = get_object_or_404(Dog.objects.select_for_update(), pk=pk)
+            if request.POST.get("version") != dog.updated_at.isoformat():
+                raise ValidationError(
+                    "This dog was edited since the publication page loaded. "
+                    "Reload and review the latest record before publishing."
+                )
+            make_public = action == "publish"
+            if dog.is_public == make_public:
+                messages.info(request, "This dog already has the requested visibility.")
+                return redirect("accounts:dog-direct-edit", pk=pk)
+            # No automatic 'verified' status is granted by publication.
+            # Respect ancestry cycle/identity validations before exposing facts.
+            dog.full_clean()
+            before = _snapshot(dog)
+            dog.is_public = make_public
+            dog.save(update_fields=["is_public", "updated_at"])
+            after = _snapshot(dog)
+            record_audit(
+                action=ModerationAudit.Action.RECORD_CHANGED,
+                actor=request.user, dog=dog, kennel=dog.kennel,
+                summary={
+                    "kind": "direct_dog_edit",
+                    "publication_action": action,
+                    "before": before,
+                    "after": after,
+                    "is_owner": True,
+                },
+                note=note,
+            )
+            invalidate_public_content()
+    except (ValidationError, IntegrityError) as exc:
+        messages.error(request, f"Publication was not changed: {exc}")
+        return redirect("accounts:dog-direct-edit", pk=pk)
+
+    if make_public:
+        if DogImage.objects.filter(dog_id=pk).exists():
+            messages.success(
+                request,
+                "Dog published successfully. Its profile and photograph are now eligible for public search and browsing.",
+            )
+        else:
+            messages.warning(
+                request,
+                "Dog published successfully and can be found by exact name or direct profile link. "
+                "The main dog gallery lists only dogs with photographs. "
+                "Add a genuine dog photo in the Images section to include it in the general browse list.",
+            )
+    else:
+        messages.success(request, "Dog unpublished. It is no longer visible on public profiles or search.")
+    return redirect("accounts:dog-direct-edit", pk=pk)
+
+
+@login_required
 def dog_direct_edit(request, pk):
     if not can_review_submissions(request.user):
         raise PermissionDenied
