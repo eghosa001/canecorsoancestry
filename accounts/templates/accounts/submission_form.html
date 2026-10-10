@@ -38,10 +38,12 @@
     </div>
     <div class="dog-photo-gallery-grid">
       {% for photo in photo_report_choices %}
-      <div class="dog-photo-gallery-item">
+      <button class="dog-photo-gallery-item photo-report-pick" type="button"
+              data-select-report-image="{{ photo.pk }}" aria-pressed="false"
+              aria-label="Choose photograph #{{ photo.pk }} for incorrect-photo report">
         <img src="{{ photo.image.url }}" alt="Photograph #{{ photo.pk }} of {{ dog.name }}" loading="lazy" decoding="async">
-        <span>{% if photo.is_primary %}Main{% else %}Gallery{% endif %} photograph #{{ photo.pk }}</span>
-      </div>
+        <span>{% if photo.is_primary %}Main{% else %}Gallery{% endif %} photograph #{{ photo.pk }} · Tap to select</span>
+      </button>
       {% endfor %}
     </div>
   </section>
@@ -70,4 +72,23 @@
     </div>
   </form>
 </section>
+{% if photo_report_choices %}
+<script>
+  document.querySelectorAll("[data-select-report-image]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const field = document.getElementById("id_target_image");
+      if (!field) return;
+      field.value = button.dataset.selectReportImage;
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+      document.querySelectorAll("[data-select-report-image]").forEach((item) => {
+        item.setAttribute("aria-pressed", item === button ? "true" : "false");
+      });
+    });
+  });
+</script>
+<style>
+  .photo-report-pick { color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .photo-report-pick[aria-pressed="true"] { border: 2px solid var(--gold); }
+</style>
+{% endif %}
 {% endblock %}
