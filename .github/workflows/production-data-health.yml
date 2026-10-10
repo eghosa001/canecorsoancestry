@@ -121,6 +121,27 @@ jobs:
                   for parent in (dog.sire, dog.dam):
                       known = sum(bool(p) for p in links.get(parent.pk, ()))
                       print(f'COI parent status: {parent.name!r} known_parent_links={known}')
+                  # Inspect every incomplete paternal branch for an existing,
+                  # source-ID-backed canonical parent; no automatic relinking.
+                  from registry.models import DogSource, DogExternalKey
+                  from registry.management.commands.import_canecorso_archive import DEFAULT_NAMESPACE
+                  paternal_nodes = Dog.objects.filter(pk__in=sire_links).order_by('name')
+                  for node in paternal_nodes:
+                      if node.sire_id and node.dam_id:
+                          continue
+                      provenance = [
+                          payload for payload in DogSource.objects.filter(dog=node)
+                          .values_list('raw_payload', flat=True) if payload
+                      ]
+                      for field, key in (('sire', 'father_id'), ('dam', 'mother_id')):
+                          if getattr(node, field + '_id'):
+                              continue
+                          source_parent = next((str(p.get(key) or '') for p in provenance if p.get(key)), '')
+                          candidate = DogExternalKey.objects.filter(
+                              namespace=DEFAULT_NAMESPACE, key=source_parent
+                          ).select_related('dog').first() if source_parent else None
+                          candidate_slug = candidate.dog.slug if candidate else '-'
+                          print(f'COI paternal gap: child={node.name!r} missing={field} source_parent_id={source_parent or "-"} existing_canonical={candidate_slug}')
           "
       - name: Verify one production dog image end to end
         shell: bash
