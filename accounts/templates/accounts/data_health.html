@@ -36,6 +36,32 @@
     </div>
   </section>
 
+  <section class="panel section-spacer">
+    <div class="panel-heading">
+      <div><h2>COI coverage review</h2><span>Read-only sample of recent dogs with both parents published.</span></div>
+    </div>
+    <p><strong>{{ counts.both_parents_public|default:0 }} of {{ counts.public_dogs }}</strong> public dogs have two published parent records. COI uses every connected published ancestor, not just the visible pedigree generations. A recorded 0.00% means no shared ancestor was found in currently connected records.</p>
+    <details class="moderation-details">
+      <summary>Inspect recent COI calculations ({{ report.coi_review_sample|length }} dogs)</summary>
+      <div class="relationship-list">
+        {% for row in report.coi_review_sample %}
+          <div>
+            <a href="{% url 'registry:dog-detail' row.dog.slug %}"><strong>{{ row.dog.name }}</strong></a>
+            <span>
+              {% if row.percent == None %}Needs pedigree review
+              {% elif row.recorded_zero %}0.00% · no connected common ancestor
+              {% elif row.tiny_positive %}&lt;0.01%
+              {% else %}{{ row.percent|floatformat:2 }}%{% endif %}
+            </span>
+            {% if can_manage_sources %}<a href="{% url 'accounts:dog-direct-edit' row.dog.pk %}">Review parent links</a>{% endif %}
+          </div>
+        {% empty %}
+          <p class="muted">No public dogs with both parents linked.</p>
+        {% endfor %}
+      </div>
+    </details>
+  </section>
+
   <div class="profile-section-grid section-spacer">
     <article class="panel">
       <div class="panel-heading"><h2>Provenance</h2><span>Records that need stronger source evidence.</span></div>
