@@ -141,7 +141,8 @@ jobs:
                               namespace=DEFAULT_NAMESPACE, key=source_parent
                           ).select_related('dog').first() if source_parent else None
                           candidate_slug = candidate.dog.slug if candidate else '-'
-                          print(f'COI paternal gap: child={node.name!r} missing={field} source_parent_id={source_parent or "-"} existing_canonical={candidate_slug}')
+                          source_label = source_parent or 'none'
+                          print(f'COI paternal gap: child={node.name!r} missing={field} source_parent_id={source_label} existing_canonical={candidate_slug}')
           "
       - name: Verify one production dog image end to end
         shell: bash
