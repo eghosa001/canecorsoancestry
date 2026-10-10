@@ -244,7 +244,10 @@ class OwnerFeedbackFixesTests(TestCase):
         self.client.force_login(self.owner)
         edit_url = reverse("accounts:dog-direct-edit", args=[self.dog.pk])
         publish_url = reverse("accounts:dog-set-public-visibility", args=[self.dog.pk])
-        self.assertContains(self.client.get(edit_url), "Publish to website")
+        page = self.client.get(edit_url)
+        self.assertContains(page, "Save dog details and visibility")
+        self.assertContains(page, 'role="switch"')
+        self.assertFalse(page.context["form"]["visibility_public"].value())
         self.assertEqual(self.client.get(publish_url).status_code, 405)
         version = self.dog.updated_at.isoformat()
         before_state = self.dog.verification_state
@@ -280,7 +283,9 @@ class OwnerFeedbackFixesTests(TestCase):
         self.assertEqual(audit.summary["before"]["publication"]["is_public"], False)
         self.assertEqual(audit.summary["after"]["publication"]["is_public"], True)
         self.assertEqual(audit.note, "Owner reviewed the dog's identity.")
-        self.assertContains(self.client.get(edit_url), "Unpublish from website")
+        page = self.client.get(edit_url)
+        self.assertTrue(page.context["form"]["visibility_public"].value())
+        self.assertContains(page, 'role="switch"')
 
     def test_publish_permission_confirmation_concurrency_and_unpublish(self):
         self.dog.is_public = False
@@ -299,7 +304,7 @@ class OwnerFeedbackFixesTests(TestCase):
         self.assertEqual(self.client.post(url, valid).status_code, 403)
         self.assertNotContains(
             self.client.get(reverse("accounts:dog-direct-edit", args=[self.dog.pk])),
-            "Publish to website",
+            'name="visibility_public"',
         )
         self.client.force_login(self.owner)
         self.client.post(url, {**valid, "confirm_visibility": ""})
