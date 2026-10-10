@@ -5,7 +5,7 @@ import time
 from urllib.parse import urljoin
 
 from PIL import Image
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 
 BASE = os.environ.get("SAFARI_TEST_BASE_URL", "http://127.0.0.1:8000").rstrip("/") + "/"
@@ -159,10 +159,20 @@ def run():
             page.locator("input[name='username']").fill("safari-smoke@example.test")
             page.locator("input[name='password']").fill("safari-smoke-password")
             page.locator("input[name='username']").locator("xpath=ancestor::form").locator("button[type='submit']").click()
-            page.wait_for_load_state("domcontentloaded")
-            if "/accounts/login/" in page.url:
-                problems = page.locator(".form-error, .errorlist").all_inner_texts()
-                raise AssertionError(f"Safari login did not complete, errors={problems}, url={page.url}")
+            # WebKit can finish the click before the redirect is committed.
+            # Wait for actual navigation instead of checking URL immediately.
+            try:
+                page.wait_for_url(
+                    lambda url: "/accounts/login/" not in url.path,
+                    timeout=15_000,
+                    wait_until="domcontentloaded",
+                )
+            except PlaywrightTimeoutError as exc:
+                problems = page.locator(".form-error, .errorlist, .flash.error").all_inner_texts()
+                excerpt = page.locator("body").inner_text()[:550]
+                raise AssertionError(
+                    f"Safari login did not complete, errors={problems}, url={page.url}, page={excerpt}"
+                ) from exc
 
             dog_id = os.environ["SAFARI_TEST_DOG_ID"]
             go(page, f"/member/dogs/{dog_id}/photo/")
