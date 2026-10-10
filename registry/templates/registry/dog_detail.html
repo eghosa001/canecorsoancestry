@@ -27,7 +27,7 @@
           {% if dog.display_images %}
             <img class="dog-portrait-image" data-dog-photo-main
                  src="{{ dog.display_images.0.image.url }}"
-                 alt="{{ dog.name }}"
+                 alt="{{ dog.name }}{% if dog.display_images.0.public_caption %} — {{ dog.display_images.0.public_caption }}{% endif %}"
                  loading="eager" fetchpriority="high" decoding="async">
           {% else %}
             <img class="dog-portrait-image" data-dog-photo-main
@@ -39,7 +39,7 @@
         <div class="dog-portrait-caption">
           <div class="dog-portrait-caption-copy">
             <strong>{{ dog.name }}</strong>
-            <small data-dog-photo-caption>Photo 1</small>
+            <small data-dog-photo-caption>{% if dog.display_images and dog.display_images.0.public_caption %}{{ dog.display_images.0.public_caption }}{% else %}Photo 1{% endif %}</small>
           </div>
           {% if dog.kennel %}<span class="dog-portrait-kennel">{{ dog.kennel.name }}</span>{% endif %}
         </div>
@@ -50,8 +50,8 @@
                       type="button"
                       data-dog-photo-thumb
                       data-photo-src="{{ photo.image.url }}"
-                      data-photo-alt="{{ dog.name }}"
-                      data-photo-caption="Photo {{ forloop.counter }}"
+                      data-photo-alt="{{ dog.name }}{% if photo.public_caption %} — {{ photo.public_caption }}{% endif %}"
+                      data-photo-caption="{% if photo.public_caption %}{{ photo.public_caption }}{% else %}Photo {{ forloop.counter }}{% endif %}"
                       aria-label="Show photograph {{ forloop.counter }} of {{ dog.name }}"
                       aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">
                 <img src="{{ photo.image.url }}" alt="" loading="lazy" decoding="async">
