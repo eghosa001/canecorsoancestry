@@ -9,9 +9,9 @@ from django.urls import reverse
 
 from registry.models import (
     DisputeCase, Dog, DogDocument, DogImage, DogTitle,
-    Kennel, ModerationRoleAssignment, Submission,
+    Kennel, ModerationAudit, ModerationRoleAssignment, Submission,
 )
-from registry.services import approve_submission
+from registry.services import approve_submission, record_audit
 
 
 class OwnerFeedbackFixesTests(TestCase):
@@ -69,7 +69,7 @@ class OwnerFeedbackFixesTests(TestCase):
             dog=self.dog, kennel=self.kennel,
             payload={
                 "title": "Champion award proof",
-                "document_type": DogDocument.DocumentType.TITLE_CERTIFICATE,
+                "document_type": "title_certificate",
                 "achievement_title": "National Champion",
                 "certificate_issuer": "Example Club",
                 "certificate_awarded_on": "2025-05-01",
@@ -81,10 +81,11 @@ class OwnerFeedbackFixesTests(TestCase):
         self.assertNotContains(self.client.get(url), "National Champion")
         with self.captureOnCommitCallbacks(execute=True):
             approve_submission(sub, self.staff, "Certificate checked")
-        title = DogTitle.objects.select_related("certificate_document").get(dog=self.dog)
+        title = DogTitle.objects.get(dog=self.dog)
+        certificate = DogDocument.objects.get(source_submission=sub)
         self.assertEqual(title.name, "National Champion")
-        self.assertEqual(title.issuer, "Example Club")
-        self.assertEqual(title.certificate_document.source_submission_id, sub.pk)
+        self.assertIn(f"[CCA certificate #{certificate.pk}]", title.source_text)
+        self.assertIn("Example Club", certificate.title)
         self.assertContains(self.client.get(url), "View reviewed certificate")
 
     def test_reported_photo_replacement_changes_only_reviewed_image(self):
@@ -95,12 +96,16 @@ class OwnerFeedbackFixesTests(TestCase):
         )
         case = DisputeCase.objects.create(
             dog=self.dog, opened_by=self.member,
-            reason=DisputeCase.Reason.PHOTO,
+            reason=DisputeCase.Reason.IDENTITY,
             details="The published image belongs to a different dog.",
-            target_image=previous,
             attachment=SimpleUploadedFile(
                 "new-photo.jpg", b"replacement-photo-data", content_type="image/jpeg",
             ),
+        )
+        record_audit(
+            action=ModerationAudit.Action.DISPUTE_OPENED, actor=self.member,
+            dog=self.dog, dispute=case,
+            summary={"reason": "identity", "report_type": "photo", "target_image_id": previous.pk},
         )
         self.client.force_login(self.staff)
         with self.captureOnCommitCallbacks(execute=True):
@@ -130,6 +135,11 @@ class OwnerFeedbackFixesTests(TestCase):
             dog=self.dog, opened_by=self.member,
             reason=DisputeCase.Reason.PHOTO,
             details="Incorrect photograph",
+        )
+        record_audit(
+            action=ModerationAudit.Action.DISPUTE_OPENED, actor=self.member,
+            dog=self.dog, dispute=case,
+            summary={"reason": "identity", "report_type": "photo"},
         )
         self.client.force_login(self.staff)
         self.client.post(
