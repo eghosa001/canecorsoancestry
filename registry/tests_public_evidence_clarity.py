@@ -20,6 +20,12 @@ class PublicEvidenceClarityTests(TestCase):
         self.assertContains(response, "Not independently verified")
         self.assertContains(response, "Source attribution on file")
         self.assertContains(response, "not proof")
+        # Trust context stays available without overwhelming the dog facts.
+        self.assertContains(response, '<details class="profile-record-notes ux-disclosure">')
+        self.assertContains(response, "About COI &amp; sources")
+        self.assertNotContains(response, "<dt>Evidence review</dt>")
+        self.assertNotContains(response, "<dt>Historical source</dt>")
+
 
     def test_no_imported_source_shows_missing_evidence_not_invented_document(self):
         dog = Dog.objects.create(
