@@ -315,3 +315,22 @@
   .dog-portrait-open,
   .dog-portrait-thumb { scroll-behavior: auto; transition: none; }
 }
+
+
+/* Accessible fallback when scripts are disabled; primary full-size link is
+   already available without JS, and every additional photo remains reachable. */
+.dog-portrait-nojs {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+  padding: 8px 4px;
+}
+.dog-portrait-nojs a {
+  color: var(--gold-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-height: 44px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
