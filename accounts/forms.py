@@ -940,6 +940,12 @@ class DisputeForm(forms.Form):
             self.fields["target_image"].queryset = DogImage.objects.filter(
                 dog=dog,
             ).order_by("-is_primary", "sort_order", "created_at")
+            self.fields["target_image"].label_from_instance = (
+                lambda item: (
+                    ("Main photograph" if item.is_primary else "Gallery photograph")
+                    + f" #{item.pk}: {item.caption or item.image.name.rsplit('/', 1)[-1]}"
+                )
+            )
     details = forms.CharField(
         widget=forms.Textarea(attrs={"rows": 6}),
         help_text="Describe the exact fact or relationship you believe should be reviewed.",
