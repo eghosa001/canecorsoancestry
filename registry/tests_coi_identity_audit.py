@@ -90,3 +90,41 @@ class COIDuplicateAuditTests(TestCase):
         report = audit_registration_backed_duplicates(max_display=0)
         self.assertEqual(len(report["candidates"]), 0)
         self.assertEqual(report["counts"]["matched"], 1)
+
+
+class StaffCOIReviewUIRoutingTests(COIDuplicateAuditTests):
+    def test_duplicate_scan_only_runs_for_explicit_superadmin_review(self):
+        from unittest.mock import patch
+        from django.contrib.auth import get_user_model
+        from django.urls import reverse
+
+        admin = get_user_model().objects.create_superuser(
+            username="coi-evidence-admin", email="coi-evidence-admin@example.test",
+            password="example-test-pass-2026",
+        )
+        self.client.force_login(admin)
+        url = reverse("accounts:data-health")
+        with patch("accounts.views.audit_registration_backed_duplicates",
+                   wraps=audit_registration_backed_duplicates) as scan:
+            landing = self.client.get(url)
+            self.assertEqual(landing.status_code, 200)
+            scan.assert_not_called()
+            self.assertContains(landing, "Check duplicate ancestors")
+            review = self.client.get(url, {"coi_duplicates": "1", "refresh": "1"})
+            self.assertEqual(review.status_code, 200)
+            scan.assert_called_once()
+            self.assertEqual(
+                review.context["coi_duplicate_report"]["counts"]["matched"], 1,
+            )
+            self.assertContains(review, "Review in Super Admin merge tool")
+
+    def test_regular_user_cannot_scan_superadmin_registrations(self):
+        from django.contrib.auth import get_user_model
+        from django.urls import reverse
+        user = get_user_model().objects.create_user(
+            username="coi-evidence-member", password="example-test-pass-2026",
+        )
+        self.client.force_login(user)
+        response = self.client.get(reverse("accounts:data-health"),
+                                   {"coi_duplicates": "1"})
+        self.assertNotEqual(response.status_code, 200)
