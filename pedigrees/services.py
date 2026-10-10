@@ -723,6 +723,52 @@ def inbreeding_coefficient(dog, public_only=False):
     )
 
 
+def coi_linkage_summary(dog, public_only=True):
+    """Explain a recorded COI without guessing missing ancestry.
+
+    Return ancestor-branch sizes and genuinely shared canonical IDs using the
+    same bounded recursive pedigree load as Wright's COI calculation. Private
+    or unpublished dogs are never counted in a public summary.
+    """
+    result = {
+        "status": "insufficient",
+        "coi_percent": None,
+        "sire_records": 0,
+        "dam_records": 0,
+        "shared_ancestors": 0,
+    }
+    if dog is None or not dog.sire_id or not dog.dam_id:
+        return result
+    try:
+        ordered, links = _pedigree_order(dog, public_only=public_only)
+    except PedigreeCycleError:
+        return {**result, "status": "cycle"}
+    sire_id, dam_id = links.get(dog.pk, (None, None))
+    if sire_id not in links or dam_id not in links:
+        return result
+
+    def reachable(root):
+        seen = set()
+        pending = [root]
+        while pending:
+            node = pending.pop()
+            if node in seen or node not in links:
+                continue
+            seen.add(node)
+            pending.extend(parent for parent in links[node] if parent in links)
+        return seen
+
+    sire_records = reachable(sire_id)
+    dam_records = reachable(dam_id)
+    return {
+        "status": "estimated",
+        "coi_percent": max(0, _kinship_from_links(sire_id, dam_id, ordered, links)) * 100,
+        "sire_records": len(sire_records),
+        "dam_records": len(dam_records),
+        "shared_ancestors": len(sire_records & dam_records),
+    }
+
+
 def _kinship_calculator(ordered, links):
     """Return a memoized kinship calculator for an already ordered pedigree graph."""
     order = {dog_id: position for position, dog_id in enumerate(ordered)}
