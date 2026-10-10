@@ -17,7 +17,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.forms import inlineformset_factory
 from django.core.paginator import Paginator
-from django.http import HttpResponseNotAllowed
+from django.http import HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -97,8 +97,8 @@ def _find_reference(model, text, *, fields):
 
 
 class DirectDogEditForm(forms.ModelForm):
-    sire_ref = forms.CharField(required=False, label="Sire name or UUID")
-    dam_ref = forms.CharField(required=False, label="Dam name or UUID")
+    sire_ref = forms.CharField(required=False, label="Sire name or UUID", widget=forms.TextInput(attrs={"data-admin-parent-lookup": "", "data-parent-sex": "male", "autocomplete": "off", "placeholder": "Search sire by name or registration"}))
+    dam_ref = forms.CharField(required=False, label="Dam name or UUID", widget=forms.TextInput(attrs={"data-admin-parent-lookup": "", "data-parent-sex": "female", "autocomplete": "off", "placeholder": "Search dam by name or registration"}))
     kennel_ref = forms.CharField(required=False, label="Kennel name or UUID")
     litter_ref = forms.CharField(required=False, label="Litter code or UUID")
     reason = forms.CharField(
@@ -612,3 +612,39 @@ def dog_review_edit(request, pk, audit_id):
     except (ValidationError, IntegrityError) as exc:
         messages.error(request, str(exc))
     return redirect("accounts:dog-direct-edit", pk=pk)
+
+
+@login_required
+def dog_parent_suggestions(request):
+    """Private staff lookup, including unpublished ancestors. Never return them publicly."""
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
+    query = request.GET.get("q", "").strip()[:100]
+    sex = request.GET.get("sex", "")
+    if sex not in {Dog.Sex.MALE, Dog.Sex.FEMALE}:
+        return JsonResponse({"results": []})
+    if len(query) < 2:
+        return JsonResponse({"results": []})
+    ids = moderation_dog_ids(query, limit=25, fuzzy=False)
+    found = {
+        dog.pk: dog for dog in Dog.objects.filter(
+            pk__in=ids, sex__in=(sex, Dog.Sex.UNKNOWN),
+        ).select_related("kennel").prefetch_related("registrations")
+    }
+    results = []
+    for pk in ids:
+        dog = found.get(pk)
+        if not dog:
+            continue
+        registrations = [str(r.number) for r in dog.registrations.all() if r.number][:2]
+        results.append({
+            "id": str(dog.pk),
+            "name": dog.name,
+            "kennel": dog.kennel.name if dog.kennel_id else "",
+            "registration": ", ".join(registrations),
+            "dob": dog.date_of_birth.isoformat() if dog.date_of_birth else "",
+            "is_public": dog.is_public,
+        })
+        if len(results) == 12:
+            break
+    return JsonResponse({"results": results})
