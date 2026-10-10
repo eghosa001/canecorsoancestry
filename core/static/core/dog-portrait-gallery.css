@@ -57,9 +57,9 @@
   width: auto;
   max-width: 100%;
   height: auto;
-  /* A slightly larger full-frame portrait, never cropped or zoomed. */
+  /* The small viewport stays steady when Safari's browser bars collapse. */
   max-height: min(620px, 70vh);
-  max-height: min(620px, 70dvh);
+  max-height: min(620px, 70svh);
   object-fit: contain;
   object-position: center;
   background: transparent;
@@ -176,10 +176,10 @@
   margin: auto;
   width: min(1060px, calc(100vw - 24px));
   height: min(92vh, 880px);
-  height: min(92dvh, 880px);
+  height: min(92svh, 880px);
   max-width: calc(100vw - 24px);
   max-height: 92vh;
-  max-height: 92dvh;
+  max-height: 92svh;
   padding: 0;
   border: 1px solid rgba(195, 166, 108, .42);
   border-radius: 16px;
@@ -282,6 +282,8 @@
   -webkit-user-select: none;
   -webkit-user-drag: none;
   transform-origin: center center;
+}
+.dog-photo-lightbox-viewport[data-zoomed="true"] img {
   will-change: transform;
 }
 .dog-photo-lightbox-stage.is-zoomed .dog-photo-lightbox-viewport img {
@@ -316,7 +318,7 @@
   .dog-profile .profile-photo.dog-portrait { padding: 10px; border-radius: 14px; }
   .dog-profile .profile-photo.dog-portrait .dog-portrait-image {
     max-height: min(405px, 51vh);
-    max-height: min(405px, 51dvh);
+    max-height: min(405px, 51svh);
   }
   .dog-portrait-heading { padding-bottom: 9px; }
   .dog-portrait-caption { padding-top: 10px; }
@@ -325,8 +327,10 @@
   .dog-photo-lightbox {
     width: calc(100vw - 12px);
     max-width: calc(100vw - 12px);
-    height: calc(100dvh - 20px);
-    max-height: calc(100dvh - 20px);
+    height: calc(100vh - 20px);
+    height: calc(100svh - 20px);
+    max-height: calc(100vh - 20px);
+    max-height: calc(100svh - 20px);
     border-radius: 12px;
   }
   .dog-photo-lightbox-topbar { gap: 6px; padding: 9px; }
