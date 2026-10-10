@@ -3,7 +3,7 @@
     <div>
       <p class="eyebrow">Advanced pedigree analysis</p>
       <h2 id="advanced-analysis-title">Depth-aware ancestry summary</h2>
-      <p class="muted">Calculated from the visible {{ generations }}-generation pedigree. Revision {{ analysis.revision_key }}.</p>
+      <p class="muted">{{ generations }} generations shown. COI uses all connected, available ancestry.</p>
     </div>
     <div class="button-row no-print">
       <button class="btn btn-outline" type="button" onclick="window.print()">Print pedigree</button>
@@ -15,7 +15,22 @@
     </div>
   </div>
   <div class="analysis-grid analysis-grid-four analysis-mobile-summary">
-    <article class="analysis-card"><p class="eyebrow">Coefficient of inbreeding (COI)</p><strong class="analysis-number">{% if analysis.coi_percent != None %}{{ analysis.coi_percent|floatformat:2 }}%{% else %}Unavailable{% endif %}</strong><span>{% if analysis.coi_percent != None %}Estimate from recorded ancestry; missing parent links may understate the value{% else %}{{ analysis.cycle_error|default:"Pedigree parent links need review before COI can be calculated" }}{% endif %}</span></article>
+    <article class="analysis-card">
+      <p class="eyebrow">Coefficient of inbreeding (COI)</p>
+      <strong class="analysis-number">
+        {% if analysis.coi_percent != None %}
+          {% if analysis.coi_below_display_precision %}&lt;0.01%{% else %}{{ analysis.coi_percent|floatformat:2 }}%{% endif %}
+        {% elif analysis.coi_status == "insufficient" %}Not enough ancestry
+        {% else %}Unavailable{% endif %}
+      </strong>
+      <span>
+        {% if analysis.coi_percent != None %}
+          {% if analysis.coi_percent == 0 %}No common ancestor in linked records; missing ancestors can conceal relationships.
+          {% else %}Calculated from all connected ancestors.{% endif %}
+        {% elif analysis.coi_status == "insufficient" %}Both sire and dam must be linked and available.
+        {% else %}{{ analysis.cycle_error|default:"Pedigree parent links need review." }}{% endif %}
+      </span>
+    </article>
     <article class="analysis-card"><p class="eyebrow">Pedigree coverage</p><strong class="analysis-number">{{ analysis.coverage_percent|floatformat:1 }}%</strong><span>{{ analysis.known_slots }} of {{ analysis.total_slots }} ancestry positions known</span></article>
     <article class="analysis-card"><p class="eyebrow">Unique ancestors</p><strong class="analysis-number">{{ analysis.unique_ancestor_count }}</strong><span>Ancestor loss: {{ analysis.ancestor_loss_percent|floatformat:1 }}% across known pedigree positions</span></article>
     <article class="analysis-card"><p class="eyebrow">Repeated ancestors</p><strong class="analysis-number">{{ analysis.linebreeding|length }}</strong><span>Deepest known generation: {{ analysis.deepest_known_generation }}</span></article>
