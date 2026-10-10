@@ -133,6 +133,9 @@
         <a class="btn btn-outline" href="#offspring">View offspring</a>
         <a class="btn btn-outline" href="{% url 'pedigrees:reverse' dog.slug %}">Reverse pedigree</a>
       </div>
+      <p class="profile-evidence-summary">
+        {{ verification_label }}. {% if has_source_attribution %}Source attribution on file{% else %}No source attribution recorded{% endif %}; this alone is not proof of identity, registration or pedigree accuracy.
+      </p>
       {% if can_contribute or user.is_authenticated %}
         <details class="profile-manage-actions ux-disclosure">
           <summary><span><strong>Contribute or request review</strong><small>Corrections, evidence and review requests stay separate from public browsing.</small></span></summary>
