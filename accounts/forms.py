@@ -927,7 +927,7 @@ class DocumentVisibilityForm(forms.Form):
 
 
 class DisputeForm(forms.Form):
-    reason = forms.ChoiceField(choices=DisputeCase.Reason.choices)
+    reason = forms.ChoiceField(choices=[*DisputeCase.Reason.choices, ("photo", "Incorrect dog photograph")])
     target_image = forms.ModelChoiceField(
         queryset=DogImage.objects.none(), required=False,
         label="Incorrect photo (choose from uploaded photos)",
