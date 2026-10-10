@@ -104,15 +104,15 @@ jobs:
             status="$(curl --connect-timeout 5 --max-time 25 -sS -H 'Accept: text/html' -o /tmp/cca-coi-render.html -w '%{http_code}' "$PUBLIC_SITE$path" || true)"
             test "$status" = 200 || { echo "::error::COI public route $path -> HTTP $status"; exit 1; }
             python3 - /tmp/cca-coi-render.html "$expected" <<'PY'
-import re
-import sys
-from pathlib import Path
-html = Path(sys.argv[1]).read_text(encoding='utf-8')
-expected = sys.argv[2]
-assert re.search(r'<strong[^>]*>\s*' + re.escape(expected) + r'\s*</strong>', html), (
-    f'Public HTML did not display the current published COI: {expected}'
-)
-PY
+          import re
+          import sys
+          from pathlib import Path
+          html = Path(sys.argv[1]).read_text(encoding='utf-8')
+          expected = sys.argv[2]
+          assert re.search(r'<strong[^>]*>\s*' + re.escape(expected) + r'\s*</strong>', html), (
+              f'Public HTML did not display the current published COI: {expected}'
+          )
+          PY
             echo "PASS: $path renders $expected"
           done
       - name: Verify one production dog image end to end
