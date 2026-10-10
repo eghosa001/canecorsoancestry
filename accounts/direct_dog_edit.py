@@ -301,6 +301,11 @@ def _restore(dog, target):
             for field in fields:
                 column = model._meta.get_field(field).attname
                 setattr(item, column, row[column])
+            if name == "titles":
+                for extra in ("issuer", "awarded_on", "verification_state", "certificate_document"):
+                    column = model._meta.get_field(extra).attname
+                    if column in row:
+                        setattr(item, column, row[column])
             item.full_clean(validate_constraints=name != "images")
             item.save()
 
