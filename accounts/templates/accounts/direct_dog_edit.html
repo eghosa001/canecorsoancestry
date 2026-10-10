@@ -31,6 +31,7 @@
             <h3 id="canonical-visibility-heading">Visibility</h3>
             <label class="canonical-visibility-control" for="{{ field.id_for_label }}">
               <span class="canonical-visibility-private">Private</span>
+              <input type="hidden" name="{{ field.html_name }}" value="false">
               {{ field }}
               <span class="canonical-visibility-public">Public</span>
             </label>
