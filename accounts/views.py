@@ -1511,13 +1511,16 @@ def moderation_queue(request):
         .select_related("dog", "opened_by", "assigned_to")
         .order_by("status", "created_at")[:50]
     )
-    photo_dispute_ids = [row.pk for row in disputes if row.reason == "photo"]
+    photo_dispute_ids = [row.pk for row in disputes]
     opened_photo_ids = {}
     if photo_dispute_ids:
+        opened_report_types = {}
         for row in ModerationAudit.objects.filter(
             dispute_id__in=photo_dispute_ids,
             action=ModerationAudit.Action.DISPUTE_OPENED,
         ).order_by("created_at", "pk").only("dispute_id", "summary"):
+            if row.dispute_id not in opened_report_types:
+                opened_report_types[row.dispute_id] = (row.summary or {}).get("report_type") == "photo"
             candidate_id = (row.summary or {}).get("target_image_id")
             if row.dispute_id not in opened_photo_ids and candidate_id is not None:
                 opened_photo_ids[row.dispute_id] = candidate_id
@@ -1525,6 +1528,7 @@ def moderation_queue(request):
             pk__in=opened_photo_ids.values(),
         ).in_bulk()
         for dispute in disputes:
+            dispute.is_photo_report = opened_report_types.get(dispute.pk, False)
             candidate = photo_images.get(opened_photo_ids.get(dispute.pk))
             dispute.reported_photo = (
                 candidate if candidate and candidate.dog_id == dispute.dog_id else None
@@ -2559,15 +2563,15 @@ def review_dispute(request, pk, decision):
             dispute.assigned_to = request.user
             dispute.status = DisputeCase.Status.REVIEWING
         elif decision in {"replace_photo", "remove_photo"}:
-            if dispute.reason != "photo":
+            opened = ModerationAudit.objects.filter(
+                dispute=dispute, action=ModerationAudit.Action.DISPUTE_OPENED,
+            ).order_by("created_at", "pk").first()
+            if not (opened and (opened.summary or {}).get("report_type") == "photo"):
                 messages.error(request, "Only an incorrect-photo case can change a dog photograph.")
                 return redirect("accounts:moderation")
             if not note:
                 messages.error(request, "Record the evidence considered and the reason for this correction.")
                 return redirect("accounts:moderation")
-            opened = ModerationAudit.objects.filter(
-                dispute=dispute, action=ModerationAudit.Action.DISPUTE_OPENED,
-            ).order_by("created_at", "pk").first()
             target_id = (opened.summary or {}).get("target_image_id") if opened else None
             target = (DogImage.objects.select_for_update()
                       .filter(pk=target_id, dog=dispute.dog).first()) if target_id else None
@@ -2608,7 +2612,10 @@ def review_dispute(request, pk, decision):
             dispute.closed_at = timezone.now()
             invalidate_public_content()
         elif decision == "resolve":
-            if dispute.reason == "photo":
+            opening_audit = ModerationAudit.objects.filter(
+                dispute=dispute, action=ModerationAudit.Action.DISPUTE_OPENED,
+            ).order_by("created_at", "pk").first()
+            if opening_audit and (opening_audit.summary or {}).get("report_type") == "photo":
                 messages.error(request, "A photo report must result in a reviewed photo correction or be dismissed with a reason.")
                 return redirect("accounts:moderation")
             if not note:
