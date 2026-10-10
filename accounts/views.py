@@ -2379,6 +2379,8 @@ def request_document_visibility(request, pk):
 
 @login_required
 def open_dispute(request, pk):
+    if not can_use_member_features(request.user):
+        raise PermissionDenied
     kennel_ids = request.user.kennel_memberships.values_list("kennel_id", flat=True)
     dog = get_object_or_404(
         Dog.objects.filter(Q(is_public=True) | Q(kennel_id__in=kennel_ids)).distinct(),
@@ -2423,6 +2425,13 @@ def open_dispute(request, pk):
             "intro": "Report an incorrect photo, disputed pedigree, identity, health or ownership. For photos, choose the wrong image and optionally upload the correct one. Nothing changes publicly until staff review.",
             "button_label": "Open review case",
             "multipart": True,
+            "dog": dog,
+            "current_photo_url": _current_dog_photo_url(dog),
+            "photo_report_choices": list(
+                DogImage.objects.filter(dog=dog).order_by(
+                    "-is_primary", "sort_order", "created_at",
+                )[:12]
+            ),
         },
     )
 
