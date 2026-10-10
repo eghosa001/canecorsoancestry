@@ -510,8 +510,8 @@ class DogImage(models.Model):
         """Hide import/source metadata without discarding ordinary photo descriptions."""
         caption = (self.caption or "").strip()
         if re.search(
-            r"(?i)\\b(?:source|snapshot|attribution|archive(?:d)?|credits?|retrieved)\\b"
-            r"|https?://|www\\.|[a-z0-9.-]+\\.(?:com|org|net|io|co|gov|edu)\\b",
+            r"(?i)\b(?:source|snapshot|attribution|archive(?:d)?|credits?|retrieved)\b"
+            r"|https?://|www\.|[a-z0-9.-]+\.(?:com|org|net|io|co|gov|edu)\b",
             caption,
         ):
             return ""
