@@ -185,3 +185,42 @@ document.querySelectorAll("[data-admin-parent-lookup]").forEach((referenceInput)
     }
   });
 });
+
+
+// Super Admin canonical publication. Status labels are textual as well as
+// red/green: a checked switch is only a proposed change until Save succeeds.
+// The saved state in the page header never changes until the server redirects.
+(() => {
+  const editor = document.querySelector("[data-canonical-visibility-editor]");
+  if (!editor) return;
+  const toggle = editor.querySelector('input[name="visibility_public"][type="checkbox"]');
+  const preview = editor.querySelector("[data-publication-preview]");
+  const badge = editor.querySelector("[data-publication-preview-badge]");
+  const info = editor.querySelector("[data-publication-preview-text]");
+  const submit = document.querySelector("[data-canonical-submit]");
+  if (!toggle || !preview || !badge || !info || !submit) return;
+
+  const savedPublic = editor.dataset.initiallyPublic === "true";
+  const update = () => {
+    const publicAfterSave = toggle.checked;
+    const changed = publicAfterSave !== savedPublic;
+    editor.dataset.pendingChange = String(changed);
+    badge.classList.toggle("canonical-publication-badge--published", publicAfterSave);
+    badge.classList.toggle("canonical-publication-badge--unpublished", !publicAfterSave);
+    badge.textContent = publicAfterSave ? "Published" : "Unpublished";
+    if (changed && publicAfterSave) {
+      info.textContent = "Not yet published. Press Publish dog below to make its profile and name search public.";
+      submit.textContent = "Publish dog";
+    } else if (changed) {
+      info.textContent = "Still public until you save. Press Unpublish dog below to hide its profile and search results.";
+      submit.textContent = "Unpublish dog";
+    } else {
+      info.textContent = publicAfterSave
+        ? "This dog is already published on the public website."
+        : "This dog is currently unpublished. Switch to Published and save to show it publicly.";
+      submit.textContent = "Save dog details";
+    }
+  };
+  toggle.addEventListener("change", update);
+  update();
+})();

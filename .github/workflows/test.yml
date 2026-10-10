@@ -123,6 +123,11 @@ jobs:
               scoped_accounts=true
             fi
 
+            if grep -q '^accounts/tests_direct_edit_visibility[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_direct_edit_visibility")
+              scoped_accounts=true
+            fi
+
             if grep -Eq '^accounts/(direct_dog_edit|tests_direct_dog_edit|urls)[.]py$' <<<"$changed"; then
               targets+=("accounts.tests_direct_dog_edit" "accounts.tests_role_separation")
               scoped_accounts=true

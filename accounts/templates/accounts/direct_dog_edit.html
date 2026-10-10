@@ -1,12 +1,17 @@
 {% extends "base.html" %}
 {% load static %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'accounts/canonical-visibility.css' %}?v=20261011-canonical-toggle-v1">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'accounts/canonical-visibility.css' %}?v=20261011-canonical-toggle-v2">{% endblock %}
 {% block title %}Manage {{ dog.name }} · Cane Corso Ancestry{% endblock %}
 {% block content %}
 <section class="page-shell">
   <header class="page-heading moderation-heading">
     <div><p class="eyebrow">Canonical dog administration</p><h1>Edit {{ dog.name }}</h1>
-      <p>{% if dog.is_public %}Published profile{% else %}Unpublished record{% endif %} · UUID {{ dog.pk }} {% if dog.is_record_locked %}· Super-admin locked{% endif %}</p>
+      <p class="canonical-current-publication">
+        <span class="canonical-publication-badge {% if dog.is_public %}canonical-publication-badge--published{% else %}canonical-publication-badge--unpublished{% endif %}" data-saved-publication-status>
+          {% if dog.is_public %}Published{% else %}Unpublished{% endif %}
+        </span>
+        <span class="muted">Current saved visibility · UUID {{ dog.pk }}{% if dog.is_record_locked %} · Super-admin locked{% endif %}</span>
+      </p>
       <p>Routine, authorized changes appear on the live site after saving. For published dogs, changes to sex, birth date, parents, kennel, litter or verification state require Super Admin approval before the public record changes. Every decision is audited.</p>
     </div>
     <div class="button-row">
@@ -27,16 +32,22 @@
     <div class="profile-section-grid">
       {% for field in form %}
         {% if field.name == "visibility_public" %}
-          <div class="canonical-visibility-settings" aria-labelledby="canonical-visibility-heading">
+          <div class="canonical-visibility-settings" aria-labelledby="canonical-visibility-heading" data-canonical-visibility-editor data-initially-public="{% if dog.is_public %}true{% else %}false{% endif %}">
             <h3 id="canonical-visibility-heading">Visibility</h3>
             <label class="canonical-visibility-control" for="{{ field.id_for_label }}">
-              <span class="canonical-visibility-private">Private</span>
+              <span class="canonical-visibility-unpublished">Unpublished</span>
               <input type="hidden" name="{{ field.html_name }}" value="false">
               {{ field }}
-              <span class="canonical-visibility-public">Public</span>
+              <span class="canonical-visibility-published">Published</span>
             </label>
-            <p class="muted">Off: saved privately in Manage Dogs. On: published on the public website after you save. Only Super Admins can change this.</p>
-            <p class="muted">Publishing does not certify the pedigree. The public browsing gallery displays dogs with photographs; published dogs without photos can still be found by exact name or profile link.</p>
+            <p class="canonical-publication-preview" data-publication-preview role="status" aria-live="polite">
+              <span class="canonical-publication-badge {% if dog.is_public %}canonical-publication-badge--published{% else %}canonical-publication-badge--unpublished{% endif %}" data-publication-preview-badge>{% if dog.is_public %}Published{% else %}Unpublished{% endif %}</span>
+              <span data-publication-preview-text>
+                {% if dog.is_public %}The dog is already visible on the public website.{% else %}This record remains private until you switch on Published and save.{% endif %}
+              </span>
+            </p>
+            <p class="muted">Switch to Published, then save to make the dog's public profile and name search available. Switch to Unpublished and save to hide the dog again. Only the Super Admin can change this.</p>
+            <p class="muted">The photo-only browse gallery requires a dog photograph. Published dogs without photos are still searchable by name and have a public profile.</p>
             {{ field.errors }}
           </div>
         {% else %}
@@ -88,7 +99,7 @@
     </details>
     {% endfor %}
     <div class="button-row">
-      <button class="btn btn-gold" type="submit">{% if owner %}Save dog details and visibility{% else %}Save changes or request protected review{% endif %}</button>
+      <button class="btn btn-gold" type="submit" {% if owner %}data-canonical-submit{% endif %}>{% if owner %}Save dog details and visibility{% else %}Save changes or request protected review{% endif %}</button>
       <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Discard edits</a>
     </div>
     <p class="muted">{% if owner %}The visibility toggle above is saved together with these canonical details and recorded in the moderation audit. Existing member submissions and their approvals remain separate.{% else %}Only the Super Admin can change visibility; saving a private dog does not publish it.{% endif %}</p>
@@ -133,5 +144,5 @@
   </section>
 </section>
 <script>window.CCA_PARENT_LOOKUP_URL = "{% url 'accounts:dog-parent-suggestions' %}";</script>
-<script src="{% static 'accounts/direct-dog-edit.js' %}?v=20261010-parent-picker-v2" defer></script>
+<script src="{% static 'accounts/direct-dog-edit.js' %}?v=20261011-publication-labels-v3" defer></script>
 {% endblock %}

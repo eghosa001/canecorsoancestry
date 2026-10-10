@@ -34,9 +34,9 @@
   width: 67px;
   height: 40px;
   margin: 0;
-  border: 2px solid var(--muted);
+  border: 2px solid #b4323e;
   border-radius: 999px;
-  background: var(--surface);
+  background: #b4323e;
   cursor: pointer;
   transition: background-color 150ms ease, border-color 150ms ease;
   touch-action: manipulation;
@@ -49,23 +49,23 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--muted);
+  background: #ffffff;
   transition: transform 150ms ease, background-color 150ms ease;
 }
 .canonical-visibility-control input.canonical-visibility-toggle:checked {
-  border-color: var(--gold);
-  background: color-mix(in srgb, var(--gold) 25%, var(--surface));
+  border-color: #288652;
+  background: #288652;
 }
 .canonical-visibility-control input.canonical-visibility-toggle:checked::after {
   transform: translateX(27px);
-  background: var(--gold);
+  background: #ffffff;
 }
 .canonical-visibility-control input.canonical-visibility-toggle:focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 4px;
 }
-.canonical-visibility-control .canonical-visibility-private,
-.canonical-visibility-control .canonical-visibility-public {
+.canonical-visibility-control .canonical-visibility-unpublished,
+.canonical-visibility-control .canonical-visibility-published {
   font-size: .94rem;
   min-width: 55px;
 }
@@ -77,12 +77,96 @@
 @media (max-width: 760px) {
   .canonical-visibility-settings { padding: 14px; }
   .canonical-visibility-control { gap: 9px; width: 100%; }
-  .canonical-visibility-control .canonical-visibility-private,
-  .canonical-visibility-control .canonical-visibility-public { min-width: 45px; }
+  .canonical-visibility-control .canonical-visibility-unpublished,
+  .canonical-visibility-control .canonical-visibility-published { min-width: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   .canonical-visibility-control input.canonical-visibility-toggle,
   .canonical-visibility-control input.canonical-visibility-toggle::after {
     transition: none;
   }
+}
+
+
+/* Red = not on the public site; green = saved as public. Never rely on
+   colour alone: the state names are always displayed as text. */
+.canonical-current-publication {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  margin: 12px 0;
+}
+.canonical-publication-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 31px;
+  padding: 5px 11px;
+  border-radius: 99px;
+  border: 1px solid currentColor;
+  font: 700 .79rem/1.25 var(--sans);
+  letter-spacing: .015em;
+  white-space: nowrap;
+}
+.canonical-publication-badge--unpublished {
+  background: rgba(180, 42, 53, .11);
+  color: #b42332;
+}
+.canonical-publication-badge--published {
+  background: rgba(29, 133, 72, .13);
+  color: #18773d;
+}
+html[data-theme="dark"] .canonical-publication-badge--unpublished {
+  background: rgba(250, 101, 116, .17);
+  color: #ff9da7;
+}
+html[data-theme="dark"] .canonical-publication-badge--published {
+  background: rgba(54, 204, 119, .17);
+  color: #8ce9a8;
+}
+.canonical-visibility-control .canonical-visibility-unpublished {
+  min-width: auto;
+  color: #b42332;
+  font-weight: 750;
+}
+.canonical-visibility-control .canonical-visibility-published {
+  min-width: auto;
+  color: #18773d;
+  font-weight: 750;
+}
+html[data-theme="dark"] .canonical-visibility-control .canonical-visibility-unpublished {
+  color: #ff9da7;
+}
+html[data-theme="dark"] .canonical-visibility-control .canonical-visibility-published {
+  color: #8ce9a8;
+}
+.canonical-visibility-control input.canonical-visibility-toggle:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 4px;
+}
+.canonical-publication-preview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  line-height: 1.55;
+  margin: 8px 0 11px;
+  padding: 9px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: .86rem;
+}
+.canonical-visibility-settings[data-pending-change="true"] .canonical-publication-preview {
+  border-style: dashed;
+  border-color: var(--gold);
+}
+@media (max-width: 760px) {
+  .canonical-visibility-control { flex-wrap: wrap; }
+  .canonical-visibility-control .canonical-visibility-unpublished,
+  .canonical-visibility-control .canonical-visibility-published { min-width: auto; }
+  .canonical-publication-preview { align-items: flex-start; }
 }

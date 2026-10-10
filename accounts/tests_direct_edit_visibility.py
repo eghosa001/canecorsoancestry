@@ -84,10 +84,23 @@ class StaffChangeVisibilityTests(TestCase):
         self.assertEqual(ordered[ordered.index("bio") + 1], "visibility_public")
         self.assertContains(response, 'role="switch"')
         self.assertContains(response, 'name="visibility_public"')
-        self.assertContains(response, "Private")
-        self.assertContains(response, "Public")
+        self.assertContains(response, "Unpublished")
+        self.assertContains(response, "Published")
+        self.assertContains(response, 'data-canonical-visibility-editor')
+        self.assertContains(response, 'data-publication-preview-badge')
         self.assertNotContains(response, 'id="publication-heading"')
         self.assertNotContains(response, 'class="dog-visibility-form"')
+
+    def test_status_colours_and_manage_dog_visibility_text(self):
+        self.client.force_login(self.owner)
+        url = reverse("accounts:dog-direct-edit", args=[self.dog.pk])
+        self.assertContains(self.client.get(url), "canonical-publication-badge--published")
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        self.assertContains(self.client.get(url), "canonical-publication-badge--unpublished")
+        self.assertContains(self.client.get(url), 'data-initially-public="false"')
+        manage = self.client.get(reverse("accounts:dog-edit-list"), {"q": self.dog.name})
+        self.assertContains(manage, "canonical-publication-badge--unpublished")
 
     def test_private_django_dog_publishes_and_updates_bio_in_same_save(self):
         self.dog.is_public = False
@@ -115,6 +128,24 @@ class StaffChangeVisibilityTests(TestCase):
         self.assertEqual(audit.actor, self.owner)
         self.assertFalse(audit.summary["before"]["publication"]["is_public"])
         self.assertTrue(audit.summary["after"]["publication"]["is_public"])
+
+    def test_publish_makes_dog_searchable_even_without_a_photograph(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        self.client.force_login(self.owner)
+        url, data = self.payload(visibility_public="on")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        self.client.logout()
+        profile_url = reverse("registry:dog-detail", args=[self.dog.slug])
+        self.assertEqual(self.client.get(profile_url).status_code, 200)
+        search = self.client.get(reverse("registry:dog-search"), {"q": self.dog.name})
+        self.assertEqual(search.status_code, 200)
+        self.assertContains(search, self.dog.name)
+        suggestions = self.client.get(reverse("registry:dog-suggestions"), {"q": self.dog.name})
+        self.assertEqual(suggestions.status_code, 200)
+        self.assertIn(self.dog.name, [x["name"] for x in suggestions.json()["results"]])
 
     def test_switch_off_unpublishes_without_removing_dog_from_manage_dogs(self):
         self.client.force_login(self.owner)
