@@ -30,6 +30,22 @@
       </div>
     </section>
   {% endif %}
+  {% if photo_report_choices %}
+  <section class="panel" aria-label="Photographs available to report">
+    <div class="panel-heading">
+      <h2>Select the incorrect photograph</h2>
+      <span>Match the image number below to the "Incorrect photo" selection in the form. Imported photographs can still be reported with a description.</span>
+    </div>
+    <div class="dog-photo-gallery-grid">
+      {% for photo in photo_report_choices %}
+      <div class="dog-photo-gallery-item">
+        <img src="{{ photo.image.url }}" alt="Photograph #{{ photo.pk }} of {{ dog.name }}" loading="lazy" decoding="async">
+        <span>{% if photo.is_primary %}Main{% else %}Gallery{% endif %} photograph #{{ photo.pk }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
   <form class="member-form" method="post" {% if multipart %}enctype="multipart/form-data"{% endif %}>
     {% csrf_token %}
     {% if form.non_field_errors %}<div class="notice error">{{ form.non_field_errors }}</div>{% endif %}
