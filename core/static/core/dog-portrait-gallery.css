@@ -476,3 +476,13 @@
   .dog-profile .profile-facts dd { padding: 12px 0 13px; }
   .dog-profile .profile-report-actions { margin: 22px 0 16px; }
 }
+
+/* Concise truth-in-provenance note replaces the bulky COI/source accordion. */
+.dog-profile .profile-evidence-summary {
+  padding: 11px 0 0;
+  margin: 15px 0 6px;
+  color: var(--muted);
+  font-size: .73rem;
+  line-height: 1.55;
+  border-top: 1px solid var(--line-soft);
+}
