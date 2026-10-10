@@ -101,6 +101,16 @@ class DirectDogEditForm(forms.ModelForm):
     dam_ref = forms.CharField(required=False, label="Dam name or UUID", widget=forms.TextInput(attrs={"data-admin-parent-lookup": "", "data-parent-sex": "female", "autocomplete": "off", "placeholder": "Search dam by name or registration"}))
     kennel_ref = forms.CharField(required=False, label="Kennel name or UUID")
     litter_ref = forms.CharField(required=False, label="Litter code or UUID")
+    visibility_public = forms.BooleanField(
+        required=False,
+        label="Visibility",
+        widget=forms.CheckboxInput(attrs={
+            "role": "switch",
+            "class": "canonical-visibility-toggle",
+            "aria-label": "Public visibility",
+        }),
+        help_text="Off = Private. On = Public. Only the Super Admin can publish or unpublish a dog.",
+    )
     reason = forms.CharField(
         min_length=5, max_length=2000, widget=forms.Textarea(attrs={"rows": 3}),
         help_text="Required. Explain the evidence or reason for the live change.",
@@ -115,8 +125,21 @@ class DirectDogEditForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.allow_publication = kwargs.pop("allow_publication", False)
         super().__init__(*args, **kwargs)
         dog = self.instance
+        if self.allow_publication:
+            if not self.is_bound:
+                self.fields["visibility_public"].initial = bool(dog.is_public)
+            # Put the switch directly beneath Bio, not in a separate
+            # publication section, and leave the audit reason at the bottom.
+            ordered = list(self.fields)
+            ordered.remove("visibility_public")
+            ordered.insert(ordered.index("bio") + 1, "visibility_public")
+            self.order_fields(ordered)
+        else:
+            # A forged POST from a reviewer must never publish a record.
+            self.fields.pop("visibility_public")
         if dog.pk and not self.is_bound:
             for name in ("sire", "dam", "kennel", "litter"):
                 self.fields[name + "_ref"].initial = str(getattr(dog, name + "_id") or "")
@@ -511,7 +534,7 @@ def dog_direct_edit(request, pk):
         raise PermissionDenied("This record is locked by the super admin.")
     data = request.POST if request.method == "POST" else None
     files = request.FILES if request.method == "POST" else None
-    form = DirectDogEditForm(data, instance=dog)
+    form = DirectDogEditForm(data, instance=dog, allow_publication=owner)
     sets = _edit_formsets(dog, data, files)
     if request.method == "POST":
         valid = form.is_valid()
