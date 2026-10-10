@@ -1511,6 +1511,25 @@ def moderation_queue(request):
         .select_related("dog", "opened_by", "assigned_to")
         .order_by("status", "created_at")[:50]
     )
+    photo_dispute_ids = [row.pk for row in disputes if row.reason == "photo"]
+    opened_photo_ids = {}
+    if photo_dispute_ids:
+        for row in ModerationAudit.objects.filter(
+            dispute_id__in=photo_dispute_ids,
+            action=ModerationAudit.Action.DISPUTE_OPENED,
+        ).order_by("created_at", "pk").only("dispute_id", "summary"):
+            candidate_id = (row.summary or {}).get("target_image_id")
+            if row.dispute_id not in opened_photo_ids and candidate_id is not None:
+                opened_photo_ids[row.dispute_id] = candidate_id
+        photo_images = DogImage.objects.filter(
+            pk__in=opened_photo_ids.values(),
+        ).in_bulk()
+        for dispute in disputes:
+            candidate = photo_images.get(opened_photo_ids.get(dispute.pk))
+            dispute.reported_photo = (
+                candidate if candidate and candidate.dog_id == dispute.dog_id else None
+            )
+
 
     assignee_ids = {
         obj.assigned_to_id
