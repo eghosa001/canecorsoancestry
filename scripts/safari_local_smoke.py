@@ -102,7 +102,7 @@ def run():
 
             # Dog photos retain their native landscape aspect ratio; no
             # zoom/crop, hard grey matte or CSS image scaling on profiles.
-            photo = page.locator(".profile-photo img")
+            photo = page.locator(".dog-portrait-image")
             photo.wait_for(state="visible")
             photo.evaluate("img => img.decode()")
             assert photo.evaluate("img => img.naturalWidth > 0"), "Dog photo failed to load"
@@ -110,16 +110,44 @@ def run():
               const style = getComputedStyle(img);
               const frame = getComputedStyle(img.closest('.profile-photo'));
               const box = img.getBoundingClientRect();
+              const surface = document.createElement('div');
+              surface.style.backgroundColor = 'var(--surface)';
+              document.body.append(surface);
+              const themeSurface = getComputedStyle(surface).backgroundColor;
+              surface.remove();
               return {
                 fit: style.objectFit, transform: style.transform,
-                background: frame.backgroundColor, width: box.width,
+                imageBackground: style.backgroundColor,
+                background: frame.backgroundColor,
+                themeSurface, width: box.width,
                 height: box.height, naturalRatio: img.naturalWidth / img.naturalHeight
               };
             }""")
             assert fidelity["fit"] == "contain", f"Photo is cropped: {fidelity}"
             assert fidelity["transform"] == "none", f"Photo is zoomed: {fidelity}"
-            assert fidelity["background"] == "rgba(0, 0, 0, 0)", f"Gray photo frame: {fidelity}"
+            assert fidelity["imageBackground"] == "rgba(0, 0, 0, 0)", f"Artificial image matte: {fidelity}"
+            assert fidelity["background"] == fidelity["themeSurface"], f"Portrait card does not match theme: {fidelity}"
             assert abs(fidelity["width"] / fidelity["height"] - fidelity["naturalRatio"]) < .06, f"Dog aspect ratio distorted: {fidelity}"
+
+            # Premium gallery must preserve full image proportions while
+            # allowing real taps, lightbox navigation, Escape and swipe.
+            gallery_thumbs = page.locator("[data-dog-photo-thumb]")
+            assert gallery_thumbs.count() == 2, "Approved photo thumbnails are missing"
+            gallery_thumbs.nth(1).tap()
+            assert gallery_thumbs.nth(1).get_attribute("aria-pressed") == "true"
+            assert "safari-side.jpg" in photo.get_attribute("src"), "Thumbnail did not change portrait"
+            page.locator("[data-dog-photo-open]").tap()
+            modal = page.locator("[data-dog-photo-dialog]")
+            assert modal.get_attribute("open") is not None, "Full-screen photo viewer did not open"
+            assert "2 / 2" in modal.locator("[data-dog-lightbox-count]").inner_text()
+            modal.locator("[data-dog-photo-prev]").click()
+            assert "safari-landscape.jpg" in modal.locator("[data-dog-lightbox-image]").get_attribute("src")
+            modal.locator("[data-dog-photo-zoom]").click()
+            assert modal.locator("[data-dog-photo-stage]").evaluate(
+                "el => el.classList.contains('is-zoomed')"
+            ), "Explicit zoom did not activate"
+            page.keyboard.press("Escape")
+            assert modal.get_attribute("open") is None, "Escape did not close photo viewer"
 
             go(page, "/dogs/?q=Safari")
             thumb = page.locator(".search-result-media img")
