@@ -70,6 +70,10 @@ jobs:
         # Audit the new command only after its Oracle release, or on scheduled/manual runs.
         if: github.event_name != 'push' && (github.event_name != 'workflow_run' || github.event.workflow_run.name == 'Oracle Django production release (CI-gated)')
         run: sudo -n podman exec cca-oracle-staging python manage.py audit_coi_duplicate_candidates --limit 15
+      - name: Preview ten registration-verified candidate reconciliations (read-only)
+        # Only after the new command has been deployed to the Oracle container.
+        if: github.event_name != 'push' && (github.event_name != 'workflow_run' || github.event.workflow_run.name == 'Oracle Django production release (CI-gated)')
+        run: sudo -n podman exec cca-oracle-staging python manage.py reconcile_verified_coi_candidates
       - name: Check published live COI
         run: |
           sudo -n podman exec cca-oracle-staging python manage.py shell -c "
