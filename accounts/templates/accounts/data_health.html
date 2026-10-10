@@ -98,6 +98,46 @@
     </div>
   </section>
 
+  {% if can_review_coi_duplicates %}
+  <section id="duplicate-ancestors" class="panel section-spacer">
+    <div class="panel-heading">
+      <div>
+        <h2>Review possible duplicate ancestors</h2>
+        <span>Source registrations and exact identities, not name-only matches.</span>
+      </div>
+    </div>
+    <p>Two records for one ancestor can interrupt a pedigree and hide a shared bloodline. Every suggested pair requires human identity verification before merging.</p>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'accounts:data-health' %}?coi_duplicates=1#duplicate-ancestors">Check duplicate ancestors</a>
+      {% if coi_duplicate_report %}
+        <a class="btn btn-outline" href="{% url 'accounts:data-health' %}?coi_duplicates=1&amp;refresh=1#duplicate-ancestors">Refresh matches</a>
+      {% endif %}
+    </div>
+    {% if coi_duplicate_report %}
+      <p><strong>{{ coi_duplicate_report.counts.matched }}</strong> registration-backed pairs found:
+        {{ coi_duplicate_report.counts.ready }} with complementary published ancestry,
+        {{ coi_duplicate_report.counts.needs_review }} needing additional review.</p>
+      <div class="relationship-list">
+        {% for item in coi_duplicate_report.candidates %}
+          <div>
+            <strong>{{ item.canonical_slug }}</strong>
+            <span>Also recorded as {{ item.source_slug }} · registration {{ item.registration_digits }}</span>
+            <span>{% if item.status == "ready" %}Parent links available; verify identity first{% else %}Conflicting or incomplete evidence: investigate{% endif %}</span>
+            {% if item.status == "ready" %}
+              <a href="{% url 'accounts:merge-dogs' %}?canonical={{ item.canonical_id }}&amp;duplicate={{ item.source_id }}">Review in Super Admin merge tool</a>
+            {% else %}
+              <a href="{% url 'accounts:dog-direct-edit' item.canonical_id %}">Inspect canonical record</a>
+            {% endif %}
+          </div>
+        {% empty %}
+          <p class="muted">No distinct published registrations meet these evidence rules.</p>
+        {% endfor %}
+      </div>
+      <p class="muted">The scan never merges dogs or changes COI. Preserve original registration, health records, photos and merge history during any approved correction.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   <div class="profile-section-grid section-spacer">
     <article class="panel">
       <div class="panel-heading"><h2>Provenance</h2><span>Records that need stronger source evidence.</span></div>
