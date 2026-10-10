@@ -401,19 +401,28 @@ def dog_detail(request, slug):
         return get_object_or_404(Dog.objects.filter(is_public=True), slug=slug)
 
 
-    # Public COI must never use private/unapproved ancestry. Zero means no
-    # inbreeding proven by the published links, not zero genetic inbreeding.
-    # Parents are select_related in _public_profile_dog, so this adds no query.
+    # Calculate using all reachable *published* pedigree links, not merely
+    # the four generations shown on the pedigree page. An absent/unpublished
+    # parent is unknown ancestry, never evidence of a true zero coefficient.
+    # select_related has already loaded the two parents, so no extra query.
     public_parent_count = sum(
         bool(parent and parent.is_public) for parent in (dog.sire, dog.dam)
     )
     public_parentage_complete = public_parent_count == 2
-    try:
-        coi_percent = inbreeding_coefficient(dog, public_only=True) * 100
-        coi_error = ""
-    except PedigreeCycleError:
+    coi_display_state = "insufficient" if not public_parentage_complete else "estimated"
+    if not public_parentage_complete:
         coi_percent = None
-        coi_error = "Parentage contains a cycle; the records need correction before COI can be calculated."
+        coi_error = "Both sire and dam must be linked and published to estimate COI."
+    else:
+        try:
+            coi_percent = inbreeding_coefficient(dog, public_only=True) * 100
+            coi_error = ""
+        except PedigreeCycleError:
+            coi_percent = None
+            coi_display_state = "error"
+            coi_error = "Parentage contains a cycle; the records need correction before COI can be calculated."
+    # A small but positive COI must not be rounded and displayed as 0.00%.
+    coi_below_display_precision = coi_percent is not None and 0 < coi_percent < 0.005
 
     if request.GET.get("source") == "search":
         _record_search_hit_without_wait(dog.pk)
@@ -500,6 +509,8 @@ def dog_detail(request, slug):
             "relative_health": relative_health,
             "coi_percent": coi_percent,
             "coi_error": coi_error,
+            "coi_display_state": coi_display_state,
+            "coi_below_display_precision": coi_below_display_precision,
             "public_parentage_complete": public_parentage_complete,
             "verification_label": public_verification_label(dog.verification_state),
             "has_source_attribution": dog._has_profile_sources,
