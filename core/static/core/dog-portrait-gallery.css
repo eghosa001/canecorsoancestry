@@ -57,7 +57,9 @@
   width: auto;
   max-width: 100%;
   height: auto;
-  max-height: min(540px, 60vh);
+  /* A slightly larger full-frame portrait, never cropped or zoomed. */
+  max-height: min(620px, 70vh);
+  max-height: min(620px, 70dvh);
   object-fit: contain;
   object-position: center;
   background: transparent;
@@ -313,8 +315,8 @@
 @media (max-width: 760px) {
   .dog-profile .profile-photo.dog-portrait { padding: 10px; border-radius: 14px; }
   .dog-profile .profile-photo.dog-portrait .dog-portrait-image {
-    max-height: min(340px, 42vh);
-    max-height: min(340px, 42dvh);
+    max-height: min(405px, 51vh);
+    max-height: min(405px, 51dvh);
   }
   .dog-portrait-heading { padding-bottom: 9px; }
   .dog-portrait-caption { padding-top: 10px; }
@@ -477,7 +479,7 @@
   .dog-profile .profile-report-actions { margin: 22px 0 16px; }
 }
 
-/* Concise truth-in-provenance note replaces the bulky COI/source accordion. */
+/* Public verification status stays concise; source metadata remains internal. */
 .dog-profile .profile-evidence-summary {
   padding: 11px 0 0;
   margin: 15px 0 6px;
