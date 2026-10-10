@@ -26,6 +26,7 @@ class DogModelTests(TestCase):
         DogImage.objects.create(dog=dog, image="dogs/karma.jpg", is_primary=True)
         response = self.client.get(reverse("registry:dog-search"), {"q": "Karma"})
         self.assertContains(response, "Karma Custodi Nos")
+        self.assertContains(response, 'width="84" height="84"')
 
     def test_public_search_is_paginated(self):
         for index in range(25):
@@ -168,6 +169,7 @@ class DogModelTests(TestCase):
             response,
             "https://canecorsopedigree.com/static/images/animal/source-image.jpg",
         )
+        self.assertContains(response, 'width="84" height="84"')
 
     def test_public_search_shows_record_but_not_untrusted_source_photo(self):
         dog = Dog.objects.create(
