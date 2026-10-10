@@ -307,7 +307,7 @@
   .dog-photo-lightbox-stage { padding: 4px; gap: 2px; }
   .dog-photo-lightbox-stage > img { max-width: calc(100% - 90px); }
   .dog-photo-lightbox-nav { min-width: 40px; padding: 6px; }
-  .dog-photo-lightbox-stage:not(:has(.dog-photo-lightbox-nav:not([hidden]))) > img {
+  .dog-photo-lightbox-stage.is-single > img {
     max-width: 100%;
   }
 }
