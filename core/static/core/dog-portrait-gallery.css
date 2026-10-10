@@ -239,7 +239,8 @@
   gap: 6px;
   overflow: auto;
   padding: 12px;
-  touch-action: pan-x pan-y pinch-zoom;
+  touch-action: pan-x pinch-zoom;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 .dog-photo-lightbox-stage > img {
@@ -258,6 +259,7 @@
 .dog-photo-lightbox-stage.is-zoomed {
   justify-content: flex-start;
   align-items: flex-start;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 .dog-photo-lightbox-stage.is-zoomed > img {
   flex: none;
@@ -333,4 +335,123 @@
   min-height: 44px;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+
+/* Profile details: vertical, readable ancestry and breathing room. */
+.dog-profile .profile-intro { min-width: 0; padding-top: 9px; }
+.dog-profile .profile-quick-parents {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin: 18px 0 24px;
+}
+.dog-profile .profile-quick-parents > div {
+  min-width: 0;
+  padding: 10px 12px 12px 15px;
+  border-left: 3px solid var(--gold);
+  border-bottom: 1px solid var(--line-soft);
+}
+.dog-profile .profile-quick-parents span {
+  display: block;
+  margin-bottom: 4px;
+  letter-spacing: .08em;
+}
+.dog-profile .profile-quick-parents a,
+.dog-profile .profile-quick-parents strong {
+  display: block;
+  max-width: 100%;
+  margin-top: 4px;
+  line-height: 1.45;
+}
+.dog-profile .registration-line {
+  padding: 3px 0 8px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.dog-profile .profile-facts-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 17px;
+}
+.dog-profile .profile-facts-heading h2 {
+  font-size: 1.12rem;
+  margin: 0;
+  line-height: 1.5;
+}
+.dog-profile .profile-facts {
+  display: grid;
+  grid-template-columns: minmax(108px, 35%) minmax(0, 1fr);
+  margin: 12px 0 6px;
+  column-gap: 16px;
+  row-gap: 0;
+  align-items: stretch;
+}
+.dog-profile .profile-facts dt,
+.dog-profile .profile-facts dd {
+  padding: 13px 0 14px;
+  margin: 0;
+  border-bottom: 1px solid var(--line-soft);
+  line-height: 1.55;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dog-profile .profile-facts dt {
+  color: var(--muted);
+  font-size: .83rem;
+  font-weight: 550;
+}
+.dog-profile .profile-facts dd { font-size: .92rem; color: var(--text); }
+.dog-profile .profile-facts dd small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.dog-profile .profile-report-actions {
+  margin: 24px 0 20px;
+  padding: 19px 0 4px;
+  border-top: 1px solid var(--line-soft);
+}
+.dog-profile .profile-report-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: .85rem;
+  line-height: 1.45;
+  font-weight: 550;
+}
+.dog-profile .profile-review-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  color: var(--gold-soft);
+  font-size: .75rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  line-height: 1.4;
+}
+.dog-profile .panel-heading { gap: 12px; flex-wrap: wrap; }
+.dog-profile .panel-heading .profile-review-chip { margin-left: auto; }
+.dog-profile .profile-manage-actions { margin-top: 14px; }
+@media (max-width: 760px) {
+  .dog-profile .profile-intro { padding-top: 2px; }
+  .dog-profile .profile-quick-parents {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+    margin: 14px 0 22px;
+  }
+  .dog-profile .profile-quick-parents > div { padding: 9px 10px 11px 13px; }
+  .dog-profile .profile-facts {
+    grid-template-columns: minmax(96px, 36%) minmax(0, 1fr);
+    gap: 0 12px;
+    margin-top: 9px;
+  }
+  .dog-profile .profile-facts dt,
+  .dog-profile .profile-facts dd { padding: 12px 0 13px; }
+  .dog-profile .profile-report-actions { margin: 22px 0 16px; }
 }

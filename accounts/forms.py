@@ -926,12 +926,89 @@ class DocumentVisibilityForm(forms.Form):
 
 
 
+# Keep review targets independent of the stored dispute reason. Every public
+# profile field and connected section can be challenged, including an exact
+# sub-record identified in the free-text entry field, without a schema change.
+DOG_REVIEW_FIELDS = (
+    ("Identity and profile", (
+        ("name", "Dog name"),
+        ("sex", "Sex"),
+        ("date_of_birth", "Date of birth"),
+        ("colour", "Colour"),
+        ("country", "Country"),
+        ("bloodline", "Bloodline"),
+        ("kennel", "Kennel"),
+        ("ownership", "Owner or breeder"),
+        ("biography", "Biography / description"),
+    )),
+    ("Registration and evidence", (
+        ("registration", "Registration number / details"),
+        ("registration_authority", "Registration authority"),
+        ("verification", "Verification / review status"),
+        ("source", "Evidence, references or source attribution"),
+        ("document", "Published documents"),
+    )),
+    ("Pedigree and relatives", (
+        ("sire", "Sire"),
+        ("dam", "Dam"),
+        ("pedigree", "Other pedigree connections"),
+        ("coi", "Coefficient of inbreeding (COI)"),
+        ("siblings", "Siblings / half-siblings"),
+        ("offspring", "Offspring"),
+        ("mates", "Mates"),
+        ("litter", "Litter information"),
+    )),
+    ("Achievements, health and photos", (
+        ("titles", "Titles / achievements"),
+        ("title_certificate", "Title certificates"),
+        ("health", "Health tests / results"),
+        ("dna", "DNA information"),
+        ("photo", "Dog photograph"),
+    )),
+    ("Anything else", (
+        ("other", "Any other dog detail / missing information"),
+    )),
+)
+DOG_REVIEW_LABELS = {
+    value: label for _, choices in DOG_REVIEW_FIELDS for value, label in choices
+}
+
+
 class DisputeForm(forms.Form):
-    reason = forms.ChoiceField(choices=[*DisputeCase.Reason.choices, ("photo", "Incorrect dog photograph")])
+    reason = forms.ChoiceField(
+        label="Report category",
+        choices=[*DisputeCase.Reason.choices, ("photo", "Incorrect dog photograph")],
+    )
+    target_field = forms.ChoiceField(
+        label="Which exact dog detail needs review?",
+        choices=[("", "Choose a detail"), *DOG_REVIEW_FIELDS],
+        required=False,
+        help_text="Every visible detail can be reviewed, including a missing or incorrect value.",
+    )
+    target_entry = forms.CharField(
+        label="Specific entry / existing value (if applicable)",
+        max_length=240,
+        required=False,
+        widget=forms.TextInput(attrs={
+            "placeholder": "E.g. named offspring, test result, certificate, registration number",
+        }),
+        help_text="For lists, specify the exact row, dog or record. Leave blank if the field itself is wrong.",
+    )
     target_image = forms.ModelChoiceField(
         queryset=DogImage.objects.none(), required=False,
         label="Incorrect photo (choose from uploaded photos)",
         help_text="Select the incorrect image, if listed. Imported source images can still be reported without selecting one.",
+    )
+    details = forms.CharField(
+        label="What's incorrect, and what should be checked?",
+        widget=forms.Textarea(attrs={"rows": 6}),
+        help_text="Explain the issue and provide the correct fact if known. Staff review all submissions before changing records.",
+    )
+    attachment = forms.FileField(
+        required=False,
+        widget=forms.ClearableFileInput(attrs={"accept": DOCUMENT_ACCEPT}),
+        validators=[validate_document_upload],
+        help_text="For a wrong-photo report, upload only a genuine proposed replacement dog photo (optional), not a screenshot. For other disputes, attach supporting evidence.",
     )
 
     def __init__(self, *args, dog=None, **kwargs):
@@ -946,28 +1023,26 @@ class DisputeForm(forms.Form):
                     + f" #{item.pk}: {item.caption or item.image.name.rsplit('/', 1)[-1]}"
                 )
             )
-    details = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 6}),
-        help_text="Describe the exact fact or relationship you believe should be reviewed.",
-    )
-    attachment = forms.FileField(
-        required=False,
-        widget=forms.ClearableFileInput(attrs={"accept": DOCUMENT_ACCEPT}),
-        validators=[
-            validate_document_upload,
-        ],
-        help_text="For a wrong-photo report, upload only a genuine proposed replacement dog photo (optional), not a screenshot. For other disputes, attach supporting evidence.",
-    )
 
     def clean_attachment(self):
         return normalize_image_upload(self.cleaned_data.get("attachment"))
 
     def clean(self):
         values = super().clean()
+        if values.get("target_field") == "photo":
+            # A report about the photograph must enter the photo moderation
+            # branch even if the member left a different category selected.
+            values["reason"] = "photo"
         if values.get("reason") == "photo":
+            if values.get("target_field") not in ("", "photo"):
+                self.add_error("target_field", "A photograph report must target a dog photograph.")
+            values["target_field"] = "photo"
             uploaded = values.get("attachment")
             if uploaded and not uploaded.name.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
                 self.add_error("attachment", "A suggested replacement must be an image, not a PDF.")
+        elif not values.get("target_field"):
+            # Legacy links and existing clients still open an ordinary review.
+            values["target_field"] = "other"
         return values
 
 

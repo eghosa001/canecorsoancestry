@@ -105,6 +105,7 @@ from .models import PaymentSubmissionLink, Profile, SubmissionPayment, SavedPair
 from .forms import (
     BulkModerationForm,
     DisputeForm,
+    DOG_REVIEW_LABELS,
     DocumentVisibilityForm,
     DogCorrectionForm,
     DogDocumentSubmissionForm,
@@ -2386,19 +2387,38 @@ def open_dispute(request, pk):
         Dog.objects.filter(Q(is_public=True) | Q(kennel_id__in=kennel_ids)).distinct(),
         pk=pk,
     )
+    requested_field = request.GET.get("field", "")
+    requested_field = requested_field if requested_field in DOG_REVIEW_LABELS else ""
+    requested_reason = request.GET.get("reason", "")
+    preferred_reason = {
+        "sire": "pedigree", "dam": "pedigree", "pedigree": "pedigree",
+        "coi": "pedigree", "siblings": "pedigree", "offspring": "pedigree",
+        "mates": "pedigree", "litter": "pedigree",
+        "health": "health", "dna": "health",
+        "kennel": "ownership", "ownership": "ownership",
+        "photo": "photo",
+    }.get(requested_field, "identity")
+    valid_reasons = {choice for choice, _ in DisputeCase.Reason.choices} | {"photo"}
+    if requested_reason in valid_reasons:
+        preferred_reason = requested_reason
+    if preferred_reason == "photo":
+        requested_field = "photo"
     form = DisputeForm(
         request.POST or None, request.FILES or None, dog=dog,
-        initial={"reason": "photo"}
-        if request.GET.get("reason") == "photo" else None,
+        initial={"reason": preferred_reason, "target_field": requested_field},
     )
     if request.method == "POST" and form.is_valid():
         try:
             with transaction.atomic():
+                field_key = form.cleaned_data["target_field"]
+                field_label = DOG_REVIEW_LABELS[field_key]
+                entry = form.cleaned_data.get("target_entry", "").strip()
+                field_reference = f"{field_label} ({entry})" if entry else field_label
                 dispute = DisputeCase.objects.create(
                     dog=dog,
                     opened_by=request.user,
                     reason=(DisputeCase.Reason.IDENTITY if form.cleaned_data["reason"] == "photo" else form.cleaned_data["reason"]),
-                    details=form.cleaned_data["details"],
+                    details=f"Detail to review: {field_reference}\\n{form.cleaned_data['details']}",
                     attachment=form.cleaned_data["attachment"] or "",
                 )
         except (OSError, urllib.error.URLError) as exc:
@@ -2410,7 +2430,14 @@ def open_dispute(request, pk):
                 dog=dog,
                 kennel=dog.kennel,
                 dispute=dispute,
-                summary={"reason": dispute.reason, "report_type": form.cleaned_data["reason"], "target_image_id": form.cleaned_data["target_image"].pk if form.cleaned_data["target_image"] else None},
+                summary={
+                    "reason": dispute.reason,
+                    "report_type": form.cleaned_data["reason"],
+                    "target_field": field_key,
+                    "target_label": field_label,
+                    "target_entry": entry,
+                    "target_image_id": form.cleaned_data["target_image"].pk if form.cleaned_data["target_image"] else None,
+                },
             )
             messages.success(request, "Review case opened. A moderator can now investigate it.")
             return redirect("accounts:my-disputes")
@@ -2422,7 +2449,7 @@ def open_dispute(request, pk):
             "form": form,
             "eyebrow": "Dispute / review case",
             "title": f"Request review · {dog.name}",
-            "intro": "Report an incorrect photo, disputed pedigree, identity, health or ownership. For photos, choose the wrong image and optionally upload the correct one. Nothing changes publicly until staff review.",
+            "intro": "Challenge any single field, related dog, registration, health result, photograph, title, certificate, ancestry link, COI calculation or missing information. Choose the exact detail and explain what needs verification. Only moderators can change the record.",
             "button_label": "Open review case",
             "multipart": True,
             "dog": dog,
@@ -2431,7 +2458,7 @@ def open_dispute(request, pk):
                 list(DogImage.objects.filter(dog=dog).order_by(
                     "-is_primary", "sort_order", "created_at",
                 )[:12])
-                if (request.GET.get("reason") == "photo" or
+                if (preferred_reason == "photo" or
                     request.POST.get("reason") == "photo") else []
             ),
         },

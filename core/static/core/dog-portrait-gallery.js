@@ -38,6 +38,60 @@
 
   let selected = 0;
   let touchOrigin = null;
+  let savedScrollY = null;
+  let previousScrollStyles = null;
+  const documentRoot = document.documentElement;
+  const body = document.body;
+
+  const lockBackground = () => {
+    if (savedScrollY !== null) return;
+    savedScrollY = window.scrollY;
+    previousScrollStyles = {
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyLeft: body.style.left,
+      bodyRight: body.style.right,
+      bodyWidth: body.style.width,
+      rootOverscroll: documentRoot.style.overscrollBehavior,
+    };
+    body.style.position = "fixed";
+    body.style.top = "-" + savedScrollY + "px";
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    documentRoot.style.overscrollBehavior = "none";
+  };
+
+  const unlockBackground = () => {
+    if (savedScrollY === null) return;
+    const current = savedScrollY;
+    body.style.position = previousScrollStyles.bodyPosition;
+    body.style.top = previousScrollStyles.bodyTop;
+    body.style.left = previousScrollStyles.bodyLeft;
+    body.style.right = previousScrollStyles.bodyRight;
+    body.style.width = previousScrollStyles.bodyWidth;
+    documentRoot.style.overscrollBehavior = previousScrollStyles.rootOverscroll;
+    savedScrollY = null;
+    previousScrollStyles = null;
+    window.scrollTo({ top: current, behavior: "instant" });
+  };
+
+  const closeAndScrollProfile = (fingerTravel) => {
+    // Upward swipe means move down the profile. A downward swipe returns
+    // toward the portrait. Restore the locked page before scrolling either.
+    dialog.close();
+    unlockBackground();
+    const details = document.querySelector("#profile-details");
+    const header = document.querySelector(".site-header");
+    const fixedOffset = header ? header.getBoundingClientRect().height + 12 : 20;
+    const top = fingerTravel < 0 && details
+      ? details.getBoundingClientRect().top + window.scrollY - fixedOffset
+      : Math.max(0, window.scrollY - Math.max(180, window.innerHeight * .55));
+    window.requestAnimationFrame(() => window.scrollTo({
+      top: Math.max(0, top),
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+    }));
+  };
   const single = photos.length === 1;
   prev.hidden = single;
   next.hidden = single;
@@ -89,6 +143,7 @@
     if (typeof dialog.showModal !== "function") return;
     event.preventDefault();
     dialog.showModal();
+    lockBackground();
     select(selected);
     close.focus({ preventScroll: true });
   });
@@ -122,6 +177,21 @@
     }
     touchOrigin = { x: event.touches[0].clientX, y: event.touches[0].clientY };
   }, { passive: true });
+  // Handle vertical swipes as immediate dismissal. Without intercepting
+  // touchmove, iPhone Safari can scroll the page beneath an open dialog.
+  // Horizontal swipes still change the displayed photograph.
+  stage.addEventListener("touchmove", (event) => {
+    if (!touchOrigin || event.touches.length !== 1 ||
+        stage.classList.contains("is-zoomed")) return;
+    const dx = event.touches[0].clientX - touchOrigin.x;
+    const dy = event.touches[0].clientY - touchOrigin.y;
+    if (Math.abs(dy) > 22 && Math.abs(dy) > Math.abs(dx) * 1.3) {
+      event.preventDefault();
+      touchOrigin = null;
+      closeAndScrollProfile(dy);
+    }
+  }, { passive: false });
+
   stage.addEventListener("touchend", (event) => {
     if (!touchOrigin || event.changedTouches.length !== 1) return;
     const dx = event.changedTouches[0].clientX - touchOrigin.x;
@@ -138,8 +208,9 @@
     if (event.target === dialog) dialog.close();
   });
   dialog.addEventListener("close", () => {
+    touchOrigin = null;
     resetZoom();
-    // Keep a valid image URL on hidden dialog markup; missing src is seen as
-    // a broken image by browsers, assistive tools and production image checks.
+    unlockBackground();
+    // Keep the image src valid to avoid broken thumbnails in page audits.
   });
 })();
