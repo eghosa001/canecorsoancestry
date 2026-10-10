@@ -90,7 +90,8 @@
   };
   const paint = () => {
     clampPan();
-    image.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${scale})`;
+    // Do not keep an identity GPU transform on an unzoomed Safari photo.
+    image.style.transform = isZoomed() ? `translate3d(${panX}px, ${panY}px, 0) scale(${scale})` : "none";
     stage.classList.toggle("is-zoomed", isZoomed());
     zoomButton.setAttribute("aria-pressed", String(isZoomed()));
     zoomButton.textContent = isZoomed() ? "Fit photo" : "Zoom in";
@@ -318,7 +319,9 @@
     if (event.detail && performance.now() < suppressedClickUntil) event.preventDefault();
   });
   image.addEventListener("dragstart", (event) => event.preventDefault());
-  window.addEventListener("resize", () => { if (dialog.open) paint(); }, { passive: true });
+  // iPhone browser bars can emit resize events while scrolling. Only
+  // recalculate pan while zoomed; fitted photos must remain motionless.
+  window.addEventListener("resize", () => { if (dialog.open && isZoomed()) paint(); }, { passive: true });
 
   // Also support legacy iOS touch events and the previous WebKit regression
   // contract, which dispatches touchstart/touchmove on the stage directly.
