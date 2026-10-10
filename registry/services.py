@@ -719,15 +719,27 @@ def approve_submission(
     elif submission.kind == Submission.Kind.DOCUMENT:
         if submission.dog is None or not submission.attachment:
             raise ValueError("Document submission requires a target dog and attachment.")
-        DogDocument.objects.create(
+        document_type = payload.get("document_type", DogDocument.DocumentType.OTHER)
+        document = DogDocument.objects.create(
             dog=submission.dog,
             title=payload.get("title", "").strip() or "Submitted document",
-            document_type=payload.get("document_type", DogDocument.DocumentType.OTHER),
+            document_type=document_type,
             file=submission.attachment.name,
             is_public=bool(payload.get("is_public")),
             submitted_by=submission.submitted_by,
             source_submission=submission,
         )
+        if document_type == DogDocument.DocumentType.TITLE_CERTIFICATE:
+            name = str(payload.get("achievement_title") or "").strip()
+            if not name:
+                raise ValueError("The certificate must name the documented achievement.")
+            title, _ = DogTitle.objects.get_or_create(dog=submission.dog, name=name)
+            title.issuer = str(payload.get("certificate_issuer") or "").strip()
+            title.awarded_on = _date_from_payload(payload.get("certificate_awarded_on"))
+            title.certificate_document = document
+            title.verification_state = VerificationState.IDENTITY_REVIEWED
+            title.save(update_fields=("issuer", "awarded_on", "certificate_document", "verification_state"))
+
 
     elif submission.kind == Submission.Kind.KENNEL_CREATE:
         name = str(payload.get("name") or "").strip()
