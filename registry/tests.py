@@ -231,6 +231,10 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-dog-gallery')
         self.assertContains(response, 'data-dog-photo-dialog')
+        self.assertContains(response, 'data-dog-photo-viewport')
+        self.assertContains(response, 'data-dog-photo-help')
+        self.assertNotContains(response, 'About COI &amp; sources')
+        self.assertNotContains(response, 'profile-record-notes')
         lightbox_markup = response.content.decode("utf-8").split("data-dog-lightbox-image", 1)[1].split(">", 1)[0]
         self.assertIn('src="', lightbox_markup)
         self.assertNotIn('src=""', lightbox_markup)
@@ -265,6 +269,10 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, url)
         self.assertContains(response, 'data-dog-photo-dialog')
+        self.assertContains(response, 'data-dog-photo-viewport')
+        self.assertContains(response, 'data-dog-photo-help')
+        self.assertNotContains(response, 'About COI &amp; sources')
+        self.assertNotContains(response, 'profile-record-notes')
         lightbox_markup = response.content.decode("utf-8").split("data-dog-lightbox-image", 1)[1].split(">", 1)[0]
         self.assertIn('src="', lightbox_markup)
         self.assertNotIn('src=""', lightbox_markup)

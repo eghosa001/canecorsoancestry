@@ -1,216 +1,341 @@
-/* Public dog profile only. No framework, no network calls, no database edits. */
+/* Cane Corso Ancestry dog portraits. Native, accessible and dependency-free.
+ * Fit mode: tap or swipe down closes, swipe up closes + reveals dog details,
+ * horizontal swipe changes photos. Zoom mode: pinch/double-tap or Zoom button,
+ * drag anywhere to inspect EVERY edge, tap to reset and pinch inward to fit.
+ * The background page remains locked until dialog dismissal. */
 (() => {
   "use strict";
-
   const gallery = document.querySelector("[data-dog-gallery]");
   const dialog = document.querySelector("[data-dog-photo-dialog]");
   if (!gallery || !dialog) return;
-
   const openLink = gallery.querySelector("[data-dog-photo-open]");
-  const heroImage = gallery.querySelector("[data-dog-photo-main]");
+  const hero = gallery.querySelector("[data-dog-photo-main]");
   const caption = gallery.querySelector("[data-dog-photo-caption]");
   const counter = gallery.querySelector("[data-dog-photo-count]");
-  const thumbs = Array.from(gallery.querySelectorAll("[data-dog-photo-thumb]"));
+  const thumbs = [...gallery.querySelectorAll("[data-dog-photo-thumb]")];
   const stage = dialog.querySelector("[data-dog-photo-stage]");
-  const enlarged = dialog.querySelector("[data-dog-lightbox-image]");
-  const lightboxCount = dialog.querySelector("[data-dog-lightbox-count]");
-  const lightboxCaption = dialog.querySelector("[data-dog-lightbox-caption]");
+  const viewport = dialog.querySelector("[data-dog-photo-viewport]");
+  const image = dialog.querySelector("[data-dog-lightbox-image]");
+  const modalCount = dialog.querySelector("[data-dog-lightbox-count]");
+  const modalCaption = dialog.querySelector("[data-dog-lightbox-caption-text]");
   const prev = dialog.querySelector("[data-dog-photo-prev]");
   const next = dialog.querySelector("[data-dog-photo-next]");
   const close = dialog.querySelector("[data-dog-photo-close]");
-  const zoom = dialog.querySelector("[data-dog-photo-zoom]");
-  if (!openLink || !heroImage || !stage || !enlarged || !prev || !next || !close || !zoom) return;
+  const zoomButton = dialog.querySelector("[data-dog-photo-zoom]");
+  if (![openLink, hero, stage, viewport, image, prev, next, close, zoomButton].every(Boolean)) return;
 
-  const photos = thumbs.length
-    ? thumbs.map((thumb) => ({
-      src: thumb.dataset.photoSrc,
-      alt: thumb.dataset.photoAlt || heroImage.alt,
-      caption: thumb.dataset.photoCaption || "Photo",
-      referrerPolicy: "no-referrer",
-    }))
-    : [{
-      src: openLink.href,
-      alt: heroImage.alt,
-      caption: caption ? caption.textContent.trim() : "Photo",
-      referrerPolicy: heroImage.referrerPolicy || "",
-    }];
-  if (!photos.length) return;
-
+  const photos = thumbs.length ? thumbs.map((button) => ({
+    src: button.dataset.photoSrc,
+    alt: button.dataset.photoAlt || hero.alt,
+    caption: button.dataset.photoCaption || "Photo",
+    referrerPolicy: hero.referrerPolicy || "",
+  })) : [{
+    src: openLink.href, alt: hero.alt,
+    caption: caption?.textContent?.trim() || "Photo",
+    referrerPolicy: hero.referrerPolicy || "",
+  }];
   let selected = 0;
-  let touchOrigin = null;
-  let savedScrollY = null;
-  let previousScrollStyles = null;
-  const documentRoot = document.documentElement;
-  const body = document.body;
+  let scale = 1;
+  let panX = 0;
+  let panY = 0;
+  let savedPage = null;
+  let gesture = null;
+  let pinch = null;
+  let legacyTouchStart = null;
+  let suppressedClickUntil = 0;
+  let tapTimer = null;
+  let lastTap = null;
+  const active = new Map();
+  const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+  const isZoomed = () => scale > 1.01;
 
-  const lockBackground = () => {
-    if (savedScrollY !== null) return;
-    savedScrollY = window.scrollY;
-    previousScrollStyles = {
-      bodyPosition: body.style.position,
-      bodyTop: body.style.top,
-      bodyLeft: body.style.left,
-      bodyRight: body.style.right,
-      bodyWidth: body.style.width,
-      rootOverscroll: documentRoot.style.overscrollBehavior,
+  const lockPage = () => {
+    if (savedPage) return;
+    const body = document.body, root = document.documentElement;
+    savedPage = {
+      y: window.scrollY,
+      position: body.style.position,
+      top: body.style.top, left: body.style.left,
+      right: body.style.right, width: body.style.width,
+      overscroll: root.style.overscrollBehavior,
     };
     body.style.position = "fixed";
-    body.style.top = "-" + savedScrollY + "px";
+    body.style.top = "-" + savedPage.y + "px";
     body.style.left = "0";
     body.style.right = "0";
     body.style.width = "100%";
-    documentRoot.style.overscrollBehavior = "none";
+    root.style.overscrollBehavior = "none";
+  };
+  const unlockPage = () => {
+    if (!savedPage) return;
+    const state = savedPage;
+    savedPage = null;
+    const body = document.body, root = document.documentElement;
+    body.style.position = state.position;
+    body.style.top = state.top;
+    body.style.left = state.left;
+    body.style.right = state.right;
+    body.style.width = state.width;
+    root.style.overscrollBehavior = state.overscroll;
+    window.scrollTo({ top: state.y, behavior: "instant" });
   };
 
-  const unlockBackground = () => {
-    if (savedScrollY === null) return;
-    const current = savedScrollY;
-    body.style.position = previousScrollStyles.bodyPosition;
-    body.style.top = previousScrollStyles.bodyTop;
-    body.style.left = previousScrollStyles.bodyLeft;
-    body.style.right = previousScrollStyles.bodyRight;
-    body.style.width = previousScrollStyles.bodyWidth;
-    documentRoot.style.overscrollBehavior = previousScrollStyles.rootOverscroll;
-    savedScrollY = null;
-    previousScrollStyles = null;
-    window.scrollTo({ top: current, behavior: "instant" });
+  // Bounds are based on the image's actual fitted dimensions, not the source
+  // pixel count. A user can drag to all four extremities with no clipping.
+  const clampPan = () => {
+    const maxX = Math.max(0, (image.offsetWidth * scale - viewport.clientWidth) / 2);
+    const maxY = Math.max(0, (image.offsetHeight * scale - viewport.clientHeight) / 2);
+    panX = clamp(panX, -maxX, maxX);
+    panY = clamp(panY, -maxY, maxY);
   };
-
-  const closeAndScrollProfile = (fingerTravel) => {
-    // Upward swipe means move down the profile. A downward swipe returns
-    // toward the portrait. Restore the locked page before scrolling either.
+  const paint = () => {
+    clampPan();
+    image.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${scale})`;
+    stage.classList.toggle("is-zoomed", isZoomed());
+    zoomButton.setAttribute("aria-pressed", String(isZoomed()));
+    zoomButton.textContent = isZoomed() ? "Fit photo" : "Zoom in";
+    viewport.dataset.zoomed = String(isZoomed());
+  };
+  const fit = () => {
+    scale = 1;
+    panX = 0;
+    panY = 0;
+    paint();
+  };
+  const setZoom = (value, pointX, pointY) => {
+    const before = scale;
+    scale = clamp(value, 1, 6);
+    if (scale <= 1.01) {
+      fit();
+      return;
+    }
+    const bounds = viewport.getBoundingClientRect();
+    const x = Number.isFinite(pointX) ? pointX - bounds.left - bounds.width / 2 : 0;
+    const y = Number.isFinite(pointY) ? pointY - bounds.top - bounds.height / 2 : 0;
+    const factor = scale / before;
+    panX = x - (x - panX) * factor;
+    panY = y - (y - panY) * factor;
+    paint();
+  };
+  const clearTap = () => {
+    if (tapTimer) window.clearTimeout(tapTimer);
+    tapTimer = null;
+    lastTap = null;
+  };
+  const clearGestures = () => {
+    active.clear();
+    gesture = null;
+    pinch = null;
+    legacyTouchStart = null;
+    clearTap();
+  };
+  const dismiss = (direction = "stay") => {
+    if (!dialog.open) return;
+    clearGestures();
     dialog.close();
-    unlockBackground();
-    const details = document.querySelector("#profile-details");
-    const header = document.querySelector(".site-header");
-    const fixedOffset = header ? header.getBoundingClientRect().height + 12 : 20;
-    const top = fingerTravel < 0 && details
-      ? details.getBoundingClientRect().top + window.scrollY - fixedOffset
-      : Math.max(0, window.scrollY - Math.max(180, window.innerHeight * .55));
-    window.requestAnimationFrame(() => window.scrollTo({
-      top: Math.max(0, top),
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
-    }));
+    // Keep the default native close control/ESC as a safe fallback.
+    unlockPage();
+    if (direction === "details") {
+      const details = document.querySelector("#profile-details");
+      if (details) window.requestAnimationFrame(() => {
+        const headerHeight = document.querySelector(".site-header")?.getBoundingClientRect().height || 0;
+        const top = details.getBoundingClientRect().top + window.scrollY - headerHeight - 12;
+        window.scrollTo({
+          top: Math.max(0, top),
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+        });
+      });
+    }
   };
-  const single = photos.length === 1;
+  const select = (index) => {
+    selected = (index + photos.length) % photos.length;
+    const item = photos[selected];
+    openLink.href = item.src;
+    if (hero.getAttribute("src") !== item.src) {
+      hero.src = item.src;
+      hero.alt = item.alt;
+    }
+    if (caption) caption.textContent = item.caption;
+    if (counter) counter.textContent = `${selected + 1} of ${photos.length}`;
+    thumbs.forEach((button, i) => {
+      button.classList.toggle("is-active", i === selected);
+      button.setAttribute("aria-pressed", String(i === selected));
+    });
+    if (dialog.open) {
+      clearGestures();
+      fit();
+      image.referrerPolicy = item.referrerPolicy;
+      if (image.getAttribute("src") !== item.src) image.src = item.src;
+      image.alt = item.alt;
+      if (modalCount) modalCount.textContent = `${selected + 1} / ${photos.length}`;
+      if (modalCaption) modalCaption.textContent = item.caption;
+    }
+  };
+
+  thumbs.forEach((button, index) => button.addEventListener("click", () => select(index)));
+  const single = photos.length < 2;
   prev.hidden = single;
   next.hidden = single;
   stage.classList.toggle("is-single", single);
-
-  const resetZoom = () => {
-    stage.classList.remove("is-zoomed");
-    zoom.setAttribute("aria-pressed", "false");
-    zoom.textContent = "Zoom in";
-    stage.scrollTop = 0;
-    stage.scrollLeft = 0;
-  };
-
-  const select = (index, fromThumb = false) => {
-    selected = (index + photos.length) % photos.length;
-    const item = photos[selected];
-    if (!item) return;
-
-    openLink.href = item.src;
-    if (fromThumb || heroImage.getAttribute("src") !== item.src) {
-      heroImage.src = item.src;
-      heroImage.alt = item.alt;
-    }
-    if (caption) caption.textContent = item.caption;
-    if (counter) counter.textContent = (selected + 1) + " of " + photos.length;
-    thumbs.forEach((thumb, indexInList) => {
-      const active = indexInList === selected;
-      thumb.classList.toggle("is-active", active);
-      thumb.setAttribute("aria-pressed", String(active));
-    });
-
-    // Update the open lightbox only, avoiding duplicate large-image downloads.
-    if (dialog.open) {
-      resetZoom();
-      enlarged.referrerPolicy = item.referrerPolicy;
-      enlarged.src = item.src;
-      enlarged.alt = item.alt;
-      if (lightboxCount) lightboxCount.textContent = (selected + 1) + " / " + photos.length;
-      if (lightboxCaption) lightboxCaption.textContent = item.caption;
-    }
-  };
-
-  thumbs.forEach((thumb, index) => {
-    thumb.addEventListener("click", () => select(index, true));
-  });
-
   openLink.addEventListener("click", (event) => {
-    // Older browsers keep a working full-resolution image link as fallback.
-    if (typeof dialog.showModal !== "function") return;
+    if (typeof dialog.showModal !== "function") return; // real image fallback
     event.preventDefault();
     dialog.showModal();
-    lockBackground();
+    lockPage();
     select(selected);
     close.focus({ preventScroll: true });
   });
-
-  close.addEventListener("click", () => dialog.close());
+  close.addEventListener("click", () => dismiss());
   prev.addEventListener("click", () => select(selected - 1));
   next.addEventListener("click", () => select(selected + 1));
-  zoom.addEventListener("click", () => {
-    const enlargedNow = stage.classList.toggle("is-zoomed");
-    zoom.setAttribute("aria-pressed", String(enlargedNow));
-    zoom.textContent = enlargedNow ? "Reset zoom" : "Zoom in";
+  zoomButton.addEventListener("click", () => {
+    clearTap();
+    if (isZoomed()) fit(); else setZoom(2.5);
   });
-
   dialog.addEventListener("keydown", (event) => {
-    if (event.key === "ArrowLeft" && !single) {
-      event.preventDefault();
-      select(selected - 1);
-    } else if (event.key === "ArrowRight" && !single) {
-      event.preventDefault();
-      select(selected + 1);
-    }
-    // Escape and focus trapping belong to the native <dialog>.
-  });
-
-  // Horizontal swipes navigate images. Avoid intercepting vertical scrolling,
-  // two-finger pinch gestures and manual scrolling in zoom mode.
-  stage.addEventListener("touchstart", (event) => {
-    if (single || stage.classList.contains("is-zoomed") || event.touches.length !== 1) {
-      touchOrigin = null;
-      return;
-    }
-    touchOrigin = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-  }, { passive: true });
-  // Handle vertical swipes as immediate dismissal. Without intercepting
-  // touchmove, iPhone Safari can scroll the page beneath an open dialog.
-  // Horizontal swipes still change the displayed photograph.
-  stage.addEventListener("touchmove", (event) => {
-    if (!touchOrigin || event.touches.length !== 1 ||
-        stage.classList.contains("is-zoomed")) return;
-    const dx = event.touches[0].clientX - touchOrigin.x;
-    const dy = event.touches[0].clientY - touchOrigin.y;
-    if (Math.abs(dy) > 22 && Math.abs(dy) > Math.abs(dx) * 1.3) {
-      event.preventDefault();
-      touchOrigin = null;
-      closeAndScrollProfile(dy);
-    }
-  }, { passive: false });
-
-  stage.addEventListener("touchend", (event) => {
-    if (!touchOrigin || event.changedTouches.length !== 1) return;
-    const dx = event.changedTouches[0].clientX - touchOrigin.x;
-    const dy = event.changedTouches[0].clientY - touchOrigin.y;
-    touchOrigin = null;
-    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.7) {
-      select(selected + (dx < 0 ? 1 : -1));
-    }
-  }, { passive: true });
-  stage.addEventListener("touchcancel", () => { touchOrigin = null; }, { passive: true });
-
-  dialog.addEventListener("click", (event) => {
-    // Clicking the backdrop (not the image/controls) dismisses the viewer.
-    if (event.target === dialog) dialog.close();
+    if (!single && event.key === "ArrowLeft") { event.preventDefault(); select(selected - 1); }
+    if (!single && event.key === "ArrowRight") { event.preventDefault(); select(selected + 1); }
+    if (event.key === "Escape") dismiss();
   });
   dialog.addEventListener("close", () => {
-    touchOrigin = null;
-    resetZoom();
-    unlockBackground();
-    // Keep the image src valid to avoid broken thumbnails in page audits.
+    clearGestures();
+    fit();
+    unlockPage();
+    // Keep src intact; removing it created a broken image in live production.
   });
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog || event.target === stage) dismiss();
+  });
+
+  const midpoint = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  const separation = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const startPinch = () => {
+    const values = [...active.values()];
+    if (values.length < 2) return;
+    const mid = midpoint(values[0], values[1]);
+    pinch = { distance: Math.max(5, separation(values[0], values[1])),
+              mid, scale, panX, panY };
+    gesture = null;
+    clearTap();
+  };
+  const enqueueTap = (x, y) => {
+    const when = performance.now();
+    if (lastTap && when - lastTap.when <= 350 &&
+        Math.hypot(x - lastTap.x, y - lastTap.y) < 38) {
+      clearTap();
+      if (isZoomed()) fit(); else setZoom(2.5, x, y);
+      return;
+    }
+    lastTap = { x, y, when };
+    tapTimer = window.setTimeout(() => {
+      tapTimer = null;
+      lastTap = null;
+      if (dialog.open) {
+        if (isZoomed()) fit(); // touching the image returns it to normal size
+        else dismiss();       // touching the fitted image closes the viewer
+      }
+    }, 270);
+  };
+
+  viewport.addEventListener("pointerdown", (event) => {
+    if (!dialog.open || (event.pointerType === "mouse" && event.button !== 0)) return;
+    active.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    try { viewport.setPointerCapture(event.pointerId); } catch (_error) { /* Safari fallback */ }
+    if (active.size >= 2) { startPinch(); return; }
+    gesture = { id: event.pointerId, x: event.clientX, y: event.clientY,
+                panX, panY, moved: false };
+  });
+  viewport.addEventListener("pointermove", (event) => {
+    if (!active.has(event.pointerId) || !dialog.open) return;
+    active.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (active.size >= 2) {
+      if (!pinch) startPinch();
+      const values = [...active.values()];
+      const mid = midpoint(values[0], values[1]);
+      const nextScale = clamp(pinch.scale * separation(values[0], values[1]) / pinch.distance, 1, 6);
+      const bounds = viewport.getBoundingClientRect();
+      const centerX = bounds.left + bounds.width / 2, centerY = bounds.top + bounds.height / 2;
+      const factor = nextScale / pinch.scale;
+      scale = nextScale;
+      panX = mid.x - centerX - (pinch.mid.x - centerX - pinch.panX) * factor;
+      panY = mid.y - centerY - (pinch.mid.y - centerY - pinch.panY) * factor;
+      if (!isZoomed()) { panX = 0; panY = 0; }
+      paint();
+      suppressedClickUntil = performance.now() + 500;
+      return;
+    }
+    if (!gesture || gesture.id !== event.pointerId) return;
+    const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+    if (Math.hypot(dx, dy) > 9) {
+      gesture.moved = true;
+      clearTap();
+    }
+    if (isZoomed()) {
+      panX = gesture.panX + dx;
+      panY = gesture.panY + dy;
+      paint();
+    } else if (Math.abs(dy) >= 55 && Math.abs(dy) > Math.abs(dx) * 1.25) {
+      // Downward swipe returns to the normal small portrait; upward swipe
+      // continues into details. Neither action scrolls the background while
+      // the modal is visible.
+      suppressedClickUntil = performance.now() + 450;
+      dismiss(dy < 0 ? "details" : "stay");
+    }
+  });
+  const release = (event) => {
+    if (!active.has(event.pointerId)) return;
+    const position = active.get(event.pointerId);
+    active.delete(event.pointerId);
+    if (active.size) {
+      if (pinch) {
+        pinch = null;
+        if (!isZoomed()) fit();
+        const current = [...active.entries()][0];
+        gesture = { id: current[0], x: current[1].x, y: current[1].y,
+                    panX, panY, moved: true };
+      }
+      return;
+    }
+    if (pinch) { pinch = null; gesture = null; if (!isZoomed()) fit(); return; }
+    if (!gesture || !dialog.open) return;
+    const dx = position.x - gesture.x, dy = position.y - gesture.y;
+    const moved = gesture.moved;
+    gesture = null;
+    if (moved) {
+      suppressedClickUntil = performance.now() + 300;
+      if (!isZoomed() && !single && Math.abs(dx) >= 55 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+        select(selected + (dx < 0 ? 1 : -1));
+      }
+    } else if (event.type === "pointerup") {
+      enqueueTap(position.x, position.y);
+    }
+  };
+  viewport.addEventListener("pointerup", release);
+  viewport.addEventListener("pointercancel", release);
+  viewport.addEventListener("click", (event) => {
+    // Pointer up has already handled tap/double tap. Suppress synthesized
+    // click after a drag so the modal does not close accidentally.
+    if (event.detail && performance.now() < suppressedClickUntil) event.preventDefault();
+  });
+  image.addEventListener("dragstart", (event) => event.preventDefault());
+  window.addEventListener("resize", () => { if (dialog.open) paint(); }, { passive: true });
+
+  // Also support legacy iOS touch events and the previous WebKit regression
+  // contract, which dispatches touchstart/touchmove on the stage directly.
+  stage.addEventListener("touchstart", (event) => {
+    if (!dialog.open || event.touches.length !== 1 || event.target !== stage) return;
+    legacyTouchStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+  }, { passive: true });
+  stage.addEventListener("touchmove", (event) => {
+    if (!legacyTouchStart || !dialog.open || event.touches.length !== 1) return;
+    const dx = event.touches[0].clientX - legacyTouchStart.x;
+    const dy = event.touches[0].clientY - legacyTouchStart.y;
+    if (Math.abs(dy) > 30 && Math.abs(dy) > Math.abs(dx) * 1.3) {
+      if (event.cancelable) event.preventDefault();
+      legacyTouchStart = null;
+      dismiss(dy < 0 ? "details" : "stay");
+    }
+  }, { passive: false });
+  stage.addEventListener("touchend", () => { legacyTouchStart = null; }, { passive: true });
+  stage.addEventListener("touchcancel", () => { legacyTouchStart = null; }, { passive: true });
 })();

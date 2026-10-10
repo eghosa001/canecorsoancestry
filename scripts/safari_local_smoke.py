@@ -141,7 +141,10 @@ def run():
               };
             }""")
             assert len(presentation["columns"].split()) == 1, f"Sire and dam are side-by-side: {presentation}"
-            assert "Inter" in presentation["textFont"], f"Original profile font not restored: {presentation}"
+            assert "Georgia" in presentation["textFont"], f"Original heading serif not restored: {presentation}"
+            body_font = page.evaluate("getComputedStyle(document.body).fontFamily")
+            assert "Inter" in body_font, f"Original body font is not Inter: {body_font}"
+            assert "About COI & sources" not in page.locator("body").inner_text(), "Unwanted COI/source panel remains"
             assert presentation["rowPadding"] >= 10, f"Dog details are cramped: {presentation}"
 
             # Premium gallery must preserve full image proportions while
@@ -161,8 +164,58 @@ def run():
             assert modal.locator("[data-dog-photo-stage]").evaluate(
                 "el => el.classList.contains('is-zoomed')"
             ), "Explicit zoom did not activate"
-            page.keyboard.press("Escape")
-            assert modal.get_attribute("open") is None, "Escape did not close photo viewer"
+            # Zoomed photo: pan in all four directions. JS must move the image,
+            # not the document underneath it, and never block a tap-to-fit.
+            viewport = modal.locator("[data-dog-photo-viewport]")
+            enlarged = modal.locator("[data-dog-lightbox-image]")
+            pan_probe = viewport.evaluate("""el => {
+              const img = el.querySelector('img');
+              const r = el.getBoundingClientRect();
+              const cX = r.left + r.width / 2, cY = r.top + r.height / 2;
+              const send = (type, x, y, pointerId=70) => {
+                const ev = new PointerEvent(type, {
+                  bubbles:true, cancelable:true, pointerId, pointerType:'touch',
+                  isPrimary:true, clientX:x, clientY:y,
+                });
+                el.dispatchEvent(ev);
+              };
+              const initial = img.style.transform;
+              send('pointerdown', cX, cY);
+              send('pointermove', cX - 85, cY - 70);
+              send('pointerup', cX - 85, cY - 70);
+              const afterOne = img.style.transform;
+              send('pointerdown', cX, cY, 71);
+              send('pointermove', cX + 85, cY + 70, 71);
+              send('pointerup', cX + 85, cY + 70, 71);
+              return {initial, afterOne, afterTwo:img.style.transform};
+            }""")
+            assert pan_probe["initial"] != pan_probe["afterOne"], f"Cannot pan zoomed photo: {pan_probe}"
+            assert pan_probe["afterOne"] != pan_probe["afterTwo"], f"Cannot inspect different dog areas: {pan_probe}"
+            assert page.evaluate("document.body.style.position") == "fixed", (
+                "Dragging zoomed dog moved the page beneath it"
+            )
+            # A normal tap on the picture resets zoom; a second tap closes
+            # the full-screen view, without using the inconvenient Close button.
+            viewport.evaluate("""el => {
+              const r = el.getBoundingClientRect(), x=r.left+r.width/2, y=r.top+r.height/2;
+              for (const type of ['pointerdown','pointerup']) el.dispatchEvent(
+                new PointerEvent(type, {bubbles:true, pointerId:73, pointerType:'touch',
+                                        isPrimary:true,clientX:x,clientY:y}));
+            }""")
+            page.wait_for_timeout(370)
+            assert not modal.locator("[data-dog-photo-stage]").evaluate(
+                "el => el.classList.contains('is-zoomed')"
+            ), "Tapping the zoomed photo should reset to its original fit"
+            viewport.evaluate("""el => {
+              const r = el.getBoundingClientRect(), x=r.left+r.width/2, y=r.top+r.height/2;
+              for (const type of ['pointerdown','pointerup']) el.dispatchEvent(
+                new PointerEvent(type, {bubbles:true,pointerId:74,pointerType:'touch',
+                                        isPrimary:true,clientX:x,clientY:y}));
+            }""")
+            page.wait_for_timeout(370)
+            assert modal.get_attribute("open") is None, (
+                "Tapping the fitted photo should close full-screen mode"
+            )
             page.locator("[data-dog-photo-open]").tap()
             assert modal.get_attribute("open") is not None
             assert page.evaluate("document.body.style.position") == "fixed", (

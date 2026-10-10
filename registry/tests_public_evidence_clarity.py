@@ -20,9 +20,11 @@ class PublicEvidenceClarityTests(TestCase):
         self.assertContains(response, "Not independently verified")
         self.assertContains(response, "Source attribution on file")
         self.assertContains(response, "not proof")
-        # Trust context stays available without overwhelming the dog facts.
-        self.assertContains(response, '<details class="profile-record-notes ux-disclosure">')
-        self.assertContains(response, "About COI &amp; sources")
+        # The cluttered COI/source accordion is deliberately removed, while
+        # compact, truthful verification status remains visible to visitors.
+        self.assertContains(response, 'class="profile-evidence-summary"')
+        self.assertNotContains(response, "About COI &amp; sources")
+        self.assertNotContains(response, 'class="profile-record-notes ux-disclosure"')
         self.assertNotContains(response, "<dt>Evidence review</dt>")
         self.assertNotContains(response, "<dt>Historical source</dt>")
 

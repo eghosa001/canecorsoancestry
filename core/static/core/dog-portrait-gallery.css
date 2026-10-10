@@ -229,45 +229,61 @@
 }
 .dog-photo-lightbox-actions button:hover,
 .dog-photo-lightbox-nav:hover { border-color: var(--gold); }
+/* The image viewport, not the page below, owns touch and pointer gestures.
+   Pinch zoom is a transform on the fitted photo, with JS-clamped panning
+   so every part of the animal stays inspectable. */
 .dog-photo-lightbox-stage {
   flex: 1 1 auto;
+  display: flex;
   min-height: 0;
   min-width: 0;
-  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  overflow: auto;
-  padding: 12px;
-  touch-action: pan-x pinch-zoom;
+  gap: 4px;
+  padding: 8px;
+  overflow: hidden;
   overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  touch-action: none;
 }
-.dog-photo-lightbox-stage > img {
-  flex: 0 1 auto;
-  display: block;
-  width: auto;
-  max-width: calc(100% - 110px);
-  height: auto;
-  max-height: 100%;
-  margin: auto;
-  border-radius: 4px;
-  object-fit: contain;
+.dog-photo-lightbox-viewport {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
   user-select: none;
-  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  cursor: zoom-out;
 }
-.dog-photo-lightbox-stage.is-zoomed {
-  justify-content: flex-start;
-  align-items: flex-start;
-  touch-action: pan-x pan-y pinch-zoom;
-}
-.dog-photo-lightbox-stage.is-zoomed > img {
-  flex: none;
+.dog-photo-lightbox-viewport[data-zoomed="true"] { cursor: grab; }
+.dog-photo-lightbox-viewport[data-zoomed="true"]:active { cursor: grabbing; }
+.dog-photo-lightbox-viewport img {
+  display: block;
+  flex: 0 1 auto;
   width: auto;
-  max-width: none;
-  max-height: none;
-  min-width: 130%;
-  margin: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
+  margin: 0;
+  border-radius: 3px;
+  object-fit: contain;
+  object-position: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  transform-origin: center center;
+  will-change: transform;
+}
+.dog-photo-lightbox-stage.is-zoomed .dog-photo-lightbox-viewport img {
+  object-fit: contain;
 }
 .dog-photo-lightbox-nav {
   flex: none;
@@ -277,14 +293,22 @@
 }
 .dog-photo-lightbox-nav[hidden] { display: none !important; }
 .dog-photo-lightbox-caption {
+  display: grid;
   flex: none;
+  gap: 4px;
   margin: 0;
-  min-height: 50px;
+  min-height: 54px;
   border-top: 1px solid var(--line-soft);
-  padding: 12px 17px;
+  padding: 9px 17px;
   color: var(--muted);
   font-size: .83rem;
   overflow-wrap: anywhere;
+}
+.dog-photo-lightbox-caption small {
+  display: block;
+  color: var(--muted);
+  font-size: .73rem;
+  line-height: 1.45;
 }
 @media (max-width: 760px) {
   .dog-profile .profile-photo.dog-portrait { padding: 10px; border-radius: 14px; }
@@ -306,12 +330,9 @@
   .dog-photo-lightbox-topbar { gap: 6px; padding: 9px; }
   .dog-photo-lightbox-actions { gap: 3px; }
   .dog-photo-lightbox-actions button { font-size: .75rem; min-width: 42px; padding: 8px; }
-  .dog-photo-lightbox-stage { padding: 4px; gap: 2px; }
-  .dog-photo-lightbox-stage > img { max-width: calc(100% - 90px); }
+  .dog-photo-lightbox-stage { padding: 5px; gap: 1px; }
   .dog-photo-lightbox-nav { min-width: 40px; padding: 6px; }
-  .dog-photo-lightbox-stage.is-single > img {
-    max-width: 100%;
-  }
+  .dog-photo-lightbox-viewport img { max-width: 100%; max-height: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dog-portrait-open,
@@ -454,4 +475,14 @@
   .dog-profile .profile-facts dt,
   .dog-profile .profile-facts dd { padding: 12px 0 13px; }
   .dog-profile .profile-report-actions { margin: 22px 0 16px; }
+}
+
+/* Concise truth-in-provenance note replaces the bulky COI/source accordion. */
+.dog-profile .profile-evidence-summary {
+  padding: 11px 0 0;
+  margin: 15px 0 6px;
+  color: var(--muted);
+  font-size: .73rem;
+  line-height: 1.55;
+  border-top: 1px solid var(--line-soft);
 }
