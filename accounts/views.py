@@ -3016,7 +3016,7 @@ def data_health(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
 
-    cache_key = "admin:data-health:quick:v2"
+    cache_key = "admin:data-health:quick:v3-coi"
     report = None if request.GET.get("refresh") == "1" else cache.get(cache_key)
     if report is None:
         report = quick_quality_report(sample_limit=12)
