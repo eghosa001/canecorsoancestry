@@ -84,8 +84,10 @@ class StaffChangeVisibilityTests(TestCase):
         self.assertEqual(ordered[ordered.index("bio") + 1], "visibility_public")
         self.assertContains(response, 'role="switch"')
         self.assertContains(response, 'name="visibility_public"')
-        self.assertContains(response, "Private")
-        self.assertContains(response, "Public")
+        self.assertContains(response, "Unpublished")
+        self.assertContains(response, "Published")
+        self.assertContains(response, 'data-canonical-visibility-editor')
+        self.assertContains(response, 'data-publication-preview-badge')
         self.assertNotContains(response, 'id="publication-heading"')
         self.assertNotContains(response, 'class="dog-visibility-form"')
 
