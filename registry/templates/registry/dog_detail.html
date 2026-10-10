@@ -81,6 +81,7 @@
               <a class="btn btn-outline" href="{% url 'accounts:submit-correction' dog.pk %}">Suggest correction</a>
               <a class="btn btn-outline" href="{% url 'accounts:submit-image' dog.pk %}">Submit photo</a>
               <a class="btn btn-outline" href="{% url 'accounts:submit-document' dog.pk %}">Submit document</a>
+              <a class="btn btn-outline" href="{% url 'accounts:submit-document' dog.pk %}?type=title_certificate">Submit title certificate</a>
               <a class="btn btn-outline" href="{% url 'accounts:submit-health-record' dog.pk %}">Submit health/DNA</a>
             {% endif %}
             {% if user.is_authenticated %}
@@ -127,7 +128,16 @@
     <article class="panel">
       <div class="panel-heading"><h2>Titles</h2></div>
       <div class="relationship-list">
-        {% for title in dog.display_titles %}<div><strong>{{ title.name }}</strong></div>{% empty %}<p class="muted">No titles recorded.</p>{% endfor %}
+        {% for title in dog.display_titles %}
+          <div>
+            <strong>{{ title.name }}</strong>
+            {% if title.issuer %}<small> · {{ title.issuer }}</small>{% endif %}
+            {% if title.awarded_on %}<small> · {{ title.awarded_on }}</small>{% endif %}
+            {% if title.certificate_document %}
+              {% if title.certificate_document.is_public %}<a class="text-link" href="{{ title.certificate_document.file.url }}" rel="noopener">View reviewed certificate →</a>
+              {% else %}<small> · Evidence privately reviewed</small>{% endif %}
+            {% endif %}
+          </div>{% empty %}<p class="muted">No titles recorded.</p>{% endfor %}
       </div>
     </article>
   </div>
