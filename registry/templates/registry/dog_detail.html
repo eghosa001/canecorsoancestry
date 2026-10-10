@@ -15,7 +15,7 @@
     <section class="profile-photo dog-portrait" id="photos" aria-label="Photographs of {{ dog.name }}" data-dog-gallery>
       {% if dog.display_images or dog.source_image_url %}
         <div class="dog-portrait-heading">
-          <span class="dog-portrait-eyebrow">Portrait archive</span>
+          <span class="dog-portrait-eyebrow">Photos</span>
           <span class="dog-portrait-count" data-dog-photo-count aria-live="polite">
             {% if dog.display_images %}1 of {{ dog.display_images|length }}{% else %}1 of 1{% endif %}
           </span>
@@ -27,7 +27,7 @@
           {% if dog.display_images %}
             <img class="dog-portrait-image" data-dog-photo-main
                  src="{{ dog.display_images.0.image.url }}"
-                 alt="{{ dog.name }}{% if dog.display_images.0.caption %} — {{ dog.display_images.0.caption }}{% endif %}"
+                 alt="{{ dog.name }}"
                  loading="eager" fetchpriority="high" decoding="async">
           {% else %}
             <img class="dog-portrait-image" data-dog-photo-main
@@ -39,11 +39,7 @@
         <div class="dog-portrait-caption">
           <div class="dog-portrait-caption-copy">
             <strong>{{ dog.name }}</strong>
-            <small data-dog-photo-caption>
-              {% if dog.display_images %}
-                {% if dog.display_images.0.caption %}{{ dog.display_images.0.caption }}{% elif dog.display_images.0.is_primary %}Main photo{% else %}Photo 1{% endif %}
-              {% else %}Archive photograph{% endif %}
-            </small>
+            <small data-dog-photo-caption>Photo 1</small>
           </div>
           {% if dog.kennel %}<span class="dog-portrait-kennel">{{ dog.kennel.name }}</span>{% endif %}
         </div>
@@ -54,8 +50,8 @@
                       type="button"
                       data-dog-photo-thumb
                       data-photo-src="{{ photo.image.url }}"
-                      data-photo-alt="{{ dog.name }}{% if photo.caption %} — {{ photo.caption }}{% endif %}"
-                      data-photo-caption="{% if photo.caption %}{{ photo.caption }}{% elif photo.is_primary %}Main photo{% else %}Photo {{ forloop.counter }}{% endif %}"
+                      data-photo-alt="{{ dog.name }}"
+                      data-photo-caption="Photo {{ forloop.counter }}"
                       aria-label="Show photograph {{ forloop.counter }} of {{ dog.name }}"
                       aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">
                 <img src="{{ photo.image.url }}" alt="" loading="lazy" decoding="async">
@@ -133,9 +129,7 @@
         <a class="btn btn-outline" href="#offspring">View offspring</a>
         <a class="btn btn-outline" href="{% url 'pedigrees:reverse' dog.slug %}">Reverse pedigree</a>
       </div>
-      <p class="profile-evidence-summary">
-        {{ verification_label }}. {% if has_source_attribution %}Source attribution on file{% else %}No source attribution recorded{% endif %}; this alone is not proof of identity, registration or pedigree accuracy.
-      </p>
+      <p class="profile-evidence-summary">{{ verification_label }}.</p>
       {% if can_contribute or user.is_authenticated %}
         <details class="profile-manage-actions ux-disclosure">
           <summary><span><strong>Contribute or request review</strong><small>Corrections, evidence and review requests stay separate from public browsing.</small></span></summary>
