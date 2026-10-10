@@ -101,6 +101,16 @@ class DirectDogEditForm(forms.ModelForm):
     dam_ref = forms.CharField(required=False, label="Dam name or UUID", widget=forms.TextInput(attrs={"data-admin-parent-lookup": "", "data-parent-sex": "female", "autocomplete": "off", "placeholder": "Search dam by name or registration"}))
     kennel_ref = forms.CharField(required=False, label="Kennel name or UUID")
     litter_ref = forms.CharField(required=False, label="Litter code or UUID")
+    visibility_public = forms.BooleanField(
+        required=False,
+        label="Visibility",
+        widget=forms.CheckboxInput(attrs={
+            "role": "switch",
+            "class": "canonical-visibility-toggle",
+            "aria-label": "Public visibility",
+        }),
+        help_text="Off = Private. On = Public. Only the Super Admin can publish or unpublish a dog.",
+    )
     reason = forms.CharField(
         min_length=5, max_length=2000, widget=forms.Textarea(attrs={"rows": 3}),
         help_text="Required. Explain the evidence or reason for the live change.",
@@ -115,8 +125,21 @@ class DirectDogEditForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.allow_publication = kwargs.pop("allow_publication", False)
         super().__init__(*args, **kwargs)
         dog = self.instance
+        if self.allow_publication:
+            if not self.is_bound:
+                self.fields["visibility_public"].initial = bool(dog.is_public)
+            # Put the switch directly beneath Bio, not in a separate
+            # publication section, and leave the audit reason at the bottom.
+            ordered = list(self.fields)
+            ordered.remove("visibility_public")
+            ordered.insert(ordered.index("bio") + 1, "visibility_public")
+            self.order_fields(ordered)
+        else:
+            # A forged POST from a reviewer must never publish a record.
+            self.fields.pop("visibility_public")
         if dog.pk and not self.is_bound:
             for name in ("sire", "dam", "kennel", "litter"):
                 self.fields[name + "_ref"].initial = str(getattr(dog, name + "_id") or "")
@@ -290,6 +313,9 @@ def _save_formsets(dog, sets):
 def _restore(dog, target):
     for field, value in target["dog"].items():
         setattr(dog, field, value)
+    if "publication" in target:
+        # Old revisions lack this key: leave their visibility unchanged.
+        dog.is_public = target["publication"]["is_public"]
     dog.full_clean()
     dog.save()
     for name, (model, fields) in RELATED.items():
@@ -511,7 +537,7 @@ def dog_direct_edit(request, pk):
         raise PermissionDenied("This record is locked by the super admin.")
     data = request.POST if request.method == "POST" else None
     files = request.FILES if request.method == "POST" else None
-    form = DirectDogEditForm(data, instance=dog)
+    form = DirectDogEditForm(data, instance=dog, allow_publication=owner)
     sets = _edit_formsets(dog, data, files)
     if request.method == "POST":
         valid = form.is_valid()
@@ -586,26 +612,61 @@ def dog_direct_edit(request, pk):
                                 "approval. The public dog record is unchanged."
                             )
                             return redirect("accounts:dog-direct-edit", pk=pk)
+                    # Older admin clients and scoped tests may omit the new
+                    # switch. Missing is NOT consent to unpublish; the editor
+                    # includes an explicit hidden false fallback for real
+                    # browser submissions when the switch is off.
+                    make_public = (
+                        bool(form.cleaned_data["visibility_public"])
+                        if owner and "visibility_public" in request.POST
+                        else locked.is_public
+                    )
+                    visibility_changed = owner and make_public != locked.is_public
                     before = _snapshot(locked)
+                    if visibility_changed:
+                        before["publication"] = {"is_public": locked.is_public}
                     for field in DOG_FIELDS:
                         if field in {"kennel", "sire", "dam", "litter"}:
                             setattr(locked, field, form.cleaned_data[field])
                         else:
                             setattr(locked, field, form.cleaned_data[field])
+                    if visibility_changed:
+                        locked.is_public = make_public
                     locked.full_clean()
                     locked.save()
                     _save_formsets(locked, sets)
                     after = _snapshot(locked)
+                    if visibility_changed:
+                        after["publication"] = {"is_public": locked.is_public}
                     if before != after:
                         invalidate_public_content()
                         record_audit(
                             action=ModerationAudit.Action.RECORD_CHANGED,
                             actor=request.user, dog=locked, kennel=locked.kennel,
-                            summary={"kind": "direct_dog_edit", "before": before, "after": after,
-                                     "is_owner": owner},
+                            summary={
+                                "kind": "direct_dog_edit", "before": before, "after": after,
+                                "is_owner": owner,
+                                **({"publication_action": "publish" if make_public else "unpublish"}
+                                   if visibility_changed else {}),
+                            },
                             note=form.cleaned_data["reason"],
                         )
-                messages.success(request, "Dog information saved live with an audit trail. Super admin may review or reverse it.")
+                if visibility_changed and make_public:
+                    if DogImage.objects.filter(dog_id=pk).exists():
+                        messages.success(request, "Saved and published. This dog is now visible on the public website.")
+                    else:
+                        messages.warning(
+                            request,
+                            "Saved and published. The dog can be found by exact name or its profile link. "
+                            "Add a genuine photograph in Images to include it in the photo-only browse gallery.",
+                        )
+                elif visibility_changed:
+                    messages.success(
+                        request,
+                        "Saved as Private. The dog is no longer shown on public profiles or search.",
+                    )
+                else:
+                    messages.success(request, "Dog details saved with an audit trail.")
                 return redirect("accounts:dog-direct-edit", pk=pk)
             except (IntegrityError, ValidationError) as exc:
                 form.add_error(None, str(exc))
@@ -678,6 +739,8 @@ def dog_review_edit(request, pk, audit_id):
                 raise ValidationError("Only Accept or Revert applies to completed live edits.")
             if decision == "revert":
                 current = _snapshot(dog)
+                if "publication" in event.summary.get("after", {}):
+                    current["publication"] = {"is_public": dog.is_public}
                 if current != event.summary["after"]:
                     raise ValidationError(
                         "A later change has modified this record. To preserve those changes, review the newer revisions or make an explicit super-admin override."
