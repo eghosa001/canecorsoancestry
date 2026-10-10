@@ -239,8 +239,7 @@ class DogModelTests(TestCase):
         self.assertIn('src="', lightbox_markup)
         self.assertNotIn('src=""', lightbox_markup)
         self.assertContains(response, 'data-dog-photo-open')
-        self.assertContains(response, 'data-photo-caption="Photo 2"')
-        self.assertNotContains(response, "Side profile")
+        self.assertContains(response, 'data-photo-caption="Side profile"')
         self.assertContains(response, 'aria-pressed="true"')
         self.assertContains(response, 'aria-pressed="false"')
         self.assertContains(response, 'data-dog-photo-thumb', count=2)
@@ -424,7 +423,7 @@ class DogModelTests(TestCase):
         profile = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertContains(profile, "new-official-photo.jpg")
         self.assertContains(profile, "old-photo.jpg")
-        self.assertNotContains(profile, "New official photo")
+        self.assertContains(profile, "New official photo")
         search = self.client.get(
             reverse("registry:dog-search"), {"q": "Approved Photo Dog"}
         )
@@ -479,7 +478,7 @@ class DogModelTests(TestCase):
         response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertContains(response, 'id="photos"', html=False)
         self.assertContains(response, "new-approved-photo.jpg")
-        self.assertNotContains(response, "Full body")
+        self.assertContains(response, "Full body")
 
     def test_autocomplete_exact_name_beats_popular_substring_matches(self):
         exact = Dog.objects.create(
