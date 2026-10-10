@@ -12,7 +12,7 @@ BASE = os.environ.get("SAFARI_TEST_BASE_URL", "http://127.0.0.1:8000").rstrip("/
 
 
 def go(page, path):
-    response = page.goto(urljoin(BASE, path.lstrip("/")), wait_until="domcontentloaded")
+    response = page.goto(urljoin(BASE, path.lstrip("/")), wait_until="load")
     assert response and response.status == 200, f"{path} returned {response.status if response else 'no response'}"
 
 
