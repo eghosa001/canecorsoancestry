@@ -60,6 +60,9 @@
       </dl>
 
       {% if staff_identity and staff_role %}<div class="button-row"><a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Edit canonical record</a></div>{% endif %}
+      {% if user.is_authenticated and not staff_identity and dog.display_images %}
+      <a class="text-link" href="{% url 'accounts:open-dispute' dog.pk %}?reason=photo">Report an incorrect dog photograph →</a>
+      {% endif %}
       <div class="button-row profile-primary-actions">
         <a class="btn btn-gold" href="{% url 'pedigrees:detail' dog.slug %}">View pedigree</a>
         <a class="btn btn-outline" href="#offspring">View offspring</a>
