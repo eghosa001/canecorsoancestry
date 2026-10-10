@@ -11,7 +11,7 @@ from django.utils.text import slugify
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 
-from registry.models import DisputeCase, Dog, DogDocument, DogIdentityNumber, DogRegistration, DogSource, Kennel, KennelMembership, Litter, ModerationRoleAssignment, Submission, SubmissionEvidence, VerificationState
+from registry.models import DisputeCase, Dog, DogDocument, DogImage, DogIdentityNumber, DogRegistration, DogSource, Kennel, KennelMembership, Litter, ModerationRoleAssignment, Submission, SubmissionEvidence, VerificationState
 
 from .models import Profile, SubmissionPayment
 
@@ -928,6 +928,18 @@ class DocumentVisibilityForm(forms.Form):
 
 class DisputeForm(forms.Form):
     reason = forms.ChoiceField(choices=DisputeCase.Reason.choices)
+    target_image = forms.ModelChoiceField(
+        queryset=DogImage.objects.none(), required=False,
+        label="Incorrect photo (choose from uploaded photos)",
+        help_text="Select the incorrect image, if listed. Imported source images can still be reported without selecting one.",
+    )
+
+    def __init__(self, *args, dog=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if dog is not None:
+            self.fields["target_image"].queryset = DogImage.objects.filter(
+                dog=dog,
+            ).order_by("-is_primary", "sort_order", "created_at")
     details = forms.CharField(
         widget=forms.Textarea(attrs={"rows": 6}),
         help_text="Describe the exact fact or relationship you believe should be reviewed.",
@@ -943,6 +955,14 @@ class DisputeForm(forms.Form):
 
     def clean_attachment(self):
         return normalize_image_upload(self.cleaned_data.get("attachment"))
+
+    def clean(self):
+        values = super().clean()
+        if values.get("reason") == DisputeCase.Reason.PHOTO:
+            uploaded = values.get("attachment")
+            if uploaded and not uploaded.name.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                self.add_error("attachment", "A suggested replacement must be an image, not a PDF.")
+        return values
 
 
 class BulkModerationForm(forms.Form):
