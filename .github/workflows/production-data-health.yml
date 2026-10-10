@@ -66,6 +66,9 @@ jobs:
       - name: Verify previously reconciled ancestors (read-only)
         run: sudo -n podman exec cca-oracle-staging python manage.py reconcile_known_ancestors
       - name: Detect registration-backed duplicate ancestors for staff review
+        # A direct main push can trigger before the updated container is staged.
+        # Audit the new command only after its Oracle release, or on scheduled/manual runs.
+        if: github.event_name != 'push' && (github.event_name != 'workflow_run' || github.event.workflow_run.name == 'Oracle Django production release (CI-gated)')
         run: sudo -n podman exec cca-oracle-staging python manage.py audit_coi_duplicate_candidates --limit 15
       - name: Check published live COI
         run: |
