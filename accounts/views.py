@@ -31,6 +31,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from registry.data_quality import quick_quality_report, public_coi_review_sample
+from registry.coi_identity_audit import audit_registration_backed_duplicates
 from registry.models import (
     DisputeCase,
     Dog,
@@ -3039,6 +3040,22 @@ def data_health(request):
             for dog in candidates
         ]
 
+    # The 33k-record evidence scan is deliberately opt-in and super-admin only.
+    # Cache briefly so refreshes do not repeatedly scan the archival sources.
+    can_review_coi_duplicates = (
+        request.user.is_superuser and can_manage_verification(request.user)
+    )
+    coi_duplicate_report = None
+    if can_review_coi_duplicates and request.GET.get("coi_duplicates") == "1":
+        duplicates_cache_key = "admin:coi-duplicate-review:v1"
+        coi_duplicate_report = (
+            None if request.GET.get("refresh") == "1"
+            else cache.get(duplicates_cache_key)
+        )
+        if coi_duplicate_report is None:
+            coi_duplicate_report = audit_registration_backed_duplicates(max_display=25)
+            cache.set(duplicates_cache_key, coi_duplicate_report, timeout=60)
+
     counts = report["counts"]
     critical_total = sum(
         counts.get(key, 0)
@@ -3058,6 +3075,8 @@ def data_health(request):
             "critical_total": critical_total,
             "coi_query": coi_query,
             "coi_matches": coi_matches,
+            "coi_duplicate_report": coi_duplicate_report,
+            "can_review_coi_duplicates": can_review_coi_duplicates,
             "can_manage_sources": can_manage_verification(request.user),
         },
     )
