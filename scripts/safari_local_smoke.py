@@ -129,6 +129,21 @@ def run():
             assert fidelity["background"] == fidelity["themeSurface"], f"Portrait card does not match theme: {fidelity}"
             assert abs(fidelity["width"] / fidelity["height"] - fidelity["naturalRatio"]) < .06, f"Dog aspect ratio distorted: {fidelity}"
 
+            # Owner acceptance: parents stack vertically and profile text
+            # has readable spacing, with the original Inter-family headings.
+            presentation = page.evaluate("""() => {
+              const parents = document.querySelector('.profile-quick-parents');
+              const facts = document.querySelector('.profile-facts');
+              return {
+                columns: getComputedStyle(parents).gridTemplateColumns,
+                textFont: getComputedStyle(document.querySelector('.profile-title-row h1')).fontFamily,
+                rowPadding: parseFloat(getComputedStyle(facts.querySelector('dt')).paddingBottom),
+              };
+            }""")
+            assert len(presentation["columns"].split()) == 1, f"Sire and dam are side-by-side: {presentation}"
+            assert "Inter" in presentation["textFont"], f"Original profile font not restored: {presentation}"
+            assert presentation["rowPadding"] >= 10, f"Dog details are cramped: {presentation}"
+
             # Premium gallery must preserve full image proportions while
             # allowing real taps, lightbox navigation, Escape and swipe.
             gallery_thumbs = page.locator("[data-dog-photo-thumb]")
@@ -148,6 +163,33 @@ def run():
             ), "Explicit zoom did not activate"
             page.keyboard.press("Escape")
             assert modal.get_attribute("open") is None, "Escape did not close photo viewer"
+            page.locator("[data-dog-photo-open]").tap()
+            assert modal.get_attribute("open") is not None
+            assert page.evaluate("document.body.style.position") == "fixed", (
+                "The page underneath full-screen mode is not scroll locked"
+            )
+            # Swipe up inside the unzoomed photograph. The first vertical
+            # movement must dismiss the dialog and reveal dog details.
+            page.evaluate("""() => {
+              const stage = document.querySelector('[data-dog-photo-stage]');
+              const fire = (name, y) => {
+                const evt = new Event(name, { bubbles: true, cancelable: true });
+                Object.defineProperty(evt, 'touches', {
+                  value: [{ clientX: 150, clientY: y }],
+                });
+                stage.dispatchEvent(evt);
+              };
+              fire('touchstart', 340);
+              fire('touchmove', 300);
+            }""")
+            page.wait_for_timeout(650)
+            assert modal.get_attribute("open") is None, "Vertical swipe did not immediately dismiss lightbox"
+            assert page.evaluate("document.body.style.position") != "fixed", (
+                "Full-screen swipe left background scroll locked"
+            )
+            assert page.evaluate("window.scrollY") > 0, (
+                "Closing the viewer did not advance to the dog's details"
+            )
 
             go(page, "/dogs/?q=Safari")
             thumb = page.locator(".search-result-media img")
