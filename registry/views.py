@@ -389,7 +389,7 @@ def _public_profile_dog(slug):
     # Keep public and private certificate access separate, without schema changes.
     title_doc_ids = {}
     for item in dog.display_titles:
-        matched = re.search(r"\\[CCA certificate #(\\d+)\\]", item.source_text or "")
+        matched = re.search(r"\[CCA certificate #(\d+)\]", item.source_text or "")
         if matched:
             title_doc_ids[item.pk] = int(matched.group(1))
     if title_doc_ids:
