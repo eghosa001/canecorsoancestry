@@ -154,6 +154,86 @@ class OwnerFeedbackFixesTests(TestCase):
         )
         self.assertTrue(DogImage.objects.filter(pk=replacement.pk).exists())
 
+    def test_public_review_links_are_members_only_and_target_sections(self):
+        url = reverse("registry:dog-detail", args=[self.dog.slug])
+        guest = self.client.get(url)
+        self.assertNotContains(guest, "Request a detail correction")
+        self.assertNotContains(guest, 'href="/member/dogs/')
+        self.client.force_login(self.member)
+        response = self.client.get(url)
+        self.assertContains(response, "Request a detail correction")
+        self.assertContains(response, "?field=other")
+        self.assertContains(response, "?field=offspring")
+        self.assertContains(response, "?reason=health&amp;field=health")
+        self.assertContains(response, 'id="profile-details"')
+        self.assertContains(response, "profile-report-actions", count=0)
+
+    def test_member_can_report_exact_field_and_moderators_receive_audit(self):
+        from accounts.forms import DOG_REVIEW_LABELS
+        self.assertTrue({
+            "name", "sire", "dam", "sex", "date_of_birth", "colour",
+            "bloodline", "country", "kennel", "registration",
+            "registration_authority", "coi", "siblings", "offspring", "mates",
+            "litter", "health", "dna", "titles", "title_certificate",
+            "document", "verification", "source", "biography", "photo", "other",
+        } <= set(DOG_REVIEW_LABELS))
+        url = reverse("accounts:open-dispute", args=[self.dog.pk])
+        self.client.force_login(self.member)
+        for target in ("name", "sire", "dam", "coi", "health", "offspring", "title_certificate", "document", "other"):
+            with self.subTest(target=target):
+                get = self.client.get(url, {"field": target})
+                self.assertEqual(get.status_code, 200)
+                self.assertEqual(get.context["form"].initial["target_field"], target)
+                response = self.client.post(url, {
+                    "reason": "pedigree",
+                    "target_field": target,
+                    "target_entry": "Named source row",
+                    "details": "Please check the supporting record.",
+                })
+                self.assertRedirects(response, reverse("accounts:my-disputes"))
+                case = DisputeCase.objects.latest("created_at")
+                audit = ModerationAudit.objects.filter(
+                    dispute=case, action=ModerationAudit.Action.DISPUTE_OPENED,
+                ).get()
+                self.assertEqual(audit.summary["target_field"], target)
+                self.assertEqual(audit.summary["target_label"], DOG_REVIEW_LABELS[target])
+                self.assertEqual(audit.summary["target_entry"], "Named source row")
+                self.assertIn(DOG_REVIEW_LABELS[target], case.details)
+                self.assertIn("Named source row", case.details)
+        self.client.logout()
+        guest = self.client.get(url)
+        self.assertEqual(guest.status_code, 302)
+
+    def test_member_photo_report_validated_and_never_changes_images_directly(self):
+        first_photo = DogImage.objects.create(
+            dog=self.dog, image="dogs/report-proof.jpg", is_primary=True,
+        )
+        url = reverse("accounts:open-dispute", args=[self.dog.pk])
+        self.client.force_login(self.member)
+        get = self.client.get(url, {"field": "photo"})
+        self.assertEqual(get.context["form"].initial["reason"], "photo")
+        self.assertEqual(get.context["form"].initial["target_field"], "photo")
+        result = self.client.post(url, {
+            "reason": "identity",
+            "target_field": "photo",
+            "target_image": str(first_photo.pk),
+            "details": "This is a different animal.",
+        })
+        self.assertEqual(result.status_code, 302)
+        case = DisputeCase.objects.latest("created_at")
+        self.assertEqual(case.reason, DisputeCase.Reason.IDENTITY)
+        audit = ModerationAudit.objects.filter(dispute=case).get()
+        self.assertEqual(audit.summary["report_type"], "photo")
+        self.assertEqual(audit.summary["target_field"], "photo")
+        self.assertTrue(DogImage.objects.filter(pk=first_photo.pk).exists())
+        invalid = self.client.post(url, {
+            "reason": "photo",
+            "target_field": "dam",
+            "details": "Must not combine categories.",
+        })
+        self.assertEqual(invalid.status_code, 200)
+        self.assertIn("target_field", invalid.context["form"].errors)
+
     def test_photo_case_cannot_be_closed_without_corrective_action(self):
         case = DisputeCase.objects.create(
             dog=self.dog, opened_by=self.member,
