@@ -164,7 +164,21 @@ def run():
                 page.set_viewport_size({"width": width, "height": 844})
                 go(page, "/dogs/?q=Safari")
                 overflow = page.evaluate("document.documentElement.scrollWidth - innerWidth")
-                assert overflow <= 3, f"WebKit horizontal overflow at {width}px: {overflow}"
+                if overflow > 3:
+                    offenders = page.evaluate("""() => [...document.querySelectorAll('body *')]
+                      .map(el => ({
+                        tag: el.tagName,
+                        cls: typeof el.className === 'string' ? el.className.slice(0, 85) : '',
+                        right: Math.round(el.getBoundingClientRect().right),
+                        width: Math.round(el.getBoundingClientRect().width)
+                      }))
+                      .filter(el => el.right > innerWidth + 3)
+                      .sort((a, b) => b.right - a.right)
+                      .slice(0, 8)
+                    """)
+                    raise AssertionError(
+                        f"WebKit horizontal overflow at {width}px: {overflow}; offenders={offenders}"
+                    )
                 assert page.locator(".site-header").is_visible()
 
             assert not errors, f"WebKit JavaScript exceptions: {errors[:3]}"
