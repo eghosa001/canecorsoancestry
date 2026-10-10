@@ -129,6 +129,24 @@ class StaffChangeVisibilityTests(TestCase):
         self.assertFalse(audit.summary["before"]["publication"]["is_public"])
         self.assertTrue(audit.summary["after"]["publication"]["is_public"])
 
+    def test_publish_makes_dog_searchable_even_without_a_photograph(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        self.client.force_login(self.owner)
+        url, data = self.payload(visibility_public="on")
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 302)
+        self.client.logout()
+        profile_url = reverse("registry:dog-detail", args=[self.dog.slug])
+        self.assertEqual(self.client.get(profile_url).status_code, 200)
+        search = self.client.get(reverse("registry:dog-search"), {"q": self.dog.name})
+        self.assertEqual(search.status_code, 200)
+        self.assertContains(search, self.dog.name)
+        suggestions = self.client.get(reverse("registry:dog-suggestions"), {"q": self.dog.name})
+        self.assertEqual(suggestions.status_code, 200)
+        self.assertIn(self.dog.name, [x["name"] for x in suggestions.json()["results"]])
+
     def test_switch_off_unpublishes_without_removing_dog_from_manage_dogs(self):
         self.client.force_login(self.owner)
         url, data = self.payload(visibility_public="false")
