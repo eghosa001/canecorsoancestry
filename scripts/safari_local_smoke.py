@@ -197,6 +197,8 @@ def run():
                       .map(el => ({
                         tag: el.tagName,
                         cls: typeof el.className === 'string' ? el.className.slice(0, 85) : '',
+                        text: (el.textContent || '').trim().slice(0, 50),
+                        parent: el.parentElement && typeof el.parentElement.className === 'string' ? el.parentElement.className.slice(0, 95) : '',
                         right: Math.round(el.getBoundingClientRect().right),
                         width: Math.round(el.getBoundingClientRect().width)
                       }))
