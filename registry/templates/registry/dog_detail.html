@@ -1,24 +1,74 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{{ dog.name }} · Cane Corso Ancestry{% endblock %}
 {% block meta_description %}Pedigree, ancestry, offspring, siblings and health information for Cane Corso {{ dog.name }}.{% endblock %}
 {% block og_title %}{{ dog.name }} · Cane Corso Pedigree{% endblock %}
 {% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and health information.{% endblock %}
 {% block extra_head %}
+  <link rel="stylesheet" href="{% static 'core/dog-portrait-gallery.css' %}?v=20261010-gallery-v1">
   {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}?v=20261002-2">{% elif dog.source_image_url %}<meta property="og:image" content="{{ dog.source_image_url }}">{% endif %}
   <script type="application/ld+json">{{ structured_data }}</script>
 {% endblock %}
 {% block content %}
 <section class="dog-profile page-shell">
   <div class="dog-profile-hero">
-    <div class="profile-photo">
-      {% if dog.display_images %}
-        <img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}" width="640" height="640" loading="eager" fetchpriority="high" decoding="async">
-      {% elif dog.source_image_url %}
-        <img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="640" height="640" loading="eager" fetchpriority="high" decoding="async" referrerpolicy="no-referrer">
+    <section class="profile-photo dog-portrait" id="photos" aria-label="Photographs of {{ dog.name }}" data-dog-gallery>
+      {% if dog.display_images or dog.source_image_url %}
+        <div class="dog-portrait-heading">
+          <span class="dog-portrait-eyebrow">Portrait archive</span>
+          <span class="dog-portrait-count" data-dog-photo-count>
+            {% if dog.display_images %}1 of {{ dog.display_images|length }}{% else %}1 of 1{% endif %}
+          </span>
+        </div>
+        <a class="dog-portrait-open" data-dog-photo-open
+           href="{% if dog.display_images %}{{ dog.display_images.0.image.url }}{% else %}{{ dog.source_image_url }}{% endif %}"
+           target="_blank" rel="noopener"
+           aria-label="Enlarge photograph of {{ dog.name }}">
+          {% if dog.display_images %}
+            <img class="dog-portrait-image" data-dog-photo-main
+                 src="{{ dog.display_images.0.image.url }}"
+                 alt="{{ dog.name }}{% if dog.display_images.0.caption %} — {{ dog.display_images.0.caption }}{% endif %}"
+                 loading="eager" fetchpriority="high" decoding="async">
+          {% else %}
+            <img class="dog-portrait-image" data-dog-photo-main
+                 src="{{ dog.source_image_url }}" alt="{{ dog.name }}"
+                 loading="eager" fetchpriority="high" decoding="async" referrerpolicy="no-referrer">
+          {% endif %}
+          <span class="dog-portrait-expand" aria-hidden="true">View larger ↗</span>
+        </a>
+        <div class="dog-portrait-caption">
+          <div class="dog-portrait-caption-copy">
+            <strong>{{ dog.name }}</strong>
+            <small data-dog-photo-caption>
+              {% if dog.display_images %}
+                {% if dog.display_images.0.caption %}{{ dog.display_images.0.caption }}{% elif dog.display_images.0.is_primary %}Main photo{% else %}Photo 1{% endif %}
+              {% else %}Archive photograph{% endif %}
+            </small>
+          </div>
+          {% if dog.kennel %}<span class="dog-portrait-kennel">{{ dog.kennel.name }}</span>{% endif %}
+        </div>
+        {% if dog.display_images|length > 1 %}
+          <div class="dog-portrait-thumbnails" role="group" aria-label="Choose a photograph of {{ dog.name }}">
+            {% for photo in dog.display_images %}
+              <button class="dog-portrait-thumb{% if forloop.first %} is-active{% endif %}"
+                      type="button"
+                      data-dog-photo-thumb
+                      data-photo-src="{{ photo.image.url }}"
+                      data-photo-alt="{{ dog.name }}{% if photo.caption %} — {{ photo.caption }}{% endif %}"
+                      data-photo-caption="{% if photo.caption %}{{ photo.caption }}{% elif photo.is_primary %}Main photo{% else %}Photo {{ forloop.counter }}{% endif %}"
+                      aria-label="Show photograph {{ forloop.counter }} of {{ dog.name }}"
+                      aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">
+                <img src="{{ photo.image.url }}" alt="" loading="lazy" decoding="async">
+                <span>{{ forloop.counter }}</span>
+              </button>
+            {% endfor %}
+          </div>
+        {% endif %}
       {% else %}
         <div class="media-placeholder large">CCA</div>
+        <p class="dog-portrait-empty">No published photograph yet</p>
       {% endif %}
-    </div>
+    </section>
     <div class="profile-intro">
       <p class="eyebrow">Dog profile</p>
       <div class="profile-title-row">
@@ -96,23 +146,31 @@
     </div>
   </div>
 
-  {% if dog.display_images|length > 1 %}
-  <section class="dog-photo-gallery panel" id="photos" aria-label="Approved photos">
-    <div class="panel-heading"><h2>Photos</h2><span>Approved photographs for {{ dog.name }}</span></div>
-    <div class="dog-photo-gallery-grid">
-      {% for photo in dog.display_images %}
-        <a class="dog-photo-gallery-item" href="{{ photo.image.url }}" target="_blank" rel="noopener" aria-label="View approved photo {{ forloop.counter }} of {{ dog.name }}">
-          <img src="{{ photo.image.url }}" alt="{{ dog.name }}{% if photo.caption %} — {{ photo.caption }}{% endif %}" loading="lazy" decoding="async">
-          <span>{% if photo.caption %}{{ photo.caption }}{% elif photo.is_primary %}Main photo{% else %}Photo {{ forloop.counter }}{% endif %}</span>
-        </a>
-      {% endfor %}
-    </div>
-  </section>
+
+  {% if dog.display_images or dog.source_image_url %}
+    <dialog class="dog-photo-lightbox" data-dog-photo-dialog aria-label="Expanded photos of {{ dog.name }}">
+      <div class="dog-photo-lightbox-inner">
+        <header class="dog-photo-lightbox-topbar">
+          <strong>{{ dog.name }}</strong>
+          <span data-dog-lightbox-count aria-live="polite"></span>
+          <div class="dog-photo-lightbox-actions">
+            <button type="button" data-dog-photo-zoom aria-pressed="false" aria-label="Zoom photograph">Zoom in</button>
+            <button type="button" data-dog-photo-close aria-label="Close expanded photograph">Close ✕</button>
+          </div>
+        </header>
+        <div class="dog-photo-lightbox-stage" data-dog-photo-stage>
+          <button class="dog-photo-lightbox-nav" type="button" data-dog-photo-prev aria-label="Previous photograph" {% if dog.display_images|length <= 1 %}hidden{% endif %}>‹</button>
+          <img data-dog-lightbox-image alt="{{ dog.name }}" decoding="async" draggable="false">
+          <button class="dog-photo-lightbox-nav" type="button" data-dog-photo-next aria-label="Next photograph" {% if dog.display_images|length <= 1 %}hidden{% endif %}>›</button>
+        </div>
+        <p class="dog-photo-lightbox-caption" data-dog-lightbox-caption></p>
+      </div>
+    </dialog>
   {% endif %}
 
   <nav class="profile-tabs" aria-label="Profile sections">
     <a href="#overview">Overview</a>
-    {% if dog.display_images|length > 1 %}<a href="#photos">Photos</a>{% endif %}
+    {% if dog.display_images or dog.source_image_url %}<a href="#photos">Photos</a>{% endif %}
     <a href="{% url 'pedigrees:detail' dog.slug %}">Pedigree</a>
     <a href="#health">Health</a>
     <a href="#offspring">Offspring</a>
@@ -301,4 +359,5 @@
   {% endif %}
 
 </section>
+<script src="{% static 'core/dog-portrait-gallery.js' %}?v=20261010-gallery-v1" defer></script>
 {% endblock %}

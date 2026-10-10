@@ -1,0 +1,317 @@
+/* Cane Corso Ancestry: framed portrait, original image pixels and proportions
+   are preserved. This stylesheet only loads on public dog profiles. */
+.dog-profile .profile-photo.dog-portrait {
+  display: block;
+  align-self: start;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  margin: 0;
+  border-radius: 18px;
+  border: 1px solid rgba(195, 166, 108, .48);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(5, 15, 18, .13), 0 1px 2px rgba(5, 15, 18, .06);
+  overflow: hidden;
+}
+.dog-portrait-heading,
+.dog-portrait-caption {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  min-width: 0;
+}
+.dog-portrait-heading { padding: 4px 4px 12px; }
+.dog-portrait-eyebrow {
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.dog-portrait-count {
+  color: var(--gold-soft);
+  font-size: .78rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dog-portrait-open {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 11px;
+  background: transparent;
+  text-decoration: none;
+  cursor: zoom-in;
+}
+/* Do not impose an aspect ratio, crop, filter or dark letterbox on the dog. */
+.dog-profile .profile-photo.dog-portrait .dog-portrait-image {
+  display: block;
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: min(540px, 60vh);
+  object-fit: contain;
+  object-position: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  transform: none;
+  filter: none;
+}
+.dog-portrait-expand {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  border: 1px solid rgba(188, 174, 138, .46);
+  border-radius: 100px;
+  background: rgba(9, 18, 21, .8);
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 600;
+  padding: 7px 11px;
+  line-height: 1.2;
+  pointer-events: none;
+}
+.dog-portrait-caption {
+  padding: 12px 4px 8px;
+  align-items: flex-start;
+}
+.dog-portrait-caption-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.dog-portrait-caption-copy strong {
+  color: var(--text);
+  font-size: .9rem;
+  overflow-wrap: anywhere;
+}
+.dog-portrait-caption-copy small {
+  color: var(--muted);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.dog-portrait-kennel {
+  color: var(--muted);
+  font-size: .73rem;
+  text-align: right;
+  max-width: 45%;
+  overflow-wrap: anywhere;
+}
+.dog-portrait-thumbnails {
+  display: flex;
+  align-items: stretch;
+  gap: 9px;
+  padding: 10px 4px 3px;
+  margin: 3px 0 0;
+  border-top: 1px solid var(--line-soft);
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+}
+.dog-portrait-thumb {
+  position: relative;
+  flex: 0 0 72px;
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  padding: 4px;
+  background: transparent;
+  overflow: hidden;
+  scroll-snap-align: start;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.dog-profile .profile-photo.dog-portrait .dog-portrait-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  min-width: 0;
+  object-fit: contain;
+  background: transparent;
+  border: 0;
+  transform: none;
+}
+.dog-portrait-thumb span {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  border-radius: 4px;
+  padding: 0 3px;
+  font-size: .65rem;
+  color: #fff;
+  background: rgba(9, 18, 21, .78);
+}
+.dog-portrait-thumb.is-active,
+.dog-portrait-thumb[aria-pressed="true"] {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px var(--gold);
+}
+.dog-portrait-thumb:hover { border-color: var(--gold); }
+.dog-portrait-empty { padding: 0 12px; text-align: center; color: var(--muted); }
+
+/* Native dialog provides focus containment and Escape behavior on iOS Safari,
+   Chromium and desktop browsers. Fallback keeps the original photo link. */
+.dog-photo-lightbox {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(1060px, calc(100vw - 24px));
+  height: min(92vh, 880px);
+  height: min(92dvh, 880px);
+  max-width: calc(100vw - 24px);
+  max-height: 92vh;
+  max-height: 92dvh;
+  padding: 0;
+  border: 1px solid rgba(195, 166, 108, .42);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, .3);
+  overflow: hidden;
+}
+.dog-photo-lightbox:not([open]) { display: none; }
+.dog-photo-lightbox::backdrop { background: rgba(5, 10, 12, .88); }
+.dog-photo-lightbox-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+.dog-photo-lightbox-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 17px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.dog-photo-lightbox-topbar strong {
+  min-width: 0;
+  flex: 1;
+  font-size: .96rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dog-photo-lightbox-topbar span {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: .82rem;
+}
+.dog-photo-lightbox-actions { display: flex; gap: 7px; }
+.dog-photo-lightbox-actions button,
+.dog-photo-lightbox-nav {
+  min-height: 44px;
+  min-width: 44px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 12px;
+  font: inherit;
+}
+.dog-photo-lightbox-actions button:hover,
+.dog-photo-lightbox-nav:hover { border-color: var(--gold); }
+.dog-photo-lightbox-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: auto;
+  padding: 12px;
+  touch-action: pan-x pan-y pinch-zoom;
+  -webkit-overflow-scrolling: touch;
+}
+.dog-photo-lightbox-stage > img {
+  flex: 0 1 auto;
+  display: block;
+  width: auto;
+  max-width: calc(100% - 110px);
+  height: auto;
+  max-height: 100%;
+  margin: auto;
+  border-radius: 4px;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.dog-photo-lightbox-stage.is-zoomed {
+  justify-content: flex-start;
+  align-items: flex-start;
+}
+.dog-photo-lightbox-stage.is-zoomed > img {
+  flex: none;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  min-width: 130%;
+  margin: auto;
+}
+.dog-photo-lightbox-nav {
+  flex: none;
+  font-size: 1.6rem;
+  line-height: 1;
+  padding: 4px 10px;
+}
+.dog-photo-lightbox-nav[hidden] { display: none !important; }
+.dog-photo-lightbox-caption {
+  flex: none;
+  margin: 0;
+  min-height: 50px;
+  border-top: 1px solid var(--line-soft);
+  padding: 12px 17px;
+  color: var(--muted);
+  font-size: .83rem;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .dog-profile .profile-photo.dog-portrait { padding: 10px; border-radius: 14px; }
+  .dog-profile .profile-photo.dog-portrait .dog-portrait-image {
+    max-height: min(340px, 42vh);
+    max-height: min(340px, 42dvh);
+  }
+  .dog-portrait-heading { padding-bottom: 9px; }
+  .dog-portrait-caption { padding-top: 10px; }
+  .dog-portrait-kennel { max-width: 40%; }
+  .dog-portrait-thumb { flex-basis: 65px; width: 65px; height: 65px; }
+  .dog-photo-lightbox {
+    width: calc(100vw - 12px);
+    max-width: calc(100vw - 12px);
+    height: calc(100dvh - 20px);
+    max-height: calc(100dvh - 20px);
+    border-radius: 12px;
+  }
+  .dog-photo-lightbox-topbar { gap: 6px; padding: 9px; }
+  .dog-photo-lightbox-actions { gap: 3px; }
+  .dog-photo-lightbox-actions button { font-size: .75rem; min-width: 42px; padding: 8px; }
+  .dog-photo-lightbox-stage { padding: 4px; gap: 2px; }
+  .dog-photo-lightbox-stage > img { max-width: calc(100% - 90px); }
+  .dog-photo-lightbox-nav { min-width: 40px; padding: 6px; }
+  .dog-photo-lightbox-stage.is-single > img {
+    max-width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dog-portrait-open,
+  .dog-portrait-thumb { scroll-behavior: auto; transition: none; }
+}

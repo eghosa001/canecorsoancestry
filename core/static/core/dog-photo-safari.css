@@ -168,10 +168,19 @@
     max-width: 100%;
     min-width: 0;
   }
+  .search-result-card .search-result-media {
+    width: 84px;
+    max-width: 84px;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
   .search-result-card .search-result-media img {
     display: block;
-    width: 100%;
+    width: 84px;
     max-width: 100%;
+    min-width: 0;
     height: auto;
+    object-fit: contain;
   }
 }

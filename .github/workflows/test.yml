@@ -12,6 +12,7 @@ on:
       - "manage.py"
       - "requirements.txt"
       - "Dockerfile"
+      - "core/static/core/dog-portrait-gallery.js"
       - ".github/workflows/test.yml"
   pull_request:
     paths:
@@ -23,6 +24,7 @@ on:
       - "manage.py"
       - "requirements.txt"
       - "Dockerfile"
+      - "core/static/core/dog-portrait-gallery.js"
       - ".github/workflows/test.yml"
 
 permissions:
@@ -71,6 +73,9 @@ jobs:
           if grep -q '^accounts/static/accounts/direct-dog-edit[.]js$' <<<"$changed"; then
             node --check accounts/static/accounts/direct-dog-edit.js
           fi
+
+          # Small syntax guard; installed Node is provided by ubuntu-latest.
+          node --check core/static/core/dog-portrait-gallery.js
 
           targets=()
 

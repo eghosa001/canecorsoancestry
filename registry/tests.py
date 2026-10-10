@@ -210,6 +210,70 @@ class DogModelTests(TestCase):
         self.assertContains(response, 'class="profile-manage-actions ux-disclosure"', html=False)
         self.assertContains(response, "Request profile review")
 
+    def test_public_profile_photo_gallery_has_accessible_navigation(self):
+        dog = Dog.objects.create(
+            name="Portrait Archive Dog", slug="portrait-archive-dog",
+            is_public=True,
+        )
+        DogImage.objects.create(
+            dog=dog, image="dogs/portrait-primary.jpg",
+            is_primary=True, caption="Show stance",
+        )
+        DogImage.objects.create(
+            dog=dog, image="dogs/portrait-side.jpg",
+            is_primary=False, caption="Side profile",
+        )
+        response = self.client.get(
+            reverse("registry:dog-detail", args=[dog.slug])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-dog-gallery')
+        self.assertContains(response, 'data-dog-photo-dialog')
+        self.assertContains(response, 'data-dog-photo-open')
+        self.assertContains(response, 'data-photo-caption="Side profile"')
+        self.assertContains(response, 'aria-pressed="true"')
+        self.assertContains(response, 'aria-pressed="false"')
+        self.assertContains(response, 'data-dog-photo-thumb', count=2)
+        self.assertContains(response, 'data-dog-photo-main', count=1)
+        self.assertNotContains(response, 'class="dog-photo-gallery panel"')
+        self.assertContains(response, 'href="#photos"')
+        self.assertNotContains(response, "Report an incorrect dog photograph")
+        self.assertContains(response, "dog-portrait-gallery.js")
+
+    def test_public_profile_source_photo_gets_single_fallback_viewer(self):
+        dog = Dog.objects.create(
+            name="Trusted Archive Dog", slug="trusted-archive-dog",
+            is_public=True,
+        )
+        url = "https://canecorsopedigree.com/static/images/animal/archive.jpg"
+        DogSource.objects.create(
+            dog=dog,
+            source_url="https://canecorsopedigree.com/dog/trusted-archive-dog",
+            raw_payload={"image_url": url},
+        )
+        response = self.client.get(
+            reverse("registry:dog-detail", args=[dog.slug])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, url)
+        self.assertContains(response, 'data-dog-photo-dialog')
+        self.assertContains(response, 'referrerpolicy="no-referrer"')
+        self.assertNotContains(response, 'data-dog-photo-thumb')
+        self.assertContains(response, 'href="#photos"')
+
+    def test_public_profile_without_photo_keeps_graceful_placeholder(self):
+        dog = Dog.objects.create(
+            name="No Picture Archive", slug="no-picture-archive",
+            is_public=True,
+        )
+        response = self.client.get(
+            reverse("registry:dog-detail", args=[dog.slug])
+        )
+        self.assertContains(response, "No published photograph yet")
+        self.assertNotContains(response, 'data-dog-photo-dialog')
+        self.assertNotContains(response, 'data-dog-photo-open')
+        self.assertNotContains(response, 'href="#photos"')
+
     def test_dog_suggestions_return_live_matches(self):
         dog = Dog.objects.create(
             name="Suggestion Champion",
