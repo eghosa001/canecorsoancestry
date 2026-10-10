@@ -59,6 +59,7 @@ urlpatterns = [
     path("moderation/dogs/", direct_dog_edit.dog_edit_list, name="dog-edit-list"),
     path("moderation/dogs/parent-suggestions/", direct_dog_edit.dog_parent_suggestions, name="dog-parent-suggestions"),
     path("moderation/dogs/<uuid:pk>/edit/", direct_dog_edit.dog_direct_edit, name="dog-direct-edit"),
+    path("moderation/dogs/<uuid:pk>/visibility/", direct_dog_edit.dog_set_public_visibility, name="dog-set-public-visibility"),
     path("moderation/dogs/<uuid:pk>/revisions/<int:audit_id>/review/", direct_dog_edit.dog_review_edit, name="dog-review-edit"),
     path(
         "moderation/verification/",

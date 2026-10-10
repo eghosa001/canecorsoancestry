@@ -13,6 +13,43 @@
       {% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">Public profile</a>{% endif %}
     </div>
   </header>
+  {% if owner %}
+  <section class="panel" aria-labelledby="publication-heading">
+    <h2 id="publication-heading">Public profile visibility</h2>
+    <p class="muted">
+      {% if dog.is_public %}
+        <strong>Published.</strong> Visitors can open this dog's public profile.
+      {% else %}
+        <strong>Not published.</strong> This dog exists in Django Admin and Manage Dogs only.
+        Saving its details does not publish it automatically.
+      {% endif %}
+    </p>
+    <p class="muted">Super Admin must explicitly approve publication. Publishing does not mark unverified facts as verified. The public directory shows dogs with approved photographs; without a photo, a published dog can still be found by its name or direct profile link.</p>
+    <form method="post" action="{% url 'accounts:dog-set-public-visibility' dog.pk %}" class="dog-visibility-form">
+      {% csrf_token %}
+      <input type="hidden" name="version" value="{{ version }}">
+      <input type="hidden" name="action" value="{% if dog.is_public %}unpublish{% else %}publish{% endif %}">
+      <label for="publication-reason">Reason for {% if dog.is_public %}unpublishing{% else %}publishing{% endif %} (required)</label>
+      <textarea id="publication-reason" name="reason" required minlength="5" maxlength="2000" rows="2" placeholder="E.g. Checked identity and supporting registration details"></textarea>
+      <label class="dog-visibility-confirm" for="confirm-visibility">
+        <input id="confirm-visibility" type="checkbox" name="confirm_visibility" value="yes" required>
+        <span>I have reviewed this dog's identity and understand the visibility change.</span>
+      </label>
+      <div class="button-row">
+        <button class="btn {% if dog.is_public %}btn-outline{% else %}btn-gold{% endif %}" type="submit" onclick="return confirm('Confirm {% if dog.is_public %}unpublish{% else %}publish{% endif %} of this dog?');">
+          {% if dog.is_public %}Unpublish from website{% else %}Publish to website{% endif %}
+        </button>
+        {% if dog.is_public %}
+          <a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}" target="_blank" rel="noopener">View live dog profile ↗</a>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+  {% else %}
+    {% if not dog.is_public %}
+      <p class="panel muted">This record is private. Only the Super Admin can publish it after reviewing its identity and details.</p>
+    {% endif %}
+  {% endif %}
   <form method="post" enctype="multipart/form-data" class="panel" autocomplete="off">
     {% csrf_token %}
     <input type="hidden" name="version" value="{{ version }}">
@@ -72,7 +109,7 @@
       <button class="btn btn-gold" type="submit">Save changes or request protected review</button>
       <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Discard edits</a>
     </div>
-    <p class="muted">Publication and record locking remain controlled by the existing verification workflow; editing a dog's profile does not bypass a pending member submission.</p>
+    <p class="muted">Saving edits does not publish a private dog. Publication requires the separate Super Admin visibility approval above and never bypasses pending member submissions.</p>
   </form>
   <section class="panel">
     <h2>Revision history and super-admin review</h2>

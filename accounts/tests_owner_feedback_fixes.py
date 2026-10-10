@@ -234,6 +234,116 @@ class OwnerFeedbackFixesTests(TestCase):
         self.assertEqual(invalid.status_code, 200)
         self.assertIn("target_field", invalid.context["form"].errors)
 
+    def test_new_django_admin_dog_requires_explicit_super_admin_publication(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        self.assertEqual(
+            self.client.get(reverse("registry:dog-detail", args=[self.dog.slug])).status_code,
+            404,
+        )
+        self.client.force_login(self.owner)
+        edit_url = reverse("accounts:dog-direct-edit", args=[self.dog.pk])
+        publish_url = reverse("accounts:dog-set-public-visibility", args=[self.dog.pk])
+        self.assertContains(self.client.get(edit_url), "Publish to website")
+        self.assertEqual(self.client.get(publish_url).status_code, 405)
+        version = self.dog.updated_at.isoformat()
+        before_state = self.dog.verification_state
+        response = self.client.post(publish_url, {
+            "action": "publish",
+            "reason": "Owner reviewed the dog's identity.",
+            "confirm_visibility": "yes",
+            "version": version,
+        })
+        self.assertRedirects(response, edit_url)
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+        self.assertEqual(self.dog.verification_state, before_state)
+        self.assertEqual(
+            self.client.get(reverse("registry:dog-detail", args=[self.dog.slug])).status_code,
+            200,
+        )
+        self.assertContains(
+            self.client.get(reverse("registry:dog-search"), {"q": self.dog.name}),
+            self.dog.name,
+        )
+        # A published dog without an image must be reachable by search/direct URL
+        # but cannot crowd the main visual browse grid with an empty image.
+        self.assertNotContains(
+            self.client.get(reverse("registry:dog-search")),
+            "Owner Review Dog",
+        )
+        audit = ModerationAudit.objects.get(
+            dog=self.dog, action=ModerationAudit.Action.RECORD_CHANGED,
+            summary__publication_action="publish",
+        )
+        self.assertEqual(audit.actor, self.owner)
+        self.assertEqual(audit.summary["before"]["publication"]["is_public"], False)
+        self.assertEqual(audit.summary["after"]["publication"]["is_public"], True)
+        self.assertEqual(audit.note, "Owner reviewed the dog's identity.")
+        self.assertContains(self.client.get(edit_url), "Unpublish from website")
+
+    def test_publish_permission_confirmation_concurrency_and_unpublish(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        url = reverse("accounts:dog-set-public-visibility", args=[self.dog.pk])
+        version = self.dog.updated_at.isoformat()
+        valid = {
+            "action": "publish",
+            "confirm_visibility": "yes",
+            "reason": "Reviewed dog entry",
+            "version": version,
+        }
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.post(url, valid).status_code, 403)
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.post(url, valid).status_code, 403)
+        self.assertNotContains(
+            self.client.get(reverse("accounts:dog-direct-edit", args=[self.dog.pk])),
+            "Publish to website",
+        )
+        self.client.force_login(self.owner)
+        self.client.post(url, {**valid, "confirm_visibility": ""})
+        self.dog.refresh_from_db()
+        self.assertFalse(self.dog.is_public)
+        self.client.post(url, {**valid, "reason": "No"})
+        self.dog.refresh_from_db()
+        self.assertFalse(self.dog.is_public)
+        self.dog.bio = "Updated between review and publish"
+        self.dog.save(update_fields=["bio", "updated_at"])
+        self.client.post(url, valid)
+        self.dog.refresh_from_db()
+        self.assertFalse(self.dog.is_public)
+        self.assertEqual(ModerationAudit.objects.filter(
+            dog=self.dog, summary__publication_action="publish",
+        ).count(), 0)
+        self.client.post(url, {**valid, "version": self.dog.updated_at.isoformat()})
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+        self.client.post(url, {
+            "action": "unpublish", "reason": "Owner withdrew approval",
+            "confirm_visibility": "yes", "version": self.dog.updated_at.isoformat(),
+        })
+        self.dog.refresh_from_db()
+        self.assertFalse(self.dog.is_public)
+        self.assertEqual(
+            self.client.get(reverse("registry:dog-detail", args=[self.dog.slug])).status_code,
+            404,
+        )
+        self.assertEqual(ModerationAudit.objects.filter(
+            dog=self.dog, summary__publication_action="unpublish",
+        ).count(), 1)
+
+    def test_django_admin_explains_how_to_publish(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        self.client.force_login(self.owner)
+        response = self.client.get(
+            reverse("admin:registry_dog_change", args=[self.dog.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Manage publication / make public")
+        self.assertContains(response, reverse("accounts:dog-direct-edit", args=[self.dog.pk]))
+
     def test_photo_case_cannot_be_closed_without_corrective_action(self):
         case = DisputeCase.objects.create(
             dog=self.dog, opened_by=self.member,
