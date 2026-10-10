@@ -160,7 +160,9 @@
         </header>
         <div class="dog-photo-lightbox-stage" data-dog-photo-stage>
           <button class="dog-photo-lightbox-nav" type="button" data-dog-photo-prev aria-label="Previous photograph" {% if dog.display_images|length <= 1 %}hidden{% endif %}>‹</button>
-          <img data-dog-lightbox-image alt="{{ dog.name }}" decoding="async" draggable="false">
+          <img data-dog-lightbox-image
+               src="{% if dog.display_images %}{{ dog.display_images.0.image.url }}{% else %}{{ dog.source_image_url }}{% endif %}"
+               alt="{{ dog.name }}" loading="lazy" decoding="async" draggable="false"{% if not dog.display_images %} referrerpolicy="no-referrer"{% endif %}>
           <button class="dog-photo-lightbox-nav" type="button" data-dog-photo-next aria-label="Next photograph" {% if dog.display_images|length <= 1 %}hidden{% endif %}>›</button>
         </div>
         <p class="dog-photo-lightbox-caption" data-dog-lightbox-caption></p>
