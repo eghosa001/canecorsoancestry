@@ -239,7 +239,8 @@
   gap: 6px;
   overflow: auto;
   padding: 12px;
-  touch-action: pan-x pan-y pinch-zoom;
+  touch-action: pan-x pinch-zoom;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 .dog-photo-lightbox-stage > img {
@@ -258,6 +259,7 @@
 .dog-photo-lightbox-stage.is-zoomed {
   justify-content: flex-start;
   align-items: flex-start;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 .dog-photo-lightbox-stage.is-zoomed > img {
   flex: none;
