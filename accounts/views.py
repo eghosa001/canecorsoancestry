@@ -2391,7 +2391,7 @@ def open_dispute(request, pk):
                 dispute = DisputeCase.objects.create(
                     dog=dog,
                     opened_by=request.user,
-                    reason=form.cleaned_data["reason"],
+                    reason=(DisputeCase.Reason.IDENTITY if form.cleaned_data["reason"] == "photo" else form.cleaned_data["reason"]),
                     details=form.cleaned_data["details"],
                     attachment=form.cleaned_data["attachment"] or "",
                 )
@@ -2404,7 +2404,7 @@ def open_dispute(request, pk):
                 dog=dog,
                 kennel=dog.kennel,
                 dispute=dispute,
-                summary={"reason": dispute.reason, "target_image_id": form.cleaned_data["target_image"].pk if form.cleaned_data["target_image"] else None},
+                summary={"reason": dispute.reason, "report_type": form.cleaned_data["reason"], "target_image_id": form.cleaned_data["target_image"].pk if form.cleaned_data["target_image"] else None},
             )
             messages.success(request, "Review case opened. A moderator can now investigate it.")
             return redirect("accounts:my-disputes")
