@@ -120,6 +120,15 @@ class DirectDogEditForm(forms.ModelForm):
         if dog.pk and not self.is_bound:
             for name in ("sire", "dam", "kennel", "litter"):
                 self.fields[name + "_ref"].initial = str(getattr(dog, name + "_id") or "")
+                if name in {"sire", "dam"}:
+                    parent = getattr(dog, name)
+                    if parent:
+                        # Progressive enhancement: render the readable name in
+                        # the staff picker, while posting the unambiguous UUID.
+                        self.fields[name + "_ref"].widget.attrs.update({
+                            "data-current-parent-name": parent.name,
+                            "data-current-parent-id": str(parent.pk),
+                        })
 
     def clean(self):
         data = super().clean()
