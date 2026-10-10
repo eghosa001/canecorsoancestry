@@ -91,6 +91,17 @@ class StaffChangeVisibilityTests(TestCase):
         self.assertNotContains(response, 'id="publication-heading"')
         self.assertNotContains(response, 'class="dog-visibility-form"')
 
+    def test_status_colours_and_manage_dog_visibility_text(self):
+        self.client.force_login(self.owner)
+        url = reverse("accounts:dog-direct-edit", args=[self.dog.pk])
+        self.assertContains(self.client.get(url), "canonical-publication-badge--published")
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        self.assertContains(self.client.get(url), "canonical-publication-badge--unpublished")
+        self.assertContains(self.client.get(url), 'data-initially-public="false"')
+        manage = self.client.get(reverse("accounts:dog-edit-list"), {"q": self.dog.name})
+        self.assertContains(manage, "canonical-publication-badge--unpublished")
+
     def test_private_django_dog_publishes_and_updates_bio_in_same_save(self):
         self.dog.is_public = False
         self.dog.save(update_fields=["is_public"])
