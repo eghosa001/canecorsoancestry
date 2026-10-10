@@ -229,6 +229,9 @@ def _snapshot(dog):
             for field in fields:
                 column = model._meta.get_field(field).attname
                 row[column] = _safe_value(getattr(item, column))
+            if name == "titles":
+                for extra in ("issuer", "awarded_on", "verification_state", "certificate_document"):
+                    row[model._meta.get_field(extra).attname] = _safe_value(getattr(item, model._meta.get_field(extra).attname))
             rows.append(row)
         related[name] = rows
     return {"dog": base, "related": related}
