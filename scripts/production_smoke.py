@@ -102,6 +102,79 @@ def verify_featured_images(page, label):
     page.screenshot(path=OUT / f"{label}-featured.png", full_page=True)
 
 
+
+def verify_dog_portrait(page, label):
+    """Real browser contract for both managed galleries and source-only photos."""
+    gallery = page.locator("[data-dog-gallery]")
+    if gallery.count() != 1:
+        raise AssertionError(f"{label}: exactly one portrait gallery is required")
+
+    main = gallery.locator("[data-dog-photo-main]")
+    modal = page.locator("[data-dog-photo-dialog]")
+    opener = gallery.locator("[data-dog-photo-open]")
+    if not main.count():
+        if modal.count() or opener.count() or not gallery.locator(".dog-portrait-empty").count():
+            raise AssertionError(f"{label}: imageless profile shows an invalid photo viewer")
+        return
+
+    if not opener.count() or not modal.count():
+        raise AssertionError(f"{label}: visible photo needs both an opener and lightbox")
+    if not main.evaluate("img => img.complete && img.naturalWidth > 0"):
+        raise AssertionError(f"{label}: main photograph is not loaded")
+    assert_fidelity = main.evaluate("""img => {
+      const style = getComputedStyle(img);
+      const rect = img.getBoundingClientRect();
+      return {
+        fit: style.objectFit, transform: style.transform,
+        aspect: img.naturalWidth / img.naturalHeight,
+        displayed: rect.width / rect.height,
+      };
+    }""")
+    if assert_fidelity["fit"] != "contain" or assert_fidelity["transform"] != "none":
+        raise AssertionError(f"{label}: photo was cropped or scaled: {assert_fidelity}")
+    if abs(assert_fidelity["aspect"] - assert_fidelity["displayed"]) > .07:
+        raise AssertionError(f"{label}: photo aspect ratio was distorted: {assert_fidelity}")
+
+    thumbnails = gallery.locator("[data-dog-photo-thumb]")
+    if thumbnails.count() > 1:
+        second = thumbnails.nth(1)
+        expected = second.get_attribute("data-photo-src")
+        second.click()
+        if second.get_attribute("aria-pressed") != "true":
+            raise AssertionError(f"{label}: alternate photograph cannot be selected")
+        if main.get_attribute("src") != expected:
+            raise AssertionError(f"{label}: thumbnail did not update hero photograph")
+
+    opener.click()
+    if not modal.evaluate("dlg => dlg.open"):
+        raise AssertionError(f"{label}: full-screen photograph viewer did not open")
+    enlarged = modal.locator("[data-dog-lightbox-image]")
+    if not enlarged.get_attribute("src"):
+        raise AssertionError(f"{label}: lightbox rendered an empty image URL")
+    if not enlarged.evaluate("img => img.complete && img.naturalWidth > 0"):
+        page.wait_for_function(
+            "img => img.complete && img.naturalWidth > 0",
+            arg=enlarged.element_handle(), timeout=12_000,
+        )
+    if enlarged.evaluate("img => getComputedStyle(img).objectFit") != "contain":
+        raise AssertionError(f"{label}: full-screen photograph must never be cropped")
+    if thumbnails.count() > 1:
+        modal.locator("[data-dog-photo-prev]").click()
+        if modal.locator("[data-dog-lightbox-count]").inner_text().strip() != "1 / " + str(thumbnails.count()):
+            raise AssertionError(f"{label}: previous-photo navigation failed")
+        modal.locator("[data-dog-photo-next]").click()
+        if modal.locator("[data-dog-lightbox-count]").inner_text().strip() != "2 / " + str(thumbnails.count()):
+            raise AssertionError(f"{label}: next-photo navigation failed")
+    modal.locator("[data-dog-photo-zoom]").click()
+    if not modal.locator("[data-dog-photo-stage]").evaluate("el => el.classList.contains('is-zoomed')"):
+        raise AssertionError(f"{label}: user-initiated zoom is not working")
+    modal.locator("[data-dog-photo-close]").click()
+    if modal.evaluate("dlg => dlg.open"):
+        raise AssertionError(f"{label}: full-screen viewer did not close")
+    if not enlarged.get_attribute("src"):
+        raise AssertionError(f"{label}: closing viewer discarded the source and broke the image")
+
+
 def assert_visual_contrast(page, background_selector, foreground_selector, label, minimum=4.5):
     result = page.evaluate(
         """([backgroundSelector, foregroundSelector]) => {
@@ -462,6 +535,9 @@ def main():
             })""")
             if fidelity["fit"] != "contain" or fidelity["transform"] != "none":
                 raise AssertionError(f"Public dog photo is cropped or zoomed: {fidelity}")
+        if "Report an incorrect dog photograph" in detail_page.locator("body").inner_text():
+            raise AssertionError("Photo-report action is visible to logged-out visitors")
+        verify_dog_portrait(detail_page, "dog-profile-desktop")
         detail_page.screenshot(path=OUT / "dog-profile-desktop.png", full_page=True)
         report["details"].append({
             "dog_profile": detail_page.url,
@@ -470,6 +546,17 @@ def main():
             "edge_cache": dog_response.headers.get("x-cca-edge-cache") if dog_response else None,
         })
         detail_page.close()
+
+        # Compact phones are the main customer experience. Validate the real
+        # live dog portrait at 375px, not only homepage/search cards.
+        mobile_dog = browser.new_page(
+            viewport={"width": 375, "height": 812}, has_touch=True, is_mobile=True,
+        )
+        wait_for_real_app(mobile_dog, dog_path)
+        assert_page(mobile_dog, "dog-profile-375px", mobile=True)
+        verify_dog_portrait(mobile_dog, "dog-profile-375px")
+        mobile_dog.screenshot(path=OUT / "dog-profile-375px.png", full_page=True)
+        mobile_dog.close()
 
         pedigree_page = browser.new_page(viewport={"width": 1440, "height": 1000})
         wait_for_real_app(pedigree_page, "/pedigrees/")
