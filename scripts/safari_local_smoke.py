@@ -163,7 +163,7 @@ def run():
             # Wait for actual navigation instead of checking URL immediately.
             try:
                 page.wait_for_url(
-                    lambda url: "/accounts/login/" not in url.path,
+                    lambda url: "/accounts/login/" not in str(url),
                     timeout=15_000,
                     wait_until="domcontentloaded",
                 )
