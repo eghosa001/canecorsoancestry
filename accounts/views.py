@@ -2427,10 +2427,12 @@ def open_dispute(request, pk):
             "multipart": True,
             "dog": dog,
             "current_photo_url": _current_dog_photo_url(dog),
-            "photo_report_choices": list(
-                DogImage.objects.filter(dog=dog).order_by(
+            "photo_report_choices": (
+                list(DogImage.objects.filter(dog=dog).order_by(
                     "-is_primary", "sort_order", "created_at",
-                )[:12]
+                )[:12])
+                if (request.GET.get("reason") == "photo" or
+                    request.POST.get("reason") == "photo") else []
             ),
         },
     )
