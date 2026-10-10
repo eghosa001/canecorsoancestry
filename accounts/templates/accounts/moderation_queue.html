@@ -178,15 +178,33 @@
             <h3>{{ dispute.dog.name }}</h3>
             <p>{{ dispute.details }}</p>
             <small>Opened by {{ dispute.opened_by }} · {{ dispute.created_at|date:"d M Y, H:i" }}{% if dispute.assigned_to %} · Assigned to {{ dispute.queue_assignee_label }}{% endif %}</small>
+            {% if dispute.reason == "photo" %}
+              {% if dispute.target_image %}<p><strong>Reported image:</strong> <a href="{{ dispute.target_image.image.url }}" target="_blank" rel="noopener">View exact disputed photograph</a></p>
+              {% else %}<p>Imported or unlinked image: staff must inspect the original source before making any changes.</p>{% endif %}
+            {% endif %}
             {% if dispute.attachment %}<a class="text-link" href="{{ dispute.attachment.url }}">Open evidence →</a>{% endif %}
           </div>
           <div class="dispute-actions">
             <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'assign' %}">{% csrf_token %}<button class="btn btn-outline" type="submit">Assign to me</button></form>
+            {% if dispute.reason == "photo" and dispute.target_image %}
+            <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'remove_photo' %}">
+              {% csrf_token %}
+              <textarea name="resolution_notes" rows="2" required placeholder="Evidence supporting photo removal" aria-label="Photo removal evidence"></textarea>
+              <button class="btn btn-outline" type="submit" onclick="return confirm('Remove this incorrect dog image from the public profile?');">Remove wrong photo</button>
+            </form>
+            {% if dispute.attachment %}
+            <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'replace_photo' %}">
+              {% csrf_token %}
+              <textarea name="resolution_notes" rows="2" required placeholder="Evidence supporting photo replacement" aria-label="Photo replacement evidence"></textarea>
+              <button class="btn btn-gold" type="submit" onclick="return confirm('Publish the reviewed replacement image?');">Approve replacement photo</button>
+            </form>
+            {% endif %}
+            {% elif dispute.reason != "photo" %}
             <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'resolve' %}">
               {% csrf_token %}
               <textarea name="resolution_notes" rows="2" placeholder="Resolution note" aria-label="Dispute resolution note"></textarea>
               <button class="btn btn-gold" type="submit">Resolve</button>
-            </form>
+            </form>{% endif %}
             <form method="post" action="{% url 'accounts:review-dispute' dispute.pk 'dismiss' %}">
               {% csrf_token %}
               <textarea name="resolution_notes" rows="2" placeholder="Reason for dismissal" aria-label="Reason for dismissing dispute"></textarea>
