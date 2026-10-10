@@ -520,6 +520,10 @@ class DogTitle(models.Model):
     dog = models.ForeignKey(Dog, on_delete=models.CASCADE, related_name="titles")
     name = models.CharField(max_length=160)
     source_text = models.CharField(max_length=220, blank=True)
+    issuer = models.CharField(max_length=160, blank=True)
+    awarded_on = models.DateField(blank=True, null=True)
+    verification_state = models.CharField(max_length=20, choices=VerificationState.choices, default=VerificationState.COMMUNITY)
+    certificate_document = models.ForeignKey("DogDocument", null=True, blank=True, on_delete=models.SET_NULL, related_name="supported_titles")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1026,6 +1030,7 @@ class DogDocument(models.Model):
         HEALTH = "health", "Health"
         REGISTRATION = "registration", "External registration"
         DNA = "dna", "DNA"
+        TITLE_CERTIFICATE = "title_certificate", "Club title certificate"
         OTHER = "other", "Other"
 
     dog = models.ForeignKey(Dog, on_delete=models.CASCADE, related_name="documents")
@@ -1065,6 +1070,7 @@ class DisputeCase(models.Model):
         HEALTH = "health", "Health/DNA information"
         OWNERSHIP = "ownership", "Kennel/ownership information"
         DUPLICATE = "duplicate", "Possible duplicate dog"
+        PHOTO = "photo", "Incorrect dog photograph"
         OTHER = "other", "Other"
 
     class Status(models.TextChoices):
@@ -1086,6 +1092,7 @@ class DisputeCase(models.Model):
     )
     details = models.TextField()
     attachment = models.FileField(upload_to="disputes/%Y/%m/", blank=True)
+    target_image = models.ForeignKey(DogImage, null=True, blank=True, on_delete=models.SET_NULL, related_name="photo_disputes")
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
