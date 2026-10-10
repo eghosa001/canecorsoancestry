@@ -956,7 +956,7 @@ class DisputeForm(forms.Form):
         validators=[
             validate_document_upload,
         ],
-        help_text="Optional pedigree, certificate, screenshot or other supporting evidence, including photos from phones and cameras.",
+        help_text="For a wrong-photo report, upload only a genuine proposed replacement dog photo (optional), not a screenshot. For other disputes, attach supporting evidence.",
     )
 
     def clean_attachment(self):
