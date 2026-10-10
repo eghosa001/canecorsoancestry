@@ -108,13 +108,13 @@
         <dd>
           {% if coi_percent != None %}
             <strong>{% if coi_below_display_precision %}&lt;0.01%{% else %}{{ coi_percent|floatformat:2 }}%{% endif %}</strong>
-            <small class="profile-coi-context">{% if coi_percent == 0 %}No common ancestor in linked records{% else %}Based on linked, published ancestors{% endif %}</small>
+            <small class="profile-coi-context">{% if coi_percent == 0 %}No common ancestor in linked records{% else %}Based on linked, published ancestors{% endif %}. Missing ancestors can make the estimate too low.</small>
           {% elif coi_display_state == "insufficient" %}
             <strong>Not enough ancestry</strong>
-            <small class="profile-coi-context">Both parents are needed</small>
+            <small class="profile-coi-context">Both parents are needed. {{ coi_error }}</small>
           {% else %}
             <strong>Cannot calculate</strong>
-            <small class="profile-coi-context">Pedigree links need review</small>
+            <small class="profile-coi-context">Pedigree links need review. {{ coi_error }}</small>
           {% endif %}
         </dd>
         <dt>Country</dt><dd>{{ dog.country|default:"Not recorded" }}</dd>
