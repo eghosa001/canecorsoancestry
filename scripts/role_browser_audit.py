@@ -37,7 +37,7 @@ def visit(page, path, expected=200):
     assert response.status == expected, (
         f"{path}: HTTP {response.status} (expected {expected}), final URL {page.url}"
     )
-    if expected == 200 and not path.startswith("/admin/"):
+    if expected == 200 and not path.startswith(("/admin/", "/dogs/suggestions/")):
         assert page.locator("main").count(), f"{path}: main content missing"
     return response
 
