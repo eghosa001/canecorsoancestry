@@ -64,12 +64,19 @@ Dog.objects.create(
     name="Browser Audit Private", slug="browser-audit-private",
     sex=Dog.Sex.MALE, is_public=False, kennel=kennel,
 )
+duplicate = Dog.objects.create(
+    name="Browser Audit Sire Copy", slug="browser-audit-sire-copy",
+    sex=Dog.Sex.MALE, is_public=True, kennel=kennel,
+)
 submission = Submission.objects.create(
     kind=Submission.Kind.KENNEL_CREATE,
     submitted_by=U.objects.get(pk=roles["member"]["id"]),
     payload={"name": "Browser Pending Kennel", "slug": "browser-pending-kennel"},
 )
-payload = {"roles": roles, "submission_id": str(submission.pk)}
+payload = {
+    "roles": roles, "submission_id": str(submission.pk),
+    "merge_canonical": str(sire.pk), "merge_duplicate": str(duplicate.pk),
+}
 path = Path("/tmp/cca-playwright-audit-credentials.json")
 path.write_text(json.dumps(payload))
 path.chmod(0o600)
