@@ -644,7 +644,7 @@ class DogDocumentSubmissionForm(forms.Form):
 
     def clean(self):
         values = super().clean()
-        if (values.get("document_type") == DogDocument.DocumentType.TITLE_CERTIFICATE
+        if (values.get("document_type") == "title_certificate"
                 and not (values.get("achievement_title") or "").strip()):
             self.add_error("achievement_title", "Please enter the title shown on the document.")
         return values
@@ -958,7 +958,7 @@ class DisputeForm(forms.Form):
 
     def clean(self):
         values = super().clean()
-        if values.get("reason") == DisputeCase.Reason.PHOTO:
+        if values.get("reason") == "photo":
             uploaded = values.get("attachment")
             if uploaded and not uploaded.name.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
                 self.add_error("attachment", "A suggested replacement must be an image, not a PDF.")
