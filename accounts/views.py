@@ -2360,7 +2360,11 @@ def open_dispute(request, pk):
         Dog.objects.filter(Q(is_public=True) | Q(kennel_id__in=kennel_ids)).distinct(),
         pk=pk,
     )
-    form = DisputeForm(request.POST or None, request.FILES or None)
+    form = DisputeForm(
+        request.POST or None, request.FILES or None, dog=dog,
+        initial={"reason": DisputeCase.Reason.PHOTO}
+        if request.GET.get("reason") == DisputeCase.Reason.PHOTO else None,
+    )
     if request.method == "POST" and form.is_valid():
         try:
             with transaction.atomic():
@@ -2369,6 +2373,7 @@ def open_dispute(request, pk):
                     opened_by=request.user,
                     reason=form.cleaned_data["reason"],
                     details=form.cleaned_data["details"],
+                    target_image=form.cleaned_data["target_image"],
                     attachment=form.cleaned_data["attachment"] or "",
                 )
         except (OSError, urllib.error.URLError) as exc:
@@ -2392,7 +2397,7 @@ def open_dispute(request, pk):
             "form": form,
             "eyebrow": "Dispute / review case",
             "title": f"Request review · {dog.name}",
-            "intro": "Report a specific pedigree, identity, health, ownership or duplicate concern. Opening a case does not alter the canonical record.",
+            "intro": "Report an incorrect photo, disputed pedigree, identity, health or ownership. For photos, choose the wrong image and optionally upload the correct one. Nothing changes publicly until staff review.",
             "button_label": "Open review case",
             "multipart": True,
         },
