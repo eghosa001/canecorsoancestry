@@ -1,0 +1,69 @@
+name: One-time approved pedigree reconciliation
+
+on:
+  workflow_run:
+    workflows: ["Oracle Django production release (CI-gated)"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+# A temporary, explicitly approved production-data operation, not a recurring
+# health check. Remove this workflow immediately after a successful execution.
+concurrency:
+  group: cca-approved-pedigree-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: >-
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_sha == github.sha
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 15
+    steps:
+      - name: Check production database is the Oracle-local primary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = aarch64
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = local
+          sudo -n systemctl is-active --quiet cca-oracle-staging.service
+          sudo -n systemctl is-active --quiet cca-pg-shadow.service
+          sudo -n podman exec cca-oracle-staging python manage.py migrate --check
+          sudo -n podman exec cca-oracle-staging python manage.py shell -c "
+          from registry.models import Dog
+          total = Dog.objects.count()
+          assert total >= 33000, 'Unexpected database; stopping'
+          print(f'Confirmed Oracle-local primary with {total} dogs')
+          "
+
+      - name: Verify all ten registration-backed ancestry pairs before any write
+        run: |
+          set -euo pipefail
+          sudo -n podman exec cca-oracle-staging python manage.py reconcile_verified_coi_candidates
+
+      - name: Atomically reconcile only the ten approved identities
+        run: |
+          set -euo pipefail
+          sudo -n podman exec cca-oracle-staging python manage.py reconcile_verified_coi_candidates --apply
+
+      - name: Verify merge idempotency and live pedigree integrity
+        run: |
+          set -euo pipefail
+          sudo -n podman exec cca-oracle-staging python manage.py reconcile_verified_coi_candidates
+          sudo -n podman exec cca-oracle-staging python manage.py audit_pedigree_data --fail-on-critical
+          sudo -n podman exec cca-oracle-staging python manage.py audit_production_invariants --fail-on-critical
+          sudo -n podman exec cca-oracle-staging python manage.py shell -c "
+          from registry.models import Dog, DogExternalKey
+          slugs = ('mia-olimpo-osiride', 'plutone', 'aragon',
+                   'rothorm-jy-dream-runaway', 'divina',
+                   'lithium-dellantiqua-apulia', 'anticos-echo',
+                   'fuoco-della-nevaia', 'enza-degli-elmi', 'warrior')
+          rows = list(Dog.objects.filter(slug__in=slugs).only('pk','slug','sire_id','dam_id'))
+          assert len(rows) == len(slugs), 'Missing canonical record'
+          assert all(row.sire_id and row.dam_id for row in rows), 'Parentage not restored'
+          print(f'PASS: {len(rows)} canonical dogs retain two recorded parents')
+          "
