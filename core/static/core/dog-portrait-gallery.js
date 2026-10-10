@@ -139,6 +139,7 @@
   });
   dialog.addEventListener("close", () => {
     resetZoom();
-    enlarged.removeAttribute("src");
+    // Keep a valid image URL on hidden dialog markup; missing src is seen as
+    // a broken image by browsers, assistive tools and production image checks.
   });
 })();

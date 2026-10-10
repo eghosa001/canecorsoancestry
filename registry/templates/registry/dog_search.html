@@ -57,7 +57,7 @@
       <a class="search-result-card{% if not dog.card_image_url and not dog.source_image_url %} no-media{% endif %}" href="{% url 'registry:dog-detail' dog.slug %}?source=search">
         {% if dog.card_image_url or dog.source_image_url %}
           <div class="search-result-media">
-            {% if dog.card_image_url %}<img src="{{ dog.card_image_url }}?v=20261002-2" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async">{% else %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% endif %}
+            {% if dog.card_image_url %}<img src="{{ dog.card_image_url }}?v=20261002-2" alt="{{ dog.name }}" width="84" height="84" loading="lazy" decoding="async">{% else %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="84" height="84" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% endif %}
           </div>
         {% endif %}
         <div class="search-result-main">

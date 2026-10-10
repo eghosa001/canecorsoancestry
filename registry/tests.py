@@ -26,6 +26,7 @@ class DogModelTests(TestCase):
         DogImage.objects.create(dog=dog, image="dogs/karma.jpg", is_primary=True)
         response = self.client.get(reverse("registry:dog-search"), {"q": "Karma"})
         self.assertContains(response, "Karma Custodi Nos")
+        self.assertContains(response, 'width="84" height="84"')
 
     def test_public_search_is_paginated(self):
         for index in range(25):
@@ -168,6 +169,7 @@ class DogModelTests(TestCase):
             response,
             "https://canecorsopedigree.com/static/images/animal/source-image.jpg",
         )
+        self.assertContains(response, 'width="84" height="84"')
 
     def test_public_search_shows_record_but_not_untrusted_source_photo(self):
         dog = Dog.objects.create(
@@ -229,6 +231,9 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-dog-gallery')
         self.assertContains(response, 'data-dog-photo-dialog')
+        lightbox_markup = response.content.decode("utf-8").split("data-dog-lightbox-image", 1)[1].split(">", 1)[0]
+        self.assertIn('src="', lightbox_markup)
+        self.assertNotIn('src=""', lightbox_markup)
         self.assertContains(response, 'data-dog-photo-open')
         self.assertContains(response, 'data-photo-caption="Side profile"')
         self.assertContains(response, 'aria-pressed="true"')
@@ -257,6 +262,9 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, url)
         self.assertContains(response, 'data-dog-photo-dialog')
+        lightbox_markup = response.content.decode("utf-8").split("data-dog-lightbox-image", 1)[1].split(">", 1)[0]
+        self.assertIn('src="', lightbox_markup)
+        self.assertNotIn('src=""', lightbox_markup)
         self.assertContains(response, 'referrerpolicy="no-referrer"')
         self.assertNotContains(response, 'data-dog-photo-thumb')
         self.assertContains(response, 'href="#photos"')
