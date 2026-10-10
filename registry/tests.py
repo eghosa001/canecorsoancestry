@@ -891,15 +891,46 @@ class DogModelTests(TestCase):
 
 
 
-    def test_profile_zero_coi_is_displayed_but_not_misrepresented_as_full_coverage(self):
+    def test_profile_with_unlinked_parents_does_not_report_false_zero(self):
         no_parents = Dog.objects.create(
             name="Unlinked COI Dog", slug="unlinked-coi-dog", is_public=True
         )
-        response = self.client.get(reverse("registry:dog-detail", args=[no_parents.slug]))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "0.00%")
-        self.assertContains(response, "incomplete public parentage")
-        self.assertContains(response, "does not prove no inbreeding")
+        with self.assertNumQueries(1):
+            response = self.client.get(reverse("registry:dog-detail", args=[no_parents.slug]))
+        self.assertContains(response, "Not enough ancestry")
+        self.assertContains(response, "Both parents are needed")
+        self.assertNotContains(response, "<strong>0.00%</strong>")
+        self.assertContains(response, "Both sire and dam must be linked and published")
+
+    def test_profile_with_unpublished_parent_does_not_report_false_zero(self):
+        hidden = Dog.objects.create(name="Hidden Sire", slug="hidden-coi-sire", is_public=False)
+        dam = Dog.objects.create(name="Public Dam", slug="public-coi-dam", is_public=True)
+        child = Dog.objects.create(
+            name="Unpublished COI Parent", slug="unpublished-coi-parent",
+            sire=hidden, dam=dam, is_public=True,
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[child.slug]))
+        self.assertContains(response, "Not enough ancestry")
+        self.assertNotContains(response, "<strong>0.00%</strong>")
+
+    def test_profile_two_published_unrelated_parents_has_recorded_zero(self):
+        sire = Dog.objects.create(name="Unrelated Father", slug="unrelated-coi-father", is_public=True)
+        dam = Dog.objects.create(name="Unrelated Mother", slug="unrelated-coi-mother", is_public=True)
+        child = Dog.objects.create(name="Unrelated Child", slug="unrelated-coi-child",
+                                   sire=sire, dam=dam, is_public=True)
+        response = self.client.get(reverse("registry:dog-detail", args=[child.slug]))
+        self.assertContains(response, "<strong>0.00%</strong>")
+        self.assertContains(response, "No common ancestor in linked records")
+
+    def test_profile_tiny_positive_coi_does_not_round_to_zero(self):
+        sire = Dog.objects.create(name="Tiny Father", slug="tiny-coi-father", is_public=True)
+        dam = Dog.objects.create(name="Tiny Mother", slug="tiny-coi-mother", is_public=True)
+        child = Dog.objects.create(name="Tiny COI Child", slug="tiny-coi-child",
+                                   sire=sire, dam=dam, is_public=True)
+        with patch("registry.views.inbreeding_coefficient", return_value=0.00002):
+            response = self.client.get(reverse("registry:dog-detail", args=[child.slug]))
+        self.assertContains(response, "<strong>&lt;0.01%</strong>")
+        self.assertNotContains(response, "<strong>0.00%</strong>")
 
     def test_profile_coi_excludes_private_ancestry(self):
         ancestor = Dog.objects.create(
