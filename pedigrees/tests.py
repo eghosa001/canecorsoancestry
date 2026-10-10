@@ -490,6 +490,44 @@ class PedigreeServiceTests(TestCase):
         )
         self.assertGreater(analysis["ancestor_loss_percent"], 0)
 
+    def test_public_pedigree_with_no_parents_does_not_show_false_zero(self):
+        dog = Dog.objects.create(
+            name="Unknown Pedigree", slug="unknown-coi-pedigree", is_public=True
+        )
+        response = self.client.get(reverse("pedigrees:detail", args=[dog.slug]))
+        self.assertContains(response, "Not enough ancestry")
+        self.assertNotContains(response, 'class="analysis-number">0.00%')
+
+    def test_deep_ancestry_change_updates_coi_even_when_board_cache_hits(self):
+        cache.clear()
+        common = Dog.objects.create(name="Shared Deep Dog", slug="shared-deep-dog", is_public=True)
+        sire = Dog.objects.create(name="Deep Sire", slug="deep-sire", is_public=True)
+        dam = Dog.objects.create(name="Deep Dam", slug="deep-dam", is_public=True)
+        subject = Dog.objects.create(name="Deep Subject", slug="deep-subject",
+                                     sire=sire, dam=dam, is_public=True)
+        tails = []
+        for side, root in (("sire", sire), ("dam", dam)):
+            previous = root
+            for generation in range(1, 6):
+                ancestor = Dog.objects.create(
+                    name=f"{side} G{generation}",
+                    slug=f"{side}-deep-g{generation}", is_public=True
+                )
+                previous.sire = ancestor
+                previous.save(update_fields=["sire"])
+                previous = ancestor
+            tails.append(previous)
+
+        first = pedigree_analysis(subject, generations=4, public_only=True)
+        self.assertEqual(first["coi_percent"], 0.0)
+        for tail in tails:
+            tail.sire = common
+            tail.save(update_fields=["sire"])
+        second = pedigree_analysis(subject, generations=4, public_only=True)
+        self.assertTrue(second["cache_hit"])
+        self.assertEqual(second["revision_key"], first["revision_key"])
+        self.assertGreater(second["coi_percent"], 0.0)
+
     def test_analysis_cache_is_revision_keyed(self):
         cache.clear()
         sire = Dog.objects.create(name="Sire", slug="cache-sire")

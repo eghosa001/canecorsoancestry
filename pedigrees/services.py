@@ -1193,15 +1193,6 @@ def _analysis_payload(snapshot):
     known_slots = len(occurrences)
     deepest_known = max(known_by_generation, default=0)
 
-    try:
-        coi_percent = inbreeding_coefficient(
-            snapshot["dog"], public_only=snapshot["public_only"]
-        ) * 100
-        cycle_error = ""
-    except PedigreeCycleError:
-        coi_percent = None
-        cycle_error = "This pedigree contains a parent cycle and cannot be analysed safely."
-
     unique_ancestor_count = len(rows)
     ancestor_retention_percent = (
         unique_ancestor_count / known_slots * 100 if known_slots else 100.0
@@ -1209,8 +1200,6 @@ def _analysis_payload(snapshot):
     ancestor_loss_percent = max(0.0, 100.0 - ancestor_retention_percent)
 
     return {
-        "coi_percent": coi_percent,
-        "cycle_error": cycle_error,
         "coverage_percent": (known_slots / total_slots * 100) if total_slots else 0.0,
         "known_slots": known_slots,
         "total_slots": total_slots,
@@ -1228,6 +1217,40 @@ def _analysis_payload(snapshot):
             }
             for generation in range(1, generations + 1)
         ],
+    }
+
+
+def _current_analysis_coi(snapshot):
+    """Recalculate COI from all currently linked ancestors, independent of board cache.
+
+    The ancestor summary caches only the requested visible generations. The COI
+    can change when a deeper ancestor is approved or re-linked, even if those
+    visible generations (and the summary cache key) do not change.
+    """
+    visible_parents = snapshot["layers"][1]
+    if not all(visible_parents):
+        return {
+            "coi_percent": None,
+            "coi_below_display_precision": False,
+            "coi_status": "insufficient",
+            "cycle_error": "",
+        }
+    try:
+        percent = inbreeding_coefficient(
+            snapshot["dog"], public_only=snapshot["public_only"]
+        ) * 100.0
+    except PedigreeCycleError:
+        return {
+            "coi_percent": None,
+            "coi_below_display_precision": False,
+            "coi_status": "error",
+            "cycle_error": "A pedigree cycle prevents COI calculation.",
+        }
+    return {
+        "coi_percent": percent,
+        "coi_below_display_precision": 0 < percent < 0.005,
+        "coi_status": "estimated",
+        "cycle_error": "",
     }
 
 
@@ -1266,6 +1289,7 @@ def pedigree_analysis(dog, generations=4, public_only=False):
 
     return {
         **payload,
+        **_current_analysis_coi(snapshot),
         "layers": _layers_from_snapshot(snapshot),
         "contributions": contributions,
         "linebreeding": linebreeding,
