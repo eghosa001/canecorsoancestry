@@ -96,6 +96,31 @@ jobs:
               dam_ok = bool(dog.dam and dog.dam.is_public)
               percent = round(inbreeding_coefficient(dog, public_only=True) * 100, 6) if sire_ok and dam_ok else None
               print(f'COI record: name={dog.name!r} slug={dog.slug} sire_public={sire_ok} dam_public={dam_ok} coi_percent={percent}')
+              if sire_ok and dam_ok:
+                  from pedigrees.services import _pedigree_links
+                  links = _pedigree_links(dog, public_only=True)
+                  def connected(root):
+                      found = set()
+                      stack = [root]
+                      while stack:
+                          current = stack.pop()
+                          if current not in links or current in found:
+                              continue
+                          found.add(current)
+                          stack.extend(p for p in links[current] if p in links and p not in found)
+                      return found
+                  sire_links = connected(dog.sire_id)
+                  dam_links = connected(dog.dam_id)
+                  shared = sire_links & dam_links
+                  print(f'COI trace: sire={dog.sire.name!r} dam={dog.dam.name!r} sire_nodes={len(sire_links)} dam_nodes={len(dam_links)} shared_canonical_ids={len(shared)}')
+                  nodes = list(Dog.objects.filter(pk__in=sire_links | dam_links).values('id', 'name', 'normalized_name'))
+                  sire_names = {p['normalized_name'] for p in nodes if p['id'] in sire_links and p['normalized_name']}
+                  dam_names = {p['normalized_name'] for p in nodes if p['id'] in dam_links and p['normalized_name']}
+                  same_names = sorted(sire_names & dam_names)
+                  print(f'COI trace possible separate-ID name matches: {same_names[:12]} (total={len(same_names)})')
+                  for parent in (dog.sire, dog.dam):
+                      known = sum(bool(p) for p in links.get(parent.pk, ()))
+                      print(f'COI parent status: {parent.name!r} known_parent_links={known}')
           "
       - name: Verify one production dog image end to end
         shell: bash
