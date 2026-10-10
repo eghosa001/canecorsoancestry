@@ -160,6 +160,12 @@ def run():
             assert "2 / 2" in modal.locator("[data-dog-lightbox-count]").inner_text()
             modal.locator("[data-dog-photo-prev]").click()
             assert "safari-landscape.jpg" in modal.locator("[data-dog-lightbox-image]").get_attribute("src")
+            # An unzoomed photograph must not have an identity GPU transform
+            # or flicker when Safari sends viewport-resize events.
+            fitted = modal.locator("[data-dog-lightbox-image]")
+            assert fitted.evaluate("img => getComputedStyle(img).transform") == "none"
+            page.evaluate("window.dispatchEvent(new Event('resize'))")
+            assert fitted.evaluate("img => getComputedStyle(img).transform") == "none"
             modal.locator("[data-dog-photo-zoom]").click()
             assert modal.locator("[data-dog-photo-stage]").evaluate(
                 "el => el.classList.contains('is-zoomed')"
