@@ -459,9 +459,11 @@ def dog_set_public_visibility(request, pk):
             # Respect ancestry cycle/identity validations before exposing facts.
             dog.full_clean()
             before = _snapshot(dog)
+            before["publication"] = {"is_public": dog.is_public}
             dog.is_public = make_public
             dog.save(update_fields=["is_public", "updated_at"])
             after = _snapshot(dog)
+            after["publication"] = {"is_public": dog.is_public}
             record_audit(
                 action=ModerationAudit.Action.RECORD_CHANGED,
                 actor=request.user, dog=dog, kennel=dog.kennel,
