@@ -175,9 +175,10 @@
           </div>
           <button class="dog-photo-lightbox-nav" type="button" data-dog-photo-next aria-label="Next photograph" {% if dog.display_images|length <= 1 %}hidden{% endif %}>›</button>
         </div>
-        <p class="dog-photo-lightbox-caption" data-dog-lightbox-caption>
-          <span data-dog-photo-help>Swipe down to close · Pinch to zoom · Drag to explore · Tap photo to return</span>
-        </p>
+        <div class="dog-photo-lightbox-caption" data-dog-lightbox-caption>
+          <span data-dog-lightbox-caption-text></span>
+          <small data-dog-photo-help>Swipe down to close · Pinch or double-tap to zoom · Drag when zoomed · Tap to return</small>
+        </div>
       </div>
     </dialog>
   {% endif %}
