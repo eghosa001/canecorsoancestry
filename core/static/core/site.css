@@ -396,6 +396,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
 }
 .profile-facts dt, .compact-facts dt { color: var(--muted); }
 .profile-facts dd, .compact-facts dd { margin: 0; }
+.profile-facts dd { min-width: 0; overflow-wrap: anywhere; }
 .profile-tabs {
   margin: 22px 0;
   padding: 0 8px;
@@ -591,7 +592,6 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   .hero-search input, .hero-search button { width: 100%; min-height: 50px; }
   .dashboard-sidebar nav { grid-template-columns: 1fr; }
   .profile-facts { grid-template-columns: minmax(88px, 108px) minmax(0, 1fr); column-gap: 12px; row-gap: 10px; }
-  .profile-facts dd { min-width: 0; overflow-wrap: anywhere; }
   .compact-facts { grid-template-columns: 1fr; }
 }
 
