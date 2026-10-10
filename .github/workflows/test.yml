@@ -103,6 +103,10 @@ jobs:
 
           if grep -Eq '^accounts/.*\.py$' <<<"$changed"; then
             scoped_accounts=false
+            if grep -q "^accounts/tests_owner_feedback_fixes[.]py$" <<<"$changed"; then
+              targets+=("accounts.tests_owner_feedback_fixes")
+              scoped_accounts=true
+            fi
 
             if grep -q '^accounts/tests_workspace_navigation[.]py$' <<<"$changed"; then
               targets+=("accounts.tests_workspace_navigation")
