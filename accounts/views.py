@@ -1167,8 +1167,8 @@ def submit_document(request, pk):
 
     form = DogDocumentSubmissionForm(
         request.POST or None, request.FILES or None,
-        initial={"document_type": DogDocument.DocumentType.TITLE_CERTIFICATE}
-        if request.GET.get("type") == DogDocument.DocumentType.TITLE_CERTIFICATE else None,
+        initial={"document_type": "title_certificate"}
+        if request.GET.get("type") == "title_certificate" else None,
     )
     if request.method == "POST" and form.is_valid():
         try:
@@ -2363,8 +2363,8 @@ def open_dispute(request, pk):
     )
     form = DisputeForm(
         request.POST or None, request.FILES or None, dog=dog,
-        initial={"reason": DisputeCase.Reason.PHOTO}
-        if request.GET.get("reason") == DisputeCase.Reason.PHOTO else None,
+        initial={"reason": "photo"}
+        if request.GET.get("reason") == "photo" else None,
     )
     if request.method == "POST" and form.is_valid():
         try:
@@ -2541,7 +2541,7 @@ def review_dispute(request, pk, decision):
             dispute.assigned_to = request.user
             dispute.status = DisputeCase.Status.REVIEWING
         elif decision in {"replace_photo", "remove_photo"}:
-            if dispute.reason != DisputeCase.Reason.PHOTO:
+            if dispute.reason != "photo":
                 messages.error(request, "Only an incorrect-photo case can change a dog photograph.")
                 return redirect("accounts:moderation")
             if not note:
@@ -2586,7 +2586,7 @@ def review_dispute(request, pk, decision):
             dispute.closed_at = timezone.now()
             invalidate_public_content()
         elif decision == "resolve":
-            if dispute.reason == DisputeCase.Reason.PHOTO:
+            if dispute.reason == "photo":
                 messages.error(request, "A photo report must result in a reviewed photo correction or be dismissed with a reason.")
                 return redirect("accounts:moderation")
             if not note:
