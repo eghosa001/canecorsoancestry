@@ -377,7 +377,7 @@ def _public_profile_dog(slug):
         if dog._has_profile_registrations else []
     )
     dog.display_titles = (
-        list(DogTitle.objects.filter(dog=dog).order_by("name"))
+        list(DogTitle.objects.filter(dog=dog).select_related("certificate_document").order_by("name"))
         if dog._has_profile_titles else []
     )
     dog.display_documents = (
