@@ -65,6 +65,8 @@ jobs:
         run: sudo -n podman exec cca-oracle-staging python manage.py audit_production_invariants --fail-on-critical
       - name: Verify previously reconciled ancestors (read-only)
         run: sudo -n podman exec cca-oracle-staging python manage.py reconcile_known_ancestors
+      - name: Detect registration-backed duplicate ancestors for staff review
+        run: sudo -n podman exec cca-oracle-staging python manage.py audit_coi_duplicate_candidates --limit 15
       - name: Check published live COI
         run: |
           sudo -n podman exec cca-oracle-staging python manage.py shell -c "
