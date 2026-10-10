@@ -76,9 +76,13 @@ class VerifiedCOIReconciliationTests(TestCase):
         self.assertTrue(Dog.objects.filter(pk=self.archive.pk).exists())
 
     def test_parent_pair_collision_is_blocked(self):
-        Dog.objects.create(
-            name="Conflict Child", slug="conflict-child",
-            sire=self.canonical, dam=self.archive, is_public=True,
+        child = Dog.objects.create(
+            name="Conflict Child", slug="conflict-child", is_public=True,
+        )
+        # Deliberately corrupt a relationship to confirm the merge refuses
+        # to collapse a child's sire/dam into the same canonical record.
+        Dog.objects.filter(pk=child.pk).update(
+            sire=self.canonical, dam=self.archive,
         )
         with self.assertRaisesMessage(CommandError, "parent-pair conflict"):
             call_command("reconcile_verified_coi_candidates", only=self.slug, apply=True)
