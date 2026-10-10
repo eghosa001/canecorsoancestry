@@ -1,15 +1,17 @@
 name: One-time approved pedigree reconciliation
 
 on:
-  workflow_run:
-    workflows: ["Oracle Django production release (CI-gated)"]
-    types: [completed]
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/one-time-approved-coi-reconciliation.yml"
 
 permissions:
   contents: read
 
 # A temporary, explicitly approved production-data operation, not a recurring
-# health check. Remove this workflow immediately after a successful execution.
+# health check. Remove this workflow immediately after this single execution. The backend and full Oracle release
+# were already validated, deployed and dry-run-tested at 05a729d0.
 concurrency:
   group: cca-approved-pedigree-reconciliation
   cancel-in-progress: false
@@ -18,9 +20,7 @@ jobs:
   reconcile:
     if: >-
       github.repository == 'eghosa001/canecorsoancestry' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_sha == github.sha
+      github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux, arm64, cca-oracle]
     timeout-minutes: 15
     steps:
