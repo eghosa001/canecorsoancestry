@@ -1029,6 +1029,10 @@ class DisputeForm(forms.Form):
 
     def clean(self):
         values = super().clean()
+        if values.get("target_field") == "photo":
+            # A report about the photograph must enter the photo moderation
+            # branch even if the member left a different category selected.
+            values["reason"] = "photo"
         if values.get("reason") == "photo":
             if values.get("target_field") not in ("", "photo"):
                 self.add_error("target_field", "A photograph report must target a dog photograph.")
