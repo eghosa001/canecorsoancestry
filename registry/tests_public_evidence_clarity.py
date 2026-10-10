@@ -48,3 +48,16 @@ class PublicEvidenceClarityTests(TestCase):
         self.assertNotContains(response, "CaneCorsoPedigree.com")
         self.assertNotContains(response, "Snapshot 2026-09-15")
         self.assertEqual(image.caption, caption)  # Retain for internal review.
+        self.assertEqual(image.public_caption, "")
+
+    def test_real_photo_description_stays_visible(self):
+        dog = Dog.objects.create(
+            name="Portrait Dog", slug="portrait-dog", is_public=True,
+        )
+        image = DogImage.objects.create(
+            dog=dog, image="dogs/portrait.jpg",
+            caption="Side portrait", is_primary=True,
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertEqual(image.public_caption, "Side portrait")
+        self.assertContains(response, "Side portrait")
