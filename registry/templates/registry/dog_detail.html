@@ -16,7 +16,7 @@
       {% if dog.display_images or dog.source_image_url %}
         <div class="dog-portrait-heading">
           <span class="dog-portrait-eyebrow">Portrait archive</span>
-          <span class="dog-portrait-count" data-dog-photo-count>
+          <span class="dog-portrait-count" data-dog-photo-count aria-live="polite">
             {% if dog.display_images %}1 of {{ dog.display_images|length }}{% else %}1 of 1{% endif %}
           </span>
         </div>
@@ -63,6 +63,13 @@
               </button>
             {% endfor %}
           </div>
+          <noscript>
+            <nav class="dog-portrait-nojs" aria-label="Open full-size dog photos">
+              {% for photo in dog.display_images %}
+                <a href="{{ photo.image.url }}" target="_blank" rel="noopener">Open photo {{ forloop.counter }}</a>
+              {% endfor %}
+            </nav>
+          </noscript>
         {% endif %}
       {% else %}
         <div class="media-placeholder large">CCA</div>
