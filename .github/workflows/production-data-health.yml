@@ -109,7 +109,7 @@ import sys
 from pathlib import Path
 html = Path(sys.argv[1]).read_text(encoding='utf-8')
 expected = sys.argv[2]
-assert re.search(r'<strong[^>]*>\\s*' + re.escape(expected) + r'\\s*</strong>', html), (
+assert re.search(r'<strong[^>]*>\s*' + re.escape(expected) + r'\s*</strong>', html), (
     f'Public HTML did not display the current published COI: {expected}'
 )
 PY
