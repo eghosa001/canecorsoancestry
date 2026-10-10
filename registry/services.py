@@ -729,7 +729,7 @@ def approve_submission(
             submitted_by=submission.submitted_by,
             source_submission=submission,
         )
-        if document_type == DogDocument.DocumentType.TITLE_CERTIFICATE:
+        if document_type == "title_certificate":
             name = str(payload.get("achievement_title") or "").strip()
             if not name:
                 raise ValueError("The certificate must name the documented achievement.")
