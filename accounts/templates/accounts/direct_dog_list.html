@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% load static %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'accounts/canonical-visibility.css' %}?v=20261011-canonical-toggle-v2">{% endblock %}
 {% block title %}Dog record management · Cane Corso Ancestry{% endblock %}
 {% block content %}
 <section class="page-shell">
@@ -24,7 +26,7 @@
     <h2>Matching dogs</h2>
     {% for dog in dogs %}
     <div class="button-row" style="justify-content:space-between;border-bottom:1px solid var(--border-color, #aaa);padding:.8rem 0">
-      <div><strong>{{ dog.name }}</strong><p class="muted">{{ dog.kennel.name|default:"No kennel" }} · {% if dog.is_public %}Published{% else %}Private{% endif %}{% if dog.is_record_locked %} · Locked{% endif %}</p></div>
+      <div><strong>{{ dog.name }}</strong><p class="canonical-list-publication"><span class="canonical-publication-badge {% if dog.is_public %}canonical-publication-badge--published{% else %}canonical-publication-badge--unpublished{% endif %}">{% if dog.is_public %}Published{% else %}Unpublished{% endif %}</span> <span class="muted">{{ dog.kennel.name|default:"No kennel" }}{% if dog.is_record_locked %} · Locked{% endif %}</span></p></div>
       <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Manage record</a>
     </div>
     {% empty %}<p>No matching canonical dogs were found.</p>{% endfor %}
