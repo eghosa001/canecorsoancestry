@@ -229,9 +229,6 @@ def _snapshot(dog):
             for field in fields:
                 column = model._meta.get_field(field).attname
                 row[column] = _safe_value(getattr(item, column))
-            if name == "titles":
-                for extra in ("issuer", "awarded_on", "verification_state", "certificate_document"):
-                    row[model._meta.get_field(extra).attname] = _safe_value(getattr(item, model._meta.get_field(extra).attname))
             rows.append(row)
         related[name] = rows
     return {"dog": base, "related": related}
@@ -301,11 +298,6 @@ def _restore(dog, target):
             for field in fields:
                 column = model._meta.get_field(field).attname
                 setattr(item, column, row[column])
-            if name == "titles":
-                for extra in ("issuer", "awarded_on", "verification_state", "certificate_document"):
-                    column = model._meta.get_field(extra).attname
-                    if column in row:
-                        setattr(item, column, row[column])
             item.full_clean(validate_constraints=name != "images")
             item.save()
 
