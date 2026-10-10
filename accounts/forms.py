@@ -642,6 +642,13 @@ class DogDocumentSubmissionForm(forms.Form):
     def clean_attachment(self):
         return normalize_image_upload(self.cleaned_data.get("attachment"))
 
+    def clean(self):
+        values = super().clean()
+        if (values.get("document_type") == DogDocument.DocumentType.TITLE_CERTIFICATE
+                and not (values.get("achievement_title") or "").strip()):
+            self.add_error("achievement_title", "Please enter the title shown on the document.")
+        return values
+
 
 class KennelCreateForm(forms.Form):
     name = forms.CharField(max_length=180, label="Kennel / breeder brand name")
