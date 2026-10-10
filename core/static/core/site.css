@@ -590,7 +590,9 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 500; }
   .hero-search { grid-template-columns: 1fr; background: transparent; border: 0; gap: 8px; }
   .hero-search input, .hero-search button { width: 100%; min-height: 50px; }
   .dashboard-sidebar nav { grid-template-columns: 1fr; }
-  .profile-facts, .compact-facts { grid-template-columns: 1fr; }
+  .profile-facts { grid-template-columns: minmax(88px, 108px) minmax(0, 1fr); column-gap: 12px; row-gap: 10px; }
+  .profile-facts dd { min-width: 0; overflow-wrap: anywhere; }
+  .compact-facts { grid-template-columns: 1fr; }
 }
 
 .flash-stack {
@@ -6882,6 +6884,28 @@ html[data-theme="light"] .hero-search input {
     padding-inline: 12px;
   }
 }
+.profile-coi-context {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.profile-record-notes {
+  margin-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+.profile-record-notes > summary {
+  font-size: 0.9rem;
+}
+.profile-record-notes-body {
+  padding-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.profile-record-notes-body p { margin: 0 0 9px; }
+.profile-record-notes-body strong { color: var(--text); }
+
 
 
 /* Long-page navigation and below-the-fold rendering v77. */
