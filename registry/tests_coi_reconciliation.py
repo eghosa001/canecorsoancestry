@@ -69,3 +69,53 @@ class CanonicalCOIRepairTests(TestCase):
         with self.assertRaises(CommandError):
             call_command("reconcile_known_ancestors", only="tocco-of-revenge-della-valle-dei-lord", apply=True)
         self.assertTrue(Dog.objects.filter(pk=self.archive.pk).exists())
+
+
+class COILineageDiagnosticsTests(TestCase):
+    def test_published_common_ancestors_report_actual_kinship(self):
+        from pedigrees.services import coi_linkage_summary
+        common = Dog.objects.create(name="Review Common", slug="review-common", is_public=True)
+        sire = Dog.objects.create(name="Review Sire", slug="review-sire", sire=common, is_public=True)
+        dam = Dog.objects.create(name="Review Dam", slug="review-dam", sire=common, is_public=True)
+        child = Dog.objects.create(name="Review Child", slug="review-child", sire=sire, dam=dam, is_public=True)
+        summary = coi_linkage_summary(child)
+        self.assertEqual(summary["status"], "estimated")
+        self.assertAlmostEqual(summary["coi_percent"], 12.5)
+        self.assertEqual((summary["sire_records"], summary["dam_records"], summary["shared_ancestors"]), (2, 2, 1))
+
+    def test_private_shared_ancestor_not_included_in_public_diagnostics(self):
+        from pedigrees.services import coi_linkage_summary
+        hidden = Dog.objects.create(name="Private Common", slug="private-common-review", is_public=False)
+        sire = Dog.objects.create(name="Public Sire", slug="public-sire-review", sire=hidden, is_public=True)
+        dam = Dog.objects.create(name="Public Dam", slug="public-dam-review", sire=hidden, is_public=True)
+        child = Dog.objects.create(name="Review No Public Common", slug="review-no-public-common", sire=sire, dam=dam, is_public=True)
+        summary = coi_linkage_summary(child)
+        self.assertEqual(summary["coi_percent"], 0)
+        self.assertEqual(summary["shared_ancestors"], 0)
+        self.assertEqual((summary["sire_records"], summary["dam_records"]), (1, 1))
+
+    def test_missing_published_parent_is_not_misrepresented_as_zero(self):
+        from pedigrees.services import coi_linkage_summary
+        sire = Dog.objects.create(name="Known Review Sire", slug="known-review-sire", is_public=True)
+        child = Dog.objects.create(name="Incomplete Review Child", slug="incomplete-review-child", sire=sire, is_public=True)
+        summary = coi_linkage_summary(child)
+        self.assertEqual(summary["status"], "insufficient")
+        self.assertIsNone(summary["coi_percent"])
+
+    def test_review_search_requires_staff_and_only_shows_public_dogs(self):
+        from django.contrib.auth import get_user_model
+        from django.urls import reverse
+        editor = get_user_model().objects.create_superuser(
+            username="coi-review-admin", email="coi-review@example.test", password="test-admin-password-2026"
+        )
+        public = Dog.objects.create(name="COI Audit Public", slug="coi-audit-public", is_public=True)
+        Dog.objects.create(name="COI Audit Hidden", slug="coi-audit-hidden", is_public=False)
+        url = reverse("accounts:data-health")
+        denied = self.client.get(url, {"coi_q": "COI Audit"})
+        self.assertNotEqual(denied.status_code, 200)
+        self.client.force_login(editor)
+        response = self.client.get(url, {"coi_q": "COI Audit"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["dog"].pk for row in response.context["coi_matches"]], [public.pk])
+        self.assertContains(response, "Not enough ancestry")
+        self.assertNotContains(response, "COI Audit Hidden")

@@ -60,6 +60,42 @@
         {% endfor %}
       </div>
     </details>
+    <div class="section-spacer">
+      <h3>Investigate a dog's COI</h3>
+      <form method="get" class="button-row" role="search" aria-label="Investigate public dog COI">
+        <label for="coi-search">Dog name</label>
+        <input id="coi-search" name="coi_q" type="search" minlength="3" maxlength="80"
+               value="{{ coi_query }}" placeholder="Find a dog by name or slug" autocomplete="off">
+        <button type="submit" class="btn btn-outline">Check ancestry</button>
+      </form>
+      {% if coi_query %}
+        {% if coi_query|length < 3 %}
+          <p class="muted">Enter at least three characters to search.</p>
+        {% elif coi_matches %}
+          <div class="relationship-list">
+            {% for row in coi_matches %}
+              <div>
+                <strong><a href="{% url 'registry:dog-detail' row.dog.slug %}">{{ row.dog.name }}</a></strong>
+                <span>
+                  {% if row.status == "estimated" %}
+                    {% if row.coi_percent == 0 %}0.00% · no connected common ancestor
+                    {% elif row.coi_percent < 0.005 %}&lt;0.01%
+                    {% else %}{{ row.coi_percent|floatformat:2 }}%{% endif %}
+                    · {{ row.sire_records }} sire-side / {{ row.dam_records }} dam-side records
+                    · {{ row.shared_ancestors }} shared ancestor{{ row.shared_ancestors|pluralize }}
+                  {% elif row.status == "cycle" %}Pedigree cycle requires review
+                  {% else %}Not enough ancestry: both published parents are needed{% endif %}
+                </span>
+                {% if can_manage_sources %}<a href="{% url 'accounts:dog-direct-edit' row.dog.pk %}">Review parent links</a>{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+          <p class="muted">Only published and linked records are counted. A matching name alone is not proof that two ancestors are the same dog; evidence-backed identity review is required.</p>
+        {% else %}
+          <p class="muted">No published dog matches this search.</p>
+        {% endif %}
+      {% endif %}
+    </div>
   </section>
 
   <div class="profile-section-grid section-spacer">

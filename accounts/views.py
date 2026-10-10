@@ -83,7 +83,7 @@ from registry.services import (
 
 from registry.verification import current_findings, verification_checklist, verify_submission
 
-from pedigrees.services import pedigree_analysis, pedigree_export_rows, virtual_mating_analysis
+from pedigrees.services import coi_linkage_summary, pedigree_analysis, pedigree_export_rows, virtual_mating_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -3023,6 +3023,22 @@ def data_health(request):
         report["coi_review_sample"] = public_coi_review_sample(limit=12)
         cache.set(cache_key, report, timeout=60)
 
+    # Detailed COI investigation runs only when a reviewer searches a named
+    # public dog. Bound both matches and pedigree computations per request.
+    coi_query = request.GET.get("coi_q", "").strip()[:80]
+    coi_matches = []
+    if len(coi_query) >= 3:
+        candidates = (
+            Dog.objects.filter(is_public=True)
+            .filter(Q(name__icontains=coi_query) | Q(slug__icontains=coi_query))
+            .select_related("sire", "dam")
+            .order_by("name", "pk")[:5]
+        )
+        coi_matches = [
+            {"dog": dog, **coi_linkage_summary(dog, public_only=True)}
+            for dog in candidates
+        ]
+
     counts = report["counts"]
     critical_total = sum(
         counts.get(key, 0)
@@ -3040,6 +3056,8 @@ def data_health(request):
             "report": report,
             "counts": counts,
             "critical_total": critical_total,
+            "coi_query": coi_query,
+            "coi_matches": coi_matches,
             "can_manage_sources": can_manage_verification(request.user),
         },
     )
