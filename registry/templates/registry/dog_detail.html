@@ -24,6 +24,10 @@
       <div class="profile-title-row">
         <h1>{{ dog.name }}</h1>
       </div>
+      <div class="profile-quick-parents" aria-label="Recorded parents">
+        <div><span>Sire</span>{% if dog.sire and dog.sire.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.sire.slug %}">{{ dog.sire.name }}</a>{% elif dog.sire %}<strong>Not published</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
+        <div><span>Dam</span>{% if dog.dam and dog.dam.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.dam.slug %}">{{ dog.dam.name }}</a>{% elif dog.dam %}<strong>Not published</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
+      </div>
       {% if dog.display_registrations %}
         <p class="registration-line">
           {% for registration in dog.display_registrations %}
@@ -112,26 +116,7 @@
     <a href="#mates">Mates</a>
   </nav>
 
-  <div class="profile-section-grid" id="overview">
-    <article class="panel">
-      <div class="panel-heading"><h2>Parents</h2></div>
-      <div class="parent-grid">
-        <div>
-          <span>Sire</span>
-          {% if dog.sire %}
-            {% if dog.sire.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.sire.slug %}">{{ dog.sire.name }}</a>{% else %}<strong>Not published</strong>{% endif %}
-          {% else %}<strong>Not recorded</strong>{% endif %}
-        </div>
-        <div>
-          <span>Dam</span>
-          {% if dog.dam %}
-            {% if dog.dam.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.dam.slug %}">{{ dog.dam.name }}</a>{% else %}<strong>Not published</strong>{% endif %}
-          {% else %}<strong>Not recorded</strong>{% endif %}
-        </div>
-      </div>
-    </article>
-
-  </div>
+  <div id="overview"></div>
 
   {% if dog.bio or dog.display_titles %}
   <div class="profile-section-grid">
