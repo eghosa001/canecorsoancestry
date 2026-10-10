@@ -143,6 +143,20 @@ jobs:
                           candidate_slug = candidate.dog.slug if candidate else '-'
                           source_label = source_parent or 'none'
                           print(f'COI paternal gap: child={node.name!r} missing={field} source_parent_id={source_label} existing_canonical={candidate_slug}')
+                  from registry.models import DogRegistration, normalize_identity_name
+                  names = (
+                      'Tocco Of Revenge Della Valle Dei Lord', 'Karin Della Valle Dei Lord',
+                      'Geronimo', 'Carlotta', 'Thor', 'Sally Della Valle Dei Lord',
+                      'Davor Del Dyrium', 'Dante', 'Anea',
+                  )
+                  for name in names:
+                      query = Dog.objects.filter(normalized_name=normalize_identity_name(name))
+                      total = query.count()
+                      print(f'COI candidate name={name!r} total={total}')
+                      for row in query.order_by('pk')[:8]:
+                          numbers = list(DogRegistration.objects.filter(dog=row).values_list('number', flat=True)[:5])
+                          keys = list(DogExternalKey.objects.filter(dog=row).values_list('namespace', 'key')[:3])
+                          print(f'COI candidate dog={row.name!r} slug={row.slug} sex={row.sex} dob={row.date_of_birth} sire={bool(row.sire_id)} dam={bool(row.dam_id)} registration={numbers} external_keys={keys}')
           "
       - name: Verify one production dog image end to end
         shell: bash
