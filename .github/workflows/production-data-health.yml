@@ -88,6 +88,33 @@ jobs:
               print('Explosion Custodi Nos COI:', round(inbreeding_coefficient(target, public_only=True) * 100, 6))
           print(f'PASS: Wright COI computed on {len(dogs)} live pedigrees')
           "
+      - name: Confirm COI appears on the actual public dog and pedigree pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(sudo -n podman exec cca-oracle-staging python manage.py shell -c "
+          from registry.models import Dog
+          from pedigrees.services import inbreeding_coefficient
+          dog = Dog.objects.get(slug='explosion-custodi-nos')
+          print(f'{inbreeding_coefficient(dog, public_only=True)*100:.2f}%')
+          " | tail -n 1)"
+          echo "Expected published COI: $expected"
+          test "$expected" != "0.00%"
+          for path in "/dogs/explosion-custodi-nos/" "/pedigrees/explosion-custodi-nos/?generations=4"; do
+            status="$(curl --connect-timeout 5 --max-time 25 -sS -H 'Accept: text/html' -o /tmp/cca-coi-render.html -w '%{http_code}' "$PUBLIC_SITE$path" || true)"
+            test "$status" = 200 || { echo "::error::COI public route $path -> HTTP $status"; exit 1; }
+            python3 - /tmp/cca-coi-render.html "$expected" <<'PY'
+import re
+import sys
+from pathlib import Path
+html = Path(sys.argv[1]).read_text(encoding='utf-8')
+expected = sys.argv[2]
+assert re.search(r'<strong[^>]*>\\s*' + re.escape(expected) + r'\\s*</strong>', html), (
+    f'Public HTML did not display the current published COI: {expected}'
+)
+PY
+            echo "PASS: $path renders $expected"
+          done
       - name: Verify one production dog image end to end
         shell: bash
         run: |
