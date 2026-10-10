@@ -62,6 +62,30 @@ class OwnerFeedbackFixesTests(TestCase):
         self.assertEqual(response.json()["results"][0]["is_public"], False)
         self.assertEqual(self.client.get(url, {"q": "C", "sex": "male"}).json(), {"results": []})
 
+    def test_staff_editor_renders_readable_selected_ancestor_names(self):
+        sire = Dog.objects.create(
+            name="Verified Sire of Review", slug="verified-sire-of-review",
+            sex=Dog.Sex.MALE, is_public=False,
+        )
+        dam = Dog.objects.create(
+            name="Verified Dam of Review", slug="verified-dam-of-review",
+            sex=Dog.Sex.FEMALE, is_public=False,
+        )
+        self.dog.sire = sire
+        self.dog.dam = dam
+        self.dog.save()
+        self.client.force_login(self.staff)
+        response = self.client.get(
+            reverse("accounts:dog-direct-edit", args=[self.dog.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-current-parent-name="Verified Sire of Review"')
+        self.assertContains(response, 'data-current-parent-name="Verified Dam of Review"')
+        self.assertContains(response, f'data-current-parent-id="{sire.pk}"')
+        self.assertContains(response, f'data-current-parent-id="{dam.pk}"')
+        self.assertContains(response, 'data-parent-results-for="sire_ref"')
+        self.assertContains(response, 'data-parent-results-for="dam_ref"')
+
     @patch("registry.services.verify_submission", return_value=[])
     def test_title_certificate_stays_private_until_review(self, _verification):
         sub = Submission.objects.create(

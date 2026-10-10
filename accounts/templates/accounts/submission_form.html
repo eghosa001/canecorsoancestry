@@ -40,12 +40,13 @@
       {% for photo in photo_report_choices %}
       <button class="dog-photo-gallery-item photo-report-pick" type="button"
               data-select-report-image="{{ photo.pk }}" aria-pressed="false"
-              aria-label="Choose photograph #{{ photo.pk }} for incorrect-photo report">
-        <img src="{{ photo.image.url }}" alt="Photograph #{{ photo.pk }} of {{ dog.name }}" loading="lazy" decoding="async">
-        <span>{% if photo.is_primary %}Main{% else %}Gallery{% endif %} photograph #{{ photo.pk }} · Tap to select</span>
+              aria-label="Select photo {{ forloop.counter }} of {{ dog.name }} for review">
+        <img src="{{ photo.image.url }}" alt="Photo {{ forloop.counter }} of {{ dog.name }}" loading="lazy" decoding="async">
+        <span data-photo-report-label="{% if photo.is_primary %}Main photo{% else %}Photo {{ forloop.counter }}{% endif %}">{% if photo.is_primary %}Main photo{% else %}Photo {{ forloop.counter }}{% endif %} · Select for review</span>
       </button>
       {% endfor %}
     </div>
+    <p class="muted" id="photo-report-selection-status" role="status" aria-live="polite">Select the photograph that needs correction, or use the form below to describe an imported image.</p>
   </section>
   {% endif %}
   <form class="member-form" method="post" {% if multipart %}enctype="multipart/form-data"{% endif %}>
@@ -74,21 +75,38 @@
 </section>
 {% if photo_report_choices %}
 <script>
-  document.querySelectorAll("[data-select-report-image]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const field = document.getElementById("id_target_image");
-      if (!field) return;
-      field.value = button.dataset.selectReportImage;
-      field.dispatchEvent(new Event("change", { bubbles: true }));
-      document.querySelectorAll("[data-select-report-image]").forEach((item) => {
-        item.setAttribute("aria-pressed", item === button ? "true" : "false");
+  const field = document.getElementById("id_target_image");
+  const selectionStatus = document.getElementById("photo-report-selection-status");
+  const choices = [...document.querySelectorAll("[data-select-report-image]")];
+  if (field) {
+    const syncSelection = () => {
+      const chosen = choices.find((item) => item.dataset.selectReportImage === field.value);
+      choices.forEach((item) => {
+        const selected = item === chosen;
+        item.setAttribute("aria-pressed", String(selected));
+        const label = item.querySelector("[data-photo-report-label]");
+        if (label) label.textContent = label.dataset.photoReportLabel +
+          (selected ? " · Selected ✓" : " · Select for review");
+      });
+      if (selectionStatus) selectionStatus.textContent = chosen
+        ? "Selected: " + chosen.querySelector("[data-photo-report-label]").dataset.photoReportLabel +
+          ". Complete the explanation below and submit the report."
+        : "Select the photograph that needs correction, or use the form below to describe an imported image.";
+    };
+    choices.forEach((button) => {
+      button.addEventListener("click", () => {
+        field.value = button.dataset.selectReportImage;
+        field.dispatchEvent(new Event("change", { bubbles: true }));
       });
     });
-  });
+    field.addEventListener("change", syncSelection);
+    syncSelection();
+  }
 </script>
 <style>
-  .photo-report-pick { color: inherit; font: inherit; text-align: left; cursor: pointer; }
-  .photo-report-pick[aria-pressed="true"] { border: 2px solid var(--gold); }
+  .photo-report-pick { color: inherit; font: inherit; text-align: left; cursor: pointer; touch-action: manipulation; }
+  .photo-report-pick[aria-pressed="true"] { outline: 3px solid var(--gold); outline-offset: -3px; }
+  .photo-report-pick:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 </style>
 {% endif %}
 {% endblock %}

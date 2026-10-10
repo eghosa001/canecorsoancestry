@@ -67,6 +67,11 @@ jobs:
 
           python manage.py check
 
+          # Check this mobile-only picker only when it changes.
+          if grep -q '^accounts/static/accounts/direct-dog-edit[.]js$' <<<"$changed"; then
+            node --check accounts/static/accounts/direct-dog-edit.js
+          fi
+
           targets=()
 
           if grep -Eq '^pedigrees/.*\.py$' <<<"$changed"; then

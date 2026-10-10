@@ -59,7 +59,13 @@
   .workspace-shortcuts-links a { min-height: 44px; }
 }
 
-.parent-identity-results { display: grid; gap: 4px; margin-top: 5px; max-height: 260px; overflow-y: auto; overscroll-behavior: contain; }
-.parent-identity-option { display: grid; gap: 4px; width: 100%; text-align: left; padding: 10px; background: var(--surface); color: var(--text); border: 1px solid var(--line-soft); border-radius: 7px; cursor: pointer; }
+/* Accessible, bounded identity search on mobile, including Safari. */
+.parent-identity-results { display: grid; gap: 4px; margin-top: 5px; max-height: min(280px, 42dvh); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.parent-identity-results[hidden] { display: none !important; }
+.parent-identity-option { display: grid; gap: 4px; width: 100%; min-height: 52px; text-align: left; padding: 10px; background: var(--surface); color: var(--text); border: 1px solid var(--line-soft); border-radius: 7px; cursor: pointer; touch-action: manipulation; }
 .parent-identity-option small { color: var(--muted); overflow-wrap: anywhere; }
 .parent-identity-option:hover, .parent-identity-option:focus-visible { border-color: var(--gold); outline: 2px solid var(--gold); outline-offset: 1px; }
+.parent-identity-selection { display: block; min-height: 1.3em; margin-top: 6px; color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
+.parent-identity-selection[data-selected="true"] { color: var(--text); font-weight: 600; }
+.parent-identity-selection[data-error="true"] { color: var(--error, #bc5151); }
+@media (max-width: 760px) { .parent-identity-results { max-height: min(260px, 36dvh); } input[data-parent-search-visible] { font-size: 16px !important; } }
