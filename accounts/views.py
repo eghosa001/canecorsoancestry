@@ -2565,8 +2565,12 @@ def review_dispute(request, pk, decision):
             if not note:
                 messages.error(request, "Record the evidence considered and the reason for this correction.")
                 return redirect("accounts:moderation")
+            opened = ModerationAudit.objects.filter(
+                dispute=dispute, action=ModerationAudit.Action.DISPUTE_OPENED,
+            ).order_by("created_at", "pk").first()
+            target_id = (opened.summary or {}).get("target_image_id") if opened else None
             target = (DogImage.objects.select_for_update()
-                      .filter(pk=dispute.target_image_id, dog=dispute.dog).first())
+                      .filter(pk=target_id, dog=dispute.dog).first()) if target_id else None
             if target is None:
                 messages.error(request, "Select a managed dog photograph before correcting it. Imported source images require direct staff review.")
                 return redirect("accounts:moderation")
