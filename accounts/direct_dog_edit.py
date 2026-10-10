@@ -612,9 +612,14 @@ def dog_direct_edit(request, pk):
                                 "approval. The public dog record is unchanged."
                             )
                             return redirect("accounts:dog-direct-edit", pk=pk)
+                    # Older admin clients and scoped tests may omit the new
+                    # switch. Missing is NOT consent to unpublish; the editor
+                    # includes an explicit hidden false fallback for real
+                    # browser submissions when the switch is off.
                     make_public = (
                         bool(form.cleaned_data["visibility_public"])
-                        if owner else locked.is_public
+                        if owner and "visibility_public" in request.POST
+                        else locked.is_public
                     )
                     visibility_changed = owner and make_public != locked.is_public
                     before = _snapshot(locked)
