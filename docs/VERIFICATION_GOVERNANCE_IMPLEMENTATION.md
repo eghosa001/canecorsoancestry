@@ -6,7 +6,7 @@ This document tracks the October 2026 verification/governance upgrade requested 
 
 **Compatibility rule:** this upgrade is additive. Existing dogs, pedigrees, kennel profiles, members, submissions, Paystack records, authentication and public URLs are preserved. Canonical `Dog` and `Litter` UUIDs remain the record identities.
 
-**Current package pricing preserved from `main`:** ₦500 single dog; ₦1,500 for 2–4 dogs from one verified kennel; ₦200 for one litter and its puppies. The older pricing figures repeated in the specification were intentionally not used to undo the newer approved pricing change.
+**Current package pricing in live models:** ₦500 single dog; ₦1,500 for 2–6 dogs from one verified kennel; ₦1,000 for one genuine litter and its puppies. These amounts are taken from `accounts/models.py` and `docs/OWNER_REQUIREMENTS.md`; no older illustrative pricing is authoritative.
 
 ## Architecture before this upgrade
 

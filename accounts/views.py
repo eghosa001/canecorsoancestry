@@ -30,6 +30,7 @@ from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from registry.public_freshness import invalidate_public_content
 from registry.data_quality import quick_quality_report, public_coi_review_sample
 from registry.coi_identity_audit import audit_registration_backed_duplicates
 from registry.models import (
@@ -1164,7 +1165,11 @@ def submit_document(request, pk):
     if not can_contribute_to_dog(request.user, dog):
         raise PermissionDenied
 
-    form = DogDocumentSubmissionForm(request.POST or None, request.FILES or None)
+    form = DogDocumentSubmissionForm(
+        request.POST or None, request.FILES or None,
+        initial={"document_type": "title_certificate"}
+        if request.GET.get("type") == "title_certificate" else None,
+    )
     if request.method == "POST" and form.is_valid():
         try:
             with transaction.atomic():
@@ -1177,6 +1182,12 @@ def submit_document(request, pk):
                         "title": form.cleaned_data["title"],
                         "document_type": form.cleaned_data["document_type"],
                         "is_public": form.cleaned_data["is_public"],
+                        "achievement_title": form.cleaned_data["achievement_title"],
+                        "certificate_issuer": form.cleaned_data["certificate_issuer"],
+                        "certificate_awarded_on": (
+                            form.cleaned_data["certificate_awarded_on"].isoformat()
+                            if form.cleaned_data["certificate_awarded_on"] else ""
+                        ),
                     },
                     attachment=form.cleaned_data["attachment"],
                     notes=form.cleaned_data["notes"],
@@ -1500,6 +1511,29 @@ def moderation_queue(request):
         .select_related("dog", "opened_by", "assigned_to")
         .order_by("status", "created_at")[:50]
     )
+    photo_dispute_ids = [row.pk for row in disputes]
+    opened_photo_ids = {}
+    if photo_dispute_ids:
+        opened_report_types = {}
+        for row in ModerationAudit.objects.filter(
+            dispute_id__in=photo_dispute_ids,
+            action=ModerationAudit.Action.DISPUTE_OPENED,
+        ).order_by("created_at", "pk").only("dispute_id", "summary"):
+            if row.dispute_id not in opened_report_types:
+                opened_report_types[row.dispute_id] = (row.summary or {}).get("report_type") == "photo"
+            candidate_id = (row.summary or {}).get("target_image_id")
+            if row.dispute_id not in opened_photo_ids and candidate_id is not None:
+                opened_photo_ids[row.dispute_id] = candidate_id
+        photo_images = DogImage.objects.filter(
+            pk__in=opened_photo_ids.values(),
+        ).in_bulk()
+        for dispute in disputes:
+            dispute.is_photo_report = opened_report_types.get(dispute.pk, False)
+            candidate = photo_images.get(opened_photo_ids.get(dispute.pk))
+            dispute.reported_photo = (
+                candidate if candidate and candidate.dog_id == dispute.dog_id else None
+            )
+
 
     assignee_ids = {
         obj.assigned_to_id
@@ -2345,19 +2379,25 @@ def request_document_visibility(request, pk):
 
 @login_required
 def open_dispute(request, pk):
+    if not can_use_member_features(request.user):
+        raise PermissionDenied
     kennel_ids = request.user.kennel_memberships.values_list("kennel_id", flat=True)
     dog = get_object_or_404(
         Dog.objects.filter(Q(is_public=True) | Q(kennel_id__in=kennel_ids)).distinct(),
         pk=pk,
     )
-    form = DisputeForm(request.POST or None, request.FILES or None)
+    form = DisputeForm(
+        request.POST or None, request.FILES or None, dog=dog,
+        initial={"reason": "photo"}
+        if request.GET.get("reason") == "photo" else None,
+    )
     if request.method == "POST" and form.is_valid():
         try:
             with transaction.atomic():
                 dispute = DisputeCase.objects.create(
                     dog=dog,
                     opened_by=request.user,
-                    reason=form.cleaned_data["reason"],
+                    reason=(DisputeCase.Reason.IDENTITY if form.cleaned_data["reason"] == "photo" else form.cleaned_data["reason"]),
                     details=form.cleaned_data["details"],
                     attachment=form.cleaned_data["attachment"] or "",
                 )
@@ -2370,7 +2410,7 @@ def open_dispute(request, pk):
                 dog=dog,
                 kennel=dog.kennel,
                 dispute=dispute,
-                summary={"reason": dispute.reason},
+                summary={"reason": dispute.reason, "report_type": form.cleaned_data["reason"], "target_image_id": form.cleaned_data["target_image"].pk if form.cleaned_data["target_image"] else None},
             )
             messages.success(request, "Review case opened. A moderator can now investigate it.")
             return redirect("accounts:my-disputes")
@@ -2382,9 +2422,18 @@ def open_dispute(request, pk):
             "form": form,
             "eyebrow": "Dispute / review case",
             "title": f"Request review · {dog.name}",
-            "intro": "Report a specific pedigree, identity, health, ownership or duplicate concern. Opening a case does not alter the canonical record.",
+            "intro": "Report an incorrect photo, disputed pedigree, identity, health or ownership. For photos, choose the wrong image and optionally upload the correct one. Nothing changes publicly until staff review.",
             "button_label": "Open review case",
             "multipart": True,
+            "dog": dog,
+            "current_photo_url": _current_dog_photo_url(dog),
+            "photo_report_choices": (
+                list(DogImage.objects.filter(dog=dog).order_by(
+                    "-is_primary", "sort_order", "created_at",
+                )[:12])
+                if (request.GET.get("reason") == "photo" or
+                    request.POST.get("reason") == "photo") else []
+            ),
         },
     )
 
@@ -2516,10 +2565,70 @@ def review_dispute(request, pk, decision):
             pk=pk,
         )
 
+        if dispute.status in {DisputeCase.Status.RESOLVED, DisputeCase.Status.DISMISSED}:
+            messages.error(request, "This case is already closed and cannot be changed twice.")
+            return redirect("accounts:moderation")
+
+        photo_mutation = {}
         if decision == "assign":
             dispute.assigned_to = request.user
             dispute.status = DisputeCase.Status.REVIEWING
+        elif decision in {"replace_photo", "remove_photo"}:
+            opened = ModerationAudit.objects.filter(
+                dispute=dispute, action=ModerationAudit.Action.DISPUTE_OPENED,
+            ).order_by("created_at", "pk").first()
+            if not (opened and (opened.summary or {}).get("report_type") == "photo"):
+                messages.error(request, "Only an incorrect-photo case can change a dog photograph.")
+                return redirect("accounts:moderation")
+            if not note:
+                messages.error(request, "Record the evidence considered and the reason for this correction.")
+                return redirect("accounts:moderation")
+            target_id = (opened.summary or {}).get("target_image_id") if opened else None
+            target = (DogImage.objects.select_for_update()
+                      .filter(pk=target_id, dog=dispute.dog).first()) if target_id else None
+            if target is None:
+                messages.error(request, "Select a managed dog photograph before correcting it. Imported source images require direct staff review.")
+                return redirect("accounts:moderation")
+            photo_mutation = {"old_image_id": str(target.pk), "old_file": target.image.name}
+            old_primary = target.is_primary
+            if decision == "replace_photo":
+                if not dispute.attachment or not dispute.attachment.name.lower().endswith(".jpg"):
+                    messages.error(request, "A reviewed replacement photo is required.")
+                    return redirect("accounts:moderation")
+                try:
+                    exists = dispute.attachment.storage.exists(dispute.attachment.name)
+                except (OSError, TimeoutError, ValueError):
+                    exists = False
+                if not exists:
+                    messages.error(request, "Replacement image is unavailable in storage. No change was made.")
+                    return redirect("accounts:moderation")
+                if old_primary:
+                    DogImage.objects.filter(pk=target.pk).update(is_primary=False)
+                replacement = DogImage.objects.create(
+                    dog=dispute.dog, image=dispute.attachment.name,
+                    caption="Corrected photo after evidence review",
+                    is_primary=old_primary,
+                )
+                photo_mutation["replacement_image_id"] = str(replacement.pk)
+            target.delete()  # The original storage file remains as dispute evidence.
+            if not DogImage.objects.filter(dog=dispute.dog, is_primary=True).exists():
+                next_photo = DogImage.objects.filter(dog=dispute.dog).order_by(
+                    "sort_order", "created_at",
+                ).first()
+                if next_photo:
+                    DogImage.objects.filter(pk=next_photo.pk).update(is_primary=True)
+            dispute.status = DisputeCase.Status.RESOLVED
+            dispute.resolution_notes = note
+            dispute.closed_by = request.user
+            dispute.closed_at = timezone.now()
+            invalidate_public_content()
         elif decision == "resolve":
+            opening_audit = ModerationAudit.objects.filter(
+                dispute=dispute, action=ModerationAudit.Action.DISPUTE_OPENED,
+            ).order_by("created_at", "pk").first()
+            if opening_audit and (opening_audit.summary or {}).get("report_type") == "photo":
+                messages.error(request, "A photo report must result in a reviewed photo correction or be dismissed with a reason.")
+                return redirect("accounts:moderation")
             if not note:
                 messages.error(request, "A resolution note is required.")
                 return redirect("accounts:moderation")
@@ -2546,7 +2655,7 @@ def review_dispute(request, pk, decision):
             dog=dispute.dog,
             kennel=dispute.dog.kennel,
             dispute=dispute,
-            summary={"decision": decision, "status": dispute.status},
+            summary={"decision": decision, "status": dispute.status, **photo_mutation},
             note=note,
         )
         Notification.objects.create(

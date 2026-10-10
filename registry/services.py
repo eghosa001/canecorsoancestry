@@ -719,15 +719,34 @@ def approve_submission(
     elif submission.kind == Submission.Kind.DOCUMENT:
         if submission.dog is None or not submission.attachment:
             raise ValueError("Document submission requires a target dog and attachment.")
-        DogDocument.objects.create(
+        document_type = payload.get("document_type", DogDocument.DocumentType.OTHER)
+        is_certificate = document_type == "title_certificate"
+        title_name = str(payload.get("achievement_title") or "").strip()
+        if is_certificate and not title_name:
+            raise ValueError("The certificate must name the documented achievement.")
+        issuer = str(payload.get("certificate_issuer") or "").strip()
+        awarded = str(payload.get("certificate_awarded_on") or "").strip()
+        label = str(payload.get("title") or "").strip() or "Submitted document"
+        if is_certificate:
+            label = f"Club title: {title_name} · {issuer} · {awarded} · {label}"[:220]
+        document = DogDocument.objects.create(
             dog=submission.dog,
-            title=payload.get("title", "").strip() or "Submitted document",
-            document_type=payload.get("document_type", DogDocument.DocumentType.OTHER),
+            title=label,
+            document_type=(
+                DogDocument.DocumentType.OTHER if is_certificate else document_type
+            ),
             file=submission.attachment.name,
             is_public=bool(payload.get("is_public")),
             submitted_by=submission.submitted_by,
             source_submission=submission,
         )
+        if is_certificate:
+            title, _ = DogTitle.objects.get_or_create(dog=submission.dog, name=title_name)
+            marker = f"[CCA certificate #{document.pk}]"
+            if marker not in title.source_text:
+                title.source_text = (title.source_text + " " + marker).strip()[:220]
+                title.save(update_fields=("source_text",))
+
 
     elif submission.kind == Submission.Kind.KENNEL_CREATE:
         name = str(payload.get("name") or "").strip()

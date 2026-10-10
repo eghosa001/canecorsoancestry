@@ -30,6 +30,24 @@
       </div>
     </section>
   {% endif %}
+  {% if photo_report_choices %}
+  <section class="panel" aria-label="Photographs available to report">
+    <div class="panel-heading">
+      <h2>Select the incorrect photograph</h2>
+      <span>Match the image number below to the "Incorrect photo" selection in the form. Imported photographs can still be reported with a description.</span>
+    </div>
+    <div class="dog-photo-gallery-grid">
+      {% for photo in photo_report_choices %}
+      <button class="dog-photo-gallery-item photo-report-pick" type="button"
+              data-select-report-image="{{ photo.pk }}" aria-pressed="false"
+              aria-label="Choose photograph #{{ photo.pk }} for incorrect-photo report">
+        <img src="{{ photo.image.url }}" alt="Photograph #{{ photo.pk }} of {{ dog.name }}" loading="lazy" decoding="async">
+        <span>{% if photo.is_primary %}Main{% else %}Gallery{% endif %} photograph #{{ photo.pk }} · Tap to select</span>
+      </button>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
   <form class="member-form" method="post" {% if multipart %}enctype="multipart/form-data"{% endif %}>
     {% csrf_token %}
     {% if form.non_field_errors %}<div class="notice error">{{ form.non_field_errors }}</div>{% endif %}
@@ -54,4 +72,23 @@
     </div>
   </form>
 </section>
+{% if photo_report_choices %}
+<script>
+  document.querySelectorAll("[data-select-report-image]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const field = document.getElementById("id_target_image");
+      if (!field) return;
+      field.value = button.dataset.selectReportImage;
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+      document.querySelectorAll("[data-select-report-image]").forEach((item) => {
+        item.setAttribute("aria-pressed", item === button ? "true" : "false");
+      });
+    });
+  });
+</script>
+<style>
+  .photo-report-pick { color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .photo-report-pick[aria-pressed="true"] { border: 2px solid var(--gold); }
+</style>
+{% endif %}
 {% endblock %}

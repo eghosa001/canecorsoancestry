@@ -58,3 +58,8 @@
   .workspace-shortcuts-label { display: block; margin: 0 0 3px 8px; }
   .workspace-shortcuts-links a { min-height: 44px; }
 }
+
+.parent-identity-results { display: grid; gap: 4px; margin-top: 5px; max-height: 260px; overflow-y: auto; overscroll-behavior: contain; }
+.parent-identity-option { display: grid; gap: 4px; width: 100%; text-align: left; padding: 10px; background: var(--surface); color: var(--text); border: 1px solid var(--line-soft); border-radius: 7px; cursor: pointer; }
+.parent-identity-option small { color: var(--muted); overflow-wrap: anywhere; }
+.parent-identity-option:hover, .parent-identity-option:focus-visible { border-color: var(--gold); outline: 2px solid var(--gold); outline-offset: 1px; }

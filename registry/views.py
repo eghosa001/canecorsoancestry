@@ -9,6 +9,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from urllib.parse import urlparse
+import re
 
 from core.seo import json_ld
 
@@ -384,6 +385,19 @@ def _public_profile_dog(slug):
         list(DogDocument.objects.filter(dog=dog, is_public=True).order_by("-created_at"))
         if dog._has_public_documents else []
     )
+    # The approved source text holds a reference to the reviewed document.
+    # Keep public and private certificate access separate, without schema changes.
+    title_doc_ids = {}
+    for item in dog.display_titles:
+        matched = re.search(r"\[CCA certificate #(\d+)\]", item.source_text or "")
+        if matched:
+            title_doc_ids[item.pk] = int(matched.group(1))
+    if title_doc_ids:
+        evidence = DogDocument.objects.filter(
+            dog=dog, pk__in=set(title_doc_ids.values()),
+        ).in_bulk()
+        for item in dog.display_titles:
+            item.display_certificate = evidence.get(title_doc_ids.get(item.pk))
     dog.display_source_media = (
         list(DogSource.objects.filter(dog=dog).order_by("-verified_at", "-created_at"))
         if not dog.display_images and dog._has_profile_sources else []

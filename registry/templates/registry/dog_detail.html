@@ -24,6 +24,10 @@
       <div class="profile-title-row">
         <h1>{{ dog.name }}</h1>
       </div>
+      <div class="profile-quick-parents" aria-label="Recorded parents">
+        <div><span>Sire</span>{% if dog.sire and dog.sire.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.sire.slug %}">{{ dog.sire.name }}</a>{% elif dog.sire %}<strong>Not published</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
+        <div><span>Dam</span>{% if dog.dam and dog.dam.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.dam.slug %}">{{ dog.dam.name }}</a>{% elif dog.dam %}<strong>Not published</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
+      </div>
       {% if dog.display_registrations %}
         <p class="registration-line">
           {% for registration in dog.display_registrations %}
@@ -56,6 +60,9 @@
       </dl>
 
       {% if staff_identity and staff_role %}<div class="button-row"><a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Edit canonical record</a></div>{% endif %}
+      {% if user.is_authenticated and not staff_identity and dog.display_images %}
+      <a class="text-link" href="{% url 'accounts:open-dispute' dog.pk %}?reason=photo">Report an incorrect dog photograph →</a>
+      {% endif %}
       <div class="button-row profile-primary-actions">
         <a class="btn btn-gold" href="{% url 'pedigrees:detail' dog.slug %}">View pedigree</a>
         <a class="btn btn-outline" href="#offspring">View offspring</a>
@@ -77,6 +84,7 @@
               <a class="btn btn-outline" href="{% url 'accounts:submit-correction' dog.pk %}">Suggest correction</a>
               <a class="btn btn-outline" href="{% url 'accounts:submit-image' dog.pk %}">Submit photo</a>
               <a class="btn btn-outline" href="{% url 'accounts:submit-document' dog.pk %}">Submit document</a>
+              <a class="btn btn-outline" href="{% url 'accounts:submit-document' dog.pk %}?type=title_certificate">Submit title certificate</a>
               <a class="btn btn-outline" href="{% url 'accounts:submit-health-record' dog.pk %}">Submit health/DNA</a>
             {% endif %}
             {% if user.is_authenticated %}
@@ -112,26 +120,7 @@
     <a href="#mates">Mates</a>
   </nav>
 
-  <div class="profile-section-grid" id="overview">
-    <article class="panel">
-      <div class="panel-heading"><h2>Parents</h2></div>
-      <div class="parent-grid">
-        <div>
-          <span>Sire</span>
-          {% if dog.sire %}
-            {% if dog.sire.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.sire.slug %}">{{ dog.sire.name }}</a>{% else %}<strong>Not published</strong>{% endif %}
-          {% else %}<strong>Not recorded</strong>{% endif %}
-        </div>
-        <div>
-          <span>Dam</span>
-          {% if dog.dam %}
-            {% if dog.dam.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.dam.slug %}">{{ dog.dam.name }}</a>{% else %}<strong>Not published</strong>{% endif %}
-          {% else %}<strong>Not recorded</strong>{% endif %}
-        </div>
-      </div>
-    </article>
-
-  </div>
+  <div id="overview"></div>
 
   {% if dog.bio or dog.display_titles %}
   <div class="profile-section-grid">
@@ -142,7 +131,14 @@
     <article class="panel">
       <div class="panel-heading"><h2>Titles</h2></div>
       <div class="relationship-list">
-        {% for title in dog.display_titles %}<div><strong>{{ title.name }}</strong></div>{% empty %}<p class="muted">No titles recorded.</p>{% endfor %}
+        {% for title in dog.display_titles %}
+          <div>
+            <strong>{{ title.name }}</strong>
+            {% if title.display_certificate %}
+              {% if title.display_certificate.is_public %}<a class="text-link" href="{{ title.display_certificate.file.url }}" rel="noopener">View reviewed certificate →</a>
+              {% else %}<small> · Certificate privately reviewed</small>{% endif %}
+            {% endif %}
+          </div>{% empty %}<p class="muted">No titles recorded.</p>{% endfor %}
       </div>
     </article>
   </div>
