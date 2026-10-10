@@ -40,8 +40,11 @@
         <dt>COI</dt>
         <dd>
           {% if coi_percent != None %}
-            <strong>{{ coi_percent|floatformat:2 }}%</strong>
-            <small class="profile-coi-context">Based on published ancestry{% if not public_parentage_complete %} · incomplete records{% endif %}</small>
+            <strong>{% if coi_below_display_precision %}&lt;0.01%{% else %}{{ coi_percent|floatformat:2 }}%{% endif %}</strong>
+            <small class="profile-coi-context">{% if coi_percent == 0 %}No common ancestor in linked records{% else %}Based on linked, published ancestors{% endif %}</small>
+          {% elif coi_display_state == "insufficient" %}
+            <strong>Not enough ancestry</strong>
+            <small class="profile-coi-context">Both parents are needed</small>
           {% else %}
             <strong>Cannot calculate</strong>
             <small class="profile-coi-context">Pedigree links need review</small>
@@ -61,7 +64,7 @@
       <details class="profile-record-notes ux-disclosure">
         <summary>About COI &amp; sources</summary>
         <div class="profile-record-notes-body">
-          <p><strong>COI:</strong> {% if coi_percent != None %}Calculated from recorded, published pedigree links{% if not public_parentage_complete %} · incomplete public parentage{% endif %}. Missing ancestors can make the estimate too low; 0.00% does not prove no inbreeding.{% else %}{{ coi_error }} Ask a moderator to review parent links.{% endif %}</p>
+          <p><strong>COI:</strong> {% if coi_percent != None %}Calculated from all reachable, linked, published ancestors. Missing ancestors can make the estimate too low; 0.00% does not prove no inbreeding.{% else %}{{ coi_error }} Ask a moderator to review parent links.{% endif %}</p>
           <p><strong>Evidence:</strong> {{ verification_label }}. This describes independent review of the available record, not registration by Cane Corso Ancestry.</p>
           <p><strong>Source:</strong> {% if has_source_attribution %}Source attribution on file{% else %}No source attribution recorded{% endif %}. A linked or imported source is not proof that identity, health or ancestry was independently verified.</p>
         </div>
