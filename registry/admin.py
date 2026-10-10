@@ -1,6 +1,7 @@
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.urls import reverse
+from django.utils.html import format_html
 from urllib.parse import urlencode
 
 from .permissions import has_member_identity
@@ -121,8 +122,18 @@ class DogAdmin(admin.ModelAdmin):
         DogTitleInline,
     )
 
+    @admin.display(description="Publication to public website")
+    def publication_workflow(self, obj):
+        if not obj or not obj.pk:
+            return "Save this new dog first. Then publish it from Manage Dogs."
+        return format_html(
+            '<a href="{}">Manage publication / make public →</a>',
+            reverse("accounts:dog-direct-edit", args=[obj.pk]),
+        )
+
     def get_readonly_fields(self, request, obj=None):
         protected = (
+            "publication_workflow",
             "is_public",
             "is_record_locked",
             "record_locked_at",
