@@ -134,11 +134,9 @@
         {% for title in dog.display_titles %}
           <div>
             <strong>{{ title.name }}</strong>
-            {% if title.issuer %}<small> · {{ title.issuer }}</small>{% endif %}
-            {% if title.awarded_on %}<small> · {{ title.awarded_on }}</small>{% endif %}
-            {% if title.certificate_document %}
-              {% if title.certificate_document.is_public %}<a class="text-link" href="{{ title.certificate_document.file.url }}" rel="noopener">View reviewed certificate →</a>
-              {% else %}<small> · Evidence privately reviewed</small>{% endif %}
+            {% if title.display_certificate %}
+              {% if title.display_certificate.is_public %}<a class="text-link" href="{{ title.display_certificate.file.url }}" rel="noopener">View reviewed certificate →</a>
+              {% else %}<small> · Certificate privately reviewed</small>{% endif %}
             {% endif %}
           </div>{% empty %}<p class="muted">No titles recorded.</p>{% endfor %}
       </div>
