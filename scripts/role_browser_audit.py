@@ -85,7 +85,11 @@ def public_routes(page, label):
     response = visit(page, "/dogs/suggestions/?q=" + quote("Browser Audit Sire"))
     assert "Browser Audit Sire" in response.text(), "Published dog missing from autocomplete"
     visit(page, "/")
-    theme = page.locator("[data-theme-toggle]").first
+    if page.viewport_size["width"] <= 760:
+        page.locator(".mobile-nav > summary").click()
+        theme = page.locator(".mobile-nav-panel [data-theme-toggle]").first
+    else:
+        theme = page.locator("[data-theme-toggle]").first
     before = page.locator("html").get_attribute("data-theme")
     theme.click()
     after = page.locator("html").get_attribute("data-theme")
