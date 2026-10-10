@@ -133,7 +133,7 @@ class OwnerFeedbackFixesTests(TestCase):
     def test_photo_case_cannot_be_closed_without_corrective_action(self):
         case = DisputeCase.objects.create(
             dog=self.dog, opened_by=self.member,
-            reason=DisputeCase.Reason.PHOTO,
+            reason=DisputeCase.Reason.IDENTITY,
             details="Incorrect photograph",
         )
         record_audit(
