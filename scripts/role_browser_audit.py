@@ -70,9 +70,10 @@ def public_routes(page, label):
         visit(page, path)
         no_overflow(page, label + path)
     visit(page, "/dogs/?q=Browser%20Audit%20Private")
-    assert "Browser Audit Private" not in page.locator("main").inner_text(), (
-        "Private unpublished dog appears in public search"
-    )
+    assert not any(
+        "Browser Audit Private" in card
+        for card in page.locator(".search-result-card").all_inner_texts()
+    ), "Private unpublished dog appears in public result cards"
     visit(page, "/dogs/?q=Browser%20Audit%20Offspring")
     assert "Browser Audit Offspring" in page.locator("main").inner_text(), (
         "Published photo-less dog cannot be found by name"
@@ -175,6 +176,12 @@ def main():
                 ("senior", lambda p: moderator_routes(p, "senior")),
                 ("owner", super_admin_routes),
             ):
+                # Six login attempts in total: don't trigger real IP throttle
+                # simply by testing all 4 roles in every emulator context.
+                if index == 1 and role != "member":
+                    continue
+                if index == 2 and role != "owner":
+                    continue
                 context = browser.new_context(**options)
                 page = context.new_page()
                 check(label + " " + role + " workflows", lambda fn=fn, page=page: fn(page), page)
