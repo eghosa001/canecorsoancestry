@@ -229,6 +229,9 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-dog-gallery')
         self.assertContains(response, 'data-dog-photo-dialog')
+        lightbox_markup = response.content.decode("utf-8").split("data-dog-lightbox-image", 1)[1].split(">", 1)[0]
+        self.assertIn('src="', lightbox_markup)
+        self.assertNotIn('src=""', lightbox_markup)
         self.assertContains(response, 'data-dog-photo-open')
         self.assertContains(response, 'data-photo-caption="Side profile"')
         self.assertContains(response, 'aria-pressed="true"')
@@ -257,6 +260,9 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, url)
         self.assertContains(response, 'data-dog-photo-dialog')
+        lightbox_markup = response.content.decode("utf-8").split("data-dog-lightbox-image", 1)[1].split(">", 1)[0]
+        self.assertIn('src="', lightbox_markup)
+        self.assertNotIn('src=""', lightbox_markup)
         self.assertContains(response, 'referrerpolicy="no-referrer"')
         self.assertNotContains(response, 'data-dog-photo-thumb')
         self.assertContains(response, 'href="#photos"')
