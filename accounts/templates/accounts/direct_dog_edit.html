@@ -25,7 +25,7 @@
         <div>
           <label for="{{ field.id_for_label }}">{{ field.label }}</label>
           {{ field }}
-          {% if field.name == "sire_ref" or field.name == "dam_ref" %}<div class="parent-identity-results" data-parent-results-for="{{ field.name }}" aria-live="polite"></div>{% endif %}
+          {% if field.name == "sire_ref" or field.name == "dam_ref" %}<div id="parent-results-{{ field.name }}" class="parent-identity-results" data-parent-results-for="{{ field.name }}" role="listbox" aria-label="Matching ancestors" hidden></div><small class="parent-identity-selection" data-parent-selection-for="{{ field.name }}" role="status" aria-live="polite"></small>{% endif %}
           {% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}
           {{ field.errors }}
         </div>
