@@ -41,14 +41,12 @@
         <dd>
           {% if coi_percent != None %}
             <strong>{{ coi_percent|floatformat:2 }}%</strong>
-            <small class="muted">Calculated from recorded, published pedigree links{% if not public_parentage_complete %} · incomplete public parentage{% endif %}. Missing ancestors can make the estimate too low; 0.00% does not prove no inbreeding.</small>
+            <small class="profile-coi-context">Based on published ancestry{% if not public_parentage_complete %} · incomplete records{% endif %}</small>
           {% else %}
             <strong>Cannot calculate</strong>
-            <small class="muted">{{ coi_error }} Ask a moderator to review parent links.</small>
+            <small class="profile-coi-context">Pedigree links need review</small>
           {% endif %}
         </dd>
-        <dt>Evidence review</dt><dd><strong>{{ verification_label }}</strong><small class="muted">This describes independent review of the available record, not registration by Cane Corso Ancestry.</small></dd>
-        <dt>Historical source</dt><dd>{% if has_source_attribution %}Source attribution on file{% else %}No source attribution recorded{% endif %}<small class="muted">A linked or imported source is not proof that identity, health or ancestry was independently verified.</small></dd>
         <dt>Country</dt><dd>{{ dog.country|default:"Not recorded" }}</dd>
         <dt>Kennel</dt>
         <dd>{% if dog.kennel %}<a class="text-link" href="{% url 'registry:kennel-detail' dog.kennel.slug %}">{{ dog.kennel.name }}</a>{% else %}Not recorded{% endif %}</dd>
@@ -60,6 +58,14 @@
         <a class="btn btn-outline" href="#offspring">View offspring</a>
         <a class="btn btn-outline" href="{% url 'pedigrees:reverse' dog.slug %}">Reverse pedigree</a>
       </div>
+      <details class="profile-record-notes ux-disclosure">
+        <summary>About COI &amp; sources</summary>
+        <div class="profile-record-notes-body">
+          <p><strong>COI:</strong> {% if coi_percent != None %}Calculated from recorded, published pedigree links{% if not public_parentage_complete %} · incomplete public parentage{% endif %}. Missing ancestors can make the estimate too low; 0.00% does not prove no inbreeding.{% else %}{{ coi_error }} Ask a moderator to review parent links.{% endif %}</p>
+          <p><strong>Evidence:</strong> {{ verification_label }}. This describes independent review of the available record, not registration by Cane Corso Ancestry.</p>
+          <p><strong>Source:</strong> {% if has_source_attribution %}Source attribution on file{% else %}No source attribution recorded{% endif %}. A linked or imported source is not proof that identity, health or ancestry was independently verified.</p>
+        </div>
+      </details>
       {% if can_contribute or user.is_authenticated %}
         <details class="profile-manage-actions ux-disclosure">
           <summary><span><strong>Contribute or request review</strong><small>Corrections, evidence and review requests stay separate from public browsing.</small></span></summary>
