@@ -140,6 +140,31 @@ class AdminSurfaceSmokeTests(TestCase):
         self.assertGreaterEqual(report["counts"]["source_backed_public"], 1)
         self.assertEqual(report["counts"]["public_without_sources"], 0)
 
+    def test_coi_review_samples_real_linked_relationships_without_inventing_zero(self):
+        from registry.data_quality import public_coi_review_sample
+
+        shared = Dog.objects.create(name="Health Shared", slug="health-shared", is_public=True)
+        sire = Dog.objects.create(name="Health Sire", slug="health-coi-sire",
+                                  sire=shared, is_public=True)
+        dam = Dog.objects.create(name="Health Dam", slug="health-coi-dam",
+                                 sire=shared, is_public=True)
+        child = Dog.objects.create(name="Health COI Child", slug="health-coi-child",
+                                   sire=sire, dam=dam, is_public=True)
+        Dog.objects.create(name="Health Missing Parent", slug="health-missing-parent",
+                           sire=sire, is_public=True)
+
+        sample = public_coi_review_sample(limit=12)
+        by_id = {item["dog"].pk: item for item in sample}
+        self.assertAlmostEqual(by_id[child.pk]["percent"], 12.5)
+        self.assertNotIn("health-missing-parent", [item["dog"].slug for item in sample])
+
+        self.client.force_login(self.owner)
+        cache.clear()
+        response = self.client.get(reverse("accounts:data-health"))
+        self.assertContains(response, "COI coverage review")
+        self.assertContains(response, "12.50%")
+        self.assertContains(response, "Health COI Child")
+
     def test_data_health_page_caches_repeated_reads(self):
         cache.clear()
         self.client.force_login(self.owner)

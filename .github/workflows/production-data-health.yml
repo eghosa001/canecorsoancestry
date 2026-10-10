@@ -63,15 +63,8 @@ jobs:
         run: sudo -n podman exec cca-oracle-staging python manage.py audit_pedigree_data --fail-on-critical
       - name: Audit live owner production invariants
         run: sudo -n podman exec cca-oracle-staging python manage.py audit_production_invariants --fail-on-critical
-      - name: Reconcile exact-registration-backed duplicates (idempotent)
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Preview validates source IDs, sex, existing parents, locked records,
-          # and matching registration evidence before any database write.
-          sudo -n podman exec cca-oracle-staging python manage.py reconcile_known_ancestors
-          sudo -n podman exec cca-oracle-staging python manage.py reconcile_known_ancestors --apply
-          sudo -n podman exec cca-oracle-staging python manage.py audit_pedigree_data --fail-on-critical
+      - name: Verify previously reconciled ancestors (read-only)
+        run: sudo -n podman exec cca-oracle-staging python manage.py reconcile_known_ancestors
       - name: Check published live COI
         run: |
           sudo -n podman exec cca-oracle-staging python manage.py shell -c "

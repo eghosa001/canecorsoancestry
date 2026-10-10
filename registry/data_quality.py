@@ -16,6 +16,9 @@ def quick_quality_report(sample_limit=12):
             "pk",
             filter=Q(sire__isnull=False) | Q(dam__isnull=False),
         ),
+        both_parents_public=Count(
+            "pk", filter=Q(sire__is_public=True, dam__is_public=True),
+        ),
         community_only_public=Count(
             "pk",
             filter=Q(verification_state=VerificationState.COMMUNITY),
@@ -168,6 +171,37 @@ def quick_quality_report(sample_limit=12):
             for key, queryset in issue_sets.items()
         },
     }
+
+
+def public_coi_review_sample(limit=12):
+    """Bounded, read-only live COI sample for staff triage.
+
+    A zero coefficient means no shared ancestor has been connected *yet*,
+    not verified absence of inbreeding. Never use private ancestors here.
+    """
+    from pedigrees.services import PedigreeCycleError, inbreeding_coefficient
+
+    limit = max(1, min(int(limit), 20))
+    dogs = Dog.objects.filter(
+        is_public=True,
+        sire__is_public=True,
+        dam__is_public=True,
+    ).only("pk", "name", "slug", "sire_id", "dam_id").order_by(
+        "-date_of_birth", "pk"
+    )[:limit]
+    rows = []
+    for dog in dogs:
+        try:
+            percent = inbreeding_coefficient(dog, public_only=True) * 100
+        except PedigreeCycleError:
+            percent = None
+        rows.append({
+            "dog": dog,
+            "percent": percent,
+            "recorded_zero": percent == 0,
+            "tiny_positive": percent is not None and 0 < percent < 0.005,
+        })
+    return rows
 
 
 def pedigree_cycles(limit=50):

@@ -30,7 +30,7 @@ from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from registry.data_quality import quick_quality_report
+from registry.data_quality import quick_quality_report, public_coi_review_sample
 from registry.models import (
     DisputeCase,
     Dog,
@@ -3016,10 +3016,11 @@ def data_health(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
 
-    cache_key = "admin:data-health:quick:v2"
+    cache_key = "admin:data-health:quick:v3-coi"
     report = None if request.GET.get("refresh") == "1" else cache.get(cache_key)
     if report is None:
         report = quick_quality_report(sample_limit=12)
+        report["coi_review_sample"] = public_coi_review_sample(limit=12)
         cache.set(cache_key, report, timeout=60)
 
     counts = report["counts"]
