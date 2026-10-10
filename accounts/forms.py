@@ -624,7 +624,7 @@ class DogDocumentSubmissionForm(forms.Form):
     achievement_title = forms.CharField(max_length=160, required=False)
     certificate_issuer = forms.CharField(max_length=160, required=False)
     certificate_awarded_on = forms.DateField(required=False)
-    document_type = forms.ChoiceField(choices=DogDocument.DocumentType.choices)
+    document_type = forms.ChoiceField(choices=[*DogDocument.DocumentType.choices, ("title_certificate", "Club title certificate")])
     attachment = forms.FileField(
         widget=forms.ClearableFileInput(
             attrs={"accept": DOCUMENT_ACCEPT}
