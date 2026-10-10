@@ -92,7 +92,9 @@ class COIDuplicateAuditTests(TestCase):
         self.assertEqual(report["counts"]["matched"], 1)
 
 
-class StaffCOIReviewUIRoutingTests(COIDuplicateAuditTests):
+class StaffCOIReviewUIRoutingTests(TestCase):
+    setUp = COIDuplicateAuditTests.setUp
+
     def test_duplicate_scan_only_runs_for_explicit_superadmin_review(self):
         from unittest.mock import patch
         from django.contrib.auth import get_user_model
