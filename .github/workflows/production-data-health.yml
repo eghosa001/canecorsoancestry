@@ -63,100 +63,30 @@ jobs:
         run: sudo -n podman exec cca-oracle-staging python manage.py audit_pedigree_data --fail-on-critical
       - name: Audit live owner production invariants
         run: sudo -n podman exec cca-oracle-staging python manage.py audit_production_invariants --fail-on-critical
-      - name: Check COI computation using published live pedigree links
+      - name: Reconcile exact-registration-backed duplicates (idempotent)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Preview validates source IDs, sex, existing parents, locked records,
+          # and matching registration evidence before any database write.
+          sudo -n podman exec cca-oracle-staging python manage.py reconcile_known_ancestors
+          sudo -n podman exec cca-oracle-staging python manage.py reconcile_known_ancestors --apply
+          sudo -n podman exec cca-oracle-staging python manage.py audit_pedigree_data --fail-on-critical
+      - name: Check published live COI
         run: |
           sudo -n podman exec cca-oracle-staging python manage.py shell -c "
           from registry.models import Dog
           from pedigrees.services import inbreeding_coefficient
-          dogs = list(Dog.objects.filter(is_public=True, sire__is_public=True, dam__is_public=True).only('pk', 'sire_id', 'dam_id').order_by('pk')[:3])
+          dogs = list(Dog.objects.filter(is_public=True, sire__is_public=True, dam__is_public=True).only('pk', 'sire_id', 'dam_id').order_by('pk')[:6])
           assert dogs, 'No public records with published sire and dam'
           for dog in dogs:
               value = inbreeding_coefficient(dog, public_only=True)
-              assert 0 <= value <= 1, 'COI calculation returned an invalid value'
-          print(f'PASS: COI computed on {len(dogs)} actual published pedigrees')
-          # Diagnose representative live published dogs without modifying ancestry.
-          from django.db.models import Q
-          sample = list(
-              Dog.objects.filter(is_public=True, sire__is_public=True, dam__is_public=True)
-              .only('id', 'sire_id', 'dam_id').order_by('-date_of_birth', 'pk')[:24]
-          )
-          positives = sum(inbreeding_coefficient(dog, public_only=True) > 0 for dog in sample)
-          print(f'COI sample: {positives} positive, {len(sample)-positives} zero among {len(sample)} known-parent profiles')
-          # The reported mobile profile shows a male born 25 May 2021,
-          # bloodline/kennel Custodi Nos. Report matching *public* record
-          # links so a genuine zero can be distinguished from missing ancestry.
-          matched = list(
-              Dog.objects.filter(is_public=True, date_of_birth='2021-05-25', sex='male')
-              .filter(Q(bloodline__icontains='Custodi Nos') | Q(kennel__name__icontains='Custodi Nos'))
-              .select_related('sire', 'dam').order_by('name')[:20]
-          )
-          print(f'Custodi Nos 25-May-2021 public candidates: {len(matched)}')
-          for dog in matched:
-              sire_ok = bool(dog.sire and dog.sire.is_public)
-              dam_ok = bool(dog.dam and dog.dam.is_public)
-              percent = round(inbreeding_coefficient(dog, public_only=True) * 100, 6) if sire_ok and dam_ok else None
-              print(f'COI record: name={dog.name!r} slug={dog.slug} sire_public={sire_ok} dam_public={dam_ok} coi_percent={percent}')
-              if sire_ok and dam_ok:
-                  from pedigrees.services import _pedigree_links
-                  links = _pedigree_links(dog, public_only=True)
-                  def connected(root):
-                      found = set()
-                      stack = [root]
-                      while stack:
-                          current = stack.pop()
-                          if current not in links or current in found:
-                              continue
-                          found.add(current)
-                          stack.extend(p for p in links[current] if p in links and p not in found)
-                      return found
-                  sire_links = connected(dog.sire_id)
-                  dam_links = connected(dog.dam_id)
-                  shared = sire_links & dam_links
-                  print(f'COI trace: sire={dog.sire.name!r} dam={dog.dam.name!r} sire_nodes={len(sire_links)} dam_nodes={len(dam_links)} shared_canonical_ids={len(shared)}')
-                  nodes = list(Dog.objects.filter(pk__in=sire_links | dam_links).values('id', 'name', 'normalized_name'))
-                  sire_names = {p['normalized_name'] for p in nodes if p['id'] in sire_links and p['normalized_name']}
-                  dam_names = {p['normalized_name'] for p in nodes if p['id'] in dam_links and p['normalized_name']}
-                  same_names = sorted(sire_names & dam_names)
-                  print(f'COI trace possible separate-ID name matches: {same_names[:12]} (total={len(same_names)})')
-                  for parent in (dog.sire, dog.dam):
-                      known = sum(bool(p) for p in links.get(parent.pk, ()))
-                      print(f'COI parent status: {parent.name!r} known_parent_links={known}')
-                  # Inspect every incomplete paternal branch for an existing,
-                  # source-ID-backed canonical parent; no automatic relinking.
-                  from registry.models import DogSource, DogExternalKey
-                  from registry.management.commands.import_canecorso_archive import DEFAULT_NAMESPACE
-                  paternal_nodes = Dog.objects.filter(pk__in=sire_links).order_by('name')
-                  for node in paternal_nodes:
-                      if node.sire_id and node.dam_id:
-                          continue
-                      provenance = [
-                          payload for payload in DogSource.objects.filter(dog=node)
-                          .values_list('raw_payload', flat=True) if payload
-                      ]
-                      for field, key in (('sire', 'father_id'), ('dam', 'mother_id')):
-                          if getattr(node, field + '_id'):
-                              continue
-                          source_parent = next((str(p.get(key) or '') for p in provenance if p.get(key)), '')
-                          candidate = DogExternalKey.objects.filter(
-                              namespace=DEFAULT_NAMESPACE, key=source_parent
-                          ).select_related('dog').first() if source_parent else None
-                          candidate_slug = candidate.dog.slug if candidate else '-'
-                          source_label = source_parent or 'none'
-                          print(f'COI paternal gap: child={node.name!r} missing={field} source_parent_id={source_label} existing_canonical={candidate_slug}')
-                  from registry.models import DogRegistration, normalize_identity_name
-                  names = (
-                      'Tocco Of Revenge Della Valle Dei Lord', 'Karin Della Valle Dei Lord',
-                      'Geronimo', 'Carlotta', 'Thor', 'Sally Della Valle Dei Lord',
-                      'Davor Del Dyrium', 'Dante', 'Anea',
-                  )
-                  for name in names:
-                      query = Dog.objects.filter(normalized_name=normalize_identity_name(name))
-                      total = query.count()
-                      print(f'COI candidate name={name!r} total={total}')
-                      for row in query.order_by('pk')[:8]:
-                          numbers = list(DogRegistration.objects.filter(dog=row).values_list('number', flat=True)[:5])
-                          keys = list(DogExternalKey.objects.filter(dog=row).values_list('namespace', 'key')[:3])
-                          print(f'COI candidate dog={row.name!r} slug={row.slug} sex={row.sex} dob={row.date_of_birth} sire={bool(row.sire_id)} dam={bool(row.dam_id)} registration={numbers} external_keys={keys}')
+              assert 0 <= value <= 1, 'COI computation returned an invalid value'
+          target = Dog.objects.filter(slug='explosion-custodi-nos').first()
+          if target:
+              assert target.sire_id and target.dam_id
+              print('Explosion Custodi Nos COI:', round(inbreeding_coefficient(target, public_only=True) * 100, 6))
+          print(f'PASS: Wright COI computed on {len(dogs)} live pedigrees')
           "
       - name: Verify one production dog image end to end
         shell: bash
