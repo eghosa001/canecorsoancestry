@@ -37,7 +37,7 @@
   {% endif %}
 
   {% if other_offspring %}
-    <div class="section-heading section-spacer"><h2>Other registered offspring</h2><span>No public photo yet</span></div>
+    <div class="section-heading section-spacer"><h2>Other offspring without photos</h2><span>No public photo yet</span></div>
     <div class="relationship-list">
       {% for dog in other_offspring %}
         <a href="{% url 'registry:dog-detail' dog.slug %}"><strong>{{ dog.name }}</strong><span>{{ dog.get_sex_display }} · {{ dog.colour|default:"Colour not recorded" }}</span></a>

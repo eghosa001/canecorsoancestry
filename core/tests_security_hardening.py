@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
@@ -74,3 +75,44 @@ class SecurityHardeningTests(TestCase):
             REMOTE_ADDR="203.0.113.9",
         )
         self.assertEqual(blocked.status_code, 429)
+
+    def test_spoofed_forwarded_for_cannot_evade_login_limit(self):
+        url = reverse("login")
+        for attempt in range(10):
+            response = self.client.post(
+                url,
+                {"username": "spoofed-client", "password": "wrong"},
+                REMOTE_ADDR="203.0.113.50",
+                HTTP_X_FORWARDED_FOR=f"198.51.100.{attempt + 1}",
+            )
+            self.assertNotEqual(response.status_code, 429)
+        blocked = self.client.post(
+            url,
+            {"username": "spoofed-client", "password": "wrong"},
+            REMOTE_ADDR="203.0.113.50",
+            HTTP_X_FORWARDED_FOR="198.51.100.200",
+        )
+        self.assertEqual(blocked.status_code, 429)
+
+    def test_attested_edge_uses_forwarded_client_address(self):
+        url = reverse("login")
+        edge = {
+            "REMOTE_ADDR": "127.0.0.1",
+            "HTTP_X_CCA_EDGE": "1",
+            "HTTP_X_CCA_ORIGIN_SECRET": settings.SECRET_KEY,
+        }
+        for _ in range(10):
+            response = self.client.post(
+                url,
+                {"username": "edge-client", "password": "wrong"},
+                HTTP_X_FORWARDED_FOR="198.51.100.20",
+                **edge,
+            )
+            self.assertNotEqual(response.status_code, 429)
+        response = self.client.post(
+            url,
+            {"username": "edge-client", "password": "wrong"},
+            HTTP_X_FORWARDED_FOR="198.51.100.21",
+            **edge,
+        )
+        self.assertNotEqual(response.status_code, 429)

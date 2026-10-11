@@ -31,6 +31,16 @@ CSP = "; ".join(
 )
 
 
+def _trusted_edge_request(request):
+    """Trust proxy-supplied identity only when the private edge attests it."""
+    secret = request.headers.get("X-CCA-Origin-Secret", "")
+    return (
+        request.headers.get("X-CCA-Edge") == "1"
+        and bool(secret)
+        and hmac.compare_digest(secret, settings.SECRET_KEY)
+    )
+
+
 class RequestSecurityMiddleware:
     """Add request tracing/security headers and keep private pages out of caches/indexes."""
 
@@ -39,12 +49,7 @@ class RequestSecurityMiddleware:
 
     def __call__(self, request):
         host = request.get_host().split(":", 1)[0].lower()
-        edge_marker = request.headers.get("X-CCA-Edge") == "1"
-        edge_secret = request.headers.get("X-CCA-Origin-Secret", "")
-        trusted_edge_request = edge_marker and bool(edge_secret) and hmac.compare_digest(
-            edge_secret,
-            settings.SECRET_KEY,
-        )
+        trusted_edge_request = _trusted_edge_request(request)
         is_direct_origin_request = (
             (host.endswith(".onrender.com") or host.endswith(".code.run"))
             and not trusted_edge_request
@@ -116,9 +121,8 @@ class RequestSecurityMiddleware:
 class AbuseProtectionMiddleware:
     """Small cache-backed guard for authentication and contribution abuse.
 
-    This is intentionally dependency-free so it works on the current Render
-    deployment. A shared cache can replace LocMem later without changing the
-    middleware.
+    This is intentionally dependency-free for the Oracle Django origin.
+    A shared cache is needed if the app runs with multiple independent workers.
     """
 
     RULES = (
@@ -179,7 +183,14 @@ class AbuseProtectionMiddleware:
     def _principal(request):
         if getattr(request, "user", None) and request.user.is_authenticated:
             return f"user:{request.user.pk}"
-        forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+        # An untrusted X-Forwarded-For can be changed on each attempt to
+        # evade rate limiting; only the authenticated Cloudflare edge may
+        # supply a client address for this purpose.
+        forwarded = (
+            request.META.get("HTTP_X_FORWARDED_FOR", "")
+            if _trusted_edge_request(request)
+            else ""
+        )
         remote = (
             forwarded.split(",", 1)[0].strip()
             if forwarded
