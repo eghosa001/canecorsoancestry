@@ -887,7 +887,7 @@ class DogModelTests(TestCase):
         self.assertEqual(len(response.context["other_offspring"]), 1)
         self.assertContains(response, "Photo Puppy")
         self.assertContains(response, "No Photo Puppy")
-        self.assertContains(response, "Other registered offspring")
+        self.assertContains(response, "Other offspring without photos")
         self.assertNotContains(response, '<div class="media-placeholder">CCA</div>', html=False)
 
     def test_explicit_search_includes_public_image_less_record(self):
