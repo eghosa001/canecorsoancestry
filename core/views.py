@@ -11,7 +11,6 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.core.files.storage import default_storage
 from django.db import connection
 from django.db.models import Prefetch, Q
 from django.http import Http404, HttpResponse, JsonResponse
