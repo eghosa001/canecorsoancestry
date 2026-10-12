@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Manage kennels · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Internal moderation</p>
+    <h1>Manage kennels</h1>
+    <p>Control the public kennel profile independently from its dogs. Changes are audited and do not delete information or bypass dog approvals.</p>
+  </header>
+  <form class="filter-panel" method="get" role="search">
+    <div class="filter-search">
+      <label for="kennel-admin-q">Find a kennel</label>
+      <input id="kennel-admin-q" name="q" type="search" value="{{ query }}" maxlength="160" placeholder="Kennel, city or country" autocomplete="off">
+    </div>
+    <button class="btn btn-gold" type="submit">Search kennels</button>
+    {% if query %}<a class="btn btn-outline" href="{% url 'accounts:kennel-publication-list' %}">Clear</a>{% endif %}
+  </form>
+  <section class="panel">
+    <h2>Ken­nels ({{ page_obj.paginator.count }})</h2>
+    {% for kennel in kennels %}
+      <div class="button-row" style="justify-content:space-between;align-items:center;padding:.85rem 0;border-bottom:1px solid var(--border-color, #aaa)">
+        <div>
+          <strong>{{ kennel.name }}</strong>
+          <p class="muted">{{ kennel.city }}{% if kennel.city and kennel.country %}, {% endif %}{{ kennel.country }} · {{ kennel.dog_count }} linked dog{{ kennel.dog_count|pluralize }}</p>
+          <p class="muted">{% if kennel.is_public %}Kennel profile visible{% else %}Kennel profile hidden{% endif %} · {% if kennel.hide_dogs %}All linked dogs suppressed{% else %}Eligible dogs can appear{% endif %}</p>
+        </div>
+        <a class="btn btn-outline" href="{% url 'accounts:kennel-publication-detail' kennel.pk %}">Manage publication →</a>
+      </div>
+    {% empty %}
+      <p>No kennels matched your search.</p>
+    {% endfor %}
+  </section>
+  {% if page_obj.has_other_pages %}
+  <nav class="button-row" aria-label="Kennel pages">
+    {% if page_obj.has_previous %}<a class="btn btn-outline" href="?q={{ query|urlencode }}&amp;page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+    <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a class="btn btn-outline" href="?q={{ query|urlencode }}&amp;page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% endblock %}
