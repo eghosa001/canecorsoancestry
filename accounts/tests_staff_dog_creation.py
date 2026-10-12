@@ -68,16 +68,59 @@ class StaffDogCreationAndAccessTests(TestCase):
         self.assertEqual(editor.status_code, 200)
         self.assertContains(editor, "Visibility")
 
-    def test_reviewer_and_member_cannot_add_even_by_post(self):
+    def test_normal_moderator_can_add_private_dog_with_audit_and_navigation(self):
+        self.client.force_login(self.reviewer)
         url = reverse("accounts:dog-direct-create")
-        for account in (self.reviewer, self.member):
-            self.client.force_login(account)
-            self.assertEqual(self.client.get(url).status_code, 403)
-            self.assertEqual(self.client.post(url, {
-                "name": "Forbidden record", "sex": "male",
-                "reason": "Should never be inserted in the canonical table",
-            }).status_code, 403)
+        self.assertTrue(can_add_canonical_dog(self.reviewer))
+        page = self.client.get(url)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Add private dog")
+        self.assertContains(page, "Moderator / Senior Moderator / Super Admin")
+        self.assertNotContains(page, 'name="verification_state"')
+        self.assertContains(
+            self.client.get(reverse("accounts:dog-edit-list")),
+            'href="' + url + '"',
+        )
+        response = self.client.post(url, {
+            "name": "Moderator Created Dog",
+            "sex": "female",
+            "reason": "Pedigree and breeding kennel evidence reviewed",
+            "is_public": "on",
+            "verification_state": "verified",
+        })
+        dog = Dog.objects.get(name="Moderator Created Dog")
+        self.assertRedirects(
+            response, reverse("accounts:dog-direct-edit", args=[dog.pk]),
+            fetch_redirect_response=False,
+        )
+        self.assertFalse(dog.is_public)
+        self.assertEqual(dog.verification_state, "community")
+        event = ModerationAudit.objects.get(
+            dog=dog, summary__kind="direct_dog_create",
+        )
+        self.assertEqual(event.actor, self.reviewer)
+        self.assertFalse(event.summary["is_owner"])
+
+    def test_member_cannot_add_even_with_forged_post(self):
+        url = reverse("accounts:dog-direct-create")
+        self.client.force_login(self.member)
+        self.assertFalse(can_add_canonical_dog(self.member))
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.post(url, {
+            "name": "Forbidden record", "sex": "male",
+            "reason": "Should never be inserted in the canonical table",
+        }).status_code, 403)
         self.assertFalse(Dog.objects.filter(name="Forbidden record").exists())
+
+    def test_deactivated_moderator_cannot_add_dog(self):
+        self.reviewer.is_active = False
+        self.reviewer.save(update_fields=["is_active"])
+        self.assertFalse(can_add_canonical_dog(self.reviewer))
+        self.client.force_login(self.reviewer)
+        # Django refuses authentication by inactive accounts.
+        self.assertEqual(
+            self.client.get(reverse("accounts:dog-direct-create")).status_code, 302
+        )
 
     def test_owner_can_deactivate_and_reactivate_senior(self):
         self.client.force_login(self.owner)
