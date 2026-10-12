@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from registry.models import Dog, Kennel, ModerationAudit
-from registry.permissions import can_review_submissions
+from registry.permissions import can_review_submissions, can_manage_verification
 from registry.public_freshness import invalidate_public_content
 from registry.services import record_audit
 
@@ -67,6 +67,7 @@ def kennel_publication_detail(request, pk):
         "approved_total": kennel.dogs.filter(is_public=True).count(),
         "hidden_total": kennel.dogs.filter(hidden_by_moderation=True).count(),
         "version": kennel.updated_at.isoformat(),
+        "is_superadmin": can_manage_verification(request.user),
     })
 
 
@@ -76,7 +77,8 @@ def kennel_publication_change(request, pk):
     _require_moderator(request.user)
     action = request.POST.get("action", "")
     reason = request.POST.get("reason", "").strip()
-    if action not in KENNEL_ACTIONS:
+    owner = can_manage_verification(request.user)
+    if action not in KENNEL_ACTIONS and not (owner and action == "delegate"):
         messages.error(request, "Select a valid kennel publication option.")
         return redirect("accounts:kennel-publication-detail", pk=pk)
     if request.POST.get("confirm") != "yes" or len(reason) < 5:
@@ -88,14 +90,42 @@ def kennel_publication_change(request, pk):
         if request.POST.get("version") != kennel.updated_at.isoformat():
             messages.error(request, "This kennel changed. Reload and review its current visibility.")
             return redirect("accounts:kennel-publication-detail", pk=pk)
-        before = {"is_public": kennel.is_public, "hide_dogs": kennel.hide_dogs}
-        new_public, new_hide_dogs = KENNEL_ACTIONS[action]
-        if (new_public, new_hide_dogs) == (kennel.is_public, kennel.hide_dogs):
-            messages.info(request, "The kennel already has this visibility.")
+        if kennel.publication_locked_by_superadmin and not owner:
+            raise PermissionDenied("The Super Admin has finalized this kennel's visibility.")
+        before = {
+            "is_public": kennel.is_public,
+            "hide_dogs": kennel.hide_dogs,
+            "publication_locked_by_superadmin": kennel.publication_locked_by_superadmin,
+        }
+        if action == "delegate":
+            new_public, new_hide_dogs = kennel.is_public, kennel.hide_dogs
+            lock = False
+        else:
+            new_public, new_hide_dogs = KENNEL_ACTIONS[action]
+            lock = bool(owner)
+        # A moderator cannot hide dogs already expressly restored and protected
+        # by the Super Admin via the dog-level publication controls.
+        if not owner and new_hide_dogs and not kennel.hide_dogs and kennel.dogs.filter(
+            is_public=True,
+            hidden_by_moderation=False,
+            visibility_locked_by_superadmin=True,
+        ).exists():
+            raise PermissionDenied(
+                "One or more dogs have a protected Super Admin visibility decision."
+            )
+        if (
+            new_public == kennel.is_public
+            and new_hide_dogs == kennel.hide_dogs
+            and lock == kennel.publication_locked_by_superadmin
+        ):
+            messages.info(request, "The kennel already has this visibility and decision authority.")
             return redirect("accounts:kennel-publication-detail", pk=pk)
         kennel.is_public = new_public
         kennel.hide_dogs = new_hide_dogs
-        kennel.save(update_fields=["is_public", "hide_dogs", "updated_at"])
+        kennel.publication_locked_by_superadmin = lock
+        kennel.save(update_fields=[
+            "is_public", "hide_dogs", "publication_locked_by_superadmin", "updated_at",
+        ])
         record_audit(
             action=ModerationAudit.Action.RECORD_CHANGED,
             actor=request.user, kennel=kennel,
@@ -103,7 +133,12 @@ def kennel_publication_change(request, pk):
                 "kind": "kennel_publication",
                 "action": action,
                 "before": before,
-                "after": {"is_public": kennel.is_public, "hide_dogs": kennel.hide_dogs},
+                "after": {
+                    "is_public": kennel.is_public,
+                    "hide_dogs": kennel.hide_dogs,
+                    "publication_locked_by_superadmin": kennel.publication_locked_by_superadmin,
+                },
+                "is_superadmin": owner,
             },
             note=reason,
         )
@@ -119,7 +154,8 @@ def kennel_dogs_visibility_change(request, pk):
     _require_moderator(request.user)
     action = request.POST.get("action", "")
     reason = request.POST.get("reason", "").strip()
-    if action not in {"hide", "restore"}:
+    owner = can_manage_verification(request.user)
+    if action not in {"hide", "restore"} and not (owner and action == "delegate"):
         messages.error(request, "Select Hide or Restore for the selected dogs.")
         return redirect("accounts:kennel-publication-detail", pk=pk)
     if request.POST.get("confirm") != "yes" or len(reason) < 5:
@@ -150,13 +186,27 @@ def kennel_dogs_visibility_change(request, pk):
             messages.error(request, "Some selected dogs no longer belong to this kennel.")
             return redirect("accounts:kennel-publication-detail", pk=pk)
 
+        if not owner and any(dog.visibility_locked_by_superadmin for dog in dogs):
+            raise PermissionDenied(
+                "A selected dog has a protected Super Admin decision. Nothing was changed."
+            )
         hide = action == "hide"
-        changed = [dog for dog in dogs if dog.hidden_by_moderation != hide]
+        changed = [
+            dog for dog in dogs
+            if (
+                (action != "delegate" and dog.hidden_by_moderation != hide)
+                or dog.visibility_locked_by_superadmin != (owner and action != "delegate")
+            )
+        ]
         if changed:
             timestamp = timezone.now()
-            Dog.objects.filter(pk__in=[dog.pk for dog in changed]).update(
-                hidden_by_moderation=hide, updated_at=timestamp,
-            )
+            updates = {
+                "visibility_locked_by_superadmin": owner and action != "delegate",
+                "updated_at": timestamp,
+            }
+            if action != "delegate":
+                updates["hidden_by_moderation"] = hide
+            Dog.objects.filter(pk__in=[dog.pk for dog in changed]).update(**updates)
             for dog in changed:
                 record_audit(
                     action=ModerationAudit.Action.RECORD_CHANGED,
@@ -164,14 +214,27 @@ def kennel_dogs_visibility_change(request, pk):
                     summary={
                         "kind": "kennel_dog_visibility",
                         "action": action,
-                        "before": {"hidden_by_moderation": not hide, "is_public": dog.is_public},
-                        "after": {"hidden_by_moderation": hide, "is_public": dog.is_public},
+                        "before": {
+                            "hidden_by_moderation": dog.hidden_by_moderation,
+                            "is_public": dog.is_public,
+                            "visibility_locked_by_superadmin": dog.visibility_locked_by_superadmin,
+                        },
+                        "after": {
+                            "hidden_by_moderation": (
+                                dog.hidden_by_moderation if action == "delegate" else hide
+                            ),
+                            "is_public": dog.is_public,
+                            "visibility_locked_by_superadmin": owner and action != "delegate",
+                        },
+                        "is_superadmin": owner,
                     },
                     note=reason,
                 )
             invalidate_public_content()
     messages.success(
-        request, f"{len(changed)} dog(s) updated. Private or unapproved records remain private."
-        if changed else "Selected dogs already had the requested visibility.",
+        request,
+        (f"{len(changed)} dog(s) updated. Super Admin decisions take priority; "
+         "private or unapproved dogs remain private.")
+        if changed else "Selected dogs already had the requested visibility and authority.",
     )
     return redirect("accounts:kennel-publication-detail", pk=pk)
