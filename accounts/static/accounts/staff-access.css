@@ -1,0 +1,70 @@
+/* Clear, single-account access controls on mobile and desktop. */
+.staff-access-panel {
+  border-left: 3px solid var(--gold);
+  scroll-margin-top: 88px;
+}
+.staff-access-panel .panel-heading { margin-bottom: 18px; }
+.staff-access-panel .panel-heading p:last-child {
+  margin: 10px 0 0;
+  max-width: 70ch;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.staff-access-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.staff-access-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.staff-access-field label {
+  color: var(--text);
+  font-size: .92rem;
+  font-weight: 650;
+}
+.staff-access-field select,
+.staff-access-field textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: var(--field-bg);
+  color: var(--text);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 16px; /* prevent Safari zoom on mobile */
+}
+.staff-access-field select option {
+  background: var(--surface);
+  color: var(--text);
+}
+.staff-access-field select:focus-visible,
+.staff-access-field textarea:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+.staff-access-reason, .staff-access-submit { grid-column: 1 / -1; }
+.staff-access-reason textarea { resize: vertical; }
+.staff-access-submit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.staff-access-submit .muted {
+  margin: 0;
+  max-width: 47ch;
+  font-size: .82rem;
+  line-height: 1.5;
+}
+#staff-accounts { scroll-margin-top: 88px; }
+@media (max-width: 760px) {
+  .staff-access-form { grid-template-columns: minmax(0, 1fr); }
+  .staff-access-submit .btn { width: 100%; min-height: 48px; }
+  .staff-access-panel .panel-heading h2 { font-size: 1.45rem; }
+}

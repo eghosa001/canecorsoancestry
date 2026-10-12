@@ -122,6 +122,68 @@ class StaffDogCreationAndAccessTests(TestCase):
             self.client.get(reverse("accounts:dog-direct-create")).status_code, 302
         )
 
+    def test_superadmin_dashboard_has_explicit_staff_selector(self):
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("accounts:verification-dashboard"))
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Suspend or reactivate a specific moderator")
+        self.assertContains(page, 'id="staff-access-form"')
+        self.assertContains(page, 'id="staff-action"')
+        markup = page.content.decode()
+        selector = markup.split('id="staff-target"', 1)[1].split("</select>", 1)[0]
+        self.assertIn(f'<option value="{self.reviewer.pk}">', selector)
+        self.assertIn(f'<option value="{self.senior.pk}">', selector)
+        self.assertNotIn(f'<option value="{self.owner.pk}">', selector)
+        self.assertIn("Choose a moderator account", selector)
+        self.assertIn("staff-access.js", markup)
+        self.assertIn("staff-access.css", markup)
+
+    def test_superadmin_can_target_one_moderator_without_affecting_others(self):
+        self.client.force_login(self.owner)
+        url = reverse("accounts:moderation-set-status")
+        result = self.client.post(url, {
+            "user_id": str(self.reviewer.pk),
+            "action": "deactivate",
+            "reason": "Scheduled temporary access suspension",
+        }, follow=True)
+        self.assertEqual(result.status_code, 200)
+        self.assertContains(result, "staff-reviewer deactivated")
+        self.reviewer.refresh_from_db()
+        self.senior.refresh_from_db()
+        self.assertFalse(self.reviewer.is_active)
+        self.assertTrue(self.senior.is_active)
+        self.assertTrue(self.owner.is_active)
+        self.assertContains(result, "Deactivated")
+        self.assertTrue(ModerationAudit.objects.filter(
+            summary__type="moderation_account_deactivated",
+            summary__target_admin_number=self.reviewer.ancestry_moderation_role.admin_number,
+        ).exists())
+
+        result = self.client.post(url, {
+            "user_id": str(self.reviewer.pk),
+            "action": "activate",
+            "reason": "Suspension review completed",
+        }, follow=True)
+        self.assertContains(result, "staff-reviewer reactivated")
+        self.reviewer.refresh_from_db()
+        self.assertTrue(self.reviewer.is_active)
+        self.assertTrue(self.senior.is_active)
+
+    def test_staff_selector_cannot_deactivate_superadmin_or_member(self):
+        self.client.force_login(self.owner)
+        endpoint = reverse("accounts:moderation-set-status")
+        for person, expected_status in ((self.owner, 403), (self.member, 404)):
+            result = self.client.post(endpoint, {
+                "user_id": str(person.pk),
+                "action": "deactivate",
+                "reason": "Should be refused safely",
+            })
+            # Super Admin is forbidden; ordinary user without a registered
+            # moderation identity is deliberately not found.
+            self.assertEqual(result.status_code, expected_status)
+            person.refresh_from_db()
+            self.assertTrue(person.is_active)
+
     def test_owner_can_deactivate_and_reactivate_senior(self):
         self.client.force_login(self.owner)
         endpoint = reverse("accounts:moderation-set-status")
