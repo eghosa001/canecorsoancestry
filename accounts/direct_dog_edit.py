@@ -478,18 +478,36 @@ def dog_set_public_visibility(request, pk):
                     "Reload and review the latest record before publishing."
                 )
             make_public = action == "publish"
-            if dog.is_public == make_public:
-                messages.info(request, "This dog already has the requested visibility.")
+            if (
+                dog.is_public == make_public
+                and dog.visibility_locked_by_superadmin
+                and (not make_public or not dog.hidden_by_moderation)
+            ):
+                messages.info(request, "The Super Admin decision is already in effect.")
                 return redirect("accounts:dog-direct-edit", pk=pk)
             # No automatic 'verified' status is granted by publication.
             # Respect ancestry cycle/identity validations before exposing facts.
             dog.full_clean()
             before = _snapshot(dog)
-            before["publication"] = {"is_public": dog.is_public}
+            before["publication"] = {
+                "is_public": dog.is_public,
+                "hidden_by_moderation": dog.hidden_by_moderation,
+                "visibility_locked_by_superadmin": dog.visibility_locked_by_superadmin,
+            }
             dog.is_public = make_public
-            dog.save(update_fields=["is_public", "updated_at"])
+            if make_public:
+                dog.hidden_by_moderation = False
+            dog.visibility_locked_by_superadmin = True
+            dog.save(update_fields=[
+                "is_public", "hidden_by_moderation",
+                "visibility_locked_by_superadmin", "updated_at",
+            ])
             after = _snapshot(dog)
-            after["publication"] = {"is_public": dog.is_public}
+            after["publication"] = {
+                "is_public": dog.is_public,
+                "hidden_by_moderation": dog.hidden_by_moderation,
+                "visibility_locked_by_superadmin": dog.visibility_locked_by_superadmin,
+            }
             record_audit(
                 action=ModerationAudit.Action.RECORD_CHANGED,
                 actor=request.user, dog=dog, kennel=dog.kennel,
@@ -624,7 +642,11 @@ def dog_direct_edit(request, pk):
                     visibility_changed = owner and make_public != locked.is_public
                     before = _snapshot(locked)
                     if visibility_changed:
-                        before["publication"] = {"is_public": locked.is_public}
+                        before["publication"] = {
+                            "is_public": locked.is_public,
+                            "hidden_by_moderation": locked.hidden_by_moderation,
+                            "visibility_locked_by_superadmin": locked.visibility_locked_by_superadmin,
+                        }
                     for field in DOG_FIELDS:
                         if field in {"kennel", "sire", "dam", "litter"}:
                             setattr(locked, field, form.cleaned_data[field])
@@ -632,12 +654,19 @@ def dog_direct_edit(request, pk):
                             setattr(locked, field, form.cleaned_data[field])
                     if visibility_changed:
                         locked.is_public = make_public
+                        if make_public:
+                            locked.hidden_by_moderation = False
+                        locked.visibility_locked_by_superadmin = True
                     locked.full_clean()
                     locked.save()
                     _save_formsets(locked, sets)
                     after = _snapshot(locked)
                     if visibility_changed:
-                        after["publication"] = {"is_public": locked.is_public}
+                        after["publication"] = {
+                            "is_public": locked.is_public,
+                            "hidden_by_moderation": locked.hidden_by_moderation,
+                            "visibility_locked_by_superadmin": locked.visibility_locked_by_superadmin,
+                        }
                     if before != after:
                         invalidate_public_content()
                         record_audit(
