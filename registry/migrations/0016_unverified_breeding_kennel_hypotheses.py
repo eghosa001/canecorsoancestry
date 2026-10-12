@@ -28,14 +28,5 @@ class Migration(migrations.Migration):
             name="inferred_kennel_evidence",
             field=models.JSONField(default=dict, blank=True),
         ),
-        migrations.AddConstraint(
-            model_name="dog",
-            constraint=models.CheckConstraint(
-                condition=(
-                    models.Q(kennel__isnull=True)
-                    | models.Q(inferred_kennel__isnull=True)
-                ),
-                name="no_inferred_kennel_when_canonical_exists",
-            ),
-        ),
+
     ]
