@@ -166,3 +166,24 @@ class KennelPublicationTests(TestCase):
         self.assertEqual(self.dogs_change("hide", self.first).status_code, 302)
         self.first.refresh_from_db()
         self.assertTrue(self.first.hidden_by_moderation)
+
+    def test_only_superadmin_can_delegate_and_direct_publish_is_protected(self):
+        self.client.force_login(self.staff)
+        self.assertEqual(self.change("delegate").status_code, 302)
+        self.assertEqual(self.dogs_change("delegate", self.first).status_code, 302)
+        self.client.force_login(self.owner)
+        self.first.refresh_from_db()
+        result = self.client.post(
+            reverse("accounts:dog-set-public-visibility", args=[self.first.pk]),
+            {
+                "action": "publish",
+                "reason": "Super Admin final publication",
+                "version": self.first.updated_at.isoformat(),
+                "confirm_visibility": "yes",
+            },
+        )
+        self.assertEqual(result.status_code, 302)
+        self.first.refresh_from_db()
+        self.assertTrue(self.first.visibility_locked_by_superadmin)
+        self.client.force_login(self.staff)
+        self.assertEqual(self.dogs_change("hide", self.first).status_code, 403)
