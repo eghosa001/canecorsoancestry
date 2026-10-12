@@ -39,13 +39,41 @@ class BreedingKennelReviewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Agatha Custodinus")
         self.assertContains(response, "Custodinus")
-        self.assertContains(response, "not verified ownership")
+        self.assertContains(response, "not verified breeder identities")
         self.assertContains(
             response, "?kennel=" + str(self.kennel.pk)
         )
         self.assertEqual(response.context["page_obj"].paginator.count, 1)
         self.dog.refresh_from_db()
         self.assertIsNone(self.dog.kennel_id)
+
+    def test_archive_learned_suffix_is_visible_but_cannot_modify_dog(self):
+        suffix = Dog.objects.create(
+            name="NINFA DELL'ANTICO CERBERUS",
+            slug="ninfa-dellantico-cerberus",
+            is_public=True,
+        )
+        self.client.force_login(self.moderator)
+        response = self.client.get(self.url(), {"q": "NINFA"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Historical naming-pattern suggestions")
+        self.assertContains(response, "Dell&#x27;antico Cerberus")
+        self.assertContains(response, "1943 archive dog names")
+        suffix.refresh_from_db()
+        self.assertIsNone(suffix.kennel_id)
+
+    def test_archived_prefix_pattern_is_reviewed_without_creating_kennel(self):
+        name = Dog.objects.create(
+            name="HÄGNATORPETS NEW DOG", slug="hagnatorpets-new-dog",
+            is_public=True,
+        )
+        self.client.force_login(self.moderator)
+        response = self.client.get(self.url(), {"q": "HÄGNATORPETS"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Hägnatorpets")
+        self.assertFalse(Kennel.objects.filter(name__iexact="Hägnatorpets").exists())
+        name.refresh_from_db()
+        self.assertIsNone(name.kennel_id)
 
     def test_page_excludes_already_linked_dogs(self):
         self.dog.kennel = self.kennel
