@@ -50,7 +50,7 @@
       <article style="padding:1rem 0;border-bottom:1px solid var(--border-color, #aaa)">
         <strong>{% if event.dog %}{{ event.dog.name }}{% else %}Dog {{ event.dog_id_snapshot }}{% endif %}</strong>
         <p class="muted">{{ event.created_at|date:"d M Y H:i" }} · {{ event.actor_admin_label }} ·
-          {% if event.summary.kind == "direct_dog_proposal" %}{% if event.review_state == "direct_dog_proposal_approved" %}Approved and published{% elif event.review_state == "direct_dog_proposal_rejected" %}Rejected without publication{% else %}Pending Super Admin approval — not public{% endif %}{% elif event.summary.is_owner %}Super Admin direct edit{% elif event.review_state == "direct_dog_revert" %}Reverted{% elif event.review_state == "direct_dog_review" %}Reviewed{% else %}Live edit awaiting review{% endif %}
+          {% if event.summary.kind == "direct_dog_proposal" %}{% if event.review_state == "direct_dog_proposal_approved" %}Approved and published{% elif event.review_state == "direct_dog_proposal_rejected" %}Rejected without publication{% else %}Pending Super Admin approval — not public{% endif %}{% elif event.summary.kind == "direct_dog_create" %}New private dog created{% elif event.summary.is_owner %}Super Admin direct edit{% elif event.review_state == "direct_dog_revert" %}Reverted{% elif event.review_state == "direct_dog_review" %}Reviewed{% else %}Live edit awaiting review{% endif %}
         </p>
         {% if event.summary.kind == "direct_dog_proposal" %}
           <details class="ux-disclosure">
