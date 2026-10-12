@@ -278,29 +278,6 @@ class Dog(models.Model):
         return super().save(*args, **kwargs)
 
     @property
-    def public_site_label(self):
-        """Do not expose unpublished parents through a generated litter title."""
-        if self.code and not self.code.startswith("AUTO-"):
-            return self.code
-        sire = self.sire if self.sire_id else None
-        dam = self.dam if self.dam_id else None
-        sire_name = (
-            sire.name if sire and sire.is_effectively_public else "Unpublished sire"
-        )
-        dam_name = (
-            dam.name if dam and dam.is_effectively_public else "Unpublished dam"
-        )
-        if sire and dam:
-            return f"{sire_name} × {dam_name}"
-        if dam:
-            return f"{dam_name} litter"
-        if sire:
-            return f"{sire_name} litter"
-        if self.date_of_birth:
-            return f"Litter born {self.date_of_birth:%d %b %Y}"
-        return "Litter"
-
-    @property
     def record_locked_by_admin_label(self):
         if not self.record_locked_by_id:
             return ""
