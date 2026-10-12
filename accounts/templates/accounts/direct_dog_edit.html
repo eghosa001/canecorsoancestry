@@ -132,7 +132,7 @@
             </div>
           </div>
         </details>
-        {% if owner and not event.summary.is_owner and not event.review_state %}
+        {% if owner and not event.summary.is_owner and not event.review_state and event.summary.kind != "direct_dog_create" %}
         <form method="post" action="{% url 'accounts:dog-review-edit' dog.pk event.pk %}" style="margin-top:.8rem">
           {% csrf_token %}
           <label for="reason-{{ event.pk }}">Review decision reason</label>
