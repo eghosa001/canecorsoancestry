@@ -314,8 +314,13 @@ def _restore(dog, target):
     for field, value in target["dog"].items():
         setattr(dog, field, value)
     if "publication" in target:
-        # Old revisions lack this key: leave their visibility unchanged.
-        dog.is_public = target["publication"]["is_public"]
+        # Old revisions may contain only is_public; preserve unspecified fields.
+        publication = target["publication"]
+        dog.is_public = publication["is_public"]
+        if "hidden_by_moderation" in publication:
+            dog.hidden_by_moderation = publication["hidden_by_moderation"]
+        if "visibility_locked_by_superadmin" in publication:
+            dog.visibility_locked_by_superadmin = publication["visibility_locked_by_superadmin"]
     dog.full_clean()
     dog.save()
     for name, (model, fields) in RELATED.items():
@@ -770,6 +775,9 @@ def dog_review_edit(request, pk, audit_id):
                 current = _snapshot(dog)
                 if "publication" in event.summary.get("after", {}):
                     current["publication"] = {"is_public": dog.is_public}
+                    for field in ("hidden_by_moderation", "visibility_locked_by_superadmin"):
+                        if field in event.summary["after"]["publication"]:
+                            current["publication"][field] = getattr(dog, field)
                 if current != event.summary["after"]:
                     raise ValidationError(
                         "A later change has modified this record. To preserve those changes, review the newer revisions or make an explicit super-admin override."
