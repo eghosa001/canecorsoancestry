@@ -29,7 +29,7 @@ from registry.models import (
     ModerationAudit,
 )
 from registry.public_freshness import invalidate_public_content
-from registry.permissions import can_add_canonical_dog, can_manage_verification, can_review_submissions
+from registry.permissions import can_add_canonical_dog, can_manage_verification, can_publish_canonical_dog, can_review_submissions
 from registry.services import record_audit, moderation_dog_ids
 from .forms import validate_document_upload, validate_image_upload, normalize_image_upload
 
@@ -113,7 +113,7 @@ class DirectDogEditForm(forms.ModelForm):
             "class": "canonical-visibility-toggle",
             "aria-label": "Public visibility",
         }),
-        help_text="Off = Private. On = Public. Only the Super Admin can publish or unpublish a dog.",
+        help_text="Off = Private. On = Public. Moderators, Senior Moderators and Super Admins can change visibility unless it is locked by the Super Admin.",
     )
     reason = forms.CharField(
         min_length=5, max_length=2000, widget=forms.Textarea(attrs={"rows": 3}),
@@ -143,7 +143,7 @@ class DirectDogEditForm(forms.ModelForm):
             ordered.insert(ordered.index("bio") + 1, "visibility_public")
             self.order_fields(ordered)
         else:
-            # A forged POST from a reviewer must never publish a record.
+            # Do not expose the switch if the role cannot publish or a Super Admin has locked visibility.
             self.fields.pop("visibility_public")
         if dog.pk and not self.is_bound:
             for name in ("sire", "dam", "kennel", "litter"):
@@ -486,7 +486,7 @@ def dog_direct_create(request):
             messages.success(
                 request,
                 "Canonical dog added privately with an audit trail. "
-                "Only the Super Admin can publish it using Visibility in Manage record.",
+                "A Moderator, Senior Moderator or Super Admin can publish it using Visibility in Manage record.",
             )
             return redirect("accounts:dog-direct-edit", pk=dog.pk)
     return render(request, "accounts/direct_dog_create.html", {"form": form})
@@ -550,14 +550,10 @@ def dog_edit_list(request):
 @login_required
 @require_POST
 def dog_set_public_visibility(request, pk):
-    """Only the Super Admin deliberately publishes direct Django Admin records.
-
-    Creating a canonical dog through Advanced Admin is NOT member moderation.
-    There is no member-submission approval to process for this record.
-    Keep the act of publication separate, explicit, version-safe and audited.
-    """
-    if not can_manage_verification(request.user):
+    """Explicit, version-checked and audited canonical publication action."""
+    if not can_publish_canonical_dog(request.user):
         raise PermissionDenied
+    owner = can_manage_verification(request.user)
     action = request.POST.get("action", "")
     note = request.POST.get("reason", "").strip()
     if action not in {"publish", "unpublish"}:
@@ -578,13 +574,15 @@ def dog_set_public_visibility(request, pk):
                     "This dog was edited since the publication page loaded. "
                     "Reload and review the latest record before publishing."
                 )
+            if dog.visibility_locked_by_superadmin and not owner:
+                raise PermissionDenied("The Super Admin has locked this dog's publication status.")
             make_public = action == "publish"
             if (
                 dog.is_public == make_public
                 and dog.visibility_locked_by_superadmin
                 and (not make_public or not dog.hidden_by_moderation)
             ):
-                messages.info(request, "The Super Admin decision is already in effect.")
+                messages.info(request, "This publication decision is already in effect.")
                 return redirect("accounts:dog-direct-edit", pk=pk)
             # No automatic 'verified' status is granted by publication.
             # Respect ancestry cycle/identity validations before exposing facts.
@@ -598,7 +596,10 @@ def dog_set_public_visibility(request, pk):
             dog.is_public = make_public
             if make_public:
                 dog.hidden_by_moderation = False
-            dog.visibility_locked_by_superadmin = True
+            # Only Super Admin publication decisions introduce an override lock.
+            # Moderators can never clear an existing protected decision.
+            if owner:
+                dog.visibility_locked_by_superadmin = True
             dog.save(update_fields=[
                 "is_public", "hidden_by_moderation",
                 "visibility_locked_by_superadmin", "updated_at",
@@ -617,7 +618,7 @@ def dog_set_public_visibility(request, pk):
                     "publication_action": action,
                     "before": before,
                     "after": after,
-                    "is_owner": True,
+                    "is_owner": owner,
                 },
                 note=note,
             )
@@ -663,8 +664,11 @@ def dog_direct_edit(request, pk):
         suggested_kennel = get_object_or_404(Kennel, pk=target_uuid)
     data = request.POST if request.method == "POST" else None
     files = request.FILES if request.method == "POST" else None
+    can_publish = can_publish_canonical_dog(request.user) and (
+        owner or not dog.visibility_locked_by_superadmin
+    )
     form = DirectDogEditForm(
-        data, instance=dog, allow_publication=owner,
+        data, instance=dog, allow_publication=can_publish,
         suggested_kennel=suggested_kennel,
     )
     sets = _edit_formsets(dog, data, files)
@@ -681,6 +685,33 @@ def dog_direct_edit(request, pk):
                         raise ValidationError("The dog changed while this form was open. Reload and review the latest values.")
                     if locked.is_record_locked and not owner:
                         raise PermissionDenied("This record is locked by the super admin.")
+                    if locked.visibility_locked_by_superadmin and not owner and "visibility_public" in request.POST:
+                        raise PermissionDenied("The Super Admin has locked this dog's publication status.")
+                    # Older clients that do not submit the visibility switch
+                    # must never silently unpublish a record.
+                    make_public = (
+                        bool(form.cleaned_data["visibility_public"])
+                        if can_publish and "visibility_public" in request.POST
+                        else locked.is_public
+                    )
+                    visibility_changed = make_public != locked.is_public
+                    # An ordinary moderator must not combine publication with
+                    # sensitive ancestry/evidence changes in one transaction.
+                    # Such changes must be saved and checked independently.
+                    if visibility_changed and not owner:
+                        protected_changed = any(
+                            _current_change(locked, field)
+                            != _candidate_change(field, form.cleaned_data[field])
+                            for field in PROTECTED_DOG_FIELDS
+                        )
+                        evidence_changed = any(
+                            sets[name].has_changed() for name in PROTECTED_RELATED
+                        )
+                        if protected_changed or evidence_changed:
+                            raise ValidationError(
+                                "Save protected ancestry or evidence changes separately "
+                                "from publication. Nothing was published."
+                            )
                     # Only canonical facts that are deliberately low-risk may
                     # save directly for a moderator. Sensitive published
                     # ancestry goes through a separate human approval.
@@ -741,16 +772,6 @@ def dog_direct_edit(request, pk):
                                 "approval. The public dog record is unchanged."
                             )
                             return redirect("accounts:dog-direct-edit", pk=pk)
-                    # Older admin clients and scoped tests may omit the new
-                    # switch. Missing is NOT consent to unpublish; the editor
-                    # includes an explicit hidden false fallback for real
-                    # browser submissions when the switch is off.
-                    make_public = (
-                        bool(form.cleaned_data["visibility_public"])
-                        if owner and "visibility_public" in request.POST
-                        else locked.is_public
-                    )
-                    visibility_changed = owner and make_public != locked.is_public
                     before = _snapshot(locked)
                     if visibility_changed:
                         before["publication"] = {
@@ -767,7 +788,8 @@ def dog_direct_edit(request, pk):
                         locked.is_public = make_public
                         if make_public:
                             locked.hidden_by_moderation = False
-                        locked.visibility_locked_by_superadmin = True
+                        if owner:
+                            locked.visibility_locked_by_superadmin = True
                     locked.full_clean()
                     locked.save()
                     _save_formsets(locked, sets)
@@ -817,6 +839,7 @@ def dog_direct_edit(request, pk):
         "owner": owner, "version": dog.updated_at.isoformat(),
         "suggested_kennel": suggested_kennel,
         "can_add_dog": can_add_canonical_dog(request.user),
+        "can_publish_dog": can_publish,
     })
 
 

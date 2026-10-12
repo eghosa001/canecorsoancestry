@@ -19,8 +19,8 @@
       {% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">Public profile</a>{% endif %}
     </div>
   </header>
-  {% if not owner and not dog.is_public %}
-    <p class="panel muted">Private record. Only the Super Admin can change its publication status in the canonical details editor.</p>
+  {% if dog.visibility_locked_by_superadmin and not owner %}
+    <p class="panel muted">This dog's publication status is locked by the Super Admin. You can propose allowed corrections, but only a Super Admin can change its visibility.</p>
   {% endif %}
   <form method="post" enctype="multipart/form-data" class="panel" autocomplete="off">
     {% csrf_token %}
@@ -53,7 +53,7 @@
                 {% if dog.is_public %}The dog is already visible on the public website.{% else %}This record remains private until you switch on Published and save.{% endif %}
               </span>
             </p>
-            <p class="muted">Switch to Published, then save to make the dog's public profile and name search available. Switch to Unpublished and save to hide the dog again. Only the Super Admin can change this.</p>
+            <p class="muted">Moderators, Senior Moderators and Super Admins can publish or unpublish unlocked dogs. Every change is recorded in the audit history. Visibility locked by the Super Admin cannot be overridden by moderators.</p>
             <p class="muted">The photo-only browse gallery requires a dog photograph. Published dogs without photos are still searchable by name and have a public profile.</p>
             {{ field.errors }}
           </div>
@@ -106,10 +106,10 @@
     </details>
     {% endfor %}
     <div class="button-row">
-      <button class="btn btn-gold" type="submit" {% if owner %}data-canonical-submit{% endif %}>{% if owner %}Save dog details and visibility{% else %}Save changes or request protected review{% endif %}</button>
+      <button class="btn btn-gold" type="submit" {% if can_publish_dog %}data-canonical-submit{% endif %}>{% if can_publish_dog %}Save dog details and visibility{% else %}Save changes or request protected review{% endif %}</button>
       <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Discard edits</a>
     </div>
-    <p class="muted">{% if owner %}The visibility toggle above is saved together with these canonical details and recorded in the moderation audit. Existing member submissions and their approvals remain separate.{% else %}Only the Super Admin can change visibility; saving a private dog does not publish it.{% endif %}</p>
+    <p class="muted">{% if can_publish_dog %}The visibility toggle is saved with canonical details and recorded in the moderation audit. For non-Super Admins, protected ancestry and evidence changes must be saved separately from publication.{% else %}Visibility is protected by the Super Admin or unavailable to this account.{% endif %}</p>
   </form>
   <section class="panel">
     <h2>Revision history and super-admin review</h2>

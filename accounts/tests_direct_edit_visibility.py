@@ -11,6 +11,7 @@ class StaffChangeVisibilityTests(TestCase):
     def setUp(self):
         User = get_user_model()
         self.staff = User.objects.create_user(username="immediate-visibility-editor")
+        self.senior = User.objects.create_user(username="visibility-senior")
         self.owner = User.objects.create_superuser(
             username="visibility-owner",
             email="visibility-owner@example.com",
@@ -21,6 +22,10 @@ class StaffChangeVisibilityTests(TestCase):
         )
         ModerationRoleAssignment.objects.create(
             user=self.owner, role=ModerationRoleAssignment.Role.OWNER,
+            assigned_by=self.owner,
+        )
+        ModerationRoleAssignment.objects.create(
+            user=self.senior, role=ModerationRoleAssignment.Role.SENIOR,
             assigned_by=self.owner,
         )
         self.dog = Dog.objects.create(name="Before", slug="visibility-dog", is_public=True)
@@ -167,19 +172,101 @@ class StaffChangeVisibilityTests(TestCase):
             dog=self.dog, summary__publication_action="unpublish",
         ).exists())
 
-    def test_reviewer_cannot_see_switch_or_change_visibility_with_forged_post(self):
+    def test_moderator_can_publish_private_dog_with_audited_visibility(self):
         self.dog.is_public = False
         self.dog.save(update_fields=["is_public"])
-        url, data = self.payload()
-        self.assertNotContains(self.client.get(url), 'name="visibility_public"')
-        data["visibility_public"] = "on"
+        url, data = self.payload(visibility_public="on")
+        self.assertContains(self.client.get(url), 'name="visibility_public"')
+        self.assertContains(self.client.get(url), "Save dog details and visibility")
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
         self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+        self.assertFalse(self.dog.visibility_locked_by_superadmin)
+        event = ModerationAudit.objects.get(dog=self.dog, summary__publication_action="publish")
+        self.assertEqual(event.actor, self.staff)
+        self.assertFalse(event.summary["is_owner"])
+
+    def test_senior_can_publish_and_moderator_can_unpublish(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        self.client.force_login(self.senior)
+        url, data = self.payload(visibility_public="on")
+        self.assertEqual(self.client.post(url, data).status_code, 302)
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+        self.assertFalse(self.dog.visibility_locked_by_superadmin)
+        self.client.force_login(self.staff)
+        url, data = self.payload(visibility_public="false")
+        self.assertEqual(self.client.post(url, data).status_code, 302)
+        self.dog.refresh_from_db()
         self.assertFalse(self.dog.is_public)
+        self.assertTrue(ModerationAudit.objects.filter(
+            dog=self.dog, actor=self.staff, summary__publication_action="unpublish",
+        ).exists())
+
+    def test_super_admin_publication_lock_blocks_moderator_and_senior(self):
+        self.dog.is_public = False
+        self.dog.visibility_locked_by_superadmin = True
+        self.dog.save(update_fields=["is_public", "visibility_locked_by_superadmin"])
+        for user in (self.staff, self.senior):
+            self.client.force_login(user)
+            url, data = self.payload(visibility_public="on")
+            self.assertNotContains(self.client.get(url), 'name="visibility_public"')
+            self.assertEqual(self.client.post(url, data).status_code, 403)
+            self.dog.refresh_from_db()
+            self.assertFalse(self.dog.is_public)
         self.assertFalse(ModerationAudit.objects.filter(
             dog=self.dog, summary__publication_action="publish",
         ).exists())
+
+    def test_moderator_cannot_publish_and_change_ancestry_in_single_post(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        url, data = self.payload(visibility_public="on", sex=Dog.Sex.FEMALE)
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Save protected ancestry or evidence changes separately")
+        self.dog.refresh_from_db()
+        self.assertFalse(self.dog.is_public)
+        self.assertNotEqual(self.dog.sex, Dog.Sex.FEMALE)
+
+    def test_direct_publication_endpoint_allows_senior_and_respects_owner_lock(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        endpoint = reverse("accounts:dog-set-public-visibility", args=[self.dog.pk])
+        self.client.force_login(self.senior)
+        self.assertEqual(self.client.post(endpoint, {
+            "action": "publish", "reason": "Breeder identity and supporting evidence confirmed",
+            "confirm_visibility": "yes",
+            "version": self.dog.updated_at.isoformat(),
+        }).status_code, 302)
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+        self.assertFalse(self.dog.visibility_locked_by_superadmin)
+        self.assertTrue(ModerationAudit.objects.filter(
+            dog=self.dog, actor=self.senior, summary__publication_action="publish",
+        ).exists())
+        self.dog.visibility_locked_by_superadmin = True
+        self.dog.save(update_fields=["visibility_locked_by_superadmin", "updated_at"])
+        self.assertEqual(self.client.post(endpoint, {
+            "action": "unpublish", "reason": "Attempt to bypass Super Admin publication lock",
+            "confirm_visibility": "yes",
+            "version": self.dog.updated_at.isoformat(),
+        }).status_code, 403)
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+
+    def test_inactive_moderator_has_no_publication_authority(self):
+        from registry.permissions import can_publish_canonical_dog
+        self.staff.is_active = False
+        self.staff.save(update_fields=["is_active"])
+        self.assertFalse(can_publish_canonical_dog(self.staff))
+        self.client.force_login(self.staff)
+        # Django treats inactive sessions as unauthenticated and redirects to login.
+        self.assertEqual(self.client.get(
+            reverse("accounts:dog-direct-edit", args=[self.dog.pk])
+        ).status_code, 302)
 
     def test_legacy_owner_save_without_switch_preserves_public_status(self):
         self.client.force_login(self.owner)

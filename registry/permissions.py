@@ -134,6 +134,11 @@ def can_add_canonical_dog(user):
     }
 
 
+def can_publish_canonical_dog(user):
+    """Active moderators of every tier can publish unlocked canonical records."""
+    return can_review_submissions(user)
+
+
 def can_review_flagged_submissions(user):
     return moderation_role(user) in {
         ModerationRoleAssignment.Role.OWNER,
