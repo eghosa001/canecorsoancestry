@@ -33,6 +33,19 @@ class BreedingKennelReviewTests(TestCase):
         self.client.force_login(self.member)
         self.assertEqual(self.client.get(self.url()).status_code, 403)
 
+    def test_staff_group_directory_supports_family_ranked_review(self):
+        self.client.force_login(self.moderator)
+        response = self.client.get(self.url())
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.context["archive_cluster_total"], 330)
+        self.assertContains(response, "SCANDIFIO")
+        self.assertContains(response, "Show all")
+        self.assertContains(response, "not verified breeders")
+        all_groups = self.client.get(self.url(), {"clusters": "all"})
+        self.assertEqual(all_groups.status_code, 200)
+        self.assertGreaterEqual(len(all_groups.context["archive_clusters"]), 330)
+        self.assertFalse(Dog.objects.exclude(kennel__isnull=True).exists())
+
     def test_moderator_can_review_suggestions_but_no_dog_is_changed(self):
         self.client.force_login(self.moderator)
         response = self.client.get(self.url(), {"q": "Agatha"})
