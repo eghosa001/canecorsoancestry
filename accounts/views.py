@@ -2928,6 +2928,10 @@ def verification_dashboard(request):
     }
     for user in staff_users:
         user.moderation_assignment = role_assignments.get(user.pk)
+    manageable_staff = [
+        user for user in staff_users
+        if not user.is_superuser and user.moderation_assignment is not None
+    ]
 
     return render(
         request,
@@ -2951,6 +2955,7 @@ def verification_dashboard(request):
             "locked_litters": locked_litters,
             "rules": rules,
             "staff_users": staff_users,
+            "manageable_staff": manageable_staff,
             "staff_account_form": ModeratorAccountCreateForm(),
             "role_choices": (
                 (ModerationRoleAssignment.Role.NONE, "Suspended staff"),
@@ -3104,7 +3109,14 @@ def moderation_set_status(request):
             },
             note=reason,
         )
-    messages.success(request, "Staff account activated." if activate else "Staff account deactivated; sign-in is blocked.")
+    messages.success(
+        request,
+        (
+            f"{assignment.public_label} · {target.username} reactivated; sign-in is restored."
+            if activate else
+            f"{assignment.public_label} · {target.username} deactivated; sign-in is blocked."
+        ),
+    )
     return redirect("accounts:verification-dashboard")
 
 
