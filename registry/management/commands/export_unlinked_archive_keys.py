@@ -22,6 +22,9 @@ class Command(BaseCommand):
         limit = kwargs["max_rows"]
         if limit < 0 or limit > 200000:
             raise CommandError("Limit must be between 0 and 200000.")
+        # Audit CSV export intentionally remains independent of a web request
+        # and never imports source data back into the canonical registry.
+        # This lets researchers inspect the original archive offline first.
         # External keys are precise archive identities. Registration numbers
         # and common names are NEVER substituted for source identity.
         keys = {}
