@@ -30,6 +30,50 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: One-time read-only effective Super Admin and moderator role check
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "eghosa001/canecorsoancestry"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = local
+          # The target address is represented only by a SHA-256 fingerprint;
+          # no usernames, email addresses or user IDs are printed to the logs.
+          sudo -n podman exec cca-oracle-staging python manage.py shell -c '
+          import hashlib
+          import json
+          from django.contrib.auth import get_user_model
+          from registry.models import KennelMembership, ModerationRoleAssignment, Submission
+          fingerprint = "a5c24cb2ef5e8c401364356f649c29dda82b565cf3d0683dc91d7ca4508b5734"
+          def is_target(text):
+              return hashlib.sha256(str(text or "").strip().casefold().encode()).hexdigest() == fingerprint
+          matches = [
+              user for user in get_user_model().objects.all().iterator(chunk_size=500)
+              if is_target(user.email) or is_target(user.username)
+          ]
+          report = {"matching_accounts":len(matches)}
+          if len(matches) == 1:
+              user = matches[0]
+              member_identity = (
+                  KennelMembership.objects.filter(user_id=user.pk).exists()
+                  or Submission.objects.filter(submitted_by_id=user.pk).exists()
+              )
+              role = ModerationRoleAssignment.objects.filter(user_id=user.pk).values_list("role", flat=True).first()
+              effective = "owner" if (user.is_superuser and not member_identity) else (role if not member_identity else None)
+              report.update({
+                  "account_active":bool(user.is_active),
+                  "django_superuser":bool(user.is_superuser),
+                  "django_staff":bool(user.is_staff),
+                  "django_admin_access":bool(user.is_active and user.is_staff),
+                  "recorded_moderation_role":role or "unassigned",
+                  "effective_moderation_role":effective or "none",
+                  "moderator_access":bool(user.is_active and effective in ("owner","senior","reviewer")),
+                  "super_admin_control":bool(user.is_active and effective == "owner"),
+                  "conflicting_member_identity":member_identity,
+              })
+          print("PRODUCTION_ROLE_AUDIT="+json.dumps(report, sort_keys=True))
+          '
+
       - name: Diagnose real public moderation-route HTTP status and maintenance marker
         shell: bash
         run: |
