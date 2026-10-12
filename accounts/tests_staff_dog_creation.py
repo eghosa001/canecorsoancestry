@@ -172,13 +172,15 @@ class StaffDogCreationAndAccessTests(TestCase):
     def test_staff_selector_cannot_deactivate_superadmin_or_member(self):
         self.client.force_login(self.owner)
         endpoint = reverse("accounts:moderation-set-status")
-        for person in (self.owner, self.member):
+        for person, expected_status in ((self.owner, 403), (self.member, 404)):
             result = self.client.post(endpoint, {
                 "user_id": str(person.pk),
                 "action": "deactivate",
                 "reason": "Should be refused safely",
             })
-            self.assertEqual(result.status_code, 403)
+            # Super Admin is forbidden; ordinary user without a registered
+            # moderation identity is deliberately not found.
+            self.assertEqual(result.status_code, expected_status)
             person.refresh_from_db()
             self.assertTrue(person.is_active)
 
