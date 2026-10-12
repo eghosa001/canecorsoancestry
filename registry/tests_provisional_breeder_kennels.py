@@ -88,7 +88,7 @@ class ProvisionalKennelLinkTests(TestCase):
         )
         self.assertEqual(kennel_profile.status_code, 200)
         self.assertContains(kennel_profile, "Possible kennel-origin matches")
-        self.assertContains(kennel_profile, self.dog.name)
+        self.assertContains(kennel_profile, "SCANDIFIO&#x27;S SOPHIE ROSE")
         directory = self.client.get(reverse("registry:kennel-list"))
         self.assertContains(directory, "Historical name")
         self.assertContains(directory, "possible origin match")
