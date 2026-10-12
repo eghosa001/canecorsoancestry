@@ -3032,7 +3032,11 @@ def moderation_set_role(request):
             messages.info(request, "Super Admin accounts keep Super Admin authority.")
             return redirect("accounts:verification-dashboard")
         if has_member_identity(target):
-            raise PermissionDenied("Member accounts cannot receive moderation authority.")
+            messages.error(
+                request,
+                "Member identities cannot be moderators. Create a separate staff account.",
+            )
+            return redirect("accounts:verification-dashboard")
         assignment = ModerationRoleAssignment.objects.select_for_update().filter(
             user=target, is_deregistered=False,
         ).first()
