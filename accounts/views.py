@@ -3011,65 +3011,52 @@ def moderation_create_account(request):
 def moderation_set_role(request):
     if not can_manage_verification(request.user):
         raise PermissionDenied
-
     user_id = request.POST.get("user_id", "").strip()
+    requested_role = request.POST.get("role", "").strip() or ModerationRoleAssignment.Role.NONE
     if not user_id.isdigit():
         messages.error(request, "Invalid staff account ID.")
         return redirect("accounts:verification-dashboard")
-
-    target = get_object_or_404(get_user_model(), pk=int(user_id))
-    if target.is_superuser:
-        messages.info(request, "Super Admin accounts keep Super Admin authority.")
-        return redirect("accounts:verification-dashboard")
-    if has_member_identity(target):
-        ModerationRoleAssignment.objects.filter(user=target).delete()
-        if target.is_staff:
-            target.is_staff = False
-            target.save(update_fields=("is_staff",))
-        messages.error(
-            request,
-            "That is a member account. Member identities cannot be moderators; create a separate staff account.",
-        )
-        return redirect("accounts:verification-dashboard")
-
-    assignment = ModerationRoleAssignment.objects.filter(user=target).first()
-    if assignment is None or assignment.is_deregistered:
-        messages.error(
-            request,
-            "Only registered staff accounts can receive moderation roles. Deregistered accounts cannot be restored.",
-        )
-        return redirect("accounts:verification-dashboard")
-
-    requested_role = request.POST.get("role", "").strip() or ModerationRoleAssignment.Role.NONE
-    allowed_roles = {
+    if requested_role not in {
         ModerationRoleAssignment.Role.NONE,
         ModerationRoleAssignment.Role.REVIEWER,
         ModerationRoleAssignment.Role.SENIOR,
-    }
-    if requested_role not in allowed_roles:
+    }:
         messages.error(request, "That role can only be assigned to a Super Admin account.")
         return redirect("accounts:verification-dashboard")
 
-    before = assignment.role
-    assignment.role = requested_role
-    assignment.assigned_by = request.user
-    assignment.save(update_fields=("role", "assigned_by"))
-
-    if target.is_staff:
-        target.is_staff = False
-        target.save(update_fields=("is_staff",))
-
-    record_audit(
-        action=ModerationAudit.Action.VERIFICATION,
-        actor=request.user,
-        summary={
-            "type": "moderation_role_changed",
-            "target_admin_number": assignment.admin_number,
-            "previous_role": before,
-            "new_role": requested_role,
-        },
-        note="Super Admin updated dedicated staff authority.",
-    )
+    # Use the same lock order as deregistration, so a concurrent role change
+    # can never resurrect an already-revoked account.
+    with transaction.atomic():
+        target = get_object_or_404(get_user_model().objects.select_for_update(), pk=int(user_id))
+        if target.is_superuser:
+            messages.info(request, "Super Admin accounts keep Super Admin authority.")
+            return redirect("accounts:verification-dashboard")
+        if has_member_identity(target):
+            raise PermissionDenied("Member accounts cannot receive moderation authority.")
+        assignment = ModerationRoleAssignment.objects.select_for_update().filter(
+            user=target, is_deregistered=False,
+        ).first()
+        if assignment is None:
+            messages.error(request, "Only currently registered staff accounts can receive moderation roles.")
+            return redirect("accounts:verification-dashboard")
+        before = assignment.role
+        assignment.role = requested_role
+        assignment.assigned_by = request.user
+        assignment.save(update_fields=("role", "assigned_by"))
+        if target.is_staff:
+            target.is_staff = False
+            target.save(update_fields=("is_staff",))
+        record_audit(
+            action=ModerationAudit.Action.VERIFICATION,
+            actor=request.user,
+            summary={
+                "type": "moderation_role_changed",
+                "target_admin_number": assignment.admin_number,
+                "previous_role": before,
+                "new_role": requested_role,
+            },
+            note="Super Admin updated dedicated staff authority.",
+        )
     messages.success(request, "Staff authority updated.")
     return redirect("accounts:verification-dashboard")
 
