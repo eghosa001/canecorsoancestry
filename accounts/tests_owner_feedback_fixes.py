@@ -301,8 +301,13 @@ class OwnerFeedbackFixesTests(TestCase):
         self.client.force_login(self.member)
         self.assertEqual(self.client.post(url, valid).status_code, 403)
         self.client.force_login(self.staff)
-        self.assertEqual(self.client.post(url, valid).status_code, 403)
-        self.assertNotContains(
+        # Staff may publish, but the explicit endpoint still requires confirmation.
+        self.assertEqual(self.client.post(
+            url, {**valid, "confirm_visibility": ""}
+        ).status_code, 302)
+        self.dog.refresh_from_db()
+        self.assertFalse(self.dog.is_public)
+        self.assertContains(
             self.client.get(reverse("accounts:dog-direct-edit", args=[self.dog.pk])),
             'name="visibility_public"',
         )
