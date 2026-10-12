@@ -463,7 +463,22 @@ def approve_submission(
             )
 
     if submission.kind == Submission.Kind.DOG:
+        # This is the *breeding kennel of origin*, never the member who
+        # purchased/submitted the dog. Payment and submission permission
+        # continue to be verified independently against submission.kennel.
         kennel = submission.kennel
+        if "breeding_kennel_id" in payload and not payload.get("litter_submission_id"):
+            source_id = payload["breeding_kennel_id"]
+            if source_id:
+                try:
+                    kennel = Kennel.objects.get(pk=source_id, is_public=True)
+                except (Kennel.DoesNotExist, TypeError, ValueError, ValidationError) as exc:
+                    raise ValueError(
+                        "The selected breeding kennel is unavailable. "
+                        "Choose a public, registered kennel or leave it blank."
+                    ) from exc
+            else:
+                kennel = None
         sire = _resolve_dog(payload.get("sire_id"))
         dam = _resolve_dog(payload.get("dam_id"))
         litter = _resolve_litter(payload.get("litter_id"))
