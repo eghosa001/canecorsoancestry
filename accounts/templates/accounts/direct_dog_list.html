@@ -15,7 +15,15 @@
     </div>
   </header>
   {% if not show_proposals %}
+  {% if kennel_target %}
+  <section class="panel" aria-label="Target kennel for dog association">
+    <strong>Associate an existing dog with {{ kennel_target.name }}</strong>
+    <p class="muted">Choose the exact dog by name and registration. You will review the proposed kennel change in the canonical editor before submitting an audited correction. Published-dog changes by a Moderator require Super Admin approval.</p>
+    <a class="text-link" href="{% url 'accounts:kennel-publication-detail' kennel_target.pk %}">← Back to {{ kennel_target.name }}</a>
+  </section>
+  {% endif %}
   <form class="panel" method="get">
+    {% if kennel_target %}<input type="hidden" name="kennel" value="{{ kennel_target.pk }}">{% endif %}
     <label for="dog-record-q">Find an existing dog by name, registration, slug or UUID</label>
     <div class="button-row"><input id="dog-record-q" name="q" value="{{ query }}" maxlength="160" placeholder="Search canonical dog records" autocomplete="off" style="flex:1;min-width:14rem">
       <button class="btn btn-gold" type="submit">Search records</button>
@@ -27,7 +35,7 @@
     {% for dog in dogs %}
     <div class="button-row" style="justify-content:space-between;border-bottom:1px solid var(--border-color, #aaa);padding:.8rem 0">
       <div><strong>{{ dog.name }}</strong><p class="canonical-list-publication"><span class="canonical-publication-badge {% if dog.is_public %}canonical-publication-badge--published{% else %}canonical-publication-badge--unpublished{% endif %}">{% if dog.is_public %}Published{% else %}Unpublished{% endif %}</span> <span class="muted">{{ dog.kennel.name|default:"No kennel" }}{% if dog.is_record_locked %} · Locked{% endif %}</span></p></div>
-      <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Manage record</a>
+      <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}{% if kennel_target %}?kennel={{ kennel_target.pk }}{% endif %}">{% if kennel_target %}Review kennel association{% else %}Manage record{% endif %}</a>
     </div>
     {% empty %}<p>No matching canonical dogs were found.</p>{% endfor %}
   </section>
@@ -35,7 +43,7 @@
   {% endif %}
   <section class="panel">
     <h2>{% if show_proposals %}Proposal history and decisions{% else %}Recent direct record changes{% endif %}</h2>
-    {% if history_deferred %}<p class="muted">Revision history is deferred while searching so results appear faster. <a class="text-link" href="?q={{ query|urlencode }}&history=1">Load recent revision history →</a></p>{% endif %}
+    {% if history_deferred %}<p class="muted">Revision history is deferred while searching so results appear faster. <a class="text-link" href="?q={{ query|urlencode }}&history=1{% if kennel_target %}&kennel={{ kennel_target.pk }}{% endif %}">Load recent revision history →</a></p>{% endif %}
     <p class="muted">Protected ancestry proposals are not published until approved by Super Admin. Routine corrections may take effect immediately and remain auditable.</p>
     {% for event in revisions %}
       <article style="padding:1rem 0;border-bottom:1px solid var(--border-color, #aaa)">
