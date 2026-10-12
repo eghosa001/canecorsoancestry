@@ -16,6 +16,9 @@ from registry.management.commands.reconcile_breeding_kennels import (
     _normal,
     explicit_breeding_kennel,
 )
+from registry.archive_breeder_hints import (
+    archive_name_clusters, archive_pattern_hints,
+)
 from registry.models import Dog, DogExternalKey, DogSource, Kennel, ModerationAudit
 
 
@@ -51,6 +54,40 @@ class BreedingKennelReconciliationTests(TestCase):
             source_type=DogSource.SourceType.PEDIGREE,
             raw_payload=payload,
         )
+
+    def test_archive_catalog_includes_original_exact_id_join_groups(self):
+        clusters = archive_name_clusters()
+        self.assertGreaterEqual(len(clusters), 330)
+        self.assertEqual(len(clusters), len({x["name"].casefold() for x in clusters}))
+        by_name = {x["name"].casefold(): x for x in clusters}
+        self.assertEqual(by_name["scandifio's"]["matches"], 249)
+        self.assertEqual(by_name["scandifio's"]["family"], 133)
+        self.assertEqual(by_name["scandifio's"]["exact"], 249)
+        self.assertNotIn("cane corso", by_name)
+
+    def test_indexed_archive_patterns_at_start_middle_and_end(self):
+        start = archive_pattern_hints("SCANDIFIO'S SOPHIE ROSE")
+        end = archive_pattern_hints("ISOTTA DELL'APPIO")
+        middle = archive_pattern_hints("GUARDIAN DELL'APPIO THE FIRST")
+        self.assertEqual(start[0]["label"].casefold(), "scandifio's")
+        self.assertEqual(start[0]["position"], "prefix")
+        self.assertEqual(start[0]["archive_exact_source_ids"], 249)
+        self.assertEqual(end[0]["position"], "suffix")
+        self.assertEqual(middle[0]["position"], "middle")
+        self.assertTrue(all(
+            match["certainty"] == "unverified_hypothesis"
+            for match in (start[0], end[0], middle[0])
+        ))
+        self.assertEqual(archive_pattern_hints("CANE CORSO BIG BOY"), [])
+
+    def test_archive_affixes_never_authorize_direct_kennel_link(self):
+        self.dog.name = "SCANDIFIO'S SOPHIE ROSE"
+        self.dog.save(update_fields=["name"])
+        _, report = self.run_audit()
+        self.assertEqual(report["summary"]["safe"], 0)
+        self.assertEqual(report["summary"]["review"], 1)
+        self.dog.refresh_from_db()
+        self.assertIsNone(self.dog.kennel_id)
 
     def test_only_explicit_parenthesized_breeder_is_a_breeder_proof(self):
         self.assertEqual(
