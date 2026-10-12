@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Manage {{ kennel.name }} · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Kennel moderation</p>
+    <h1>{{ kennel.name }}</h1>
+    <p>Manage the kennel profile independently of its dogs. Publication approvals and original records remain unchanged.</p>
+    <a class="btn btn-outline" href="{% url 'accounts:kennel-publication-list' %}">All kennels</a>
+  </header>
+  <section class="panel">
+    <h2>Kennel visibility</h2>
+    <p>{% if kennel.is_public %}Published profile{% else %}Hidden profile{% endif %} · {% if kennel.hide_dogs %}Dogs suppressed{% else %}Eligible dogs visible{% endif %}</p>
+    <form method="post" action="{% url 'accounts:kennel-publication-change' kennel.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="version" value="{{ version }}">
+      <label for="kennel-action">Publication mode</label>
+      <select id="kennel-action" name="action" required>
+        <option value="">Choose an option</option>
+        <option value="show_all">Show kennel and eligible dogs</option>
+        <option value="hide_profile">Hide kennel profile only</option>
+        <option value="hide_dogs">Show kennel, hide all dogs</option>
+        <option value="hide_all">Hide kennel and all dogs</option>
+      </select>
+      <label for="kennel-reason">Reason</label>
+      <input id="kennel-reason" name="reason" minlength="5" maxlength="2000" required>
+      <label><input type="checkbox" name="confirm" value="yes" required> Confirm publication change</label>
+      <div class="button-row"><button class="btn btn-gold" type="submit">Save kennel settings</button></div>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Selected dog visibility</h2>
+    <p>{{ approved_total }} approved dogs; {{ hidden_total }} individually suppressed. A private dog stays private when moderation suppression is removed.</p>
+    <form method="post" action="{% url 'accounts:kennel-dogs-visibility-change' kennel.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="version" value="{{ version }}">
+      <div style="overflow-x:auto">
+        <table style="width:100%">
+          <thead><tr><th>Select</th><th>Dog</th><th>Publication</th><th>Moderation</th><th>Public site</th></tr></thead>
+          <tbody>
+          {% for dog in dogs %}
+            <tr>
+              <td><label><input type="checkbox" name="dog_ids" value="{{ dog.pk }}"><span class="sr-only">Select {{ dog.name }}</span></label></td>
+              <td><a class="text-link" href="{% url 'accounts:dog-direct-edit' dog.pk %}">{{ dog.name }}</a></td>
+              <td>{% if dog.is_public %}Approved/public{% else %}Private{% endif %}</td>
+              <td>{% if dog.hidden_by_moderation %}Hidden{% else %}Normal{% endif %}</td>
+              <td>{% if dog.is_effectively_public %}Visible{% else %}Hidden{% endif %}</td>
+            </tr>
+          {% empty %}<tr><td colspan="5">No dogs are linked.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if page_obj.has_other_pages %}
+      <nav class="button-row">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+        <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+      </nav>
+      {% endif %}
+      <label for="dog-reason">Reason</label>
+      <input id="dog-reason" name="reason" minlength="5" maxlength="2000" required>
+      <label><input type="checkbox" name="confirm" value="yes" required> Confirm selected-dog change</label>
+      <div class="button-row">
+        <button class="btn btn-outline" type="submit" name="action" value="hide">Hide selected dogs</button>
+        <button class="btn btn-gold" type="submit" name="action" value="restore">Restore selected dogs</button>
+      </div>
+    </form>
+  </section>
+</section>
+{% endblock %}
