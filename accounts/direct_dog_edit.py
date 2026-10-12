@@ -486,7 +486,7 @@ def dog_direct_create(request):
             messages.success(
                 request,
                 "Canonical dog added privately with an audit trail. "
-                "Only the Super Admin can publish it using Visibility in Manage record.",
+                "A Moderator, Senior Moderator or Super Admin can publish it using Visibility in Manage record.",
             )
             return redirect("accounts:dog-direct-edit", pk=dog.pk)
     return render(request, "accounts/direct_dog_create.html", {"form": form})
