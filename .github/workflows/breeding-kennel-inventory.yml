@@ -5,6 +5,9 @@ on:
     workflows: ["Oracle Django production release (CI-gated)"]
     types: [completed]
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/breeding-kennel-inventory.yml"]
 
 permissions:
   contents: read
