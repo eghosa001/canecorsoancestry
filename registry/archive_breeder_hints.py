@@ -116,6 +116,64 @@ S|56|Di Casa Leone
 S|54|Custode Del Trono
 S|54|Degli Orsi Ali
 S|50|Di Casa Catamo
+# Additional high-support affixes identified by joining the 2026 original
+# pedigree archive against exact source IDs of 20,993 kennel-less canonical
+# dogs (not inferred from a current owner or submitter).
+P|283|Scandifio's
+P|205|Alcor's
+S|247|Dell'appio
+P|120|Maximo's
+S|136|Strajano
+P|126|Delizioso
+S|180|Dell'anteler
+P|67|Timoniere
+S|76|Soberon
+S|78|Del-orte
+P|73|Ekskljuziv-n
+P|74|Windypine's
+S|103|Dell'alumera
+P|56|Linia Blours
+P|55|Fior Di Ferro
+P|13|Mar E Sol's
+S|34|Di Spicciano
+P|123|Proudness As
+P|119|Magnuslunds
+P|59|Uncle And Nephew's
+S|84|Della Corte Degli Olmi
+S|20|De La Rune De Dalle
+S|30|Blekitna Przystan
+P|77|Megale Hellas
+S|68|Di Dracaryus
+P|40|Imprezo Polaris
+S|28|Iz Zolotogo Ventsa
+S|113|Di Casa Leone
+S|17|Z Lesnego Potoku
+S|94|Del Diryo
+S|72|Di Rio Nero
+S|24|Des Dunes Des Sages
+S|58|Della Scuderia De Angelis
+P|15|Vento E Tempesta
+P|68|Angelo Del Guardiano
+S|124|Della Dorsale
+P|18|Schaste Moe
+S|75|Des Gardiens Des Murailles
+S|33|De Genevayse
+P|17|Master K9's
+S|79|Du Nord
+P|17|Grand Favourite
+S|21|Des Pres De Couriere
+S|94|Del Nero Velluto
+S|13|Barbarian Corso
+S|14|San Diego D W
+P|25|Julia Cezaris
+P|22|Borealis Rus
+S|64|Del Giardino Delle Ombre
+S|13|Do Casal Do Libro
+S|11|Del Baki Casa
+S|18|Lou Gardian Di Prouvenco
+P|18|Sleeping Giants
+S|16|Wise Keeper
+P|16|Rimskyi Kvartal
 """.strip()
 
 _TOKEN_RE = re.compile(r"[^\W_]+(?:['’\-][^\W_]+)*", re.UNICODE)
@@ -147,8 +205,15 @@ def archive_pattern_hints(dog_name, *, limit=3):
     """
     tokens = name_tokens(dog_name)
     hits = []
+    seen_source_rows = set()
     for row in _ARCHIVE_KENNEL_PATTERNS.splitlines():
+        if not row or row.lstrip().startswith("#"):
+            continue
         place, support, label = row.split("|", 2)
+        source_key = (place, name_tokens(label))
+        if source_key in seen_source_rows:
+            continue
+        seen_source_rows.add(source_key)
         name = name_tokens(label)
         observed = _matched_position(tokens, name)
         if observed is None:
