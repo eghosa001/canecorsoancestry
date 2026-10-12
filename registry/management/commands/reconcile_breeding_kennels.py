@@ -248,9 +248,11 @@ class Command(BaseCommand):
                 list(Kennel.objects.only("pk", "name", "verified_at", "slug"))
             )
             for dog_id, kennel_id, version in safe:
-                dog = Dog.objects.select_for_update().select_related(
-                    "litter__kennel"
-                ).get(pk=dog_id)
+                # Only lock Dog itself: nullable litter/kennel LEFT JOINs
+                # cannot participate in FOR UPDATE on PostgreSQL.
+                dog = Dog.objects.select_for_update(
+                    of=("self",)
+                ).select_related("litter__kennel").get(pk=dog_id)
                 if dog.kennel_id is not None or dog.updated_at != version:
                     raise CommandError("A dog was edited after dry-run; nothing applied.")
                 current_sources = list(DogSource.objects.filter(dog_id=dog_id))
