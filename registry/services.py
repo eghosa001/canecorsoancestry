@@ -795,6 +795,32 @@ def approve_submission(
         kennel = submission.kennel
         if kennel is None:
             raise ValueError("Kennel claim has no target kennel.")
+        # Existing legacy claims retain their old review behavior. Newly
+        # submitted certificate-required claims must contain a verified,
+        # privately stored kennel-name ownership document at approval time.
+        if payload.get("ownership_certificate_required"):
+            certificates = submission.verification_evidence.filter(
+                evidence_type=SubmissionEvidence.EvidenceType.KENNEL,
+                note="Required kennel-name ownership certificate",
+            )
+            certificate = certificates.first()
+            if certificate is None or not certificate.file:
+                raise ValueError(
+                    "A private kennel-name ownership certificate is required "
+                    "before this claim can be approved."
+                )
+            try:
+                certificate_exists = certificate.file.storage.exists(certificate.file.name)
+            except (OSError, TimeoutError, ValueError) as exc:
+                raise ValueError(
+                    "Cannot verify the kennel ownership certificate in private "
+                    "media storage. Retry when storage is healthy."
+                ) from exc
+            if not certificate_exists:
+                raise ValueError(
+                    "The kennel ownership certificate is missing from private "
+                    "storage. Request a new document before approval."
+                )
         if KennelMembership.objects.filter(kennel=kennel).exclude(
             user=submission.submitted_by
         ).exists():
