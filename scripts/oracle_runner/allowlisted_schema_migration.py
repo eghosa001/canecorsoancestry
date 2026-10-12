@@ -9,6 +9,7 @@ from django.db.migrations.operations.models import AddConstraint, CreateModel
 
 SAVED_PAIRING = ("accounts", "0005_saved_pairing")
 KENNEL_PUBLICATION = ("registry", "0015_kennel_publication_controls")
+ARCHIVE_HYPOTHESIS = ("registry", "0016_unverified_breeding_kennel_hypotheses")
 ALLOWED_MIGRATION = SAVED_PAIRING  # Backward compatibility for old tests/runbooks.
 
 # Model, field, constant default, and whether the field creates a DB index.
@@ -60,6 +61,42 @@ def _publication_is_exact(migration):
     return True
 
 
+def _archive_hypothesis_is_exact(migration):
+    ops = migration.operations
+    if (
+        len(ops) != 3
+        or migration.dependencies != [("registry", "0015_kennel_publication_controls")]
+        or any(not isinstance(op, AddField) for op in ops)
+    ):
+        return False
+    flag, candidate_fk, metadata = ops
+    flag_field = flag.field
+    fk_field = candidate_fk.field
+    meta_field = metadata.field
+    return (
+        flag.model_name == "kennel"
+        and flag.name == "is_archive_hypothesis"
+        and type(flag_field) is models.BooleanField
+        and flag_field.default is False
+        and flag_field.db_index
+        and not flag_field.null
+        and candidate_fk.model_name == "dog"
+        and candidate_fk.name == "inferred_kennel"
+        and type(fk_field) is models.ForeignKey
+        and str(fk_field.remote_field.model).lower() == "registry.kennel"
+        and fk_field.null
+        and fk_field.blank
+        and fk_field.remote_field.related_name == "inferred_dogs"
+        and fk_field.remote_field.on_delete is models.SET_NULL
+        and metadata.model_name == "dog"
+        and metadata.name == "inferred_kennel_evidence"
+        and type(meta_field) is models.JSONField
+        and meta_field.default is dict
+        and meta_field.blank
+        and not meta_field.null
+    )
+
+
 def validate_pending_schema_changes(plan):
     """Reject other pending versions, combined plans, reversals, and drift."""
     if not plan:
@@ -73,6 +110,8 @@ def validate_pending_schema_changes(plan):
     if identity == SAVED_PAIRING and _saved_pairing_is_exact(migration):
         return True
     if identity == KENNEL_PUBLICATION and _publication_is_exact(migration):
+        return True
+    if identity == ARCHIVE_HYPOTHESIS and _archive_hypothesis_is_exact(migration):
         return True
     raise ValueError("Unapproved production migration or unexpected operations.")
 
