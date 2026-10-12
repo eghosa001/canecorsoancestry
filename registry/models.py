@@ -56,6 +56,7 @@ class Kennel(models.Model):
     website = models.URLField(blank=True)
     is_public = models.BooleanField(default=True, db_index=True)
     hide_dogs = models.BooleanField(default=False)
+    publication_locked_by_superadmin = models.BooleanField(default=False)
     verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -157,6 +158,7 @@ class Dog(models.Model):
     )
     is_public = models.BooleanField(default=False, db_index=True)
     hidden_by_moderation = models.BooleanField(default=False, db_index=True)
+    visibility_locked_by_superadmin = models.BooleanField(default=False)
     is_record_locked = models.BooleanField(default=False, db_index=True)
     record_locked_at = models.DateTimeField(null=True, blank=True)
     record_locked_by = models.ForeignKey(
