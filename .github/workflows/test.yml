@@ -118,6 +118,11 @@ jobs:
               scoped_accounts=true
             fi
 
+            if grep -Eq '^accounts/(breeding_kennel_review|tests_breeding_kennel_review)[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_breeding_kennel_review" "registry.tests_breeding_kennel_reconciliation")
+              scoped_accounts=true
+            fi
+
             if grep -q '^accounts/tests_workspace_navigation[.]py$' <<<"$changed"; then
               targets+=("accounts.tests_workspace_navigation")
               scoped_accounts=true
