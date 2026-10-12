@@ -105,9 +105,9 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        # Use the verified Docker Official Images mirror to avoid shared
-        # GitHub runner Docker Hub anonymous pull-rate failures.
-        image: public.ecr.aws/docker/library/postgres:17
+        # The ECR public mirror hit a provider-side data limit in October 2026.
+        # Prefer the official Docker Hub image for the PR's PostgreSQL check.
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
