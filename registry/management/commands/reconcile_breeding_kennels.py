@@ -216,7 +216,12 @@ class Command(BaseCommand):
         if options["report_path"]:
             path = Path(options["report_path"])
             path.write_text(json.dumps({
-                "summary": dict(counts),
+                "summary": {
+                    "safe": counts["safe"],
+                    "review": counts["review"],
+                    "unresolved": counts["unresolved"],
+                    **dict(counts),
+                },
                 "auto_candidates": [
                     {"dog_id": str(did), "breeding_kennel_id": str(kid)}
                     for did, kid, _ in safe
