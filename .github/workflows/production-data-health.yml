@@ -30,6 +30,45 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Diagnose real public moderation-route HTTP status and maintenance marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "eghosa001/canecorsoancestry"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = local
+          echo "Checking availability of the user-reported HTTP 503 paths (unauthenticated)."
+          echo "systemd origin=$(systemctl is-active cca-oracle-staging.service || true)"
+          echo "systemd postgres=$(systemctl is-active cca-pg-shadow.service || true)"
+          echo "systemd cloudflare-vpc=$(systemctl is-active cca-cloudflared-vpc.service || true)"
+          if sudo -n test -e /var/lib/cca/control/maintenance.flag; then
+            echo "::warning::Production maintenance.flag EXISTS; non-health requests return HTTP 503."
+            sudo -n stat -c 'maintenance_flag_last_changed=%y' /var/lib/cca/control/maintenance.flag
+          else
+            echo "Production maintenance.flag: absent"
+          fi
+          failures=0
+          for path in /healthz/ /accounts/login/ /member/moderation/ /member/moderation/kennels/; do
+            status="$(curl --silent --show-error --connect-timeout 6 --max-time 25 --path-as-is \
+              -o /tmp/cca-mod-route.out -D /tmp/cca-mod-route.headers \
+              -w '%{http_code}' "$PUBLIC_SITE$path" || true)"
+            echo "PUBLIC $path: HTTP ${status:-unavailable}"
+            if [ "$status" = "503" ]; then
+              grep -iE '^(retry-after|server|cf-ray|content-type):' /tmp/cca-mod-route.headers || true
+              echo "::error::Public HTTP 503 for $path; do not claim moderator site is healthy."
+              failures=$((failures+1))
+            elif [ "$path" = /healthz/ ] || [ "$path" = /accounts/login/ ]; then
+              [ "$status" = "200" ] || failures=$((failures+1))
+            else
+              # Authentication-required moderator pages normally redirect to login.
+              [[ "$status" == 302 || "$status" == 301 || "$status" == 200 ]] || failures=$((failures+1))
+            fi
+          done
+          if [ "$failures" -gt 0 ]; then
+            echo "::error::$failures moderator-route health failures detected."
+            exit 1
+          fi
+          echo "PASS: Public moderator routes do not return 503."
       - name: Confirm audited database is the Oracle-local production primary
         shell: bash
         run: |
