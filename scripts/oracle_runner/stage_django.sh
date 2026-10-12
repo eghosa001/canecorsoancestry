@@ -209,6 +209,20 @@ else
       psql -X -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
       < scripts/oracle_runner/approved_registry_0015.sql
     echo "PASS: Five publication fields, indexes and migration ledger applied transactionally."
+  elif [[ "$schema_approval" == "PASS: Only approved registry.0016_unverified_breeding_kennel_hypotheses is pending." ]]; then
+    echo "Applying three optional origin-research fields without assigning dog origins."
+    # A single checked SQL transaction has owner-verified backup + migration
+    # history. PostgreSQL cca_app role never gains ALTER permissions.
+    app_schema_can_create="$(sudo -n "$PODMAN_BIN" exec cca-pg-shadow \
+      psql -X -At -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+      -c "SELECT has_schema_privilege('cca_app', 'django_app', 'CREATE');")"
+    [[ "$app_schema_can_create" == f ]] || {
+      echo "::error::Runtime app unexpectedly holds schema CREATE privilege"; exit 1;
+    }
+    sudo -n "$PODMAN_BIN" exec -i cca-pg-shadow \
+      psql -X -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+      < scripts/oracle_runner/approved_registry_0016.sql
+    echo "PASS: Three research-only fields, FK, indexes and ledger applied atomically."
   elif [[ "$schema_approval" == "PASS: Only approved accounts.0005_saved_pairing is pending." ]]; then
   # PostgreSQL intentionally grants the production app no schema DDL rights.
   # Borrow CREATE on this schema for the reviewed transaction, then revoke it
