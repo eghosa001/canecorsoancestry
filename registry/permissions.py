@@ -127,11 +127,8 @@ def can_review_submissions(user):
 
 
 def can_add_canonical_dog(user):
-    """Only active Super Admins and Senior Moderators create canonical dogs."""
-    return moderation_role(user) in {
-        ModerationRoleAssignment.Role.OWNER,
-        ModerationRoleAssignment.Role.SENIOR,
-    }
+    """All active moderator tiers may add private, audited canonical dog records."""
+    return can_review_submissions(user)
 
 
 def can_publish_canonical_dog(user):
