@@ -87,6 +87,16 @@ urlpatterns = [
         name="moderation-set-role",
     ),
     path(
+        "moderation/verification/staff/status/",
+        views.moderation_set_status,
+        name="moderation-set-status",
+    ),
+    path(
+        "moderation/verification/staff/deregister/",
+        views.moderation_deregister_staff,
+        name="moderation-deregister-staff",
+    ),
+    path(
         "moderation/verification/rules/<int:pk>/",
         views.verification_rule_update,
         name="verification-rule-update",
