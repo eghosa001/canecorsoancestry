@@ -21,7 +21,7 @@ from django.urls import reverse
 
 from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
 from registry.permissions import can_manage_verification, can_review_submissions, is_staff_identity
-from registry.querysets import one_dog_per_kennel, with_card_image, with_card_registration, with_stored_images
+from registry.querysets import one_dog_per_kennel, with_card_image, with_card_registration, with_stored_images, published_dogs
 
 from .seo import json_ld
 
@@ -214,7 +214,7 @@ def _load_featured_dogs():
         rows = list(
             with_card_image(with_card_registration(
                 _display_dogs(
-                    Dog.objects.filter(pk__in=ids, is_public=True),
+                    published_dogs(Dog.objects.filter(pk__in=ids)),
                     include_sources=False,
                     include_registrations=False,
                     include_images=False,
@@ -232,7 +232,7 @@ def _load_featured_dogs():
             return featured
 
     candidate_rows = list(
-        with_stored_images(Dog.objects.filter(is_public=True))
+        with_stored_images(published_dogs())
         .order_by("-search_count", "-updated_at", "name")
         .values_list("pk", "kennel_id")[:96]
     )
@@ -253,7 +253,7 @@ def _load_featured_dogs():
         # the exact per-kennel query rather than showing a short homepage row.
         featured_ids = list(
             one_dog_per_kennel(
-                with_stored_images(Dog.objects.filter(is_public=True))
+                with_stored_images(published_dogs())
             )
             .order_by("-search_count", "-updated_at", "name")
             .values_list("pk", flat=True)[:4]
@@ -268,10 +268,10 @@ def home(request):
     public_stats = cache.get("cca:home:public-stats:v4")
     if public_stats is None:
         public_stats = {
-            "dog_count": Dog.objects.filter(is_public=True).count(),
-            "kennel_count": Kennel.objects.count(),
-            "litter_count": Litter.objects.filter(is_public=True).count(),
-            "country_count": Dog.objects.filter(is_public=True)
+            "dog_count": published_dogs().count(),
+            "kennel_count": Kennel.objects.filter(is_public=True).count(),
+            "litter_count": Litter.objects.filter(is_public=True).filter(Q(kennel__isnull=True) | Q(kennel__hide_dogs=False)).count(),
+            "country_count": published_dogs()
             .exclude(country="")
             .values("country")
             .distinct()
