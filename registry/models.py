@@ -54,6 +54,9 @@ class Kennel(models.Model):
     city = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
     website = models.URLField(blank=True)
+    is_public = models.BooleanField(default=True, db_index=True)
+    hide_dogs = models.BooleanField(default=False)
+    publication_locked_by_superadmin = models.BooleanField(default=False)
     verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -154,6 +157,8 @@ class Dog(models.Model):
         db_index=True,
     )
     is_public = models.BooleanField(default=False, db_index=True)
+    hidden_by_moderation = models.BooleanField(default=False, db_index=True)
+    visibility_locked_by_superadmin = models.BooleanField(default=False)
     is_record_locked = models.BooleanField(default=False, db_index=True)
     record_locked_at = models.DateTimeField(null=True, blank=True)
     record_locked_by = models.ForeignKey(
@@ -191,6 +196,15 @@ class Dog(models.Model):
                 name="dog_parents_must_differ",
             ),
         ]
+
+    @property
+    def is_effectively_public(self):
+        """Approved dogs can be temporarily suppressed without losing approval."""
+        return bool(
+            self.is_public
+            and not self.hidden_by_moderation
+            and (not self.kennel_id or not self.kennel.hide_dogs)
+        )
 
     def _parent_creates_cycle(self, parent_id):
         if not self.pk or not parent_id:
@@ -373,6 +387,29 @@ class Litter(models.Model):
             return f"{self.dam.name} litter"
         if self.sire_id:
             return f"{self.sire.name} litter"
+        if self.date_of_birth:
+            return f"Litter born {self.date_of_birth:%d %b %Y}"
+        return "Litter"
+
+    @property
+    def public_site_label(self):
+        """Do not expose unpublished parents through a generated litter title."""
+        if self.code and not self.code.startswith("AUTO-"):
+            return self.code
+        sire = self.sire if self.sire_id else None
+        dam = self.dam if self.dam_id else None
+        sire_name = (
+            sire.name if sire and sire.is_effectively_public else "Unpublished sire"
+        )
+        dam_name = (
+            dam.name if dam and dam.is_effectively_public else "Unpublished dam"
+        )
+        if sire and dam:
+            return f"{sire_name} × {dam_name}"
+        if dam:
+            return f"{dam_name} litter"
+        if sire:
+            return f"{sire_name} litter"
         if self.date_of_birth:
             return f"Litter born {self.date_of_birth:%d %b %Y}"
         return "Litter"

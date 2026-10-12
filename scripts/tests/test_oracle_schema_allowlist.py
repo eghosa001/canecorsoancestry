@@ -39,6 +39,54 @@ class ApprovedSchemaMigrationTests(unittest.TestCase):
                 ), False),
             ])
 
+    def test_exact_kennel_publication_migration_is_allowlisted(self):
+        module = importlib.import_module("registry.migrations.0015_kennel_publication_controls")
+        migration = module.Migration("0015_kennel_publication_controls", "registry")
+        self.assertTrue(validate_pending_schema_changes([(migration, False)]))
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(migration, True)])
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(self.migration, False), (migration, False)])
+
+    def test_only_five_unchanged_boolean_fields_are_permitted(self):
+        module = importlib.import_module("registry.migrations.0015_kennel_publication_controls")
+        migration = module.Migration("0015_kennel_publication_controls", "registry")
+        first = migration.operations[0]
+        original = first.field.default
+        try:
+            first.field.default = False
+            with self.assertRaises(ValueError):
+                validate_pending_schema_changes([(migration, False)])
+        finally:
+            first.field.default = original
+        original_ops = migration.operations
+        try:
+            migration.operations = original_ops[:-1]
+            with self.assertRaises(ValueError):
+                validate_pending_schema_changes([(migration, False)])
+        finally:
+            migration.operations = original_ops
+
+    def test_atomic_publication_script_has_backups_and_no_app_alter_grants(self):
+        root = Path(__file__).resolve().parents[1] / "oracle_runner"
+        stage = (root / "stage_django.sh").read_text()
+        sql = (root / "approved_registry_0015.sql").read_text()
+        self.assertIn("registry.0015_kennel_publication_controls", stage)
+        self.assertIn("approved_registry_0015.sql", stage)
+        self.assertIn("bash scripts/oracle_runner/backup_local_postgres.sh", stage)
+        self.assertLess(
+            stage.index("bash scripts/oracle_runner/backup_local_postgres.sh"),
+            stage.index("< scripts/oracle_runner/approved_registry_0015.sql"),
+        )
+        self.assertIn("BEGIN;", sql)
+        self.assertIn("COMMIT;", sql)
+        self.assertIn("ON_ERROR_STOP=1", stage)
+        self.assertIn("django_app.django_migrations", sql)
+        self.assertIn("current_user <> 'cca_shadow_admin'", sql)
+        self.assertEqual(sql.count("ADD COLUMN "), 5)
+        self.assertNotIn("GRANT ALTER", stage + sql)
+        self.assertNotIn("GRANT ALL", stage + sql)
+
     def test_oracle_stage_invokes_preflight_as_importable_package(self):
         script = (
             Path(__file__).resolve().parents[1]

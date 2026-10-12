@@ -4,6 +4,14 @@ from django.db.models.functions import Coalesce, RowNumber
 from .models import Dog, DogAlias, DogImage, DogRegistration, DogSource
 
 
+def published_dogs(queryset=None):
+    """Single public-visibility rule for approved dogs and kennel overrides."""
+    queryset = Dog.objects.all() if queryset is None else queryset
+    return queryset.filter(is_public=True, hidden_by_moderation=False).filter(
+        Q(kennel__isnull=True) | Q(kennel__hide_dogs=False)
+    )
+
+
 def with_stored_images(queryset):
     """Restrict to dogs with managed images using one deduplicated ID set.
 

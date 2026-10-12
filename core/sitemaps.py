@@ -2,6 +2,8 @@ from django.contrib.sitemaps import Sitemap
 from django.urls import reverse
 
 from registry.models import Dog, Kennel, Litter
+from django.db.models import Q
+from registry.querysets import published_dogs
 
 
 class StaticViewSitemap(Sitemap):
@@ -24,7 +26,7 @@ class DogSitemap(Sitemap):
     priority = 0.9
     changefreq = "weekly"
     def items(self):
-        return Dog.objects.filter(is_public=True).only("slug", "updated_at").order_by("name")
+        return published_dogs().only("slug", "updated_at").order_by("name")
     def location(self, dog):
         return reverse("registry:dog-detail", args=[dog.slug])
     def lastmod(self, dog):
@@ -47,7 +49,7 @@ class KennelSitemap(Sitemap):
     priority = 0.7
     changefreq = "weekly"
     def items(self):
-        return Kennel.objects.only("slug", "updated_at").order_by("name")
+        return Kennel.objects.filter(is_public=True).only("slug", "updated_at").order_by("name")
     def location(self, kennel):
         return reverse("registry:kennel-detail", args=[kennel.slug])
     def lastmod(self, kennel):
@@ -58,7 +60,7 @@ class LitterSitemap(Sitemap):
     priority = 0.5
     changefreq = "monthly"
     def items(self):
-        return Litter.objects.filter(is_public=True).only("pk", "created_at").order_by("-created_at")
+        return Litter.objects.filter(is_public=True).filter(Q(kennel__isnull=True) | Q(kennel__hide_dogs=False)).only("pk", "created_at").order_by("-created_at")
     def location(self, litter):
         return reverse("registry:litter-detail", args=[litter.pk])
     def lastmod(self, litter):

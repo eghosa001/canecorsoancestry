@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, direct_dog_edit
+from . import views, direct_dog_edit, kennel_publication
 
 app_name = "accounts"
 
@@ -57,6 +57,10 @@ urlpatterns = [
     path("notifications/", views.member_account_only(views.notifications), name="notifications"),
     path("moderation/", views.moderation_queue, name="moderation"),
     path("moderation/dogs/", direct_dog_edit.dog_edit_list, name="dog-edit-list"),
+    path("moderation/kennels/", kennel_publication.kennel_publication_list, name="kennel-publication-list"),
+    path("moderation/kennels/<uuid:pk>/", kennel_publication.kennel_publication_detail, name="kennel-publication-detail"),
+    path("moderation/kennels/<uuid:pk>/publication/", kennel_publication.kennel_publication_change, name="kennel-publication-change"),
+    path("moderation/kennels/<uuid:pk>/dogs/visibility/", kennel_publication.kennel_dogs_visibility_change, name="kennel-dogs-visibility-change"),
     path("moderation/dogs/parent-suggestions/", direct_dog_edit.dog_parent_suggestions, name="dog-parent-suggestions"),
     path("moderation/dogs/<uuid:pk>/edit/", direct_dog_edit.dog_direct_edit, name="dog-direct-edit"),
     path("moderation/dogs/<uuid:pk>/visibility/", direct_dog_edit.dog_set_public_visibility, name="dog-set-public-visibility"),

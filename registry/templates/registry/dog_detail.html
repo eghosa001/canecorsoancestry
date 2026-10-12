@@ -78,8 +78,8 @@
         <h1>{{ dog.name }}</h1>
       </div>
       <div class="profile-quick-parents" aria-label="Recorded parents">
-        <div><span>Sire</span>{% if dog.sire and dog.sire.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.sire.slug %}">{{ dog.sire.name }}</a>{% elif dog.sire %}<strong>Not published</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
-        <div><span>Dam</span>{% if dog.dam and dog.dam.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.dam.slug %}">{{ dog.dam.name }}</a>{% elif dog.dam %}<strong>Not published</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
+        <div><span>Sire</span>{% if dog.sire and dog.sire.is_effectively_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.sire.slug %}">{{ dog.sire.name }}</a>{% elif dog.sire %}<strong>Not published</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
+        <div><span>Dam</span>{% if dog.dam and dog.dam.is_effectively_public %}<a class="parent-link" href="{% url 'registry:dog-detail' dog.dam.slug %}">{{ dog.dam.name }}</a>{% elif dog.dam %}<strong>Not published</strong>{% else %}<strong>Not recorded</strong>{% endif %}</div>
       </div>
       {% if dog.display_registrations %}
         <p class="registration-line">
@@ -115,7 +115,7 @@
         </dd>
         <dt>Country</dt><dd>{{ dog.country|default:"Not recorded" }}</dd>
         <dt>Kennel</dt>
-        <dd>{% if dog.kennel %}<a class="text-link" href="{% url 'registry:kennel-detail' dog.kennel.slug %}">{{ dog.kennel.name }}</a>{% else %}Not recorded{% endif %}</dd>
+        <dd>{% if dog.kennel %}{% if dog.kennel.is_public %}<a class="text-link" href="{% url 'registry:kennel-detail' dog.kennel.slug %}">{{ dog.kennel.name }}</a>{% else %}{{ dog.kennel.name }}{% endif %}{% else %}Not recorded{% endif %}</dd>
       </dl>
 
       {% if staff_identity and staff_role %}<div class="button-row"><a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Edit canonical record</a></div>{% endif %}

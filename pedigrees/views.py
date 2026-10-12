@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, render
 
 from registry.models import Dog
 from registry.permissions import can_use_member_features
-from registry.querysets import public_dog_match_filter
+from registry.querysets import public_dog_match_filter, published_dogs
 
 from .services import (
     descendant_generations,
@@ -23,7 +23,7 @@ ALLOWED_GENERATIONS = {4, 6, 8, 10}
 
 
 def _public_dogs():
-    return Dog.objects.filter(is_public=True).select_related("kennel")
+    return published_dogs().select_related("kennel")
 
 
 def _requested_generations(request, default=4):

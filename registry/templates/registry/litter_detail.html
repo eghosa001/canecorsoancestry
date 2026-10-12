@@ -1,19 +1,19 @@
 {% extends "base.html" %}
-{% block title %}{{ litter.public_label }} · Cane Corso Ancestry{% endblock %}
+{% block title %}{{ litter.public_site_label }} · Cane Corso Ancestry{% endblock %}
 {% block content %}
 <section class="page-shell">
   <header class="page-heading">
     <p class="eyebrow">Litter</p>
-    <h1>{{ litter.public_label }}</h1>
-    <p>{{ litter.date_of_birth|default:"Date of birth not recorded" }}{% if litter.kennel %} · <a class="text-link" href="{% url 'registry:kennel-detail' litter.kennel.slug %}">{{ litter.kennel.name }}</a>{% endif %}</p>
+    <h1>{{ litter.public_site_label }}</h1>
+    <p>{{ litter.date_of_birth|default:"Date of birth not recorded" }}{% if litter.kennel %} · {% if litter.kennel.is_public %}<a class="text-link" href="{% url 'registry:kennel-detail' litter.kennel.slug %}">{{ litter.kennel.name }}</a>{% else %}{{ litter.kennel.name }}{% endif %}{% endif %}</p>
   </header>
 
   <div class="profile-section-grid">
     <article class="panel">
       <div class="panel-heading"><h2>Parents</h2></div>
       <div class="parent-grid">
-        <div><span>Sire</span>{% if litter.sire %}{% if litter.sire.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' litter.sire.slug %}">{{ litter.sire.name }}</a>{% else %}<strong>{{ litter.sire.name }}</strong>{% endif %}{% else %}<strong>Not recorded</strong>{% endif %}</div>
-        <div><span>Dam</span>{% if litter.dam %}{% if litter.dam.is_public %}<a class="parent-link" href="{% url 'registry:dog-detail' litter.dam.slug %}">{{ litter.dam.name }}</a>{% else %}<strong>{{ litter.dam.name }}</strong>{% endif %}{% else %}<strong>Not recorded</strong>{% endif %}</div>
+        <div><span>Sire</span>{% if litter.sire %}{% if litter.sire.is_effectively_public %}<a class="parent-link" href="{% url 'registry:dog-detail' litter.sire.slug %}">{{ litter.sire.name }}</a>{% else %}<strong>Not published</strong>{% endif %}{% else %}<strong>Not recorded</strong>{% endif %}</div>
+        <div><span>Dam</span>{% if litter.dam %}{% if litter.dam.is_effectively_public %}<a class="parent-link" href="{% url 'registry:dog-detail' litter.dam.slug %}">{{ litter.dam.name }}</a>{% else %}<strong>Not published</strong>{% endif %}{% else %}<strong>Not recorded</strong>{% endif %}</div>
       </div>
     </article>
     <article class="panel">

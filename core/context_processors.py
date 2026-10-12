@@ -43,6 +43,8 @@ def site_metadata(request):
             workspace_section = "verification"
         elif view_name in {"accounts:dog-edit-list", "accounts:dog-direct-edit", "accounts:dog-review-edit"}:
             workspace_section = "dogs"
+        elif view_name in {"accounts:kennel-publication-list", "accounts:kennel-publication-detail", "accounts:kennel-publication-change", "accounts:kennel-dogs-visibility-change"}:
+            workspace_section = "kennels"
         elif view_name == "accounts:moderation-audit":
             workspace_section = "audit"
         elif view_name == "accounts:data-health":

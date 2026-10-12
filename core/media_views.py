@@ -3,6 +3,7 @@ import mimetypes
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.http import FileResponse, Http404, HttpResponseRedirect
+from django.db.models import Q
 
 from core.cloudflare_media import signed_media_url
 from registry.permissions import can_review_submissions
@@ -16,13 +17,12 @@ def _member_kennel_ids(user):
 
 
 def _can_read_media(user, path):
+    visible_dog = Q(dog__is_public=True, dog__hidden_by_moderation=False) & (
+        Q(dog__kennel__isnull=True) | Q(dog__kennel__hide_dogs=False)
+    )
     public = (
-        DogImage.objects.filter(image=path, dog__is_public=True).exists()
-        or DogDocument.objects.filter(
-            file=path,
-            is_public=True,
-            dog__is_public=True,
-        ).exists()
+        DogImage.objects.filter(visible_dog, image=path).exists()
+        or DogDocument.objects.filter(visible_dog, file=path, is_public=True).exists()
     )
     if public:
         return True, True

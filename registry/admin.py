@@ -159,10 +159,19 @@ class DogAdmin(admin.ModelAdmin):
 
 @admin.register(Kennel)
 class KennelAdmin(admin.ModelAdmin):
-    list_display = ("name", "country", "city", "verified_at")
+    list_display = ("name", "country", "city", "verified_at", "is_public", "hide_dogs", "publication_locked_by_superadmin")
     search_fields = ("name", "country", "city")
     prepopulated_fields = {"slug": ("name",)}
-    readonly_fields = ("verified_at",)
+    readonly_fields = ("verified_at", "is_public", "hide_dogs", "publication_locked_by_superadmin", "publication_workflow")
+
+    @admin.display(description="Public visibility")
+    def publication_workflow(self, obj):
+        if not obj or not obj.pk:
+            return "Save this kennel first, then manage publication."
+        return format_html(
+            '<a href="{}">Manage kennel and dog visibility →</a>',
+            reverse("accounts:kennel-publication-detail", args=[obj.pk]),
+        )
 
 
 @admin.register(Litter)

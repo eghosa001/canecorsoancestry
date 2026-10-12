@@ -38,7 +38,7 @@ from .models import (
     public_verification_label,
 )
 from .permissions import can_contribute_to_dog
-from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images
+from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
 
 PROFILE_RELATION_PREVIEW_LIMIT = 18
@@ -105,7 +105,7 @@ def _attach_source_image_urls(dogs):
 
 
 def _public_dogs_with_images():
-    return with_displayable_images(Dog.objects.filter(is_public=True))
+    return with_displayable_images(published_dogs())
 
 
 def _attach_source_images_for_missing(dogs):
@@ -140,7 +140,7 @@ def dog_suggestions(request):
     # Typed lookup is a registry search, not a photo gallery. Every published
     # dog must be discoverable even when a photograph has not been uploaded.
     # Keep the image requirement only for the unfiltered browse picker.
-    dogs = Dog.objects.filter(is_public=True)
+    dogs = published_dogs()
     if not query and browse:
         dogs = with_displayable_images(dogs)
 
@@ -208,7 +208,7 @@ def dog_search(request):
     if query:
         # An explicit name/alias/registration search must find published dogs
         # irrespective of the completeness of their image gallery.
-        base_dogs = Dog.objects.filter(is_public=True).filter(
+        base_dogs = published_dogs().filter(
             public_dog_match_filter(query, exact=exact)
         )
     else:
@@ -243,7 +243,7 @@ def dog_search(request):
     # registration and kennel. The order from the ranked ID query wins.
     card_rows = with_card_image(with_card_registration(
         _dog_cards(
-            Dog.objects.filter(pk__in=page_ids, is_public=True),
+            published_dogs(Dog.objects.filter(pk__in=page_ids)),
             include_sources=False, include_registrations=False,
             include_images=False,
         )
@@ -261,7 +261,7 @@ def dog_search(request):
     countries = cache.get("cca:dog-search:countries:v3")
     if countries is None:
         countries = list(
-            with_displayable_images(Dog.objects.filter(is_public=True))
+            with_displayable_images(published_dogs())
             .exclude(country="")
             .values_list("country", flat=True)
             .distinct()
@@ -273,7 +273,7 @@ def dog_search(request):
     if kennels is None:
         displayable_kennel_ids = (
             with_displayable_images(
-                Dog.objects.filter(is_public=True, kennel__isnull=False)
+                published_dogs(Dog.objects.filter(kennel__isnull=False))
             )
             .order_by()
             .values("kennel_id")
@@ -336,8 +336,8 @@ def _public_profile_dog(slug):
     registration and published-document collections.
     """
     dogs = (
-        Dog.objects.filter(is_public=True)
-        .select_related("kennel", "sire", "dam")
+        published_dogs()
+        .select_related("kennel", "sire", "dam", "sire__kennel", "dam__kennel")
         .annotate(
             _has_profile_images=Exists(
                 DogImage.objects.filter(dog_id=OuterRef("pk"))
@@ -355,7 +355,7 @@ def _public_profile_dog(slug):
                 DogSource.objects.filter(dog_id=OuterRef("pk"))
             ),
             _has_public_offspring=Exists(
-                Dog.objects.filter(is_public=True).filter(
+                published_dogs().filter(
                     Q(sire_id=OuterRef("pk")) | Q(dam_id=OuterRef("pk"))
                 )
             ),
@@ -410,9 +410,9 @@ def dog_detail(request, slug):
     dog = _public_profile_dog(slug)
     if dog is None:
         old = DogRedirect.objects.select_related("dog").filter(old_slug=slug).first()
-        if old and old.dog.is_public:
+        if old and old.dog.is_effectively_public:
             return redirect("registry:dog-detail", slug=old.dog.slug, permanent=True)
-        return get_object_or_404(Dog.objects.filter(is_public=True), slug=slug)
+        return get_object_or_404(published_dogs(), slug=slug)
 
 
     # Calculate using all reachable *published* pedigree links, not merely
@@ -420,7 +420,7 @@ def dog_detail(request, slug):
     # parent is unknown ancestry, never evidence of a true zero coefficient.
     # select_related has already loaded the two parents, so no extra query.
     public_parent_count = sum(
-        bool(parent and parent.is_public) for parent in (dog.sire, dog.dam)
+        bool(parent and parent.is_effectively_public) for parent in (dog.sire, dog.dam)
     )
     public_parentage_complete = public_parent_count == 2
     coi_display_state = "insufficient" if not public_parentage_complete else "estimated"
@@ -464,7 +464,7 @@ def dog_detail(request, slug):
         structured_data["birthDate"] = dog.date_of_birth.isoformat()
     if image_url:
         structured_data["image"] = image_url
-    if dog.kennel:
+    if dog.kennel and dog.kennel.is_public:
         structured_data["isPartOf"] = {
             "@type": "Organization",
             "name": dog.kennel.name,
@@ -538,23 +538,23 @@ def dog_detail(request, slug):
 def _top_public_parents(parent_field, sex):
     relation = parent_field.removesuffix("_id")
     rows = list(
-        Dog.objects.filter(
-            is_public=True,
+        published_dogs(Dog.objects.filter(
             **{
                 f"{relation}__is_public": True,
+                f"{relation}__hidden_by_moderation": False,
                 f"{relation}__sex": sex,
             },
+        )).filter(
+            Q(**{f"{relation}__kennel__isnull": True}) | Q(**{f"{relation}__kennel__hide_dogs": False})
         )
         .values(parent_field)
         .annotate(public_offspring_count=Count("id"))
         .order_by("-public_offspring_count")[:20]
     )
     parent_ids = [row[parent_field] for row in rows]
-    parents = Dog.objects.filter(
-        pk__in=parent_ids,
-        is_public=True,
-        sex=sex,
-    ).in_bulk()
+    parents = published_dogs(Dog.objects.filter(
+        pk__in=parent_ids, sex=sex,
+    )).in_bulk()
     ranked = []
     for row in rows:
         parent = parents.get(row[parent_field])
@@ -570,9 +570,9 @@ def pedigree_statistics(request):
     top_sires = _top_public_parents("sire_id", Dog.Sex.MALE)
     top_dams = _top_public_parents("dam_id", Dog.Sex.FEMALE)
     top_kennels = (
-        Kennel.objects.annotate(
+        Kennel.objects.filter(is_public=True, hide_dogs=False).annotate(
             public_dog_count=Count(
-                "dogs", filter=Q(dogs__is_public=True), distinct=True
+                "dogs", filter=Q(dogs__is_public=True, dogs__hidden_by_moderation=False), distinct=True
             )
         )
         .filter(public_dog_count__gt=0)
@@ -592,18 +592,18 @@ def pedigree_statistics(request):
 def kennel_list(request):
     query = request.GET.get("q", "").strip()
     public_dog_count = (
-        Dog.objects.filter(kennel_id=OuterRef("pk"), is_public=True)
+        published_dogs(Dog.objects.filter(kennel_id=OuterRef("pk")))
         .values("kennel_id")
         .annotate(total=Count("pk"))
         .values("total")[:1]
     )
     public_litter_count = (
-        Litter.objects.filter(kennel_id=OuterRef("pk"), is_public=True)
+        Litter.objects.filter(kennel_id=OuterRef("pk"), is_public=True, kennel__hide_dogs=False)
         .values("kennel_id")
         .annotate(total=Count("pk"))
         .values("total")[:1]
     )
-    kennels = Kennel.objects.annotate(
+    kennels = Kennel.objects.filter(is_public=True).annotate(
         public_dog_count=Coalesce(
             Subquery(public_dog_count, output_field=IntegerField()),
             Value(0),
@@ -640,8 +640,8 @@ def kennel_list(request):
 
 
 def kennel_detail(request, slug):
-    kennel = get_object_or_404(Kennel, slug=slug)
-    public_dogs = Dog.objects.filter(kennel=kennel, is_public=True)
+    kennel = get_object_or_404(Kennel, slug=slug, is_public=True)
+    public_dogs = published_dogs(Dog.objects.filter(kennel=kennel))
     public_dog_total = public_dogs.count()
     stored_image_exists = DogImage.objects.filter(dog_id=OuterRef("pk"))
     source_image_exists = DogSource.objects.filter(
@@ -660,8 +660,8 @@ def kennel_detail(request, slug):
         include_sources=False,
     ).order_by("name")
     litter_queryset = (
-        Litter.objects.filter(kennel=kennel, is_public=True)
-        .select_related("sire", "dam")
+        Litter.objects.filter(kennel=kennel, is_public=True, kennel__hide_dogs=False)
+        .select_related("sire", "dam", "sire__kennel", "dam__kennel")
         .order_by("-date_of_birth", "code")
     )
     dog_page = Paginator(dog_queryset, 24).get_page(request.GET.get("dogs_page"))
@@ -712,13 +712,15 @@ def kennel_detail(request, slug):
 
 def litter_detail(request, pk):
     litter = get_object_or_404(
-        Litter.objects.select_related("kennel", "sire", "dam"),
+        Litter.objects.select_related("kennel", "sire", "dam", "sire__kennel", "dam__kennel").filter(
+            Q(kennel__isnull=True) | Q(kennel__hide_dogs=False)
+        ),
         pk=pk,
         is_public=True,
     )
     offspring = list(
         _dog_cards(
-            Dog.objects.filter(litter=litter, is_public=True)
+            published_dogs(Dog.objects.filter(litter=litter))
         ).order_by("name")
     )
     _attach_source_image_urls(offspring)
