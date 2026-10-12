@@ -9,6 +9,7 @@
       <p>Routine authorized edits are live; sensitive ancestry changes from moderators require Super Admin approval before publication. Member submissions continue through the normal review queue.</p>
     </div>
     <div class="button-row">
+      {% if can_add_dog %}<a class="btn btn-gold" href="{% url 'accounts:dog-direct-create' %}">+ Add Dog</a>{% endif %}
       {% if is_owner %}<a class="btn btn-gold" href="{% url 'accounts:dog-edit-list' %}?proposals=1">Review protected proposals</a>{% endif %}
       <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">Search dogs</a>
       <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Back to moderation</a>
