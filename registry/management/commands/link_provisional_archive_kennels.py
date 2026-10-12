@@ -205,9 +205,7 @@ class Command(BaseCommand):
             current_map, create, bad = kennel_map_for_labels(
                 {c.label for c in plan}
             )
-            if bad or {x for x in plan if x.label in create} and (
-                set(create) != prospective_new
-            ):
+            if bad or set(create) != prospective_new:
                 raise CommandError("Kennel roster changed. No records written.")
             used_slugs = set(Kennel.objects.values_list("slug", flat=True))
             for label in sorted(prospective_new):
