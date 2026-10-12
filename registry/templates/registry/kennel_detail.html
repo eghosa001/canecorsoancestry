@@ -16,7 +16,7 @@
     </div>
   </header>
 
-  <div class="section-heading"><h2>Dogs with photos</h2><span>{{ dog_total }} photographed of {{ public_dog_total }} public dog{{ public_dog_total|pluralize }}</span></div>
+  <div class="section-heading"><h2>Dogs bred by this kennel</h2><span>{{ dog_total }} photographed of {{ public_dog_total }} public bred dog{{ public_dog_total|pluralize }}</span></div>
   <div class="dog-card-grid">
     {% for dog in dogs %}
       <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
