@@ -99,7 +99,10 @@ def _find_reference(model, text, *, fields):
 class DirectDogEditForm(forms.ModelForm):
     sire_ref = forms.CharField(required=False, label="Sire name or UUID", widget=forms.TextInput(attrs={"data-admin-parent-lookup": "", "data-parent-sex": "male", "autocomplete": "off", "placeholder": "Search sire by name or registration"}))
     dam_ref = forms.CharField(required=False, label="Dam name or UUID", widget=forms.TextInput(attrs={"data-admin-parent-lookup": "", "data-parent-sex": "female", "autocomplete": "off", "placeholder": "Search dam by name or registration"}))
-    kennel_ref = forms.CharField(required=False, label="Kennel name or UUID")
+    kennel_ref = forms.CharField(
+        required=False, label="Breeding kennel name or UUID",
+        help_text="The kennel that bred this dog, not a purchaser. Leave blank if the breeder has no registered kennel name.",
+    )
     litter_ref = forms.CharField(required=False, label="Litter code or UUID")
     visibility_public = forms.BooleanField(
         required=False,

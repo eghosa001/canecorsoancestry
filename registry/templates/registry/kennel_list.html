@@ -43,7 +43,7 @@
         </div>
         <h2>{{ kennel.name }}</h2>
         <div class="mini-stats">
-          <span><strong>{{ kennel.public_dog_count }}</strong> dogs</span>
+          <span><strong>{{ kennel.public_dog_count }}</strong> bred dog{{ kennel.public_dog_count|pluralize }}</span>
           <span><strong>{{ kennel.public_litter_count }}</strong> litters</span>
         </div>
       </a>

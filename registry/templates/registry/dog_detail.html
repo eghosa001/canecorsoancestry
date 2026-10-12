@@ -114,8 +114,10 @@
           {% endif %}
         </dd>
         <dt>Country</dt><dd>{{ dog.country|default:"Not recorded" }}</dd>
-        <dt>Kennel</dt>
-        <dd>{% if dog.kennel %}{% if dog.kennel.is_public %}<a class="text-link" href="{% url 'registry:kennel-detail' dog.kennel.slug %}">{{ dog.kennel.name }}</a>{% else %}{{ dog.kennel.name }}{% endif %}{% else %}Not recorded{% endif %}</dd>
+        {% if dog.kennel %}
+        <dt>Breeding kennel</dt>
+        <dd>{% if dog.kennel.is_public %}<a class="text-link" href="{% url 'registry:kennel-detail' dog.kennel.slug %}">{{ dog.kennel.name }}</a>{% else %}{{ dog.kennel.name }}{% endif %}</dd>
+        {% endif %}
       </dl>
 
       {% if staff_identity and staff_role %}<div class="button-row"><a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Edit canonical record</a></div>{% endif %}
