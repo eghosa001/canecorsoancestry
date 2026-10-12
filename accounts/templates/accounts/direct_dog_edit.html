@@ -118,7 +118,7 @@
       <article style="border-bottom:1px solid var(--border-color, #aaa);padding:1rem 0">
         <strong>{{ event.created_at|date:"d M Y H:i" }} · {{ event.actor_admin_label }}</strong>
         <p>{{ event.note }}</p>
-        <p class="muted">{% if event.summary.kind == "direct_dog_proposal" %}{% if event.review_state == "direct_dog_proposal_approved" %}Protected proposal approved and published{% elif event.review_state == "direct_dog_proposal_rejected" %}Protected proposal rejected; not published{% else %}Awaiting Super Admin approval — not public{% endif %}{% elif event.summary.is_owner %}Super Admin direct edit{% elif event.review_state == "direct_dog_revert" %}Reverted by Super Admin{% elif event.review_state == "direct_dog_review" %}Accepted by Super Admin{% else %}Live change awaiting Super Admin review{% endif %}</p>
+        <p class="muted">{% if event.summary.kind == "direct_dog_proposal" %}{% if event.review_state == "direct_dog_proposal_approved" %}Protected proposal approved and published{% elif event.review_state == "direct_dog_proposal_rejected" %}Protected proposal rejected; not published{% else %}Awaiting Super Admin approval — not public{% endif %}{% elif event.summary.kind == "direct_dog_create" %}New private dog created{% elif event.summary.is_owner %}Super Admin direct edit{% elif event.review_state == "direct_dog_revert" %}Reverted by Super Admin{% elif event.review_state == "direct_dog_review" %}Accepted by Super Admin{% else %}Live change awaiting Super Admin review{% endif %}</p>
         <details class="ux-disclosure"><summary>Compare recorded before and after values</summary>
           <div class="ux-disclosure-body">
             <div class="profile-section-grid">
