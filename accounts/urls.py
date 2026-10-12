@@ -57,6 +57,7 @@ urlpatterns = [
     path("notifications/", views.member_account_only(views.notifications), name="notifications"),
     path("moderation/", views.moderation_queue, name="moderation"),
     path("moderation/dogs/", direct_dog_edit.dog_edit_list, name="dog-edit-list"),
+    path("moderation/dogs/add/", direct_dog_edit.dog_direct_create, name="dog-direct-create"),
     path(
         "moderation/kennel-reconciliation/",
         breeding_kennel_review.kennel_reconciliation_review,
@@ -84,6 +85,16 @@ urlpatterns = [
         "moderation/verification/roles/",
         views.moderation_set_role,
         name="moderation-set-role",
+    ),
+    path(
+        "moderation/verification/staff/status/",
+        views.moderation_set_status,
+        name="moderation-set-status",
+    ),
+    path(
+        "moderation/verification/staff/deregister/",
+        views.moderation_deregister_staff,
+        name="moderation-deregister-staff",
     ),
     path(
         "moderation/verification/rules/<int:pk>/",

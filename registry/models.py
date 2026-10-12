@@ -812,6 +812,9 @@ class ModerationRoleAssignment(models.Model):
         related_name="ancestry_moderation_role",
     )
     role = models.CharField(max_length=16, choices=Role.choices)
+    # Preserve historical Admin # attribution, but never allow a removed
+    # account to be restored to active moderation.
+    is_deregistered = models.BooleanField(default=False, db_index=True)
     admin_number = models.PositiveIntegerField(
         unique=True,
         null=True,

@@ -2758,7 +2758,7 @@ def verification_dashboard(request):
 
     reviewer_rows = []
     staff_user_ids = set(
-        ModerationRoleAssignment.objects.values_list("user_id", flat=True)
+        ModerationRoleAssignment.objects.filter(is_deregistered=False).values_list("user_id", flat=True)
     )
     staff_user_ids.update(
         get_user_model().objects.filter(is_superuser=True).values_list("pk", flat=True)
@@ -3011,66 +3011,160 @@ def moderation_create_account(request):
 def moderation_set_role(request):
     if not can_manage_verification(request.user):
         raise PermissionDenied
-
     user_id = request.POST.get("user_id", "").strip()
+    requested_role = request.POST.get("role", "").strip() or ModerationRoleAssignment.Role.NONE
     if not user_id.isdigit():
         messages.error(request, "Invalid staff account ID.")
         return redirect("accounts:verification-dashboard")
-
-    target = get_object_or_404(get_user_model(), pk=int(user_id))
-    if target.is_superuser:
-        messages.info(request, "Super Admin accounts keep Super Admin authority.")
-        return redirect("accounts:verification-dashboard")
-    if has_member_identity(target):
-        ModerationRoleAssignment.objects.filter(user=target).delete()
-        if target.is_staff:
-            target.is_staff = False
-            target.save(update_fields=("is_staff",))
-        messages.error(
-            request,
-            "That is a member account. Member identities cannot be moderators; create a separate staff account.",
-        )
-        return redirect("accounts:verification-dashboard")
-
-    assignment = ModerationRoleAssignment.objects.filter(user=target).first()
-    if assignment is None:
-        messages.error(
-            request,
-            "Only dedicated staff accounts can receive moderation roles. Create a separate moderator account first.",
-        )
-        return redirect("accounts:verification-dashboard")
-
-    requested_role = request.POST.get("role", "").strip() or ModerationRoleAssignment.Role.NONE
-    allowed_roles = {
+    if requested_role not in {
         ModerationRoleAssignment.Role.NONE,
         ModerationRoleAssignment.Role.REVIEWER,
         ModerationRoleAssignment.Role.SENIOR,
-    }
-    if requested_role not in allowed_roles:
+    }:
         messages.error(request, "That role can only be assigned to a Super Admin account.")
         return redirect("accounts:verification-dashboard")
 
-    before = assignment.role
-    assignment.role = requested_role
-    assignment.assigned_by = request.user
-    assignment.save(update_fields=("role", "assigned_by"))
-
-    if target.is_staff:
-        target.is_staff = False
-        target.save(update_fields=("is_staff",))
-
-    record_audit(
-        action=ModerationAudit.Action.VERIFICATION,
-        actor=request.user,
-        summary={
-            "type": "moderation_role_changed",
-            "target_admin_number": assignment.admin_number,
-            "previous_role": before,
-            "new_role": requested_role,
-        },
-        note="Super Admin updated dedicated staff authority.",
-    )
+    # Use the same lock order as deregistration, so a concurrent role change
+    # can never resurrect an already-revoked account.
+    with transaction.atomic():
+        target = get_object_or_404(get_user_model().objects.select_for_update(), pk=int(user_id))
+        if target.is_superuser:
+            messages.info(request, "Super Admin accounts keep Super Admin authority.")
+            return redirect("accounts:verification-dashboard")
+        if has_member_identity(target):
+            messages.error(
+                request,
+                "Member identities cannot be moderators. Create a separate staff account.",
+            )
+            return redirect("accounts:verification-dashboard")
+        assignment = ModerationRoleAssignment.objects.select_for_update().filter(
+            user=target, is_deregistered=False,
+        ).first()
+        if assignment is None:
+            messages.error(request, "Only currently registered staff accounts can receive moderation roles.")
+            return redirect("accounts:verification-dashboard")
+        before = assignment.role
+        assignment.role = requested_role
+        assignment.assigned_by = request.user
+        assignment.save(update_fields=("role", "assigned_by"))
+        if target.is_staff:
+            target.is_staff = False
+            target.save(update_fields=("is_staff",))
+        record_audit(
+            action=ModerationAudit.Action.VERIFICATION,
+            actor=request.user,
+            summary={
+                "type": "moderation_role_changed",
+                "target_admin_number": assignment.admin_number,
+                "previous_role": before,
+                "new_role": requested_role,
+            },
+            note="Super Admin updated dedicated staff authority.",
+        )
     messages.success(request, "Staff authority updated.")
+    return redirect("accounts:verification-dashboard")
+
+
+@login_required
+@require_POST
+def moderation_set_status(request):
+    """Super Admin can pause or reactivate current dedicated moderation accounts."""
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+    user_id = request.POST.get("user_id", "").strip()
+    action = request.POST.get("action", "")
+    reason = request.POST.get("reason", "").strip()
+    if not user_id.isdigit() or action not in {"activate", "deactivate"} or len(reason) < 5:
+        messages.error(request, "Select an account and provide a reason of at least 5 characters.")
+        return redirect("accounts:verification-dashboard")
+
+    with transaction.atomic():
+        target = get_object_or_404(
+            get_user_model().objects.select_for_update(), pk=int(user_id)
+        )
+        if target.is_superuser or has_member_identity(target):
+            raise PermissionDenied("Only dedicated Moderator or Senior Moderator accounts may be changed.")
+        assignment = get_object_or_404(
+            ModerationRoleAssignment.objects.select_for_update(),
+            user=target, is_deregistered=False,
+        )
+        activate = action == "activate"
+        if target.is_active == activate:
+            messages.info(request, "Account activation is already in the requested state.")
+            return redirect("accounts:verification-dashboard")
+        target.is_active = activate
+        target.save(update_fields=("is_active",))
+        record_audit(
+            action=ModerationAudit.Action.VERIFICATION,
+            actor=request.user,
+            summary={
+                "type": "moderation_account_activated" if activate else "moderation_account_deactivated",
+                "target_admin_number": assignment.admin_number,
+                "role": assignment.role,
+            },
+            note=reason,
+        )
+    messages.success(request, "Staff account activated." if activate else "Staff account deactivated; sign-in is blocked.")
+    return redirect("accounts:verification-dashboard")
+
+
+@login_required
+@require_POST
+def moderation_deregister_staff(request):
+    """Irreversibly revoke and anonymize a staff login; keep immutable audit IDs."""
+    if not can_manage_verification(request.user):
+        raise PermissionDenied
+    user_id = request.POST.get("user_id", "").strip()
+    reason = request.POST.get("reason", "").strip()
+    confirmation = request.POST.get("confirmation", "").strip()
+    if not user_id.isdigit() or confirmation != "DEREGISTER" or len(reason) < 10:
+        messages.error(request, "Type DEREGISTER and provide a reason of at least 10 characters.")
+        return redirect("accounts:verification-dashboard")
+
+    with transaction.atomic():
+        target = get_object_or_404(
+            get_user_model().objects.select_for_update(), pk=int(user_id)
+        )
+        if target.is_superuser or has_member_identity(target):
+            raise PermissionDenied("Super Admin and member accounts cannot be deregistered here.")
+        assignment = get_object_or_404(
+            ModerationRoleAssignment.objects.select_for_update(),
+            user=target, is_deregistered=False,
+        )
+        former_role = assignment.role
+        # Do not delete the user row: historical foreign keys, reviews and
+        # record changes must retain their Admin # reference for investigation.
+        assignment.role = ModerationRoleAssignment.Role.NONE
+        assignment.is_deregistered = True
+        assignment.assigned_by = request.user
+        assignment.save(update_fields=("role", "is_deregistered", "assigned_by"))
+        target.is_active = False
+        target.is_staff = False
+        target.username = f"removed-admin-{target.pk}-{uuid.uuid4().hex[:8]}"
+        target.email = ""
+        target.first_name = ""
+        target.last_name = ""
+        target.set_unusable_password()
+        target.save(update_fields=(
+            "is_active", "is_staff", "username", "email",
+            "first_name", "last_name", "password",
+        ))
+        record_audit(
+            action=ModerationAudit.Action.VERIFICATION,
+            actor=request.user,
+            summary={
+                "type": "moderation_account_deregistered",
+                "target_admin_number": assignment.admin_number,
+                "previous_role": former_role,
+                "access_revoked": True,
+            },
+            note=reason,
+        )
+    messages.success(
+        request,
+        "Staff login permanently deregistered and removed from the active team. "
+        "Historical audit references are preserved.",
+    )
     return redirect("accounts:verification-dashboard")
 
 
