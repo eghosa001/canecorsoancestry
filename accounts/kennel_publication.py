@@ -186,6 +186,8 @@ def kennel_dogs_visibility_change(request, pk):
             messages.error(request, "Some selected dogs no longer belong to this kennel.")
             return redirect("accounts:kennel-publication-detail", pk=pk)
 
+        if not owner and kennel.publication_locked_by_superadmin:
+            raise PermissionDenied("The Super Admin has finalized this kennel publication mode.")
         if not owner and any(dog.visibility_locked_by_superadmin for dog in dogs):
             raise PermissionDenied(
                 "A selected dog has a protected Super Admin decision. Nothing was changed."
