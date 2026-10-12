@@ -11,6 +11,27 @@
     </div>
     <a class="btn btn-outline" href="{% url 'accounts:kennel-publication-list' %}">← Manage kennels</a>
   </header>
+  <section class="panel" aria-label="Historical kennel naming groups">
+    <div class="panel-heading">
+      <h2>Research groups from the original pedigree archive</h2>
+      <span>{{ archive_cluster_total }} possible kennel-name phrases</span>
+    </div>
+    <p class="muted">These are name-pattern clusters matched against original archive IDs and related-dog names. The counts describe <strong>potential kennel origins, not verified breeders</strong>. Open a group to review its dogs individually; no batch publication or ownership changes are made.</p>
+    <div class="button-row">
+      {% for group in archive_clusters %}
+      <a class="btn btn-outline" href="{% url 'accounts:kennel-reconciliation-review' %}?q={{ group.name|urlencode }}" title="Review unlinked dogs with {{ group.name }} in their registered name; source evidence is required">
+        {{ group.name }} · {{ group.matches }} possible dog{{ group.matches|pluralize }} ({{ group.family }} family pattern{{ group.family|pluralize }})
+      </a>
+      {% endfor %}
+    </div>
+    <div class="button-row">
+      {% if show_all_clusters %}
+      <a class="text-link" href="{% url 'accounts:kennel-reconciliation-review' %}">Show top family-supported groups</a>
+      {% else %}
+      <a class="text-link" href="{% url 'accounts:kennel-reconciliation-review' %}?clusters=all">Show all {{ archive_cluster_total }} name-pattern groups →</a>
+      {% endif %}
+    </div>
+  </section>
   <form class="filter-panel" method="get" role="search">
     <div class="filter-search">
       <label for="missing-breeder-q">Search an unlinked dog by name</label>
@@ -46,7 +67,11 @@
       <p class="muted"><strong>Historical naming-pattern suggestions</strong> (derived from analysis of 116,370 archived dog names; <strong>not verified breeders</strong>):</p>
       <ul>
         {% for hypothesis in item.archive_name_hypotheses %}
-        <li><strong>{{ hypothesis.label }}</strong> — {{ hypothesis.position }}-position phrase, observed in {{ hypothesis.archive_name_count }} archive dog names. Requires breeder or registry confirmation before association.</li>
+        <li><strong>{{ hypothesis.label }}</strong> — {{ hypothesis.position }}-position phrase.
+          {% if hypothesis.archive_name_count %}Observed in {{ hypothesis.archive_name_count }} archive dog names.{% endif %}
+          {% if hypothesis.archive_exact_source_ids %}The same name phrase occurred in {{ hypothesis.archive_exact_source_ids }} historical records matched by exact archive ID to currently unlinked dogs; {{ hypothesis.family_pattern_support }} showed related-dog name support.{% endif %}
+          <strong>Not a verified breeding kennel.</strong> Require breeder or registry confirmation before association.
+        </li>
         {% endfor %}
       </ul>
       {% endif %}
