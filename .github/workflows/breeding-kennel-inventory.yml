@@ -61,6 +61,26 @@ jobs:
           print("Documentary exact auto candidates (NOT applied):", summary.get("safe", 0))
           print("See the private audit artifact for candidate IDs and reasoning.")
           PY
+      - name: Export original-archive identity join keys for independent research
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n podman exec cca-oracle-staging python manage.py \
+            export_unlinked_archive_keys \
+            --output /tmp/cca-unlinked-archive-source-keys.csv
+          sudo -n podman cp \
+            cca-oracle-staging:/tmp/cca-unlinked-archive-source-keys.csv \
+            "$RUNNER_TEMP/cca-unlinked-archive-source-keys.csv"
+          sudo -n chown "$(id -u):$(id -g)" \
+            "$RUNNER_TEMP/cca-unlinked-archive-source-keys.csv"
+          # Keep this private and short-retention. No member names,
+          # contacts, kennel ownership or authentication information.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unlinked-dogs-archive-source-keys-private
+          path: ${{ runner.temp }}/cca-unlinked-archive-source-keys.csv
+          if-no-files-found: error
+          retention-days: 3
       - uses: actions/upload-artifact@v4
         with:
           name: breeding-kennel-review

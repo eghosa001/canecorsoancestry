@@ -1,5 +1,6 @@
 """Risk and authorization regression tests for breeding kennel reconciliation."""
 import json
+import csv
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -15,7 +16,7 @@ from registry.management.commands.reconcile_breeding_kennels import (
     _normal,
     explicit_breeding_kennel,
 )
-from registry.models import Dog, DogSource, Kennel, ModerationAudit
+from registry.models import Dog, DogExternalKey, DogSource, Kennel, ModerationAudit
 
 
 class BreedingKennelReconciliationTests(TestCase):
@@ -172,3 +173,36 @@ class BreedingKennelReconciliationTests(TestCase):
         self.assertEqual(report["summary"]["safe"], 0)
         self.assertEqual(report["summary"]["review"], 0)
         self.assertIsNone(Dog.objects.get(pk=self.dog.pk).kennel_id)
+
+    def test_exact_source_id_export_never_infers_breeder_or_exposes_owner(self):
+        DogExternalKey.objects.create(
+            dog=self.dog, namespace="canecorsopedigree.com", key="70472",
+        )
+        DogExternalKey.objects.create(
+            dog=self.dog, namespace="other-source", key="should-not-export",
+        )
+        with TemporaryDirectory() as temp:
+            out = Path(temp) / "archive-keys.csv"
+            stdout = StringIO()
+            call_command("export_unlinked_archive_keys", output=str(out), stdout=stdout)
+            rows = list(csv.DictReader(out.open(encoding="utf-8", newline="")))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["canonical_dog_id"], str(self.dog.pk))
+        self.assertEqual(rows[0]["archive_source_ids"], "70472")
+        self.assertEqual(rows[0]["registered_name"], "Agatha Custodinus")
+        self.assertEqual(rows[0]["is_public"], "1")
+        self.assertNotIn("owner", rows[0])
+        self.assertNotIn("should-not-export", str(rows[0]))
+        self.assertIn("READ-ONLY", stdout.getvalue())
+        self.dog.refresh_from_db()
+        self.assertIsNone(self.dog.kennel_id)
+
+    def test_exact_archive_export_rejects_too_small_safety_cap(self):
+        with TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(CommandError, "safety cap"):
+                call_command(
+                    "export_unlinked_archive_keys",
+                    output=str(Path(temp) / "limited.csv"),
+                    max_rows=0,
+                    stdout=StringIO(),
+                )
