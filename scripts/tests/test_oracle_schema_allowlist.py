@@ -67,6 +67,53 @@ class ApprovedSchemaMigrationTests(unittest.TestCase):
         finally:
             migration.operations = original_ops
 
+    def test_exact_archive_research_migration_is_strictly_allowlisted(self):
+        import copy
+        module = importlib.import_module(
+            "registry.migrations.0016_unverified_breeding_kennel_hypotheses"
+        )
+        migration = module.Migration(
+            "0016_unverified_breeding_kennel_hypotheses", "registry"
+        )
+        self.assertTrue(validate_pending_schema_changes([(migration, False)]))
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(migration, True)])
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(self.migration, False), (migration, False)])
+        changed = copy.deepcopy(migration)
+        changed.operations[0].field.default = True
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(changed, False)])
+        changed = copy.deepcopy(migration)
+        changed.operations[1].field.null = False
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(changed, False)])
+        changed = copy.deepcopy(migration)
+        changed.operations[2].field.default = list
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(changed, False)])
+
+    def test_unverified_kennel_schema_sql_still_requires_backup_and_admin(self):
+        root = Path(__file__).resolve().parents[1] / "oracle_runner"
+        stage = (root / "stage_django.sh").read_text()
+        sql = (root / "approved_registry_0016.sql").read_text()
+        self.assertIn("registry.0016_unverified_breeding_kennel_hypotheses", stage)
+        self.assertIn("approved_registry_0016.sql", stage)
+        self.assertIn("BEGIN;", sql)
+        self.assertIn("COMMIT;", sql)
+        self.assertIn("ON_ERROR_STOP=1", stage)
+        self.assertIn("current_user <> 'cca_shadow_admin'", sql)
+        self.assertIn("django_app.django_migrations", sql)
+        self.assertEqual(sql.count("ADD COLUMN "), 3)
+        self.assertIn("inferred_kennel_evidence", sql)
+        self.assertNotIn("INSERT INTO django_app.registry_dog", sql)
+        self.assertNotIn("GRANT ALTER", stage + sql)
+        self.assertNotIn("GRANT ALL", stage + sql)
+        self.assertLess(
+            stage.index("bash scripts/oracle_runner/backup_local_postgres.sh"),
+            stage.index("< scripts/oracle_runner/approved_registry_0016.sql"),
+        )
+
     def test_atomic_publication_script_has_backups_and_no_app_alter_grants(self):
         root = Path(__file__).resolve().parents[1] / "oracle_runner"
         stage = (root / "stage_django.sh").read_text()
