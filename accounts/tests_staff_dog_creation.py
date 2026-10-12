@@ -54,7 +54,7 @@ class StaffDogCreationAndAccessTests(TestCase):
         self.assertEqual(event.dog, dog)
         self.assertFalse(event.summary["is_owner"])
 
-    def test_owner_can_create_and_only_owner_can_publish_later(self):
+    def test_owner_can_create_private_dog_and_manage_visibility_later(self):
         self.client.force_login(self.owner)
         response = self.client.post(reverse("accounts:dog-direct-create"), {
             "name": "Owner Record",
