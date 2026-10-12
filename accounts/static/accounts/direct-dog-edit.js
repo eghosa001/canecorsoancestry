@@ -187,7 +187,7 @@ document.querySelectorAll("[data-admin-parent-lookup]").forEach((referenceInput)
 });
 
 
-// Super Admin canonical publication. Status labels are textual as well as
+// Audited canonical publication for moderators and Super Admins. Status labels are textual as well as
 // red/green: a checked switch is only a proposed change until Save succeeds.
 // The saved state in the page header never changes until the server redirects.
 (() => {
