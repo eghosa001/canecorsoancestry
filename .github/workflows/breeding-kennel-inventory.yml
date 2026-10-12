@@ -5,6 +5,9 @@ on:
     workflows: ["Oracle Django production release (CI-gated)"]
     types: [completed]
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/breeding-kennel-inventory.yml"]
 
 permissions:
   contents: read
@@ -33,6 +36,12 @@ jobs:
           sudo -n systemctl is-active --quiet cca-oracle-staging.service
           curl --fail --silent --show-error --max-time 12 \
             http://127.0.0.1:18080/healthz/ >/dev/null
+      - name: One-time read-only provisional kennel creation and linking plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n podman exec cca-oracle-staging \
+            python manage.py link_provisional_archive_kennels
       - name: Audit all unlinked dogs without altering any database records
         shell: bash
         run: |
