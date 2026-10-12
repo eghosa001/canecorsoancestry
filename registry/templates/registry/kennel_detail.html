@@ -23,7 +23,7 @@
         <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async">{% else %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% endif %}</div>
         <div class="dog-card-body"><h3>{{ dog.name }}</h3><p>{{ dog.colour|default:"Colour not recorded" }} · {{ dog.get_sex_display }}</p></div>
       </a>
-    {% empty %}<div class="empty-state"><p>{% if public_dog_total %}This kennel has public pedigree records, but no public dog photos yet.{% else %}No public dogs are linked yet.{% endif %}</p></div>{% endfor %}
+    {% empty %}<div class="empty-state"><p>{% if public_dog_total %}This kennel has public pedigree records, but no public dog photos yet.{% elif possible_bred_count %}No confirmed breeding-origin links yet. Possible matches are listed separately below.{% else %}No public dogs are linked yet.{% endif %}</p></div>{% endfor %}
   </div>
   {% if dog_page.has_other_pages %}
     <nav class="button-row" aria-label="Kennel dog pages">
@@ -36,7 +36,7 @@
   {% if possible_bred_count %}
   <div class="section-heading section-spacer">
     <h2>Possible kennel-origin matches · unverified</h2>
-    <span>{{ possible_bred_count }} existing dog{{ possible_bred_count|pluralize }} linked for research</span>
+    <span>{{ possible_bred_count }} existing dog{{ possible_bred_count|pluralize }} with tentative name-based links</span>
   </div>
   <p class="muted">These dogs' names contain a recurring historical kennel phrase. The link is a research hypothesis only, <strong>not proof this kennel bred these dogs</strong>. Their confirmed breeding kennel remains blank until pedigree or registration documents establish the origin.</p>
   <div class="dog-card-grid">
