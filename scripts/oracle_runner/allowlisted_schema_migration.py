@@ -1,36 +1,80 @@
-"""Read-only gate for the one approved, additive Oracle production migration.
+"""Read-only gate for exactly specified, owner-reviewed Oracle migrations.
 
-Never allow an arbitrary pending migration to be applied by CI. This check
-inspects Django's actual migration graph and operation list against an explicit
-owner-reviewed allowlist. It does not run migrations or write to the database.
+No arbitrary migration may modify the Oracle-local production PostgreSQL database.
+An approved migration may run only with its exact model, field and operation shapes.
 """
+from django.db import models
+from django.db.migrations.operations.fields import AddField
 from django.db.migrations.operations.models import AddConstraint, CreateModel
 
-ALLOWED_MIGRATION = ("accounts", "0005_saved_pairing")
+SAVED_PAIRING = ("accounts", "0005_saved_pairing")
+KENNEL_PUBLICATION = ("registry", "0015_kennel_publication_controls")
+ALLOWED_MIGRATION = SAVED_PAIRING  # Backward compatibility for old tests/runbooks.
+
+# Model, field, constant default, and whether the field creates a DB index.
+PUBLICATION_FIELDS = (
+    ("kennel", "is_public", True, True),
+    ("kennel", "hide_dogs", False, False),
+    ("kennel", "publication_locked_by_superadmin", False, False),
+    ("dog", "visibility_locked_by_superadmin", False, False),
+    ("dog", "hidden_by_moderation", False, True),
+)
+
+
+def _saved_pairing_is_exact(migration):
+    ops = migration.operations
+    return (
+        len(ops) == 2
+        and isinstance(ops[0], CreateModel)
+        and ops[0].name == "SavedPairing"
+        and isinstance(ops[1], AddConstraint)
+        and ops[1].model_name == "savedpairing"
+        and ops[1].constraint.name == "saved_pairing_member_parents_unique"
+        and tuple(ops[1].constraint.fields) == ("member", "sire", "dam")
+    )
+
+
+def _publication_is_exact(migration):
+    ops = migration.operations
+    if (
+        len(ops) != len(PUBLICATION_FIELDS)
+        or migration.dependencies != [("registry", "0014_unique_canonical_litter_birth")]
+    ):
+        return False
+    for operation, (model_name, name, default, indexed) in zip(ops, PUBLICATION_FIELDS):
+        if not isinstance(operation, AddField):
+            return False
+        field = operation.field
+        if (
+            operation.model_name != model_name
+            or operation.name != name
+            or type(field) is not models.BooleanField
+            or field.default is not default
+            or field.db_index is not indexed
+            or field.null
+            or field.unique
+            or field.primary_key
+            or operation.preserve_default is False
+        ):
+            return False
+    return True
 
 
 def validate_pending_schema_changes(plan):
-    """Accept an already-updated schema or exactly the approved table addition."""
+    """Reject other pending versions, combined plans, reversals, and drift."""
     if not plan:
         return False
     if len(plan) != 1:
-        raise ValueError("Unexpected migration count; manual database review required.")
+        raise ValueError("Unexpected pending migration count; manual DB review required.")
     migration, backwards = plan[0]
-    if backwards or (migration.app_label, migration.name) != ALLOWED_MIGRATION:
-        raise ValueError("Unapproved production schema migration; manual review required.")
-    operations = migration.operations
-    if (
-        len(operations) != 2
-        or not isinstance(operations[0], CreateModel)
-        or operations[0].name != "SavedPairing"
-        or not isinstance(operations[1], AddConstraint)
-        or operations[1].model_name != "savedpairing"
-        or operations[1].constraint.name != "saved_pairing_member_parents_unique"
-        or tuple(operations[1].constraint.fields) != ("member", "sire", "dam")
-    ):
-        raise ValueError("Saved-pairing migration no longer matches approved additive schema.")
-    # Never run data migrations, DeleteModel, RunSQL or schema rewrites here.
-    return True
+    if backwards:
+        raise ValueError("Reverse production migrations are not authorized.")
+    identity = (migration.app_label, migration.name)
+    if identity == SAVED_PAIRING and _saved_pairing_is_exact(migration):
+        return True
+    if identity == KENNEL_PUBLICATION and _publication_is_exact(migration):
+        return True
+    raise ValueError("Unapproved production migration or unexpected operations.")
 
 
 def main():
@@ -43,7 +87,8 @@ def main():
     plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
     allowed = validate_pending_schema_changes(plan)
     if allowed:
-        print("PASS: Only the approved accounts.0005_saved_pairing table is pending.")
+        migration, _ = plan[0]
+        print(f"PASS: Only approved {migration.app_label}.{migration.name} is pending.")
     else:
         print("PASS: No Django migrations pending.")
     return 0
