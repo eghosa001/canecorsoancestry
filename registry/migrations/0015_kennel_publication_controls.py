@@ -18,6 +18,16 @@ class Migration(migrations.Migration):
             field=models.BooleanField(default=False),
         ),
         migrations.AddField(
+            model_name="kennel",
+            name="publication_locked_by_superadmin",
+            field=models.BooleanField(default=False),
+        ),
+        migrations.AddField(
+            model_name="dog",
+            name="visibility_locked_by_superadmin",
+            field=models.BooleanField(default=False),
+        ),
+        migrations.AddField(
             model_name="dog",
             name="hidden_by_moderation",
             field=models.BooleanField(default=False, db_index=True),
