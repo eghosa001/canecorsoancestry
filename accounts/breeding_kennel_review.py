@@ -6,7 +6,7 @@ from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.shortcuts import render
 
-from registry.archive_breeder_hints import archive_pattern_hints
+from registry.archive_breeder_hints import archive_name_clusters, archive_pattern_hints
 from registry.management.commands.reconcile_breeding_kennels import (
     _kennel_maps, assess,
 )
@@ -48,10 +48,17 @@ def kennel_reconciliation_review(request):
             "hints": ([match] if match else hints)[:3],
             "archive_name_hypotheses": archive_pattern_hints(dog.name, limit=3),
         })
+    cluster_catalog = archive_name_clusters()
+    show_all_clusters = request.GET.get("clusters") == "all"
     return render(request, "accounts/breeding_kennel_reconciliation.html", {
         "page_obj": page,
         "rows": rows,
         "query": query,
         "unlinked_total": Dog.objects.filter(kennel__isnull=True).count(),
         "is_superadmin": can_manage_verification(request.user),
+        "archive_clusters": (
+            cluster_catalog if show_all_clusters else cluster_catalog[:24]
+        ),
+        "archive_cluster_total": len(cluster_catalog),
+        "show_all_clusters": show_all_clusters,
     })
