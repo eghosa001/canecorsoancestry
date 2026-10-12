@@ -108,7 +108,12 @@ def moderation_role(user):
     if has_member_identity(user):
         return None
     assignment = moderation_assignment(user)
-    if assignment is None or assignment.role == ModerationRoleAssignment.Role.NONE:
+    if (
+        assignment is None
+        or not user.is_active
+        or assignment.is_deregistered
+        or assignment.role == ModerationRoleAssignment.Role.NONE
+    ):
         return None
     return assignment.role
 
@@ -118,6 +123,14 @@ def can_review_submissions(user):
         ModerationRoleAssignment.Role.OWNER,
         ModerationRoleAssignment.Role.SENIOR,
         ModerationRoleAssignment.Role.REVIEWER,
+    }
+
+
+def can_add_canonical_dog(user):
+    """Only active Super Admins and Senior Moderators create canonical dogs."""
+    return moderation_role(user) in {
+        ModerationRoleAssignment.Role.OWNER,
+        ModerationRoleAssignment.Role.SENIOR,
     }
 
 
