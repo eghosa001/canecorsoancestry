@@ -22,7 +22,7 @@
         <div>
           <strong>{{ kennel.name }}</strong>
           <p class="muted">{{ kennel.city }}{% if kennel.city and kennel.country %}, {% endif %}{{ kennel.country }} · {{ kennel.dog_count }} linked dog{{ kennel.dog_count|pluralize }}</p>
-          <p class="muted">{% if kennel.is_public %}Kennel profile visible{% else %}Kennel profile hidden{% endif %} · {% if kennel.hide_dogs %}All linked dogs suppressed{% else %}Eligible dogs can appear{% endif %}</p>
+          <p class="muted">{% if kennel.is_public %}Kennel profile visible{% else %}Kennel profile hidden{% endif %} · {% if kennel.hide_dogs %}All linked dogs suppressed{% else %}Eligible dogs can appear{% endif %}{% if kennel.publication_locked_by_superadmin %} · <strong>Super Admin final</strong>{% endif %}</p>
         </div>
         <a class="btn btn-outline" href="{% url 'accounts:kennel-publication-detail' kennel.pk %}">Manage publication →</a>
       </div>
