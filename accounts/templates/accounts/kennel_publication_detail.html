@@ -5,12 +5,14 @@
   <header class="page-heading">
     <p class="eyebrow">Kennel moderation</p>
     <h1>{{ kennel.name }}</h1>
-    <p>Manage the kennel profile independently of its dogs. Publication approvals and original records remain unchanged.</p>
+    <p>Manage the kennel profile independently of its dogs. Publication approvals and original records remain unchanged. Super Admin decisions take precedence and are protected until the Super Admin delegates control again.</p>
     <a class="btn btn-outline" href="{% url 'accounts:kennel-publication-list' %}">All kennels</a>
   </header>
   <section class="panel">
     <h2>Kennel visibility</h2>
     <p>{% if kennel.is_public %}Published profile{% else %}Hidden profile{% endif %} · {% if kennel.hide_dogs %}Dogs suppressed{% else %}Eligible dogs visible{% endif %}</p>
+    <p>{% if kennel.publication_locked_by_superadmin %}<strong>Super Admin decision — moderators cannot change the kennel or its dog visibility.</strong>{% else %}Moderator-controlled until the Super Admin makes a final decision.{% endif %}</p>
+    {% if is_superadmin or not kennel.publication_locked_by_superadmin %}
     <form method="post" action="{% url 'accounts:kennel-publication-change' kennel.pk %}">
       {% csrf_token %}
       <input type="hidden" name="version" value="{{ version }}">
@@ -21,32 +23,36 @@
         <option value="hide_profile">Hide kennel profile only</option>
         <option value="hide_dogs">Show kennel, hide all dogs</option>
         <option value="hide_all">Hide kennel and all dogs</option>
+        {% if is_superadmin %}<option value="delegate">Release final decision; allow moderators to manage again</option>{% endif %}
       </select>
       <label for="kennel-reason">Reason</label>
       <input id="kennel-reason" name="reason" minlength="5" maxlength="2000" required>
       <label><input type="checkbox" name="confirm" value="yes" required> Confirm publication change</label>
-      <div class="button-row"><button class="btn btn-gold" type="submit">Save kennel settings</button></div>
+      <div class="button-row"><button class="btn btn-gold" type="submit">{% if is_superadmin %}Save final Super Admin decision{% else %}Save kennel settings{% endif %}</button></div>
     </form>
+    {% endif %}
   </section>
   <section class="panel">
     <h2>Selected dog visibility</h2>
     <p>{{ approved_total }} approved dogs; {{ hidden_total }} individually suppressed. A private dog stays private when moderation suppression is removed.</p>
+    {% if is_superadmin %}<p>Actions on selected dogs become a protected Super Admin decision. Use Delegate selected dogs to release that protection later.</p>{% elif kennel.publication_locked_by_superadmin %}<p><strong>The Super Admin has reserved all dog visibility decisions for this kennel.</strong></p>{% endif %}
     <form method="post" action="{% url 'accounts:kennel-dogs-visibility-change' kennel.pk %}">
       {% csrf_token %}
       <input type="hidden" name="version" value="{{ version }}">
       <div style="overflow-x:auto">
         <table style="width:100%">
-          <thead><tr><th>Select</th><th>Dog</th><th>Publication</th><th>Moderation</th><th>Public site</th></tr></thead>
+          <thead><tr><th>Select</th><th>Dog</th><th>Publication</th><th>Moderation</th><th>Authority</th><th>Public site</th></tr></thead>
           <tbody>
           {% for dog in dogs %}
             <tr>
-              <td><label><input type="checkbox" name="dog_ids" value="{{ dog.pk }}"><span class="sr-only">Select {{ dog.name }}</span></label></td>
+              <td><label><input type="checkbox" name="dog_ids" value="{{ dog.pk }}" {% if not is_superadmin and kennel.publication_locked_by_superadmin or not is_superadmin and dog.visibility_locked_by_superadmin %}disabled{% endif %}><span class="sr-only">Select {{ dog.name }}</span></label></td>
               <td><a class="text-link" href="{% url 'accounts:dog-direct-edit' dog.pk %}">{{ dog.name }}</a></td>
               <td>{% if dog.is_public %}Approved/public{% else %}Private{% endif %}</td>
               <td>{% if dog.hidden_by_moderation %}Hidden{% else %}Normal{% endif %}</td>
+              <td>{% if dog.visibility_locked_by_superadmin %}<strong>Super Admin final</strong>{% else %}Moderator editable{% endif %}</td>
               <td>{% if dog.is_effectively_public %}Visible{% else %}Hidden{% endif %}</td>
             </tr>
-          {% empty %}<tr><td colspan="5">No dogs are linked.</td></tr>{% endfor %}
+          {% empty %}<tr><td colspan="6">No dogs are linked.</td></tr>{% endfor %}
           </tbody>
         </table>
       </div>
@@ -57,13 +63,16 @@
         {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Next</a>{% endif %}
       </nav>
       {% endif %}
+      {% if is_superadmin or not kennel.publication_locked_by_superadmin %}
       <label for="dog-reason">Reason</label>
       <input id="dog-reason" name="reason" minlength="5" maxlength="2000" required>
       <label><input type="checkbox" name="confirm" value="yes" required> Confirm selected-dog change</label>
       <div class="button-row">
         <button class="btn btn-outline" type="submit" name="action" value="hide">Hide selected dogs</button>
         <button class="btn btn-gold" type="submit" name="action" value="restore">Restore selected dogs</button>
+        {% if is_superadmin %}<button class="btn btn-outline" type="submit" name="action" value="delegate">Delegate selected dogs</button>{% endif %}
       </div>
+      {% endif %}
     </form>
   </section>
 </section>
