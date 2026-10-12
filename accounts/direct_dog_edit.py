@@ -17,7 +17,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.forms import inlineformset_factory
 from django.core.paginator import Paginator
-from django.http import HttpResponseNotAllowed, JsonResponse
+from django.http import Http404, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -440,7 +440,7 @@ def dog_edit_list(request):
         try:
             kennel_uuid = uuid.UUID(target_id)
         except (ValueError, AttributeError):
-            raise ValidationError("Invalid target kennel identifier.")
+            raise Http404("Invalid target kennel identifier.")
         kennel_target = get_object_or_404(Kennel, pk=kennel_uuid)
     q = request.GET.get("q", "").strip()[:160]
     ids = moderation_dog_ids(q, limit=30) if q else []
@@ -577,7 +577,7 @@ def dog_direct_edit(request, pk):
         try:
             target_uuid = uuid.UUID(request.GET["kennel"])
         except (ValueError, AttributeError):
-            raise ValidationError("Invalid target kennel identifier.")
+            raise Http404("Invalid target kennel identifier.")
         suggested_kennel = get_object_or_404(Kennel, pk=target_uuid)
     data = request.POST if request.method == "POST" else None
     files = request.FILES if request.method == "POST" else None
@@ -733,6 +733,7 @@ def dog_direct_edit(request, pk):
     return render(request, "accounts/direct_dog_edit.html", {
         "dog": dog, "form": form, "formsets": sets, "revisions": revisions,
         "owner": owner, "version": dog.updated_at.isoformat(),
+        "suggested_kennel": suggested_kennel,
     })
 
 
