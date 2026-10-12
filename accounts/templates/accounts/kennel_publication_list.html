@@ -16,7 +16,7 @@
     {% if query %}<a class="btn btn-outline" href="{% url 'accounts:kennel-publication-list' %}">Clear</a>{% endif %}
   </form>
   <section class="panel">
-    <h2>Ken­nels ({{ page_obj.paginator.count }})</h2>
+    <h2>Kennels ({{ page_obj.paginator.count }})</h2>
     {% for kennel in kennels %}
       <div class="button-row" style="justify-content:space-between;align-items:center;padding:.85rem 0;border-bottom:1px solid var(--border-color, #aaa)">
         <div>
