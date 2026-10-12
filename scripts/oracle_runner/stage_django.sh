@@ -187,10 +187,29 @@ if sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env
 else
   # Exactly one additive, reviewed table is permitted. Never run generic
   # migrations against production merely because a new release includes them.
-  sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
-    "$IMAGE" python -m scripts.oracle_runner.allowlisted_schema_migration
+  schema_approval="$(sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" \
+    --env-file "$temporary_env" "$IMAGE" \
+    python -m scripts.oracle_runner.allowlisted_schema_migration)"
+  echo "$schema_approval"
   echo "Creating and verifying an encrypted off-VM production DB backup first."
   bash scripts/oracle_runner/backup_local_postgres.sh
+  if [[ "$schema_approval" == "PASS: Only approved registry.0015_kennel_publication_controls is pending." ]]; then
+    echo "Applying exactly five audited kennel/dog visibility fields as DB administrator."
+    # The app login has no ALTER TABLE authority and must never be granted it.
+    # This one approved SQL transaction includes Django's migration ledger;
+    # any error rolls back the schema, indexes, and ledger together.
+    app_schema_can_create="$(sudo -n "$PODMAN_BIN" exec cca-pg-shadow \
+      psql -X -At -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+      -c "SELECT has_schema_privilege('cca_app', 'django_app', 'CREATE');")"
+    [[ "$app_schema_can_create" == f ]] || {
+      echo "::error::Runtime DB account unexpectedly has CREATE permission; stop release." >&2
+      exit 1
+    }
+    sudo -n "$PODMAN_BIN" exec -i cca-pg-shadow \
+      psql -X -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+      < scripts/oracle_runner/approved_registry_0015.sql
+    echo "PASS: Five publication fields, indexes and migration ledger applied transactionally."
+  elif [[ "$schema_approval" == "PASS: Only approved accounts.0005_saved_pairing is pending." ]]; then
   # PostgreSQL intentionally grants the production app no schema DDL rights.
   # Borrow CREATE on this schema for the reviewed transaction, then revoke it
   # immediately; a trap also revokes it if the migration fails.
@@ -243,6 +262,14 @@ else
   sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
     "$IMAGE" python manage.py migrate --check --noinput
   echo "PASS: Additive saved-pairing migration and schema verification complete."
+  else
+    echo "::error::Schema preflight was not the approved production migration." >&2
+    exit 1
+  fi
+  # Both additive release paths must leave Django migration graph in sync.
+  sudo -n "$PODMAN_BIN" run --rm "${run_network[@]}" --env-file "$temporary_env" \
+    "$IMAGE" python manage.py migrate --check --noinput
+  echo "PASS: The new production app schema exactly matches its Django migrations."
 fi
 
 sudo -n install -d -m 700 /etc/cca
