@@ -200,6 +200,29 @@ def _matched_position(haystack, needle):
 
 
 @lru_cache(maxsize=1)
+def archive_name_clusters():
+    """Aggregate review-only patterns; no names of individual dogs or users."""
+    source = Path(__file__).with_name("data") / "archive_breeding_kennel_hypotheses.tsv"
+    items = []
+    with source.open(encoding="utf-8") as fh:
+        for raw in fh:
+            if not raw.strip() or raw.startswith("#"):
+                continue
+            name, matches, family, exact = raw.rstrip("\n").split("\t")
+            if name_tokens(name) == ("cane", "corso"):
+                continue
+            items.append({
+                "name": name,
+                "matches": int(matches),
+                "family": int(family),
+                "exact": int(exact),
+                "certainty": "unverified_name_pattern",
+            })
+    items.sort(key=lambda x: (-x["family"], -x["exact"], x["name"].casefold()))
+    return tuple(items)
+
+
+@lru_cache(maxsize=1)
 def _archive_affix_index():
     """Compile reviewed aggregate source-name statistics ONCE per process.
 
