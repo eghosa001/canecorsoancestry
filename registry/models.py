@@ -55,6 +55,9 @@ class Kennel(models.Model):
     description = models.TextField(blank=True)
     website = models.URLField(blank=True)
     is_public = models.BooleanField(default=True, db_index=True)
+    # Historical name-pattern matches do not establish breeder ownership.
+    # Kept separate from human-verified kennel identity.
+    is_archive_hypothesis = models.BooleanField(default=False, db_index=True)
     hide_dogs = models.BooleanField(default=False)
     publication_locked_by_superadmin = models.BooleanField(default=False)
     verified_at = models.DateTimeField(null=True, blank=True)
@@ -128,6 +131,13 @@ class Dog(models.Model):
         on_delete=models.SET_NULL,
         related_name="dogs",
     )
+    # A clickable, explicitly UNVERIFIED origin hypothesis. This must never
+    # be confused with canonical Dog.kennel or used as proof for pedigree.
+    inferred_kennel = models.ForeignKey(
+        Kennel, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="inferred_dogs",
+    )
+    inferred_kennel_evidence = models.JSONField(default=dict, blank=True)
     sire = models.ForeignKey(
         "self",
         null=True,

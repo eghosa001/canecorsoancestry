@@ -7,7 +7,7 @@
       <p class="eyebrow">Kennel profile</p>
       <h1>{{ kennel.name }}</h1>
       <p>{{ kennel.city }}{% if kennel.city and kennel.country %}, {% endif %}{{ kennel.country }}</p>
-      {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% endif %}
+      {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% elif kennel.is_archive_hypothesis %}<p class="muted"><strong>Unverified historical kennel name.</strong> Inferred from repeated dog-name patterns in an archived pedigree collection. This does not identify a verified breeder or owner.</p>{% endif %}
     </div>
     <div class="button-row">
       {% if kennel.website %}<a class="btn btn-outline" href="{{ kennel.website }}" rel="noreferrer">Kennel website</a>{% endif %}
@@ -33,6 +33,31 @@
     </nav>
   {% endif %}
 
+  {% if possible_bred_count %}
+  <div class="section-heading section-spacer">
+    <h2>Possible kennel-origin matches · unverified</h2>
+    <span>{{ possible_bred_count }} existing dog{{ possible_bred_count|pluralize }} linked for research</span>
+  </div>
+  <p class="muted">These dogs' names contain a recurring historical kennel phrase. The link is a research hypothesis only, <strong>not proof this kennel bred these dogs</strong>. Their confirmed breeding kennel remains blank until pedigree or registration documents establish the origin.</p>
+  <div class="dog-card-grid">
+    {% for dog in possible_dogs %}
+    <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
+      <div class="dog-card-body">
+        <h3>{{ dog.name }}</h3>
+        <p>{{ dog.colour|default:"Colour not recorded" }} · {{ dog.get_sex_display }}</p>
+        <small class="muted">Possible origin — unverified</small>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% if possible_dog_page.has_other_pages %}
+  <nav class="button-row" aria-label="Research dog pages">
+    {% if possible_dog_page.has_previous %}<a class="btn btn-outline" href="?research_page={{ possible_dog_page.previous_page_number }}">Previous research matches</a>{% endif %}
+    <span class="muted">Research page {{ possible_dog_page.number }} / {{ possible_dog_page.paginator.num_pages }}</span>
+    {% if possible_dog_page.has_next %}<a class="btn btn-outline" href="?research_page={{ possible_dog_page.next_page_number }}">Next research matches</a>{% endif %}
+  </nav>
+  {% endif %}
+  {% endif %}
   <div class="section-heading section-spacer"><h2>Litters</h2><span>{{ litter_total }} public litter{{ litter_total|pluralize }}</span></div>
   <div class="litter-list">
     {% for litter in litters %}

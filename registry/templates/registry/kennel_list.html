@@ -39,11 +39,12 @@
           <span class="eyebrow">
             {% if kennel.city and kennel.country %}{{ kennel.city }}, {{ kennel.country }}{% elif kennel.country %}{{ kennel.country }}{% elif kennel.city %}{{ kennel.city }}{% else %}Location not recorded{% endif %}
           </span>
-          {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% endif %}
+          {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% elif kennel.is_archive_hypothesis %}<span class="muted">Historical name · unverified</span>{% endif %}
         </div>
         <h2>{{ kennel.name }}</h2>
         <div class="mini-stats">
-          <span><strong>{{ kennel.public_dog_count }}</strong> bred dog{{ kennel.public_dog_count|pluralize }}</span>
+          <span><strong>{{ kennel.public_dog_count }}</strong> recorded bred dog{{ kennel.public_dog_count|pluralize }}</span>
+          {% if kennel.possible_breeding_dog_count %}<span><strong>{{ kennel.possible_breeding_dog_count }}</strong> possible origin match{{ kennel.possible_breeding_dog_count|pluralize }} (unverified)</span>{% endif %}
           <span><strong>{{ kennel.public_litter_count }}</strong> litters</span>
         </div>
       </a>
