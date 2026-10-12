@@ -36,26 +36,6 @@ jobs:
           sudo -n systemctl is-active --quiet cca-oracle-staging.service
           curl --fail --silent --show-error --max-time 12 \
             http://127.0.0.1:18080/healthz/ >/dev/null
-      - name: Print bounded public kennel lexicon for source-name research
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo -n podman exec cca-oracle-staging python manage.py shell -c '
-          import json
-          from django.db.models import Count
-          from registry.models import Kennel
-          rows = list(
-              Kennel.objects.filter(is_public=True)
-              .annotate(dog_count=Count("dogs"))
-              .order_by("name")
-              .values("name", "dog_count", "verified_at")
-          )
-          print("PUBLIC_KENNEL_LEXICON="+json.dumps([
-              {"name":row["name"],"linked_dogs":row["dog_count"],
-               "identity_verified":bool(row["verified_at"])}
-              for row in rows
-          ],ensure_ascii=True))
-          '
       - name: Audit all unlinked dogs without altering any database records
         shell: bash
         run: |
