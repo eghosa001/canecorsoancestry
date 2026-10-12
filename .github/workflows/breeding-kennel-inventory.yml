@@ -36,12 +36,21 @@ jobs:
           sudo -n systemctl is-active --quiet cca-oracle-staging.service
           curl --fail --silent --show-error --max-time 12 \
             http://127.0.0.1:18080/healthz/ >/dev/null
-      - name: One-time read-only provisional kennel creation and linking plan
+      - name: One-time backup and exactly-counted existing-dog research links
         shell: bash
         run: |
           set -euo pipefail
+          # Production has additive research fields. Avoid changing canonicals.
+          # The very recent read-only production plan was 1,378 existing dog
+          # links and 32 new unverified kennel profiles, from exact source IDs.
+          bash scripts/oracle_runner/backup_local_postgres.sh
           sudo -n podman exec cca-oracle-staging \
-            python manage.py link_provisional_archive_kennels
+            python manage.py link_provisional_archive_kennels \
+            --apply \
+            --expected-links 1378 \
+            --expected-new-kennels 32 \
+            --max-links 1500 \
+            --backup-confirmation LINK_EXISTING_DOGS_AS_EXPLICITLY_UNVERIFIED_RESEARCH_ONLY
       - name: Audit all unlinked dogs without altering any database records
         shell: bash
         run: |
