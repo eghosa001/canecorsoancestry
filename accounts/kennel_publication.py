@@ -7,7 +7,7 @@ from uuid import UUID
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q
@@ -58,7 +58,7 @@ def kennel_publication_list(request):
 def kennel_publication_detail(request, pk):
     _require_moderator(request.user)
     kennel = get_object_or_404(Kennel, pk=pk)
-    dogs = kennel.dogs.order_by("name", "pk")
+    dogs = kennel.dogs.select_related("kennel").order_by("name", "pk")
     page = Paginator(dogs, MAX_SELECTED_DOGS).get_page(request.GET.get("page"))
     return render(request, "accounts/kennel_publication_detail.html", {
         "kennel": kennel,
