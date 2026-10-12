@@ -6,6 +6,7 @@ from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.shortcuts import render
 
+from registry.archive_breeder_hints import archive_pattern_hints
 from registry.management.commands.reconcile_breeding_kennels import (
     _kennel_maps, assess,
 )
@@ -45,6 +46,7 @@ def kennel_reconciliation_review(request):
             "category": category,
             "reason": reason.replace("_", " "),
             "hints": ([match] if match else hints)[:3],
+            "archive_name_hypotheses": archive_pattern_hints(dog.name, limit=3),
         })
     return render(request, "accounts/breeding_kennel_reconciliation.html", {
         "page_obj": page,
