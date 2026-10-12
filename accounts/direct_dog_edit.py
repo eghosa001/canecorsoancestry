@@ -126,6 +126,7 @@ class DirectDogEditForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.allow_publication = kwargs.pop("allow_publication", False)
+        self.suggested_kennel = kwargs.pop("suggested_kennel", None)
         super().__init__(*args, **kwargs)
         dog = self.instance
         if self.allow_publication:
@@ -152,6 +153,10 @@ class DirectDogEditForm(forms.ModelForm):
                             "data-current-parent-name": parent.name,
                             "data-current-parent-id": str(parent.pk),
                         })
+            if self.suggested_kennel:
+                # Only an initial form suggestion: canonical dog/kennel facts
+                # cannot change without an explicit audited staff POST.
+                self.fields["kennel_ref"].initial = str(self.suggested_kennel.pk)
 
     def clean(self):
         data = super().clean()
@@ -429,6 +434,14 @@ def dog_edit_list(request):
             "history_deferred": False, "proposal_page": page,
             "show_proposals": True,
         })
+    target_id = request.GET.get("kennel", "").strip()
+    kennel_target = None
+    if target_id:
+        try:
+            kennel_uuid = uuid.UUID(target_id)
+        except (ValueError, AttributeError):
+            raise ValidationError("Invalid target kennel identifier.")
+        kennel_target = get_object_or_404(Kennel, pk=kennel_uuid)
     q = request.GET.get("q", "").strip()[:160]
     ids = moderation_dog_ids(q, limit=30) if q else []
     # One narrow query after bounded ID discovery. Preserve relevance order;
@@ -448,6 +461,7 @@ def dog_edit_list(request):
         "dogs": dogs, "query": q, "revisions": revisions,
         "is_owner": can_manage_verification(request.user),
         "history_deferred": bool(q and not show_history),
+        "kennel_target": kennel_target,
     })
 
 
@@ -558,9 +572,19 @@ def dog_direct_edit(request, pk):
     owner = can_manage_verification(request.user)
     if dog.is_record_locked and not owner:
         raise PermissionDenied("This record is locked by the super admin.")
+    suggested_kennel = None
+    if request.method == "GET" and request.GET.get("kennel"):
+        try:
+            target_uuid = uuid.UUID(request.GET["kennel"])
+        except (ValueError, AttributeError):
+            raise ValidationError("Invalid target kennel identifier.")
+        suggested_kennel = get_object_or_404(Kennel, pk=target_uuid)
     data = request.POST if request.method == "POST" else None
     files = request.FILES if request.method == "POST" else None
-    form = DirectDogEditForm(data, instance=dog, allow_publication=owner)
+    form = DirectDogEditForm(
+        data, instance=dog, allow_publication=owner,
+        suggested_kennel=suggested_kennel,
+    )
     sets = _edit_formsets(dog, data, files)
     if request.method == "POST":
         valid = form.is_valid()
