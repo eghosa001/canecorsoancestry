@@ -6,6 +6,9 @@
     <p class="eyebrow">Internal moderation</p>
     <h1>Manage kennels</h1>
     <p>Control the public kennel profile independently from its dogs. Changes are audited and do not delete information or bypass dog approvals.</p>
+    <div class="button-row">
+      <a class="btn btn-gold" href="{% url 'accounts:kennel-reconciliation-review' %}">Review unlinked breeding kennels →</a>
+    </div>
   </header>
   <form class="filter-panel" method="get" role="search">
     <div class="filter-search">
