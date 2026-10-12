@@ -159,10 +159,10 @@ class DogAdmin(admin.ModelAdmin):
 
 @admin.register(Kennel)
 class KennelAdmin(admin.ModelAdmin):
-    list_display = ("name", "country", "city", "verified_at", "is_public", "hide_dogs")
+    list_display = ("name", "country", "city", "verified_at", "is_public", "hide_dogs", "publication_locked_by_superadmin")
     search_fields = ("name", "country", "city")
     prepopulated_fields = {"slug": ("name",)}
-    readonly_fields = ("verified_at", "is_public", "hide_dogs", "publication_workflow")
+    readonly_fields = ("verified_at", "is_public", "hide_dogs", "publication_locked_by_superadmin", "publication_workflow")
 
     @admin.display(description="Public visibility")
     def publication_workflow(self, obj):
