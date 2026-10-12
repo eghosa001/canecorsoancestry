@@ -7,7 +7,7 @@
     <div>
       <p class="eyebrow">Super Admin / Senior Moderator</p>
       <h1>Add Dog</h1>
-      <p>Add a canonical dog without opening Advanced Admin. Every new record is private until the Super Admin explicitly publishes it under Manage record → Visibility. All additions are audited.</p>
+      <p>Add a canonical dog without opening Advanced Admin. Every new record is private initially. An active Moderator, Senior Moderator or Super Admin can publish it under Manage record → Visibility after checking the details. Every action is audited.</p>
     </div>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">Search existing dogs</a>
@@ -38,7 +38,7 @@
       <button type="submit" class="btn btn-gold">Add private dog</button>
       <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">Cancel</a>
     </div>
-    <p class="muted">After saving, you can add registrations, additional photos and evidence under Manage record. Publication remains a separate Super Admin decision.</p>
+    <p class="muted">After saving, you can add registrations, additional photos and evidence under Manage record. Publication is a separate audited decision available to active moderators unless the Super Admin locks visibility.</p>
   </form>
 </section>
 <script>window.CCA_PARENT_LOOKUP_URL = "{% url 'accounts:dog-parent-suggestions' %}";</script>
