@@ -7,7 +7,8 @@ from django.db import connection
 from django.db.models import Case, CharField, Count, F, Q, Value, When, Window
 from django.db.models.functions import RowNumber
 
-from registry.models import Dog, HealthRecord
+from registry.models import Dog, HealthRecord, Kennel
+from registry.querysets import published_dogs
 
 
 class PedigreeCycleError(ValueError):
@@ -51,7 +52,7 @@ def _pedigree_snapshot(dog, generations=4, public_only=False):
         parents = Dog.objects.select_related("kennel").in_bulk(parent_ids)
         if public_only:
             parents = {
-                pk: parent for pk, parent in parents.items() if parent.is_public
+                pk: parent for pk, parent in parents.items() if parent.is_effectively_public
             }
 
         next_slots = []
@@ -84,7 +85,7 @@ def _pedigree_snapshot(dog, generations=4, public_only=False):
                     str(current.sire_id or ""),
                     str(current.dam_id or ""),
                     str(current.kennel_id or ""),
-                    str(int(current.is_public)),
+                    str(int(current.is_effectively_public if public_only else current.is_public)),
                     current.updated_at.isoformat() if current.updated_at else "",
                 )
             )
@@ -154,7 +155,7 @@ def build_pedigree(dog, generations=4, _seen=None, public_only=False):
     """Return a bounded pedigree tree while safely stopping accidental cycles."""
     if dog is None or generations < 0:
         return None
-    if public_only and not dog.is_public:
+    if public_only and not dog.is_effectively_public:
         return None
 
     seen = set() if _seen is None else set(_seen)
@@ -222,7 +223,7 @@ def sibling_relationships(dog, public_only=True, limit=None):
 
     siblings = Dog.objects.filter(parent_filter).exclude(pk=dog.pk)
     if public_only:
-        siblings = siblings.filter(is_public=True)
+        siblings = published_dogs(siblings)
     siblings = siblings.select_related("sire", "dam", "kennel").distinct().order_by("name")
     if limit:
         siblings = siblings[:limit]
@@ -264,7 +265,7 @@ def profile_direct_relations(dog, *, public_only=True, limit=19):
 
     candidates = Dog.objects.filter(sibling_filter | offspring_filter).exclude(pk=dog.pk)
     if public_only:
-        candidates = candidates.filter(is_public=True)
+        candidates = published_dogs(candidates)
 
     candidates = (
         candidates.annotate(
@@ -322,7 +323,7 @@ def profile_direct_relations(dog, *, public_only=True, limit=19):
 def offspring_for(dog, public_only=True):
     queryset = Dog.objects.filter(Q(sire_id=dog.pk) | Q(dam_id=dog.pk))
     if public_only:
-        queryset = queryset.filter(is_public=True)
+        queryset = published_dogs(queryset)
     return queryset.select_related("kennel", "sire", "dam").distinct().order_by("name")
 
 
@@ -344,7 +345,7 @@ def mate_relationships(
             Q(sire_id=dog.pk) | Q(dam_id=dog.pk)
         )
         if public_only:
-            all_children = all_children.filter(is_public=True)
+            all_children = published_dogs(all_children)
 
         counts_by_mate_id = defaultdict(int)
         for row in (
@@ -415,7 +416,7 @@ def descendant_generations(
             Q(sire_id__in=frontier) | Q(dam_id__in=frontier)
         ).select_related("kennel", "sire", "dam")
         if public_only:
-            children = children.filter(is_public=True)
+            children = published_dogs(children)
         children = children.order_by("name")
         if per_generation_limit:
             fetched = list(children[: per_generation_limit + 1])
@@ -461,7 +462,7 @@ def direct_relative_health(
     relatives = {}
 
     def add(relative, relation):
-        if relative is None or (public_only and not relative.is_public):
+        if relative is None or (public_only and not relative.is_effectively_public):
             return
         row = relatives.setdefault(
             relative.pk,
@@ -551,7 +552,7 @@ def _pedigree_graph(*dogs, public_only=False):
     roots = [
         dog
         for dog in dogs
-        if dog is not None and (not public_only or dog.is_public)
+        if dog is not None and (not public_only or dog.is_effectively_public)
     ]
     if not roots:
         return {}, {}
@@ -559,8 +560,17 @@ def _pedigree_graph(*dogs, public_only=False):
     if connection.vendor == "postgresql":
         table = connection.ops.quote_name(Dog._meta.db_table)
         placeholders = ", ".join(["%s"] * len(roots))
-        public_root = " AND is_public" if public_only else ""
-        public_parent = "WHERE parent.is_public" if public_only else ""
+        kennel_table = connection.ops.quote_name(Kennel._meta.db_table)
+        public_root = (
+            f" AND is_public AND NOT hidden_by_moderation "
+            f"AND NOT EXISTS (SELECT 1 FROM {kennel_table} k WHERE k.id = kennel_id AND k.hide_dogs)"
+            if public_only else ""
+        )
+        public_parent = (
+            f"WHERE parent.is_public AND NOT parent.hidden_by_moderation "
+            f"AND NOT EXISTS (SELECT 1 FROM {kennel_table} k WHERE k.id = parent.kennel_id AND k.hide_dogs)"
+            if public_only else ""
+        )
         sql = f"""
             WITH RECURSIVE pedigree AS (
                 SELECT id, sire_id, dam_id, is_public, name, slug
@@ -617,14 +627,15 @@ def _pedigree_graph(*dogs, public_only=False):
         }
         if not parent_ids:
             break
-        parents = Dog.objects.only(
-            "id", "sire_id", "dam_id", "is_public", "name", "slug"
+        parents = Dog.objects.select_related("kennel").only(
+            "id", "sire_id", "dam_id", "is_public", "hidden_by_moderation", "kennel_id",
+            "kennel__hide_dogs", "name", "slug"
         ).in_bulk(parent_ids)
         if public_only:
             parents = {
                 pk: parent
                 for pk, parent in parents.items()
-                if parent.is_public
+                if parent.is_effectively_public
             }
         frontier = list(parents.values())
         nodes.update(parents)
