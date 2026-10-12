@@ -10,6 +10,9 @@ to a canonical Dog.kennel based solely on a name pattern.
 """
 import re
 import unicodedata
+from collections import defaultdict
+from functools import lru_cache
+from pathlib import Path
 
 # position; archive dogs sharing this exact affix; observed phrase.
 # This is a bounded, source-derived subset of 2,078 recurring affixes
@@ -196,55 +199,157 @@ def _matched_position(haystack, needle):
     return None
 
 
-def archive_pattern_hints(dog_name, *, limit=3):
-    """Return review-only hypotheses, never a verified or automatic link.
+@lru_cache(maxsize=1)
+def _archive_affix_index():
+    """Compile reviewed aggregate source-name statistics ONCE per process.
 
-    Prefix/suffix evidence is stronger than an internal name component,
-    but not conclusive. A long prefix can be a registered title or
-    purchased dog designation rather than its original breeder.
+    The complete canonical-source-ID join catalog has 343 name groups.
+    It is separate from the older broader archival affix patterns.
+    Neither dataset is registered kennel ownership evidence.
     """
-    tokens = name_tokens(dog_name)
-    hits = []
-    seen_source_rows = set()
+    known = {}
     for row in _ARCHIVE_KENNEL_PATTERNS.splitlines():
         if not row or row.lstrip().startswith("#"):
             continue
-        place, support, label = row.split("|", 2)
-        source_key = (place, name_tokens(label))
-        if source_key in seen_source_rows:
+        placement, count, label = row.split("|", 2)
+        tokens = name_tokens(label)
+        if len(tokens) == 0:
             continue
-        seen_source_rows.add(source_key)
-        name = name_tokens(label)
-        observed = _matched_position(tokens, name)
-        if observed is None:
-            continue
-        if (place == "P" and observed != "prefix") or (
-            place == "S" and observed != "suffix"
-        ):
-            # An unexpected internal position is a weaker suggestion;
-            # do not portray it as an archival anchored affix.
-            continue
-        hits.append({
+        known[(placement, tokens)] = {
             "label": label,
-            "position": observed,
-            "archive_name_count": int(support),
-            "source": "116370_dog_archival_name_patterns",
-            "certainty": "unverified_hypothesis",
-            "score": len(name)*10 + min(int(support), 1000)/100,
-        })
-    hits.sort(key=lambda h: (-h["score"], -h["archive_name_count"], h["label"]))
-    result = []
-    for h in hits:
-        nh = name_tokens(h["label"])
-        if any(nh != name_tokens(prev["label"]) and nh in (
-            name_tokens(prev["label"])[:len(nh)],
-            name_tokens(prev["label"])[-len(nh):]
-        ) for prev in result):
+            "tokens": tokens,
+            "preferred_position": placement,
+            "archive_name_count": int(count),
+            "unlinked_name_matches": 0,
+            "family_pattern_support": 0,
+            "archive_exact_source_ids": 0,
+            "source": "archived_name_affixes",
+        }
+    path = Path(__file__).with_name("data") / "archive_breeding_kennel_hypotheses.tsv"
+    with path.open(encoding="utf-8") as rows:
+        for row in rows:
+            if not row.strip() or row.startswith("#"):
+                continue
+            phrase, count, sibling_count, exact_source_ids = row.strip().split("\t")
+            tokens = name_tokens(phrase)
+            if not tokens or tokens in {("cane", "corso"), ("dog",), ("kennel",)}:
+                # A breed or generic term is not a useful breeder identity.
+                continue
+            if len(tokens) == 1 and len(tokens[0]) < 5:
+                continue
+            # Preserve full-source corpus support for patterns already known,
+            # and supplement it with the exact canonical archive-ID join.
+            matched = [
+                item for (placement, key), item in known.items()
+                if key == tokens
+            ]
+            if matched:
+                for item in matched:
+                    item["unlinked_name_matches"] = max(
+                        item["unlinked_name_matches"], int(count),
+                    )
+                    item["family_pattern_support"] = max(
+                        item["family_pattern_support"], int(sibling_count),
+                    )
+                    item["archive_exact_source_ids"] = max(
+                        item["archive_exact_source_ids"], int(exact_source_ids),
+                    )
+                    # The canonical ID join confirms phrase occurrences
+                    # across name positions; NEVER confirms the breeder.
+                    item["preferred_position"] = "any"
+            else:
+                known[("any", tokens)] = {
+                    "label": phrase,
+                    "tokens": tokens,
+                    "preferred_position": "any",
+                    "archive_name_count": 0,
+                    "unlinked_name_matches": int(count),
+                    "family_pattern_support": int(sibling_count),
+                    "archive_exact_source_ids": int(exact_source_ids),
+                    "source": "canonical_archive_id_join_aggregate",
+                }
+    index = defaultdict(list)
+    for item in known.values():
+        index[item["tokens"][0]].append(item)
+    for entries in index.values():
+        entries.sort(key=lambda item: (
+            -len(item["tokens"]), -item["archive_exact_source_ids"],
+            -item["archive_name_count"], item["label"].casefold(),
+        ))
+    return dict(index)
+
+
+def archive_pattern_hints(dog_name, *, limit=3):
+    """Indexed prefix / middle / suffix hypotheses for moderator review only.
+
+    A match is NOT proof of a breeding kennel, and this function must
+    never be used to mutate Dog.kennel or grant any kennel membership.
+    """
+    tokens = name_tokens(dog_name)
+    if not tokens or limit < 1:
+        return []
+    candidates = []
+    already = set()
+    index = _archive_affix_index()
+    for i, first in enumerate(tokens):
+        for item in index.get(first, ()):
+            part = item["tokens"]
+            end = i + len(part)
+            if end >= len(tokens) and i == 0:
+                continue
+            if tokens[i:end] != part:
+                continue
+            position = "prefix" if i == 0 else (
+                "suffix" if end == len(tokens) else "middle"
+            )
+            preferred = item["preferred_position"]
+            if preferred == "P" and position != "prefix":
+                continue
+            if preferred == "S" and position != "suffix":
+                continue
+            if part in already:
+                continue
+            already.add(part)
+            support = (item["archive_name_count"] or
+                       item["archive_exact_source_ids"])
+            candidates.append({
+                "label": item["label"],
+                "position": position,
+                "archive_name_count": item["archive_name_count"],
+                "unlinked_name_matches": item["unlinked_name_matches"],
+                "family_pattern_support": item["family_pattern_support"],
+                "archive_exact_source_ids": item["archive_exact_source_ids"],
+                "source": item["source"],
+                "certainty": "unverified_hypothesis",
+                "score": (
+                    len(part) * 100
+                    + min(support, 1000) / 10
+                    + min(item["family_pattern_support"], 100) / 10
+                    + (2 if position != "middle" else 0)
+                ),
+            })
+    candidates.sort(key=lambda h: (
+        -h["score"],
+        -h["family_pattern_support"],
+        -h["archive_exact_source_ids"],
+        h["label"],
+    ))
+    results = []
+    for item in candidates:
+        current = name_tokens(item["label"])
+        if any(
+            len(current) < len(name_tokens(other["label"]))
+            and (
+                current == name_tokens(other["label"])[:len(current)]
+                or current == name_tokens(other["label"])[-len(current):]
+            )
+            for other in results
+        ):
             continue
-        result.append(h)
-        if len(result) >= limit:
+        results.append(item)
+        if len(results) == limit:
             break
-    return result
+    return results
 
 
 def match_existing_kennel_name(dog_name, kennel_name):
