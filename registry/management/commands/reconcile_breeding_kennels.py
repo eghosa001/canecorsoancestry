@@ -16,6 +16,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from registry.archive_breeder_hints import archive_pattern_hints, match_existing_kennel_name, name_tokens
 from registry.models import Dog, DogSource, Kennel, ModerationAudit
 from registry.public_freshness import invalidate_public_content
 from registry.services import record_audit
@@ -56,13 +57,24 @@ def _kennel_maps(kennels):
 
 
 def _name_hints(name, names, limit=3):
-    text = _normal(name)
+    """Find full kennel names at name start, middle or end.
+
+    These are PROPOSALS ONLY, not breeder-proof matches. Prefer a longer
+    unique complete kennel phrase; multiple labels make a name ambiguous.
+    """
     hints = []
     for label, kennel in names:
-        if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", text):
-            hints.append(kennel)
-    hints.sort(key=lambda k: (-len(_normal(k.name)), k.name.casefold()))
-    return hints[:limit]
+        placement = match_existing_kennel_name(name, kennel.name)
+        if placement:
+            hints.append((kennel, placement))
+    order = {"suffix": 0, "prefix": 1, "middle": 2}
+    hints.sort(key=lambda hit: (
+        -len(name_tokens(hit[0].name)),
+        order[hit[1]],
+        -len(hit[0].name),
+        hit[0].name.casefold(),
+    ))
+    return [kennel for kennel, _ in hints[:limit]]
 
 
 def assess(dog, sources, by_name, patterns):
@@ -128,6 +140,11 @@ def assess(dog, sources, by_name, patterns):
                 list(matches[:2]) or hints)
     if hints:
         return ("review", None, "name_or_litter_hint_requires_human_proof", hints)
+    if archive_pattern_hints(dog.name, limit=1):
+        # A recurring phrase in 116,370 source dogs can identify a
+        # plausible NEW kennel but is not enough to create a canonical
+        # kennel or publish any dog->kennel association.
+        return ("review", None, "archive_kennel_name_pattern_needs_verification", [])
     return ("unresolved", None, "no_documented_breeder", [])
 
 
@@ -172,6 +189,9 @@ def _scan(*, max_review_records=2000):
                 "suggested_kennels": [
                     {"id": str(k.pk), "name": k.name} for k in hints
                 ],
+                "archive_name_hypotheses": archive_pattern_hints(
+                    dog.name, limit=3,
+                ),
                 "reason": reason, "action": "staff_review_only",
             })
     return counts, safe, review
