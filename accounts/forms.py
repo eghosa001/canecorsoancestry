@@ -356,7 +356,21 @@ class DogSubmissionForm(forms.Form):
     colour = forms.CharField(max_length=100, required=False)
     country = forms.CharField(max_length=80, required=False)
     bloodline = forms.CharField(max_length=220, required=False)
-    kennel = forms.ModelChoiceField(queryset=Kennel.objects.none(), required=False)
+    kennel = forms.ModelChoiceField(
+        queryset=Kennel.objects.none(), required=False,
+        label="Submitting kennel (account access)",
+        help_text="Your verified account kennel handles this submission; it is not necessarily the dog's breeding kennel.",
+    )
+    breeding_kennel = forms.ModelChoiceField(
+        queryset=Kennel.objects.none(), required=False,
+        label="Breeding kennel (origin)",
+        empty_label="No registered breeding kennel",
+        help_text=(
+            "Choose the kennel that originally bred this dog, not a kennel that bought it. "
+            "Leave blank if the breeder has no registered kennel name. "
+            "The original registered dog name must not be changed when purchased."
+        ),
+    )
     sire = forms.ModelChoiceField(queryset=Dog.objects.none(), required=False)
     dam = forms.ModelChoiceField(queryset=Dog.objects.none(), required=False)
     registration = forms.CharField(max_length=120, required=False)
@@ -395,11 +409,19 @@ class DogSubmissionForm(forms.Form):
         if user and user.is_authenticated:
             kennel_ids = user.kennel_memberships.values_list("kennel_id", flat=True)
         self.fields["kennel"].queryset = Kennel.objects.filter(pk__in=kennel_ids)
+        # Breeding provenance must be separate from the submitting user's kennel.
+        # A confirmed member can submit a purchased dog while recording its
+        # actual breeder, or leave the breeding kennel blank if unregistered.
+        self.fields["breeding_kennel"].queryset = Kennel.objects.filter(
+            is_public=True
+        ).order_by("name")
         if kennel is not None:
             self.fields["kennel"].queryset = Kennel.objects.filter(pk=kennel.pk)
             self.fields["kennel"].initial = kennel
             self.fields["kennel"].required = True
             self.fields["kennel"].disabled = True
+            if kennel.is_public:
+                self.fields["breeding_kennel"].initial = kennel
         related_dogs = Dog.objects.filter(
             Q(is_public=True) | Q(kennel_id__in=kennel_ids)
         )
