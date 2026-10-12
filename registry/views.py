@@ -661,7 +661,7 @@ def kennel_detail(request, slug):
     ).order_by("name")
     litter_queryset = (
         Litter.objects.filter(kennel=kennel, is_public=True, kennel__hide_dogs=False)
-        .select_related("sire", "dam")
+        .select_related("sire", "dam", "sire__kennel", "dam__kennel")
         .order_by("-date_of_birth", "code")
     )
     dog_page = Paginator(dog_queryset, 24).get_page(request.GET.get("dogs_page"))
@@ -712,7 +712,7 @@ def kennel_detail(request, slug):
 
 def litter_detail(request, pk):
     litter = get_object_or_404(
-        Litter.objects.select_related("kennel", "sire", "dam").filter(
+        Litter.objects.select_related("kennel", "sire", "dam", "sire__kennel", "dam__kennel").filter(
             Q(kennel__isnull=True) | Q(kennel__hide_dogs=False)
         ),
         pk=pk,
