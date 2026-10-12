@@ -263,9 +263,10 @@ class StaffChangeVisibilityTests(TestCase):
         self.staff.save(update_fields=["is_active"])
         self.assertFalse(can_publish_canonical_dog(self.staff))
         self.client.force_login(self.staff)
+        # Django treats inactive sessions as unauthenticated and redirects to login.
         self.assertEqual(self.client.get(
             reverse("accounts:dog-direct-edit", args=[self.dog.pk])
-        ).status_code, 403)
+        ).status_code, 302)
 
     def test_legacy_owner_save_without_switch_preserves_public_status(self):
         self.client.force_login(self.owner)
