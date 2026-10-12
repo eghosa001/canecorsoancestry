@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Add canonical dog · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell">
+  <header class="page-heading moderation-heading">
+    <div>
+      <p class="eyebrow">Super Admin / Senior Moderator</p>
+      <h1>Add Dog</h1>
+      <p>Add a canonical dog without opening Advanced Admin. Every new record is private until the Super Admin explicitly publishes it under Manage record → Visibility. All additions are audited.</p>
+    </div>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">Search existing dogs</a>
+      <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Review queue</a>
+    </div>
+  </header>
+  <div class="panel" role="note">
+    <p><strong>Check before adding:</strong> Search for the dog's registered name to avoid duplicate records. The breeding kennel means the original breeder, not a current owner or purchaser. If the original breeding kennel is not registered, leave that field empty. Never invent parents or registration information.</p>
+  </div>
+  <form class="panel" method="post" enctype="multipart/form-data" autocomplete="off">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="profile-section-grid">
+      {% for field in form %}
+        <div>
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.name == "sire_ref" or field.name == "dam_ref" %}
+            <div id="parent-results-{{ field.name }}" class="parent-identity-results" data-parent-results-for="{{ field.name }}" role="listbox" aria-label="Matching ancestors" hidden></div>
+            <small class="parent-identity-selection" data-parent-selection-for="{{ field.name }}" role="status" aria-live="polite"></small>
+          {% endif %}
+          {% if field.help_text %}<small class="muted">{{ field.help_text }}</small>{% endif %}
+          {{ field.errors }}
+        </div>
+      {% endfor %}
+    </div>
+    <div class="button-row">
+      <button type="submit" class="btn btn-gold">Add private dog</button>
+      <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">Cancel</a>
+    </div>
+    <p class="muted">After saving, you can add registrations, additional photos and evidence under Manage record. Publication remains a separate Super Admin decision.</p>
+  </form>
+</section>
+<script>window.CCA_PARENT_LOOKUP_URL = "{% url 'accounts:dog-parent-suggestions' %}";</script>
+<script src="{% static 'accounts/direct-dog-edit.js' %}?v=20261011-publication-labels-v3" defer></script>
+{% endblock %}
