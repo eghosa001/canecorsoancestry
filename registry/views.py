@@ -337,7 +337,7 @@ def _public_profile_dog(slug):
     """
     dogs = (
         published_dogs()
-        .select_related("kennel", "sire", "dam", "sire__kennel", "dam__kennel")
+        .select_related("kennel", "inferred_kennel", "sire", "dam", "sire__kennel", "dam__kennel")
         .annotate(
             _has_profile_images=Exists(
                 DogImage.objects.filter(dog_id=OuterRef("pk"))
@@ -603,7 +603,20 @@ def kennel_list(request):
         .annotate(total=Count("pk"))
         .values("total")[:1]
     )
+    inferred_dog_count = (
+        published_dogs(
+            Dog.objects.filter(
+                inferred_kennel_id=OuterRef("pk"), kennel__isnull=True
+            )
+        )
+        .values("inferred_kennel_id")
+        .annotate(total=Count("pk"))
+        .values("total")[:1]
+    )
     kennels = Kennel.objects.filter(is_public=True).annotate(
+        possible_breeding_dog_count=Coalesce(
+            Subquery(inferred_dog_count, output_field=IntegerField()), Value(0)
+        ),
         public_dog_count=Coalesce(
             Subquery(public_dog_count, output_field=IntegerField()),
             Value(0),
@@ -659,6 +672,16 @@ def kennel_detail(request, slug):
         ),
         include_sources=False,
     ).order_by("name")
+    # Existing dogs can have a research association without declaring an
+    # unverified kennel to be their actual breeding origin.
+    possible_bred_dogs = published_dogs(
+        Dog.objects.filter(inferred_kennel=kennel, kennel__isnull=True)
+    )
+    possible_bred_count = possible_bred_dogs.count()
+    possible_dogs_page = Paginator(
+        _dog_cards(possible_bred_dogs, include_sources=False).order_by("name"), 24
+    ).get_page(request.GET.get("research_page"))
+    _attach_source_images_for_missing(possible_dogs_page.object_list)
     litter_queryset = (
         Litter.objects.filter(kennel=kennel, is_public=True, kennel__hide_dogs=False)
         .select_related("sire", "dam", "sire__kennel", "dam__kennel")
@@ -697,6 +720,9 @@ def kennel_detail(request, slug):
             "litter_page": litter_page,
             "dog_total": dog_page.paginator.count,
             "public_dog_total": public_dog_total,
+            "possible_dogs": possible_dogs_page.object_list,
+            "possible_dog_page": possible_dogs_page,
+            "possible_bred_count": possible_bred_count,
             "litter_total": litter_page.paginator.count,
             "can_claim": (
                 request.user.is_authenticated
