@@ -1,0 +1,66 @@
+name: Breeding kennel provenance inventory
+
+on:
+  workflow_run:
+    workflows: ["Oracle Django production release (CI-gated)"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cca-breeding-kennel-audit
+  cancel-in-progress: true
+
+jobs:
+  inventory:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify trusted production and current code
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "eghosa001/canecorsoancestry"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = local
+          sudo -n systemctl is-active --quiet cca-pg-shadow.service
+          sudo -n systemctl is-active --quiet cca-oracle-staging.service
+          curl --fail --silent --show-error --max-time 12 \
+            http://127.0.0.1:18080/healthz/ >/dev/null
+      - name: Audit all unlinked dogs without altering any database records
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n podman exec cca-oracle-staging \
+            python manage.py reconcile_breeding_kennels \
+            --report-path /tmp/cca-breeding-kennel-review.json \
+            --review-sample-limit 10000
+          sudo -n podman cp \
+            cca-oracle-staging:/tmp/cca-breeding-kennel-review.json \
+            "$RUNNER_TEMP/cca-breeding-kennel-review.json"
+          sudo -n chown "$(id -u):$(id -g)" \
+            "$RUNNER_TEMP/cca-breeding-kennel-review.json"
+          python3 - "$RUNNER_TEMP/cca-breeding-kennel-review.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          report=json.loads(Path(sys.argv[1]).read_text())
+          summary=report["summary"]
+          print("PASS: full canonical breeding kennel scan; no writes")
+          print("Unlinked, for human review:", summary.get("review", 0))
+          print("Unlinked with no origin evidence:", summary.get("unresolved", 0))
+          print("Documentary exact auto candidates (NOT applied):", summary.get("safe", 0))
+          print("See the private audit artifact for candidate IDs and reasoning.")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: breeding-kennel-review
+          path: ${{ runner.temp }}/cca-breeding-kennel-review.json
+          if-no-files-found: error
+          retention-days: 7
