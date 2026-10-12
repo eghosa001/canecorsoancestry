@@ -86,8 +86,12 @@ jobs:
             targets+=("pedigrees.tests_pedigree_navigation")
           fi
 
-           if grep -Eq '^registry/(management/commands/export_unlinked_archive_keys|tests_breeding_kennel_reconciliation)\\.py
+          if grep -Eq '^registry/(management/commands/(import_canecorso_archive|refresh_canecorso_latest)\.py|tests_canecorso_(import|latest)\.py)$' <<<"$changed"; then
             targets+=("registry.tests_canecorso_import" "registry.tests_canecorso_latest")
+          fi
+
+          if grep -Eq '^registry/(management/commands/export_unlinked_archive_keys|tests_breeding_kennel_reconciliation)\.py$' <<<"$changed"; then
+            targets+=("registry.tests_breeding_kennel_reconciliation")
           fi
 
           if grep -q '^registry/' <<<"$changed"; then
