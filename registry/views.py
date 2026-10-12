@@ -337,7 +337,7 @@ def _public_profile_dog(slug):
     """
     dogs = (
         published_dogs()
-        .select_related("kennel", "sire", "dam")
+        .select_related("kennel", "sire", "dam", "sire__kennel", "dam__kennel")
         .annotate(
             _has_profile_images=Exists(
                 DogImage.objects.filter(dog_id=OuterRef("pk"))
@@ -598,7 +598,7 @@ def kennel_list(request):
         .values("total")[:1]
     )
     public_litter_count = (
-        Litter.objects.filter(kennel_id=OuterRef("pk"), is_public=True)
+        Litter.objects.filter(kennel_id=OuterRef("pk"), is_public=True, kennel__hide_dogs=False)
         .values("kennel_id")
         .annotate(total=Count("pk"))
         .values("total")[:1]
