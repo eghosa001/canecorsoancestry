@@ -830,7 +830,7 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["dog_total"], 2)
         self.assertEqual(response.context["public_dog_total"], 3)
-        self.assertContains(response, "Dogs with photos")
+        self.assertContains(response, "Dogs bred by this kennel")
         self.assertContains(response, "Photographed Dog")
         self.assertContains(response, "Source Photo Dog")
         self.assertNotContains(response, "Pedigree Only Dog")
