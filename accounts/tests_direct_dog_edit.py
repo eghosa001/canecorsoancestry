@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from registry.models import Dog, DogTitle, ModerationAudit, ModerationRoleAssignment
+from registry.models import Dog, DogTitle, Kennel, ModerationAudit, ModerationRoleAssignment
 
 
 class DirectDogEditTests(TestCase):
@@ -63,6 +63,49 @@ class DirectDogEditTests(TestCase):
                     payload[f"{name}-{index}-{field_name}"] = str(value)
         payload.update(updates)
         return payload
+
+    def test_staff_can_find_a_dog_and_preview_kennel_association_without_saving(self):
+        kennel = Kennel.objects.create(name="Pet Palace", slug="pet-palace")
+        self.client.force_login(self.moderator)
+        kennel_page = self.client.get(
+            reverse("accounts:kennel-publication-detail", args=[kennel.pk])
+        )
+        self.assertEqual(kennel_page.status_code, 200)
+        self.assertContains(kennel_page, "Find existing dog to associate")
+        finder = self.client.get(
+            reverse("accounts:dog-edit-list"),
+            {"kennel": str(kennel.pk), "q": "Original Dog"},
+        )
+        self.assertEqual(finder.status_code, 200)
+        self.assertContains(finder, "Review kennel association")
+        editor = self.client.get(
+            self.editor(), {"kennel": str(kennel.pk)}
+        )
+        self.assertEqual(editor.status_code, 200)
+        self.assertEqual(editor.context["form"]["kennel_ref"].value(), str(kennel.pk))
+        self.dog.refresh_from_db()
+        self.assertIsNone(self.dog.kennel_id)
+
+    def test_moderator_kennel_association_requires_owner_review(self):
+        kennel = Kennel.objects.create(name="Pet Palace", slug="pet-palace")
+        self.client.force_login(self.moderator)
+        response = self.client.post(
+            self.editor(), self.submission(kennel_ref=str(kennel.pk))
+        )
+        self.assertEqual(response.status_code, 302)
+        self.dog.refresh_from_db()
+        self.assertIsNone(self.dog.kennel_id)
+        proposal = ModerationAudit.objects.get(summary__kind="direct_dog_proposal")
+        self.assertEqual(proposal.summary["proposed_changes"]["kennel"], str(kennel.pk))
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            self.revision_url(proposal),
+            {"decision": "approve", "reason": "Verified official kennel ownership documents"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.dog.refresh_from_db()
+        self.assertEqual(self.dog.kennel_id, kennel.pk)
+        self.assertTrue(self.dog.is_public)
 
     def test_moderator_changes_live_with_before_after_audit(self):
         self.client.force_login(self.moderator)

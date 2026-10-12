@@ -2295,21 +2295,53 @@ def claim_kennel(request, pk):
 
     form = KennelClaimForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
+        ownership_certificate = form.cleaned_data["ownership_certificate"]
+        cac_certificate = form.cleaned_data.get("cac_certificate")
         try:
             with transaction.atomic():
+                # Ownership is never granted by an upload; moderator review
+                # must verify the private certificate and the real claimant.
+                # The flag also makes approval enforce evidence for new claims
+                # without retroactively rejecting older pending claims.
                 submission = Submission.objects.create(
                     kind=Submission.Kind.KENNEL_CLAIM,
                     submitted_by=request.user,
                     kennel=kennel,
-                    payload={"relationship": form.cleaned_data["relationship"]},
-                    attachment=form.cleaned_data["evidence"] or "",
+                    payload={
+                        "relationship": form.cleaned_data["relationship"],
+                        "ownership_certificate_required": True,
+                        "cac_certificate_supplied": bool(cac_certificate),
+                    },
                     notes=form.cleaned_data["notes"],
                 )
-        except (OSError, urllib.error.URLError) as exc:
-            _add_upload_storage_error(form, "evidence", exc)
+                SubmissionEvidence.objects.create(
+                    submission=submission,
+                    evidence_type=SubmissionEvidence.EvidenceType.KENNEL,
+                    file=ownership_certificate,
+                    uploaded_by=request.user,
+                    note="Required kennel-name ownership certificate",
+                    sha256=_upload_sha256(ownership_certificate),
+                )
+                if cac_certificate:
+                    SubmissionEvidence.objects.create(
+                        submission=submission,
+                        evidence_type=SubmissionEvidence.EvidenceType.OTHER,
+                        file=cac_certificate,
+                        uploaded_by=request.user,
+                        note="Optional CAC business-name registration certificate",
+                        sha256=_upload_sha256(cac_certificate),
+                    )
+                # Submission and both private evidence records must persist
+                # together or no pending ownership claim should be created.
+                verify_submission(submission)
+        except (OSError, urllib.error.URLError, TimeoutError) as exc:
+            _add_upload_storage_error(form, "ownership_certificate", exc)
         else:
-            verify_submission(submission)
-            messages.success(request, "Kennel ownership claim submitted for review.")
+            messages.success(
+                request,
+                "Your kennel ownership claim and private documents were submitted. "
+                "Only an authorized moderator can approve the claim.",
+            )
             return redirect("accounts:submissions")
 
     return render(

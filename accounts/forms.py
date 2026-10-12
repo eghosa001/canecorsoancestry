@@ -818,13 +818,26 @@ class KennelClaimForm(forms.Form):
         max_length=180,
         help_text="Describe your relationship to this kennel (owner, breeder, manager, etc.).",
     )
-    evidence = forms.FileField(
+    ownership_certificate = forms.FileField(
+        label="Proof of kennel-name ownership (required)",
+        required=True,
+        widget=forms.ClearableFileInput(attrs={"accept": DOCUMENT_ACCEPT}),
+        validators=[validate_document_upload],
+        help_text=(
+            "Upload a readable certificate or official kennel registration document "
+            "showing your authority over this kennel name. PDF or image, up to 20 MB. "
+            "Kept private for moderator review."
+        ),
+    )
+    cac_certificate = forms.FileField(
+        label="CAC business-name certificate (optional)",
         required=False,
         widget=forms.ClearableFileInput(attrs={"accept": DOCUMENT_ACCEPT}),
-        validators=[
-            validate_document_upload,
-        ],
-        help_text="Optional supporting document or image, including photos from phones and cameras.",
+        validators=[validate_document_upload],
+        help_text=(
+            "If your kennel is registered with Nigeria's CAC, you may add the "
+            "certificate as extra evidence. CAC registration is not required to claim a kennel."
+        ),
     )
     notes = forms.CharField(
         required=False,
@@ -832,8 +845,11 @@ class KennelClaimForm(forms.Form):
         help_text="Add any information a moderator should use when checking the claim.",
     )
 
-    def clean_evidence(self):
-        return normalize_image_upload(self.cleaned_data.get("evidence"))
+    def clean_ownership_certificate(self):
+        return normalize_image_upload(self.cleaned_data["ownership_certificate"])
+
+    def clean_cac_certificate(self):
+        return normalize_image_upload(self.cleaned_data.get("cac_certificate"))
 
 
 class LitterSubmissionForm(forms.Form):

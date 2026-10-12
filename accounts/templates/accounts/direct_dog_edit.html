@@ -26,6 +26,13 @@
     {% csrf_token %}
     <input type="hidden" name="version" value="{{ version }}">
     {{ form.non_field_errors }}
+    {% if suggested_kennel %}
+    <div class="notice" role="status">
+      <strong>Proposed kennel association: {{ suggested_kennel.name }}</strong>
+      <p>Current kennel: <strong>{{ dog.kennel.name|default:"None" }}</strong>. The kennel reference below is prefilled but <strong>no change has been saved</strong>. Verify the exact dog's registration and ownership evidence before submitting with a reason. A Moderator's change to a published dog's kennel must be reviewed by the Super Admin.</p>
+      <a class="text-link" href="{% url 'accounts:kennel-publication-detail' suggested_kennel.pk %}">Return to kennel management</a>
+    </div>
+    {% endif %}
     <h2>Identity & pedigree</h2>
     {% if not owner and dog.is_public %}<p class="muted"><strong>Protected ancestry:</strong> Change sex, birth date, sire, dam, kennel, litter or verification state in a separate save. The proposal will wait for Super Admin approval; other edits should be saved separately. Registration, microchip, source and health evidence edits must be handled by Super Admin.</p>{% endif %}
     <p class="muted">For sire/dam, type at least two letters and choose the exact record using its kennel, registration and birth date. The selected name stays visible; its unique ID is saved securely with the form. Clearing a parent unlinks it, subject to approval. {% if owner %}If the ancestor is missing, <a class="text-link" href="{% url 'admin:registry_dog_add' %}" target="_blank" rel="noopener">create the missing ancestor in Advanced Admin</a> using verified evidence before linking it; do not invent ancestry.{% else %}If the ancestor is missing, ask the Super Admin to create its verified record before linking.{% endif %}</p>

@@ -33,6 +33,15 @@
     {% endif %}
   </section>
   <section class="panel">
+    <h2>Associate an existing dog with {{ kennel.name }}</h2>
+    <p>Creating a kennel does not automatically assign historical dogs to it. Search for the dog's <strong>exact canonical record</strong>, verify its registration or pedigree evidence, then propose a kennel correction. Do not create a duplicate dog or assign a dog solely because its name is similar.</p>
+    <p><strong>Protected change:</strong> A Moderator or Senior Moderator may submit a kennel association proposal for a published dog, but only the Super Admin may approve it. A Super Admin may edit the canonical kennel directly with an audit reason. Existing publication approval, kennel ownership, ancestry and images are not changed by the association alone.</p>
+    <div class="button-row">
+      <a class="btn btn-gold" href="{% url 'accounts:dog-edit-list' %}?kennel={{ kennel.pk }}">Find existing dog to associate →</a>
+      {% if kennel.is_public %}<a class="btn btn-outline" href="{% url 'registry:kennel-detail' kennel.slug %}">View public kennel profile</a>{% endif %}
+    </div>
+  </section>
+  <section class="panel">
     <h2>Selected dog visibility</h2>
     <p>{{ approved_total }} approved dogs; {{ hidden_total }} individually suppressed. A private dog stays private when moderation suppression is removed.</p>
     {% if is_superadmin %}<p>Actions on selected dogs become a protected Super Admin decision. Use Delegate selected dogs to release that protection later.</p>{% elif kennel.publication_locked_by_superadmin %}<p><strong>The Super Admin has reserved all dog visibility decisions for this kennel.</strong></p>{% endif %}
