@@ -9,7 +9,8 @@
       <p>Admins review the evidence; admins do not erase the evidence.</p>
     </div>
     <div class="button-row">
-      <a class="btn btn-gold" href="{% url 'accounts:merge-dogs' %}">Merge pedigrees</a>
+      <a class="btn btn-gold" href="{% url 'accounts:dog-direct-create' %}">+ Add Dog</a>
+      <a class="btn btn-outline" href="{% url 'accounts:merge-dogs' %}">Merge pedigrees</a>
       <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Review queue</a>
       <a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a>
     </div>
@@ -182,11 +183,11 @@
       </article>
       <article class="dashboard-action-card">
         <h3>Senior Moderator</h3>
-        <p>Moderator powers plus flagged/high-risk decisions, overrides and second approvals. Dog merges are reserved for Super Admin. Cannot manage staff or system rules.</p>
+        <p>Moderator powers plus private canonical dog creation, flagged/high-risk decisions, overrides and second approvals. Dog publication, merges and staff management remain Super Admin-only.</p>
       </article>
       <article class="dashboard-action-card">
         <h3>Super Admin</h3>
-        <p>Separate superuser identity. Manages staff accounts, verification rules, protected-record locks and Django administration.</p>
+        <p>Creates dogs, controls publication, manages moderator activation and deregistration, verification rules, protected-record locks and Django administration.</p>
       </article>
     </div>
   
@@ -212,17 +213,50 @@
     </form>
 
     {% for user in staff_users %}
-      <form class="review-diff-row" method="post" action="{% url 'accounts:moderation-set-role' %}">
-        {% csrf_token %}
-        <input type="hidden" name="user_id" value="{{ user.pk }}">
+      <article class="review-diff-row">
         <div>
-          <strong>{% if user.moderation_assignment %}{{ user.moderation_assignment.public_label }}{% else %}Super Admin{% endif %}</strong>
-          <small>Dedicated staff account: {{ user.username }}{% if user.is_superuser %} · Super Admin{% endif %}</small>
+          <strong>{% if user.moderation_assignment %}{{ user.moderation_assignment.public_label }}{% else %}Super Admin{% endif %} · {{ user.username }}</strong>
+          <small>{% if user.is_superuser %}Super Admin{% elif user.moderation_assignment %}{{ user.moderation_assignment.get_role_display }}{% else %}Staff{% endif %}</small>
+          {% if user.is_active %}<span class="submission-state green">Active</span>{% else %}<span class="submission-state red">Deactivated — cannot sign in</span>{% endif %}
         </div>
-        <select name="role" {% if user.is_superuser %}disabled{% endif %}>
-          {% for value,label in role_choices %}
-            <option value="{{ value }}"{% if user.moderation_assignment and user.moderation_assignment.role == value %} selected{% endif %}>{{ label }}</option>
-          {% endfor %}
+        {% if not user.is_superuser %}
+          <form method="post" action="{% url 'accounts:moderation-set-role' %}">
+            {% csrf_token %}
+            <input type="hidden" name="user_id" value="{{ user.pk }}">
+            <label for="staff-role-{{ user.pk }}">Authority</label>
+            <select id="staff-role-{{ user.pk }}" name="role">
+              {% for value,label in role_choices %}
+                <option value="{{ value }}"{% if user.moderation_assignment and user.moderation_assignment.role == value %} selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            <button class="btn btn-outline" type="submit">Update role</button>
+          </form>
+          <form method="post" action="{% url 'accounts:moderation-set-status' %}">
+            {% csrf_token %}
+            <input type="hidden" name="user_id" value="{{ user.pk }}">
+            <input type="hidden" name="action" value="{% if user.is_active %}deactivate{% else %}activate{% endif %}">
+            <label for="staff-status-reason-{{ user.pk }}">Reason for {% if user.is_active %}deactivation{% else %}activation{% endif %}</label>
+            <input id="staff-status-reason-{{ user.pk }}" name="reason" minlength="5" maxlength="2000" required placeholder="Reason for access change">
+            <button class="btn btn-outline" type="submit">{% if user.is_active %}Deactivate account{% else %}Activate account{% endif %}</button>
+          </form>
+          <details class="ux-disclosure">
+            <summary>Remove moderator permanently</summary>
+            <div class="ux-disclosure-body">
+              <p class="muted">This irreversibly disables sign-in and anonymizes the account. The public Admin number and historical audits remain for investigation.</p>
+              <form method="post" action="{% url 'accounts:moderation-deregister-staff' %}" onsubmit="return confirm('Permanently deregister this moderator? The staff login cannot be restored.');">
+                {% csrf_token %}
+                <input type="hidden" name="user_id" value="{{ user.pk }}">
+                <label for="staff-remove-confirm-{{ user.pk }}">Type DEREGISTER</label>
+                <input id="staff-remove-confirm-{{ user.pk }}" name="confirmation" pattern="DEREGISTER" required autocomplete="off">
+                <label for="staff-remove-reason-{{ user.pk }}">Evidence / removal reason</label>
+                <textarea id="staff-remove-reason-{{ user.pk }}" name="reason" minlength="10" maxlength="2000" required rows="2"></textarea>
+                <button class="btn btn-outline" type="submit">Deregister &amp; remove access</button>
+              </form>
+            </div>
+          </details>
+        {% endif %}
+      </article>
+    {% endfor %}
         </select>
         {% if user.is_superuser %}
           <span class="submission-state green">Super Admin</span>
