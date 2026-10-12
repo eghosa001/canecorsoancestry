@@ -45,7 +45,7 @@
           <tbody>
           {% for dog in dogs %}
             <tr>
-              <td><label><input type="checkbox" name="dog_ids" value="{{ dog.pk }}" {% if not is_superadmin and kennel.publication_locked_by_superadmin or not is_superadmin and dog.visibility_locked_by_superadmin %}disabled{% endif %}><span class="sr-only">Select {{ dog.name }}</span></label></td>
+              <td><label><input type="checkbox" name="dog_ids" value="{{ dog.pk }}" {% if not is_superadmin and kennel.publication_locked_by_superadmin %}disabled{% elif not is_superadmin and dog.visibility_locked_by_superadmin %}disabled{% endif %}><span class="sr-only">Select {{ dog.name }}</span></label></td>
               <td><a class="text-link" href="{% url 'accounts:dog-direct-edit' dog.pk %}">{{ dog.name }}</a></td>
               <td>{% if dog.is_public %}Approved/public{% else %}Private{% endif %}</td>
               <td>{% if dog.hidden_by_moderation %}Hidden{% else %}Normal{% endif %}</td>
