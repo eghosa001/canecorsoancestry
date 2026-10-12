@@ -10,6 +10,7 @@ from django.db.migrations.operations.models import AddConstraint, CreateModel
 SAVED_PAIRING = ("accounts", "0005_saved_pairing")
 KENNEL_PUBLICATION = ("registry", "0015_kennel_publication_controls")
 ARCHIVE_HYPOTHESIS = ("registry", "0016_unverified_breeding_kennel_hypotheses")
+STAFF_DEREGISTRATION = ("registry", "0017_moderation_staff_deregistration")
 ALLOWED_MIGRATION = SAVED_PAIRING  # Backward compatibility for old tests/runbooks.
 
 # Model, field, constant default, and whether the field creates a DB index.
@@ -97,6 +98,30 @@ def _archive_hypothesis_is_exact(migration):
     )
 
 
+def _staff_deregistration_is_exact(migration):
+    """Only the single additive inactive/deregistered-role marker is authorized."""
+    if (
+        migration.dependencies != [ARCHIVE_HYPOTHESIS]
+        or len(migration.operations) != 1
+    ):
+        return False
+    operation = migration.operations[0]
+    if not isinstance(operation, AddField):
+        return False
+    field = operation.field
+    return (
+        operation.model_name == "moderationroleassignment"
+        and operation.name == "is_deregistered"
+        and type(field) is models.BooleanField
+        and field.default is False
+        and field.db_index is True
+        and not field.null
+        and not field.unique
+        and not field.primary_key
+        and operation.preserve_default is not False
+    )
+
+
 def validate_pending_schema_changes(plan):
     """Reject other pending versions, combined plans, reversals, and drift."""
     if not plan:
@@ -112,6 +137,8 @@ def validate_pending_schema_changes(plan):
     if identity == KENNEL_PUBLICATION and _publication_is_exact(migration):
         return True
     if identity == ARCHIVE_HYPOTHESIS and _archive_hypothesis_is_exact(migration):
+        return True
+    if identity == STAFF_DEREGISTRATION and _staff_deregistration_is_exact(migration):
         return True
     raise ValueError("Unapproved production migration or unexpected operations.")
 
