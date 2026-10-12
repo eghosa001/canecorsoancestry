@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -12,6 +13,7 @@ from registry.models import (
     Litter,
     ModerationRoleAssignment,
     Submission,
+    SubmissionEvidence,
 )
 from registry.services import approve_submission
 
@@ -32,29 +34,75 @@ class KennelClaimTests(TestCase):
         )
         self.kennel = Kennel.objects.create(name="Unlinked Kennel", slug="unlinked-kennel")
 
+    def _pdf(self, name="proof.pdf"):
+        return SimpleUploadedFile(
+            name, b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF", content_type="application/pdf"
+        )
+
+    def test_claim_requires_ownership_certificate(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("accounts:claim-kennel", args=[self.kennel.pk]),
+            {"relationship": "Breeder and kennel owner"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("ownership_certificate", response.context["form"].errors)
+        self.assertFalse(Submission.objects.filter(kind=Submission.Kind.KENNEL_CLAIM).exists())
+
     def test_claim_requires_review_then_grants_owner_membership(self):
         self.client.force_login(self.user)
         response = self.client.post(
             reverse("accounts:claim-kennel", args=[self.kennel.pk]),
-            {"relationship": "Breeder and kennel owner", "notes": "Evidence available."},
+            {"relationship": "Breeder and kennel owner",
+             "ownership_certificate": self._pdf(),
+             "notes": "Evidence available."},
         )
         self.assertEqual(response.status_code, 302)
-
         submission = Submission.objects.get(
             kind=Submission.Kind.KENNEL_CLAIM,
-            submitted_by=self.user,
-            kennel=self.kennel,
+            submitted_by=self.user, kennel=self.kennel,
         )
-        self.assertFalse(
-            KennelMembership.objects.filter(user=self.user, kennel=self.kennel).exists()
-        )
-
+        self.assertTrue(submission.payload["ownership_certificate_required"])
+        self.assertFalse(submission.payload["cac_certificate_supplied"])
+        self.assertFalse(submission.attachment)
+        proof = SubmissionEvidence.objects.get(submission=submission)
+        self.assertEqual(proof.evidence_type, SubmissionEvidence.EvidenceType.KENNEL)
+        self.assertEqual(proof.note, "Required kennel-name ownership certificate")
+        self.assertTrue(proof.file)
+        self.assertEqual(len(proof.sha256), 64)
+        self.assertFalse(KennelMembership.objects.filter(user=self.user, kennel=self.kennel).exists())
         approve_submission(submission, self.reviewer)
-
-        membership = KennelMembership.objects.get(
-            user=self.user, kennel=self.kennel
-        )
+        membership = KennelMembership.objects.get(user=self.user, kennel=self.kennel)
         self.assertEqual(membership.role, KennelMembership.Role.OWNER)
+
+    def test_cac_certificate_optional_and_kept_private(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("accounts:claim-kennel", args=[self.kennel.pk]),
+            {"relationship": "Breeder", "ownership_certificate": self._pdf(),
+             "cac_certificate": self._pdf("cac.pdf")},
+        )
+        self.assertEqual(response.status_code, 302)
+        submission = Submission.objects.get(kind=Submission.Kind.KENNEL_CLAIM)
+        self.assertTrue(submission.payload["cac_certificate_supplied"])
+        self.assertEqual(submission.verification_evidence.count(), 2)
+        self.assertEqual(
+            set(submission.verification_evidence.values_list("evidence_type", flat=True)),
+            {SubmissionEvidence.EvidenceType.KENNEL, SubmissionEvidence.EvidenceType.OTHER},
+        )
+        self.assertFalse(submission.attachment)
+        for evidence in submission.verification_evidence.all():
+            response = self.client.get(reverse("accounts:submission-evidence-download", args=[evidence.pk]))
+            self.assertEqual(response.status_code, 200)
+
+    def test_missing_required_private_certificate_blocks_approval(self):
+        submission = Submission.objects.create(
+            kind=Submission.Kind.KENNEL_CLAIM, submitted_by=self.user,
+            kennel=self.kennel, payload={"ownership_certificate_required": True},
+        )
+        with self.assertRaisesRegex(ValueError, "ownership certificate"):
+            approve_submission(submission, self.reviewer)
+        self.assertFalse(KennelMembership.objects.filter(kennel=self.kennel).exists())
 
     def test_linked_kennel_cannot_be_claimed_through_public_flow(self):
         existing = get_user_model().objects.create_user(username="existing-owner")
