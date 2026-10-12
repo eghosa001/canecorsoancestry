@@ -54,6 +54,8 @@ class Kennel(models.Model):
     city = models.CharField(max_length=120, blank=True)
     description = models.TextField(blank=True)
     website = models.URLField(blank=True)
+    is_public = models.BooleanField(default=True, db_index=True)
+    hide_dogs = models.BooleanField(default=False)
     verified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -154,6 +156,7 @@ class Dog(models.Model):
         db_index=True,
     )
     is_public = models.BooleanField(default=False, db_index=True)
+    hidden_by_moderation = models.BooleanField(default=False, db_index=True)
     is_record_locked = models.BooleanField(default=False, db_index=True)
     record_locked_at = models.DateTimeField(null=True, blank=True)
     record_locked_by = models.ForeignKey(
@@ -191,6 +194,15 @@ class Dog(models.Model):
                 name="dog_parents_must_differ",
             ),
         ]
+
+    @property
+    def is_effectively_public(self):
+        """Approved dogs can be temporarily suppressed without losing approval."""
+        return bool(
+            self.is_public
+            and not self.hidden_by_moderation
+            and (not self.kennel_id or not self.kennel.hide_dogs)
+        )
 
     def _parent_creates_cycle(self, parent_id):
         if not self.pk or not parent_id:
