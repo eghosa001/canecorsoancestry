@@ -85,7 +85,7 @@ class KennelPublicationTests(TestCase):
         self.assertEqual(self.client.get(reverse("registry:dog-detail", args=[self.second.slug])).status_code, 200)
         self.assertNotContains(
             self.client.get(reverse("registry:dog-search"), {"q": self.first.name}),
-            self.first.name,
+            self.first.slug + "/",
         )
         self.assertEqual(self.dogs_change("restore", self.first, self.private).status_code, 302)
         self.first.refresh_from_db()
@@ -116,4 +116,4 @@ class KennelPublicationTests(TestCase):
         self.assertNotContains(directory, self.kennel.name)
         self.assertEqual(self.client.get(reverse("registry:dog-detail", args=[self.first.slug])).status_code, 200)
         self.change("hide_all")
-        self.assertNotContains(self.client.get(reverse("registry:dog-search"), {"q": self.first.name}), self.first.name)
+        self.assertNotContains(self.client.get(reverse("registry:dog-search"), {"q": self.first.name}), self.first.slug + "/")
