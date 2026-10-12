@@ -75,6 +75,28 @@ class BreedingKennelReviewTests(TestCase):
         name.refresh_from_db()
         self.assertIsNone(name.kennel_id)
 
+    def test_new_archival_source_id_join_patterns_are_review_only(self):
+        cases = (
+            ("SCANDIFIO'S SOPHIE ROSE", "Scandifio&#x27;s"),
+            ("ISOTTA DELL'APPIO", "Dell&#x27;appio"),
+            ("HÄGNATORPETS CE EPOK", "Hägnatorpets"),
+        )
+        self.client.force_login(self.moderator)
+        for index, (dog_name, phrase) in enumerate(cases):
+            dog = Dog.objects.create(
+                name=dog_name,
+                slug=f"source-name-hypothesis-{index}",
+                is_public=True,
+            )
+            response = self.client.get(
+                self.url(), {"q": dog_name}
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, phrase)
+            self.assertContains(response, "not verified breeders")
+            dog.refresh_from_db()
+            self.assertIsNone(dog.kennel_id)
+
     def test_page_excludes_already_linked_dogs(self):
         self.dog.kennel = self.kennel
         self.dog.save(update_fields=["kennel"])
