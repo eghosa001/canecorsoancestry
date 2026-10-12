@@ -231,6 +231,42 @@ class StaffChangeVisibilityTests(TestCase):
         self.assertFalse(self.dog.is_public)
         self.assertNotEqual(self.dog.sex, Dog.Sex.FEMALE)
 
+    def test_direct_publication_endpoint_allows_senior_and_respects_owner_lock(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        endpoint = reverse("accounts:dog-set-public-visibility", args=[self.dog.pk])
+        self.client.force_login(self.senior)
+        self.assertEqual(self.client.post(endpoint, {
+            "action": "publish", "reason": "Breeder identity and supporting evidence confirmed",
+            "confirm_visibility": "yes",
+            "version": self.dog.updated_at.isoformat(),
+        }).status_code, 302)
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+        self.assertFalse(self.dog.visibility_locked_by_superadmin)
+        self.assertTrue(ModerationAudit.objects.filter(
+            dog=self.dog, actor=self.senior, summary__publication_action="publish",
+        ).exists())
+        self.dog.visibility_locked_by_superadmin = True
+        self.dog.save(update_fields=["visibility_locked_by_superadmin", "updated_at"])
+        self.assertEqual(self.client.post(endpoint, {
+            "action": "unpublish", "reason": "Attempt to bypass Super Admin publication lock",
+            "confirm_visibility": "yes",
+            "version": self.dog.updated_at.isoformat(),
+        }).status_code, 403)
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+
+    def test_inactive_moderator_has_no_publication_authority(self):
+        from registry.permissions import can_publish_canonical_dog
+        self.staff.is_active = False
+        self.staff.save(update_fields=["is_active"])
+        self.assertFalse(can_publish_canonical_dog(self.staff))
+        self.client.force_login(self.staff)
+        self.assertEqual(self.client.get(
+            reverse("accounts:dog-direct-edit", args=[self.dog.pk])
+        ).status_code, 403)
+
     def test_legacy_owner_save_without_switch_preserves_public_status(self):
         self.client.force_login(self.owner)
         url, data = self.payload(name="Corrected legacy dog")
