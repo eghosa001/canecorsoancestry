@@ -19,6 +19,7 @@ from django.forms import inlineformset_factory
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.text import slugify
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
@@ -28,7 +29,7 @@ from registry.models import (
     ModerationAudit,
 )
 from registry.public_freshness import invalidate_public_content
-from registry.permissions import can_manage_verification, can_review_submissions
+from registry.permissions import can_add_canonical_dog, can_manage_verification, can_review_submissions
 from registry.services import record_audit, moderation_dog_ids
 from .forms import validate_document_upload, validate_image_upload, normalize_image_upload
 
@@ -181,6 +182,24 @@ class DirectDogEditForm(forms.ModelForm):
                 self.add_error("dam_ref", "A dam cannot be recorded as male.")
             data[field] = selected
         return data
+
+
+class DirectDogCreateForm(DirectDogEditForm):
+    """Minimal audited canonical-entry workflow; publication is separate."""
+    primary_photo = forms.FileField(
+        required=False, label="Primary photo",
+        widget=forms.ClearableFileInput(attrs={"accept": "image/*"}),
+        validators=[validate_image_upload],
+        help_text="Optional photo, up to 20 MB. Accepted images are normalized to JPEG.",
+    )
+    photo_caption = forms.CharField(required=False, max_length=220)
+
+    class Meta(DirectDogEditForm.Meta):
+        # Creation must never accept a forged verification-state elevation.
+        fields = tuple(field for field in DirectDogEditForm.Meta.fields if field != "verification_state")
+
+    def clean_primary_photo(self):
+        return normalize_image_upload(self.cleaned_data.get("primary_photo"))
 
 
 class ManagedImageForm(forms.ModelForm):
@@ -354,7 +373,7 @@ def _revision_events(dog=None):
     events = ModerationAudit.objects.filter(
         action=ModerationAudit.Action.RECORD_CHANGED,
     ).filter(
-        Q(summary__kind="direct_dog_edit") | Q(summary__kind="direct_dog_proposal")
+        Q(summary__kind__in=("direct_dog_edit", "direct_dog_proposal", "direct_dog_create"))
     ).select_related("dog", "actor")
     if dog is not None:
         events = events.filter(dog=dog)
@@ -416,6 +435,64 @@ def pending_proposals_for_dashboard(*, limit=12, batch_size=80):
 
 
 @login_required
+def dog_direct_create(request):
+    """Add a private canonical record from staff tools, without Django Admin."""
+    if not can_add_canonical_dog(request.user):
+        raise PermissionDenied
+
+    form = DirectDogCreateForm(
+        request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
+        allow_publication=False,
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            with transaction.atomic():
+                dog = form.save(commit=False)
+                for field in ("kennel", "sire", "dam", "litter"):
+                    setattr(dog, field, form.cleaned_data[field])
+                # Never change this generated slug when the dog's name changes.
+                base = slugify(dog.name, allow_unicode=True).strip("-")[:190] or "dog"
+                dog.slug = f"{base}-{uuid.uuid4().hex[:12]}"
+                dog.is_public = False
+                dog.hidden_by_moderation = False
+                dog.visibility_locked_by_superadmin = False
+                dog.full_clean()
+                dog.save()
+                photo = form.cleaned_data.get("primary_photo")
+                if photo:
+                    checksum = hashlib.sha256(photo.read()).hexdigest()
+                    photo.seek(0)
+                    DogImage.objects.create(
+                        dog=dog, image=photo, is_primary=True,
+                        caption=form.cleaned_data.get("photo_caption", ""),
+                        content_sha256=checksum,
+                    )
+                record_audit(
+                    action=ModerationAudit.Action.RECORD_CHANGED,
+                    actor=request.user,
+                    dog=dog,
+                    kennel=dog.kennel,
+                    summary={
+                        "kind": "direct_dog_create",
+                        "after": _snapshot(dog),
+                        "is_owner": can_manage_verification(request.user),
+                    },
+                    note=form.cleaned_data["reason"],
+                )
+        except (IntegrityError, ValidationError) as exc:
+            form.add_error(None, f"Dog was not added: {exc}")
+        else:
+            messages.success(
+                request,
+                "Canonical dog added privately with an audit trail. "
+                "Only the Super Admin can publish it using Visibility in Manage record.",
+            )
+            return redirect("accounts:dog-direct-edit", pk=dog.pk)
+    return render(request, "accounts/direct_dog_create.html", {"form": form})
+
+
+@login_required
 def dog_edit_list(request):
     if not can_review_submissions(request.user):
         raise PermissionDenied
@@ -434,6 +511,7 @@ def dog_edit_list(request):
         return render(request, "accounts/direct_dog_list.html", {
             "dogs": [], "query": "", "revisions": proposals,
             "is_owner": can_manage_verification(request.user),
+            "can_add_dog": can_add_canonical_dog(request.user),
             "history_deferred": False, "proposal_page": page,
             "show_proposals": True,
         })
@@ -463,6 +541,7 @@ def dog_edit_list(request):
     return render(request, "accounts/direct_dog_list.html", {
         "dogs": dogs, "query": q, "revisions": revisions,
         "is_owner": can_manage_verification(request.user),
+        "can_add_dog": can_add_canonical_dog(request.user),
         "history_deferred": bool(q and not show_history),
         "kennel_target": kennel_target,
     })
@@ -737,6 +816,7 @@ def dog_direct_edit(request, pk):
         "dog": dog, "form": form, "formsets": sets, "revisions": revisions,
         "owner": owner, "version": dog.updated_at.isoformat(),
         "suggested_kennel": suggested_kennel,
+        "can_add_dog": can_add_canonical_dog(request.user),
     })
 
 
@@ -760,6 +840,8 @@ def dog_review_edit(request, pk, audit_id):
             ).exists()
             if already_reviewed:
                 raise ValidationError("This revision has already been reviewed.")
+            if event.summary.get("kind") == "direct_dog_create":
+                raise ValidationError("A newly created dog has no previous record to revert.")
             if event.summary.get("kind") == "direct_dog_proposal":
                 if decision not in {"approve", "reject"}:
                     raise ValidationError("Choose Approve or Reject for a pending proposal.")
