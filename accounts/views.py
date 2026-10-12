@@ -750,6 +750,15 @@ def payment_submit_dog(request, pk):
                     kennel=payment.kennel,
                     payload={
                         "_paid_submission": True,
+                        # The payment kennel grants account submission access.
+                        # The public Dog.kennel is the breeder of origin only.
+                        # Legacy clients that omit the new field still use
+                        # the submitting kennel; an explicitly blank selector
+                        # means the breeder has no registered kennel name.
+                        **({"breeding_kennel_id": (
+                            str(cleaned["breeding_kennel"].pk)
+                            if cleaned.get("breeding_kennel") else None
+                        )} if "breeding_kennel" in request.POST else {}),
                         "name": cleaned["name"],
                         "sex": cleaned["sex"],
                         "date_of_birth": _date_value(cleaned["date_of_birth"]),
