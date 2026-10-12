@@ -93,6 +93,55 @@ class ApprovedSchemaMigrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_pending_schema_changes([(changed, False)])
 
+    def test_exact_staff_deregistration_field_can_migrate(self):
+        import copy
+        module = importlib.import_module(
+            "registry.migrations.0017_moderation_staff_deregistration"
+        )
+        migration = module.Migration("0017_moderation_staff_deregistration", "registry")
+        self.assertTrue(validate_pending_schema_changes([(migration, False)]))
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(migration, True)])
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(self.migration, False), (migration, False)])
+        for mutation in ("name", "default", "db_index", "null", "model_name"):
+            changed = copy.deepcopy(migration)
+            op = changed.operations[0]
+            if mutation == "name":
+                op.name = "is_active"
+            elif mutation == "default":
+                op.field.default = True
+            elif mutation == "db_index":
+                op.field.db_index = False
+            elif mutation == "null":
+                op.field.null = True
+            elif mutation == "model_name":
+                op.model_name = "dog"
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                validate_pending_schema_changes([(changed, False)])
+
+    def test_staff_deregistration_production_script_is_backed_up_and_atomic(self):
+        root = Path(__file__).resolve().parents[1] / "oracle_runner"
+        stage = (root / "stage_django.sh").read_text()
+        sql = (root / "approved_registry_0017.sql").read_text()
+        self.assertIn("registry.0017_moderation_staff_deregistration", stage)
+        self.assertIn("approved_registry_0017.sql", stage)
+        self.assertLess(
+            stage.index("bash scripts/oracle_runner/backup_local_postgres.sh"),
+            stage.index("< scripts/oracle_runner/approved_registry_0017.sql"),
+        )
+        self.assertIn("BEGIN;", sql)
+        self.assertIn("COMMIT;", sql)
+        self.assertIn("ON_ERROR_STOP=1", stage)
+        self.assertIn("current_user <> 'cca_shadow_admin'", sql)
+        self.assertIn("django_app.django_migrations", sql)
+        self.assertEqual(sql.count("ADD COLUMN "), 1)
+        self.assertIn("ADD COLUMN is_deregistered boolean NOT NULL DEFAULT false", sql)
+        self.assertNotIn("UPDATE django_app.auth_user", sql)
+        self.assertNotIn("INSERT INTO django_app.registry_dog", sql)
+        self.assertNotIn("GRANT ALTER", stage + sql)
+        self.assertNotIn("GRANT ALL", stage + sql)
+
     def test_unverified_kennel_schema_sql_still_requires_backup_and_admin(self):
         root = Path(__file__).resolve().parents[1] / "oracle_runner"
         stage = (root / "stage_django.sh").read_text()
