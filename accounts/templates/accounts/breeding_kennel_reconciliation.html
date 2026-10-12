@@ -7,7 +7,7 @@
       <p class="eyebrow">Staff · Breeder provenance</p>
       <h1>Review missing breeding kennels</h1>
       <p><strong>{{ unlinked_total }}</strong> canonical dog profiles currently lack a recorded breeding kennel. A blank field is correct when no verified breeding kennel can be established. Current owner or purchaser information is never used as breeder proof.</p>
-      <p class="muted">Suggested matches are <strong>not verified ownership</strong>. Do not assign a kennel from the dog's name alone. Require pedigree, kennel registration or breeder records. Changes to published dogs are subject to Super Admin review.</p>
+      <p class="muted">Archive analysis identified 47,111 name-pattern candidates across 116,370 original dogs, including 1,395 ambiguous patterns. These are <strong>not verified breeder identities</strong>. Do not assign a kennel from the dog's name alone. Require pedigree, kennel registration or breeder records. Changes to published dogs are subject to Super Admin review.</p>
     </div>
     <a class="btn btn-outline" href="{% url 'accounts:kennel-publication-list' %}">← Manage kennels</a>
   </header>
@@ -38,9 +38,17 @@
       {% if item.hints %}
       <div class="button-row">
         {% for candidate in item.hints %}
-          <a class="text-link" href="{% url 'accounts:dog-direct-edit' item.dog.pk %}?kennel={{ candidate.pk }}">Review {{ candidate.name }} as origin →</a>
+          <a class="text-link" href="{% url 'accounts:dog-direct-edit' item.dog.pk %}?kennel={{ candidate.pk }}">Possible registered kennel: {{ candidate.name }} — verify before editing →</a>
         {% endfor %}
       </div>
+      {% endif %}
+      {% if item.archive_name_hypotheses %}
+      <p class="muted"><strong>Historical naming-pattern suggestions</strong> (derived from analysis of 116,370 archived dog names; <strong>not verified breeders</strong>):</p>
+      <ul>
+        {% for hypothesis in item.archive_name_hypotheses %}
+        <li><strong>{{ hypothesis.label }}</strong> — {{ hypothesis.position }}-position phrase, observed in {{ hypothesis.archive_name_count }} archive dog names. Requires breeder or registry confirmation before association.</li>
+        {% endfor %}
+      </ul>
       {% endif %}
     </article>
     {% empty %}
