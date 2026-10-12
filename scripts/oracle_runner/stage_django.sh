@@ -223,6 +223,12 @@ else
       psql -X -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
       < scripts/oracle_runner/approved_registry_0016.sql
     echo "PASS: Three research-only fields, FK, indexes and ledger applied atomically."
+  elif [[ "$schema_approval" == "PASS: Only approved registry.0017_moderation_staff_deregistration is pending." ]]; then
+    echo "Applying reviewed staff deregistration schema change."
+    sudo -n "$PODMAN_BIN" exec -i cca-pg-shadow psql -X -v ON_ERROR_STOP=1 \
+      -U cca_shadow_admin -d cca_live \
+      < scripts/oracle_runner/approved_registry_0017.sql
+    echo "PASS: Staff deregistration schema change applied."
   elif [[ "$schema_approval" == "PASS: Only approved accounts.0005_saved_pairing is pending." ]]; then
   # PostgreSQL intentionally grants the production app no schema DDL rights.
   # Borrow CREATE on this schema for the reviewed transaction, then revoke it
