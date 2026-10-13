@@ -4,11 +4,12 @@ from pathlib import Path
 from unittest.mock import patch
 from django.conf import settings
 from django.http import HttpResponse
-from django.test import RequestFactory, SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase, override_settings
 from scripts.oracle_runner.oracle_middleware import (
     OracleEdgeOnlyMiddleware, OracleMigrationMaintenanceMiddleware,
 )
 
+@override_settings(ORIGIN_EDGE_SECRET="derived-for-migration-tests")
 class OracleMigrationFreezeTests(SimpleTestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
@@ -33,19 +34,19 @@ class OracleMigrationFreezeTests(SimpleTestCase):
         for method,path in (("get","/dogs/"),("post","/accounts/login/"),
                             ("post","/accounts/paystack/webhook/")):
             response=self.middleware(self.request(path,method,{"X-CCA-Edge":"1",
-                "X-CCA-Origin-Secret":settings.SECRET_KEY}))
+                "X-CCA-Origin-Secret":settings.ORIGIN_EDGE_SECRET}))
             self.assertEqual(response.status_code,503)
             self.assertEqual(response["Retry-After"],"120")
             self.assertIn("no-store",response["Cache-Control"])
 
     def test_health_and_trusted_bypass(self):
         self.assertEqual(self.middleware(self.request("/healthz/")).status_code,200)
-        headers={"X-CCA-Edge":"1","X-CCA-Origin-Secret":settings.SECRET_KEY,
+        headers={"X-CCA-Edge":"1","X-CCA-Origin-Secret":settings.ORIGIN_EDGE_SECRET,
                  "X-CCA-Maintenance-Probe":settings.SECRET_KEY}
         self.assertEqual(self.middleware(self.request("/accounts/login/","get",headers)).status_code,200)
 
     def test_permission_error_cannot_allow_requests_through(self):
-        headers={"X-CCA-Edge":"1","X-CCA-Origin-Secret":settings.SECRET_KEY}
+        headers={"X-CCA-Edge":"1","X-CCA-Origin-Secret":settings.ORIGIN_EDGE_SECRET}
         with patch.object(Path, "exists", side_effect=PermissionError("SELinux denied")):
             response=self.middleware(self.request("/member/submit/","post",headers))
         self.assertEqual(response.status_code,503)
@@ -56,5 +57,5 @@ class OracleMigrationFreezeTests(SimpleTestCase):
 
     def test_normal_operations_resume_after_root_flag_removed(self):
         self.flag.unlink()
-        headers={"X-CCA-Edge":"1","X-CCA-Origin-Secret":settings.SECRET_KEY}
+        headers={"X-CCA-Edge":"1","X-CCA-Origin-Secret":settings.ORIGIN_EDGE_SECRET}
         self.assertEqual(self.middleware(self.request("/dogs/","get",headers)).status_code,200)
