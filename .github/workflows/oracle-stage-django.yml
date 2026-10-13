@@ -64,6 +64,7 @@ jobs:
       EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
       DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
       CCA_SUPPORT_EMAIL: ${{ vars.CCA_SUPPORT_EMAIL }}
+      CCA_CANONICAL_SITE_URL: ${{ vars.CCA_CANONICAL_SITE_URL }}
     steps:
       - uses: actions/checkout@v4
         with:

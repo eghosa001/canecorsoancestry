@@ -216,7 +216,7 @@ def robots_txt(request):
     body = "\n".join([
         "User-agent: *", "Allow: /",
         "Disallow: /member/", "Disallow: /accounts/", "Disallow: /admin/", "Disallow: /dashboard/",
-        f"Sitemap: {request.build_absolute_uri(reverse('sitemap'))}", "",
+        f"Sitemap: {settings.SITE_URL}{reverse('sitemap')}", "",
     ])
     return HttpResponse(body, content_type="text/plain; charset=utf-8")
 

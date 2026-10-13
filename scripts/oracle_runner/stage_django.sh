@@ -5,7 +5,13 @@ set -euo pipefail
 umask 077
 
 readonly REPO="eghosa001/canecorsoancestry"
-readonly PUBLIC_SITE="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+readonly PUBLIC_SITE="$(python3 - <<'PY'
+import os
+from scripts.oracle_runner.site_domain import canonical_site
+print(canonical_site(os.getenv("CCA_CANONICAL_SITE_URL")))
+PY
+)"
+export CCA_CANONICAL_SITE_URL="$PUBLIC_SITE"
 readonly MEDIA_EDGE="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
 
 if [[ "$GITHUB_REPOSITORY" != "$REPO" ||
@@ -95,7 +101,9 @@ import hmac
 import os
 import sys
 from pathlib import Path
+from scripts.oracle_runner.site_domain import host_settings
 
+site_url, site_hosts, csrf_origins = host_settings(os.getenv("CCA_CANONICAL_SITE_URL"))
 secret = os.environ["DJANGO_SECRET_KEY"]
 email_keys = ("EMAIL_HOST", "EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD")
 email_ready = all(os.environ.get(key, "") for key in email_keys)
@@ -105,14 +113,9 @@ values = {
     "CCA_ORIGIN_EDGE_SECRET": hmac.new(
         secret.encode("utf-8"), b"cca-origin-edge-auth-v1", hashlib.sha256
     ).hexdigest(),
-    "DJANGO_ALLOWED_HOSTS": (
-        "canecorsoancestry-site-edge.aighewieghosa111.workers.dev,"
-        "127.0.0.1,localhost"
-    ),
-    "DJANGO_CSRF_TRUSTED_ORIGINS": (
-        "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
-    ),
-    "SITE_URL": "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",
+    "DJANGO_ALLOWED_HOSTS": site_hosts,
+    "DJANGO_CSRF_TRUSTED_ORIGINS": csrf_origins,
+    "SITE_URL": site_url,
     "DJANGO_DB_SCHEMA": "django_app",
     "DJANGO_DB_SSLMODE": "disable",
     "DJANGO_DB_EXTRA_SCHEMAS": "extensions,public",

@@ -61,3 +61,12 @@ class CanonicalHostnameMetadataTests(SimpleTestCase):
         values = site_metadata(request)
         self.assertEqual(values["site_url"], "https://pedigree.example")
         self.assertEqual(values["canonical_url"], "https://pedigree.example/dogs/sample-dog/")
+
+
+class CanonicalSitemapHostTests(SimpleTestCase):
+    @override_settings(SITE_URL="https://pedigree.example")
+    def test_robots_points_to_configured_canonical_domain(self):
+        from core.views import robots_txt
+        request = RequestFactory().get("/robots.txt", HTTP_HOST="preview.example")
+        response = robots_txt(request)
+        self.assertIn(b"Sitemap: https://pedigree.example/sitemap.xml", response.content)
