@@ -97,10 +97,14 @@ for attempt in $(seq 1 30); do
   sleep 1
 done
 test "$ready" = 1 || { echo "::error::Isolated PostgreSQL restore container did not start"; exit 1; }
+# The live database keeps extension operator classes under 'extensions'.
+# A schema-only pg_dump does not recreate extensions hosted outside django_app.
 sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
-  -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;' >/dev/null
+  -c 'CREATE SCHEMA IF NOT EXISTS extensions;' >/dev/null
 sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
-  -c 'CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public;' >/dev/null
+  -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;' >/dev/null
+sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -c 'CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA extensions;' >/dev/null
 sudo -n podman exec -u 0 "$RESTORE_CONTAINER" pg_restore \
   --exit-on-error --no-owner --no-acl -U postgres -d postgres /backups/recovered.dump >/dev/null
 restored_dogs="$(sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres -d postgres -Atqc \
