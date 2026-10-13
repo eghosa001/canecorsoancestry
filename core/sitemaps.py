@@ -70,8 +70,6 @@ class LitterSitemap(Sitemap):
 SITEMAPS = {
     "static": StaticViewSitemap,
     "dogs": DogSitemap,
-    "pedigrees": PedigreeSitemap,
-    "descendants": ReversePedigreeSitemap,
     "kennels": KennelSitemap,
     "litters": LitterSitemap,
 }

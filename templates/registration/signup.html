@@ -8,6 +8,7 @@
     <p class="muted">Create the account under your kennel name. Use your email and password to sign in; kennel ownership or a new kennel profile is then sent for review.{% if account_email_enabled %} You will verify your email before the account becomes active.{% endif %}</p>
     <form method="post">
       {% csrf_token %}
+      {% if member_next %}<input type="hidden" name="next" value="{{ member_next }}">{% endif %}
       {{ form.non_field_errors }}
       {{ form.username }}
       <label for="{{ form.kennel_name.id_for_label }}">Kennel name</label>

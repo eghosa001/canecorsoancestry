@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import connection
 from django.test import TestCase
@@ -273,6 +274,7 @@ class PedigreeServiceTests(TestCase):
         self.assertAlmostEqual(third["projected_inbreeding"], 0.0)
 
     def test_virtual_mating_resolves_names_without_large_dropdowns(self):
+        self.client.force_login(get_user_model().objects.create_user(username="pedigree-member-test_virtual_mating_resolves_names_without_large_dropdowns", password="test-pass-123"))
         common = Dog.objects.create(
             name="Public Common", slug="public-common", is_public=True
         )
@@ -303,6 +305,7 @@ class PedigreeServiceTests(TestCase):
         self.assertContains(response, "HYPOTHETICAL PEDIGREE")
 
     def test_virtual_mating_selected_ids_avoid_duplicate_name_ambiguity(self):
+        self.client.force_login(get_user_model().objects.create_user(username="pedigree-member-test_virtual_mating_selected_ids_avoid_duplicate_name_ambiguity", password="test-pass-123"))
         sire = Dog.objects.create(
             name="Selected Sire",
             slug="selected-sire",
@@ -491,6 +494,7 @@ class PedigreeServiceTests(TestCase):
         self.assertGreater(analysis["ancestor_loss_percent"], 0)
 
     def test_public_pedigree_with_no_parents_does_not_show_false_zero(self):
+        self.client.force_login(get_user_model().objects.create_user(username="pedigree-member-test_public_pedigree_with_no_parents_does_not_show_false_zero", password="test-pass-123"))
         dog = Dog.objects.create(
             name="Unknown Pedigree", slug="unknown-coi-pedigree", is_public=True
         )
@@ -557,6 +561,7 @@ class PedigreeServiceTests(TestCase):
         self.assertEqual(len(layers), 11)
 
     def test_public_pedigree_csv_export(self):
+        self.client.force_login(get_user_model().objects.create_user(username="pedigree-member-test_public_pedigree_csv_export", password="test-pass-123"))
         dog = Dog.objects.create(name="Export Dog", slug="export-dog", is_public=True)
 
         response = self.client.get(

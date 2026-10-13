@@ -4,6 +4,7 @@ import json
 import logging
 import urllib.error
 from urllib.parse import urlparse
+from django.utils.http import url_has_allowed_host_and_scheme
 import uuid
 from datetime import timedelta
 from functools import wraps
@@ -240,10 +241,23 @@ class AccountPasswordResetView(PasswordResetView):
         return super().form_valid(form)
 
 
+def _safe_signup_next(request):
+    target = (request.POST.get("next") or request.GET.get("next") or "").strip()
+    if (
+        target.startswith("/")
+        and url_has_allowed_host_and_scheme(
+            target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        )
+    ):
+        return target
+    return ""
+
+
 def signup(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
 
+    member_next = _safe_signup_next(request)
     form = MemberSignUpForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         verification_required = (
@@ -308,6 +322,8 @@ def signup(request):
                         "We could not send the verification email. Please try again later.",
                     )
                 else:
+                    if member_next:
+                        request.session["ancestry_signup_next"] = member_next
                     return render(
                         request,
                         "registration/verification_sent.html",
@@ -316,9 +332,9 @@ def signup(request):
         else:
             login(request, user)
             messages.success(request, "Welcome to Cane Corso Ancestry.")
-            return redirect("dashboard")
+            return redirect(member_next or "dashboard")
 
-    return render(request, "registration/signup.html", {"form": form})
+    return render(request, "registration/signup.html", {"form": form, "member_next": member_next})
 
 
 def verify_email(request, uidb64, token):
@@ -335,6 +351,14 @@ def verify_email(request, uidb64, token):
             user.save(update_fields=("is_active",))
         login(request, user)
         messages.success(request, "Email verified. Your member account is active.")
+        target = request.session.pop("ancestry_signup_next", "")
+        if (
+            target.startswith("/")
+            and url_has_allowed_host_and_scheme(
+                target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+            )
+        ):
+            return redirect(target)
         return redirect("dashboard")
 
     return render(request, "registration/verification_invalid.html", status=400)
