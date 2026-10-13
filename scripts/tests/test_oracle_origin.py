@@ -27,6 +27,15 @@ class OracleOriginGuardTests(SimpleTestCase):
         )
         self.assertEqual(self.middleware(request).status_code, 200)
 
+    @override_settings(ORIGIN_EDGE_SECRET="separate-worker-only-credential")
+    def test_dedicated_edge_secret_is_accepted_during_rotation(self):
+        request = self.factory.get(
+            "/accounts/login/",
+            HTTP_X_CCA_EDGE="1",
+            HTTP_X_CCA_ORIGIN_SECRET="separate-worker-only-credential",
+        )
+        self.assertEqual(self.middleware(request).status_code, 200)
+
     def test_health_probe_is_read_only_and_public(self):
         self.assertEqual(self.middleware(self.factory.get("/healthz/")).status_code, 200)
         self.assertEqual(self.middleware(self.factory.post("/healthz/")).status_code, 403)

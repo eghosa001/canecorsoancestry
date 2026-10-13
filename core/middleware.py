@@ -51,7 +51,12 @@ def _trusted_edge_request(request):
     return (
         request.headers.get("X-CCA-Edge") == "1"
         and bool(secret)
-        and hmac.compare_digest(secret, settings.SECRET_KEY)
+        and (
+            hmac.compare_digest(
+                secret, getattr(settings, "ORIGIN_EDGE_SECRET", settings.SECRET_KEY)
+            )
+            or hmac.compare_digest(secret, settings.SECRET_KEY)
+        )
     )
 
 
