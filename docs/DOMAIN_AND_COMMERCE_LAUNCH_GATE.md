@@ -21,3 +21,18 @@ charge cards; those tests require real delivery and Paystack sandbox access.
   recovery drill; verify exact deployed SHA and authenticated mobile journeys.
 
 A missing commercial prerequisite is an explicit BLOCK, not a false PASS.
+
+## Domain cutover without editing Oracle secrets
+
+Once the domain is actually purchased and Cloudflare DNS, custom Worker
+hostname and TLS are serving successfully, configure repository variable
+`CCA_PUBLIC_SITE_URL` as the canonical HTTPS origin (e.g. `https://example.com`).
+The Oracle staging release validates that the value contains an HTTPS hostname
+only, then includes that host and the existing `workers.dev` fallback in Django
+ALLOWED_HOSTS / CSRF_TRUSTED_ORIGINS and updates SITE_URL. Unset the variable
+until public TLS routing exists; an invalid value stops staging rather than
+deploying an unsafe hostname.
+
+This does **not** register a domain, create Cloudflare DNS records, configure
+Paystack callbacks or authenticate a new email sender automatically. Those
+are distinct acceptance steps before enabling the new hostname.

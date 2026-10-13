@@ -5,7 +5,11 @@ set -euo pipefail
 umask 077
 
 readonly REPO="eghosa001/canecorsoancestry"
-readonly PUBLIC_SITE="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+# The optional public-domain variable remains empty until Cloudflare custom
+# hostname/TLS and Paystack callbacks are ready. Validate before touching prod.
+PUBLIC_SITE="$(python3 scripts/oracle_runner/public_site_config.py "${CCA_PUBLIC_SITE_URL:-}")"
+readonly PUBLIC_SITE
+export CCA_PUBLIC_SITE_EFFECTIVE="$PUBLIC_SITE"
 readonly MEDIA_EDGE="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
 
 if [[ "$GITHUB_REPOSITORY" != "$REPO" ||
@@ -95,8 +99,13 @@ import hmac
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 secret = os.environ["DJANGO_SECRET_KEY"]
+public_site = os.environ["CCA_PUBLIC_SITE_EFFECTIVE"]
+public_host = urlsplit(public_site).hostname
+legacy_site = "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+legacy_host = urlsplit(legacy_site).hostname
 email_keys = ("EMAIL_HOST", "EMAIL_HOST_USER", "EMAIL_HOST_PASSWORD")
 email_ready = all(os.environ.get(key, "") for key in email_keys)
 values = {
@@ -105,14 +114,13 @@ values = {
     "CCA_ORIGIN_EDGE_SECRET": hmac.new(
         secret.encode("utf-8"), b"cca-origin-edge-auth-v1", hashlib.sha256
     ).hexdigest(),
-    "DJANGO_ALLOWED_HOSTS": (
-        "canecorsoancestry-site-edge.aighewieghosa111.workers.dev,"
-        "127.0.0.1,localhost"
-    ),
-    "DJANGO_CSRF_TRUSTED_ORIGINS": (
-        "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
-    ),
-    "SITE_URL": "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev",
+    "DJANGO_ALLOWED_HOSTS": ",".join(dict.fromkeys([
+        public_host, legacy_host, "127.0.0.1", "localhost"
+    ])),
+    "DJANGO_CSRF_TRUSTED_ORIGINS": ",".join(dict.fromkeys([
+        public_site, legacy_site
+    ])),
+    "SITE_URL": public_site,
     "DJANGO_DB_SCHEMA": "django_app",
     "DJANGO_DB_SSLMODE": "disable",
     "DJANGO_DB_EXTRA_SCHEMAS": "extensions,public",
