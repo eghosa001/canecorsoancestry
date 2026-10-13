@@ -7,6 +7,7 @@ from uuid import UUID
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
+from django.urls import reverse
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
@@ -230,8 +231,8 @@ def virtual_mating(request):
             "membership_required": bool(
                 sire_query or dam_query or sire_id or dam_id
             ),
-            "member_login_url": f"/accounts/login/?{next_query}",
-            "member_signup_url": f"/accounts/signup/?{next_query}",
+            "member_login_url": f"{reverse('login')}?{next_query}",
+            "member_signup_url": f"{reverse('accounts:signup')}?{next_query}",
         })
     if not request.user.is_active or not can_use_member_features(request.user):
         raise PermissionDenied

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, direct_dog_edit, kennel_publication, breeding_kennel_review
+from . import views, direct_dog_edit, kennel_publication, breeding_kennel_review, dog_drafts
 
 app_name = "accounts"
 
@@ -10,6 +10,7 @@ urlpatterns = [
     path("verify-email/<uidb64>/<token>/", views.verify_email, name="verify-email"),
     path("resend-verification/", views.resend_verification, name="resend-verification"),
     path("submissions/", views.member_account_only(views.submission_list), name="submissions"),
+    path("submissions/<uuid:pk>/checkout/", views.member_account_only(dog_drafts.draft_checkout), name="draft-checkout"),
     path(
         "submissions/<uuid:pk>/evidence/",
         views.member_account_only(views.submission_evidence_upload),
@@ -29,7 +30,7 @@ urlpatterns = [
     path("payments/<uuid:pk>/litter/", views.member_account_only(views.payment_submit_litter), name="payment-submit-litter"),
     path("payments/<uuid:pk>/puppy/", views.member_account_only(views.payment_submit_puppy), name="payment-submit-puppy"),
     path("disputes/", views.member_account_only(views.my_disputes), name="my-disputes"),
-    path("submit/dog/", views.member_account_only(views.submit_dog), name="submit-dog"),
+    path("submit/dog/", views.member_account_only(dog_drafts.create_dog_draft), name="submit-dog"),
     path("submit/kennel/", views.member_account_only(views.submit_kennel), name="submit-kennel"),
     path("research/pairings/", views.saved_pairings, name="saved-pairings"),
     path("research/pairings/save/", views.save_research_pairing, name="save-pairing"),

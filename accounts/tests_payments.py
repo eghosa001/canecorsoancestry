@@ -74,7 +74,7 @@ class PaidSubmissionTests(TestCase):
             user=self.user,
         )
         self.assertTrue(litter_form.is_valid(), litter_form.errors)
-        self.assertEqual(litter_form.cleaned_data["amount_kobo"], 100000)
+        self.assertEqual(litter_form.cleaned_data["amount_kobo"], 150000)
 
     @patch("accounts.views.verify_transaction")
     def test_member_can_recheck_pending_payment_status(self, verify):
