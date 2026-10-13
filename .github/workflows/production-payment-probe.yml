@@ -1,0 +1,42 @@
+name: Production payment and policy edge probe
+
+on:
+  schedule:
+    - cron: "13 8 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/production_payment_probe.py"
+      - ".github/workflows/production-payment-probe.yml"
+  pull_request:
+    paths:
+      - "scripts/production_payment_probe.py"
+      - ".github/workflows/production-payment-probe.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-payment-policy-probe
+  cancel-in-progress: false
+
+jobs:
+  lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m py_compile scripts/production_payment_probe.py
+  live:
+    if: github.event_name != 'pull_request' && github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      PRODUCTION_BASE_URL: ${{ vars.CCA_CANONICAL_SITE_URL || 'https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 scripts/production_payment_probe.py
