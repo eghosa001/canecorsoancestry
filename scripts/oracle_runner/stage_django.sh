@@ -5,12 +5,13 @@ set -euo pipefail
 umask 077
 
 readonly REPO="eghosa001/canecorsoancestry"
-readonly PUBLIC_SITE="$(python3 - <<'PY'
+PUBLIC_SITE="$(python3 - <<'PY'
 import os
 from scripts.oracle_runner.site_domain import canonical_site
 print(canonical_site(os.getenv("CCA_CANONICAL_SITE_URL")))
 PY
 )"
+readonly PUBLIC_SITE
 export CCA_CANONICAL_SITE_URL="$PUBLIC_SITE"
 readonly MEDIA_EDGE="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
 
