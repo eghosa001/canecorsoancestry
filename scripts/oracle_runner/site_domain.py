@@ -10,11 +10,15 @@ def canonical_site(value=""):
     parsed = urlsplit(requested)
     if (parsed.scheme != "https" or not parsed.hostname or parsed.username
         or parsed.password or parsed.query or parsed.fragment
-        or parsed.path not in ("", "/") or parsed.port is not None):
+        or parsed.path not in ("", "/") or parsed.port is not None
+        or parsed.username is not None or parsed.password is not None):
         raise ValueError("Canonical site must be an HTTPS DNS hostname with no path/query/port")
     host = parsed.hostname.lower()
     labels = host.split(".")
-    if len(host) > 253 or len(labels) < 2 or not all(_LABEL.fullmatch(label) for label in labels):
+    if (len(host) > 253 or len(labels) < 2
+        or all(label.isdigit() for label in labels)
+        or parsed.netloc.lower() != host
+        or not all(_LABEL.fullmatch(label) for label in labels)):
         raise ValueError("Canonical site contains an invalid DNS hostname")
     return "https://" + host
 
