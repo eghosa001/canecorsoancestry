@@ -50,9 +50,47 @@ jobs:
       - name: Validate Worker bundle
         run: npx --yes wrangler@4 deploy --dry-run --config wrangler.site.toml
 
-  deploy:
+      - name: Validate isolated origin credential rollout order
+        run: python3 -m unittest scripts.tests.test_worker_origin_secret
+
+  verify-derived-origin-secret:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     needs: validate
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 5
+    env:
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+    steps:
+      - name: Fail closed unless Oracle already accepts the new isolated credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = local
+          sudo -n systemctl is-active --quiet cca-oracle-staging.service
+          test -n "$DJANGO_SECRET_KEY"
+          derived="$(python3 - <<'PY'
+          import hashlib, hmac, os
+          print(hmac.new(
+              os.environ["DJANGO_SECRET_KEY"].encode("utf-8"),
+              b"cca-origin-edge-auth-v1", hashlib.sha256
+          ).hexdigest())
+          PY
+          )"
+          # Old Oracle code rejects this derived token with HTTP 403.
+          code="$(curl --silent --show-error --connect-timeout 4 --max-time 12 \
+            -H 'X-CCA-Edge: 1' \
+            -H "X-CCA-Origin-Secret: $derived" \
+            -H 'X-Forwarded-Proto: https' \
+            -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/accounts/login/)"
+          test "$code" = 200 || {
+            echo "::error::Live Oracle does not accept the isolated Worker credential (HTTP $code). Refusing Cloudflare rotation.";
+            exit 1;
+          }
+          echo "PASS: Live Oracle authenticated the new isolated Cloudflare credential."
+
+  deploy:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    needs: [validate, verify-derived-origin-secret]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -95,7 +133,21 @@ jobs:
 
       - name: Build Worker secret file
         run: |
-          python -c 'import json, os; open("/tmp/site-edge-secrets.json", "w", encoding="utf-8").write(json.dumps({"ORIGIN_EDGE_SECRET": os.environ["DJANGO_SECRET_KEY"]}))'
+          python3 - <<'PY'
+          import hashlib
+          import hmac
+          import json
+          import os
+          from pathlib import Path
+
+          root = os.environ["DJANGO_SECRET_KEY"].encode("utf-8")
+          derived = hmac.new(root, b"cca-origin-edge-auth-v1", hashlib.sha256).hexdigest()
+          assert derived.encode("utf-8") != root
+          path = Path("/tmp/site-edge-secrets.json")
+          path.write_text(json.dumps({"ORIGIN_EDGE_SECRET": derived}), encoding="utf-8")
+          path.chmod(0o600)
+          print("Prepared distinct Worker-only origin credential; root Django secret excluded.")
+          PY
 
       - name: Inject release-scoped cache namespace
         shell: bash
@@ -131,7 +183,7 @@ jobs:
         shell: bash
         run: python3 scripts/oracle_runner/edge_origin_mode.py render --mode "${EDGE_ORIGIN_MODE:?}"
 
-      - name: Deploy site edge
+      - name: Deploy site edge using Worker-only origin secret
         run: npx --yes wrangler@4 deploy --config wrangler.site.toml --secrets-file /tmp/site-edge-secrets.json
 
       - name: Verify public workers.dev edge and fast warm-up response
