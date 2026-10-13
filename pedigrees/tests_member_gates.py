@@ -74,6 +74,18 @@ class MemberAnalysisGateTests(TestCase):
             403,
         )
 
+    def test_signed_in_reports_and_pairing_are_noindex(self):
+        self.client.force_login(self.member)
+        for url in (
+            reverse("pedigrees:detail", args=[self.sire.slug]),
+            self.pairing,
+        ):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("noindex", response["X-Robots-Tag"])
+                self.assertContains(response, 'content="noindex,nofollow,noarchive"')
+
     def test_public_sitemap_does_not_list_login_protected_reports(self):
         from core.sitemaps import SITEMAPS
         self.assertNotIn("pedigrees", SITEMAPS)

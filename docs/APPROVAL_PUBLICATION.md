@@ -43,3 +43,18 @@ from the photo-only default browse page until a photograph is approved.
 Historical approvals might later be superseded, deleted by an administrator,
 or explicitly made private; aggregate discrepancy counts require review in
 that context and are not themselves evidence of unauthorized publication.
+
+## Direct staff creation: audited historical/research exception
+
+The in-app staff **Add Dog** operation never charges or publishes a customer
+submission. It creates a private canonical record for authenticated staff
+research. A subsequent publication of a directly staff-created dog requires:
+- a pre-existing saved documentary source URL or evidence attachment;
+- the publishing moderator's explicit historical/research attestation;
+- an audit event with `publication_basis=staff_historical_research`.
+
+It is **not** a substitute for a member's paid listing: customer-requested
+records must use the Paystack-backed private submission, then moderation.
+Existing imported/historical canonical records and properly paid member
+approvals are not retroactively forced through this exceptional path.
+Publication does not automatically grant any verification badge.
