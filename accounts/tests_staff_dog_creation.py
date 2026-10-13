@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from registry.models import Dog, ModerationAudit, ModerationRoleAssignment
+from registry.models import Dog, DogSource, ModerationAudit, ModerationRoleAssignment
 from registry.permissions import can_add_canonical_dog
 
 
@@ -100,6 +100,39 @@ class StaffDogCreationAndAccessTests(TestCase):
         )
         self.assertEqual(event.actor, self.reviewer)
         self.assertFalse(event.summary["is_owner"])
+
+    def test_staff_created_research_record_requires_source_and_attestation_to_publish(self):
+        self.client.force_login(self.reviewer)
+        response = self.client.post(reverse("accounts:dog-direct-create"), {
+            "name": "Archive Source Gate", "sex": "male",
+            "reason": "Staff archive research record prepared for sourcing",
+        })
+        self.assertEqual(response.status_code, 302)
+        dog = Dog.objects.get(name="Archive Source Gate")
+        url = reverse("accounts:dog-set-public-visibility", args=[dog.pk])
+        payload = {
+            "action": "publish", "confirm_visibility": "yes",
+            "reason": "Historical archive identity reviewed",
+            "version": dog.updated_at.isoformat(),
+            "historical_research_attestation": "yes",
+        }
+        self.client.post(url, payload)
+        dog.refresh_from_db()
+        self.assertFalse(dog.is_public)
+        DogSource.objects.create(
+            dog=dog, source_type=DogSource.SourceType.PEDIGREE,
+            title="Historical archive", source_url="https://example.org/archive",
+        )
+        self.client.post(url, {**payload, "historical_research_attestation": ""})
+        dog.refresh_from_db()
+        self.assertFalse(dog.is_public)
+        self.client.post(url, payload)
+        dog.refresh_from_db()
+        self.assertTrue(dog.is_public)
+        audit = ModerationAudit.objects.filter(
+            dog=dog, summary__publication_action="publish",
+        ).latest("pk")
+        self.assertEqual(audit.summary["publication_basis"], "staff_historical_research")
 
     def test_member_cannot_add_even_with_forged_post(self):
         url = reverse("accounts:dog-direct-create")

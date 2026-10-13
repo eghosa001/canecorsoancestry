@@ -14,6 +14,20 @@ logger = logging.getLogger(__name__)
 
 PRIVATE_PREFIXES = ("/member/", "/accounts/", "/admin/", "/dashboard/")
 
+
+def _private_path(request):
+    if request.path.startswith(PRIVATE_PREFIXES):
+        return True
+    # Research reports and signed-in pairing calculations contain personal
+    # member-only analysis and must not be indexed or cached by a proxy.
+    if request.path.startswith("/pedigrees/"):
+        if request.path == "/pedigrees/":
+            return False
+        if request.path == "/pedigrees/virtual-mating/":
+            return request.user.is_authenticated
+        return True
+    return False
+
 CSP = "; ".join(
     [
         "default-src 'self'",
@@ -111,7 +125,7 @@ class RequestSecurityMiddleware:
                 db_metrics["count"],
                 request_id,
             )
-        if request.path.startswith(PRIVATE_PREFIXES):
+        if _private_path(request):
             response["X-Robots-Tag"] = "noindex, nofollow, noarchive"
             patch_cache_control(response, private=True, no_store=True)
         return response

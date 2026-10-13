@@ -105,6 +105,15 @@
       </div>
     </details>
     {% endfor %}
+    {% if staff_research_publication_required and not dog.is_public %}
+    <div class="notice" role="note">
+      <strong>Historical/research publication — not a paid customer submission</strong>
+      <p>This dog was created directly by staff. First add and save a source URL or documentary evidence in the Sources section. Customer-requested dog listings must instead follow the paid member-submission and moderation workflow.</p>
+      <label><input type="checkbox" name="historical_research_attestation" value="yes">
+        I confirm this is an evidence-backed staff historical/research entry, not an unpaid customer listing.
+      </label>
+    </div>
+    {% endif %}
     <div class="button-row">
       <button class="btn btn-gold" type="submit" {% if can_publish_dog %}data-canonical-submit{% endif %}>{% if can_publish_dog %}Save dog details and visibility{% else %}Save changes or request protected review{% endif %}</button>
       <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Discard edits</a>

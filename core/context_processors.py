@@ -5,6 +5,12 @@ from registry.permissions import admin_public_label, is_staff_identity, moderati
 PRIVATE_PREFIXES = ("/member/", "/accounts/", "/admin/", "/dashboard/")
 
 
+def _private_research_path(request):
+    if request.path == "/pedigrees/virtual-mating/":
+        return request.user.is_authenticated
+    return request.path.startswith("/pedigrees/") and request.path != "/pedigrees/"
+
+
 def site_metadata(request):
     account_name = ""
     staff_identity = False
@@ -69,7 +75,7 @@ def site_metadata(request):
         "site_name": settings.SITE_NAME,
         "site_url": public_root,
         "canonical_url": request.build_absolute_uri(request.path),
-        "page_noindex": request.path.startswith(PRIVATE_PREFIXES),
+        "page_noindex": request.path.startswith(PRIVATE_PREFIXES) or _private_research_path(request),
         "account_email_enabled": getattr(settings, "ACCOUNT_EMAIL_ENABLED", False),
         "account_name": account_name,
         "staff_identity": staff_identity,
