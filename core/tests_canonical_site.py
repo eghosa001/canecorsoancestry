@@ -49,3 +49,15 @@ class CanonicalPublicSiteTests(SimpleTestCase):
         response = self.middleware(request)
 
         self.assertEqual(response.status_code, 200)
+
+
+class CanonicalHostnameMetadataTests(SimpleTestCase):
+    @override_settings(SITE_URL="https://pedigree.example")
+    def test_canonical_is_configured_site_even_on_preview_host(self):
+        from django.contrib.auth.models import AnonymousUser
+        from core.context_processors import site_metadata
+        request = RequestFactory().get("/dogs/sample-dog/", HTTP_HOST="preview.example")
+        request.user = AnonymousUser()
+        values = site_metadata(request)
+        self.assertEqual(values["site_url"], "https://pedigree.example")
+        self.assertEqual(values["canonical_url"], "https://pedigree.example/dogs/sample-dog/")

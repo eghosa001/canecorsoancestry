@@ -70,12 +70,14 @@ def site_metadata(request):
             "accounts:payment-detail": "payments",
         }.get(view_name, "overview")
 
-    public_root = request.build_absolute_uri("/").rstrip("/")
+    # A canonical URL must not depend on a visitor's Host header or the
+    # temporary workers.dev hostname once SITE_URL moves to a custom domain.
+    public_root = settings.SITE_URL
     return {
         "site_name": settings.SITE_NAME,
         "support_email": getattr(settings, "SUPPORT_EMAIL", ""),
         "site_url": public_root,
-        "canonical_url": request.build_absolute_uri(request.path),
+        "canonical_url": f"{settings.SITE_URL}{request.path}",
         "page_noindex": request.path.startswith(PRIVATE_PREFIXES) or _private_research_path(request),
         "account_email_enabled": getattr(settings, "ACCOUNT_EMAIL_ENABLED", False),
         "account_name": account_name,
