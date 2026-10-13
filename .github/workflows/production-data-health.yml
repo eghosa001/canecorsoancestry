@@ -25,7 +25,7 @@ jobs:
     runs-on: [self-hosted, linux, arm64, cca-oracle]
     timeout-minutes: 15
     env:
-      PUBLIC_SITE: https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev
+      PUBLIC_SITE: ${{ vars.CCA_CANONICAL_SITE_URL || 'https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev' }}
     steps:
       - uses: actions/checkout@v4
         with:

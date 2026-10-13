@@ -21,3 +21,17 @@ charge cards; those tests require real delivery and Paystack sandbox access.
   recovery drill; verify exact deployed SHA and authenticated mobile journeys.
 
 A missing commercial prerequisite is an explicit BLOCK, not a false PASS.
+
+## Validated future domain configuration (before DNS purchase)
+
+The Oracle staging script and CI smoke/data-health checks now support repository
+variable `CCA_CANONICAL_SITE_URL`. Until set, the current Workers preview remains
+the canonical public site. The new value must be exactly `https://<domain>`
+(without path or custom port). Oracle writes SITE_URL, allowed hosts and CSRF
+origins from the same validated value, always retaining the preview host for
+safe migration. Django robots.txt emits the configured canonical sitemap URL.
+
+**Do not set this variable before the new domain is purchased and Cloudflare
+Worker custom route, SSL, and origin DNS are deployed.** Once routed, configure
+Paystack callback, email SPF/DKIM/DMARC, Search Console and the apex/www redirect;
+then switch the variable and release. DNS registration is an owner action.
