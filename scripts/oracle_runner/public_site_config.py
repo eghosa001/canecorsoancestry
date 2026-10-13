@@ -16,7 +16,8 @@ def public_site(raw=""):
         or not host or len(host) > 253 or len(labels) < 2
         or any(not LABEL.fullmatch(label) for label in labels)
         or parts.username is not None or parts.password is not None
-        or parts.port is not None or parts.netloc != host
+        or parts.port is not None or parts.netloc.lower() != host
+        or all(label.isdigit() for label in labels)
         or parts.path not in ("", "/")
         or parts.query or parts.fragment
     ):
