@@ -13,6 +13,12 @@ class DomainConfigTests(TestCase):
         self.assertIn("canecorsoancestry-site-edge.aighewieghosa111.workers.dev", allowed)
         self.assertIn("https://pedigree.example", origins)
 
+    def test_shell_stops_if_canonical_url_validation_fails(self):
+        from pathlib import Path
+        script = Path("scripts/oracle_runner/stage_django.sh").read_text()
+        self.assertIn('PUBLIC_SITE="$(python3 - <<', script)
+        self.assertNotIn('readonly PUBLIC_SITE="$(python3 - <<', script)
+
     def test_rejects_unsafe_or_malformed_input(self):
         for value in ("http://example.com", "https://example.com/x",
                       "https://example.com:8443", "https://example.com?x=1",
