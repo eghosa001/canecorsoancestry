@@ -127,6 +127,7 @@ class AbuseProtectionMiddleware:
 
     RULES = (
         ("/accounts/login/", 10, 600),
+        ("/admin/login/", 5, 600),
         ("/accounts/password_reset/", 5, 3600),
         ("/member/signup/", 5, 3600),
         ("/member/resend-verification/", 5, 3600),

@@ -35,6 +35,21 @@ class SecurityHardeningTests(TestCase):
         self.assertEqual(blocked.status_code, 429)
         self.assertEqual(blocked["Retry-After"], "600")
 
+    def test_admin_login_has_a_separate_tighter_limit(self):
+        url = reverse("admin:login")
+        for _ in range(5):
+            response = self.client.post(
+                url, {"username": "unknown-admin", "password": "wrong"},
+                REMOTE_ADDR="203.0.113.117",
+            )
+            self.assertNotEqual(response.status_code, 429)
+        blocked = self.client.post(
+            url, {"username": "unknown-admin", "password": "wrong"},
+            REMOTE_ADDR="203.0.113.117",
+        )
+        self.assertEqual(blocked.status_code, 429)
+        self.assertEqual(blocked["Retry-After"], "600")
+
     def test_password_reset_attempts_are_rate_limited(self):
         url = reverse("password_reset")
         for _ in range(5):

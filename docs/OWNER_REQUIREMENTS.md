@@ -148,7 +148,7 @@ Current packages:
 
 - **₦500** — one dog;
 - **₦1,500** — 2–6 dogs from the same verified kennel;
-- **₦1,000** — one genuine litter plus the puppies belonging to that litter.
+- **₦1,500** — one genuine litter plus the puppies belonging to that litter.
 
 Only approved kennel owners/editors may purchase submission packages. Every paid dog or litter remains private/pending until the normal verification and administrator moderation flow approves it. Cane Corso Ancestry remains a pedigree/ancestry platform and must not describe these charges as official dog registration fees.
 
