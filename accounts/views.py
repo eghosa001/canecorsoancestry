@@ -426,6 +426,11 @@ def submission_list(request):
     )
     paginator = Paginator(submissions, 50)
     page_obj = paginator.get_page(request.GET.get("page"))
+    for item in page_obj.object_list:
+        item.requires_listing_payment = (
+            item.kind == Submission.Kind.DOG
+            and bool((item.payload or {}).get("_paid_submission"))
+        )
     return render(
         request,
         "accounts/submission_list.html",

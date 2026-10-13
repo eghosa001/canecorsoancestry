@@ -28,7 +28,7 @@
             <p class="muted">{{ item.get_verification_status_display }}</p>
           {% endif %}
         </div>
-        {% if item.kind == "dog" and item.payload._paid_submission %}
+        {% if item.kind == "dog" and item.requires_listing_payment %}
           {% if item.payment_link %}
             <p class="muted">Listing fee: {{ item.payment_link.payment.get_status_display }} · ₦{{ item.payment_link.payment.amount_naira }}</p>
             {% if item.payment_link.payment.status == "pending" %}
