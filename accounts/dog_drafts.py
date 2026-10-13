@@ -8,7 +8,6 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from registry.models import Kennel, KennelMembership, Submission
@@ -40,7 +39,10 @@ def create_dog_draft(request):
     form.fields["kennel"].queryset = eligible_kennels
     form.fields["kennel"].required = True
     if eligible_kennels.count() == 1:
-        form.fields["kennel"].initial = eligible_kennels.first()
+        own_kennel = eligible_kennels.first()
+        form.fields["kennel"].initial = own_kennel
+        if own_kennel.is_public:
+            form.fields["breeding_kennel"].initial = own_kennel
 
     if request.method == "POST" and form.is_valid():
         cleaned = form.cleaned_data

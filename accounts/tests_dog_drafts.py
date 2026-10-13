@@ -77,3 +77,14 @@ class DogDraftListingTests(TestCase):
             self.client.get(reverse("accounts:draft-checkout", args=[draft.pk])).status_code,
             404,
         )
+
+    def test_archive_bootstrap_reserves_private_unverified_kennels(self):
+        from django.core.management import call_command
+        call_command("bootstrap_nigerian_kennel_archives", verbosity=0)
+        call_command("bootstrap_nigerian_kennel_archives", verbosity=0)
+        for name in ("Pet Palace Kennels", "Ofreelife Kennels"):
+            kennel = Kennel.objects.get(name=name)
+            self.assertFalse(kennel.is_public)
+            self.assertIsNone(kennel.verified_at)
+            self.assertFalse(kennel.memberships.exists())
+            self.assertFalse(kennel.dogs.exists())
