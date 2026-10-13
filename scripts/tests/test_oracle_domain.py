@@ -16,6 +16,7 @@ class DomainConfigTests(TestCase):
     def test_rejects_unsafe_or_malformed_input(self):
         for value in ("http://example.com", "https://example.com/x",
                       "https://example.com:8443", "https://example.com?x=1",
-                      "https://user:pass@example.com", "https://bad..com"):
+                      "https://user:pass@example.com", "https://@example.com",
+                      "https://127.0.0.1", "https://bad..com"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 canonical_site(value)
