@@ -88,3 +88,19 @@ class DogDraftListingTests(TestCase):
             self.assertIsNone(kennel.verified_at)
             self.assertFalse(kennel.memberships.exists())
             self.assertFalse(kennel.dogs.exists())
+
+    @override_settings(ACCOUNT_EMAIL_ENABLED=False, REQUIRE_EMAIL_VERIFICATION=False)
+    def test_research_only_signup_preserves_virtual_mating_selections(self):
+        self.client.logout()
+        pairing_url = reverse("pedigrees:virtual-mating") + "?sire_q=Example&dam_q=Example2"
+        response = self.client.post(reverse("accounts:signup") + "?next=" + pairing_url.replace("&", "%26"), {
+            "kennel_name": "",
+            "email": "research-only@example.com",
+            "password1": "sample-secret-12345",
+            "password2": "sample-secret-12345",
+            "next": pairing_url,
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, pairing_url)
+        member = get_user_model().objects.get(email="research-only@example.com")
+        self.assertFalse(member.kennel_memberships.exists())

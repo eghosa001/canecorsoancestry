@@ -272,33 +272,37 @@ def signup(request):
         kennel_slug = slugify(kennel_name)[:190]
         Profile.objects.update_or_create(
             user=user,
-            defaults={"display_name": kennel_name},
+            defaults={"display_name": kennel_name or "Member"},
         )
-        existing_kennel = Kennel.objects.filter(
-            Q(name__iexact=kennel_name) | Q(slug__iexact=kennel_slug)
-        ).first()
-        if existing_kennel:
-            submission, _ = Submission.objects.get_or_create(
-                kind=Submission.Kind.KENNEL_CLAIM,
-                status=Submission.Status.PENDING,
-                submitted_by=user,
-                kennel=existing_kennel,
-                defaults={
-                    "payload": {
-                        "relationship": "Owner",
-                        "signup_kennel_name": kennel_name,
+        # Research-only members do not need to invent a kennel identity.
+        # Breeder accounts still enter the audited claim/create workflow.
+        submission = None
+        if kennel_name:
+            existing_kennel = Kennel.objects.filter(
+                Q(name__iexact=kennel_name) | Q(slug__iexact=kennel_slug)
+            ).first()
+            if existing_kennel:
+                submission, _ = Submission.objects.get_or_create(
+                    kind=Submission.Kind.KENNEL_CLAIM,
+                    status=Submission.Status.PENDING,
+                    submitted_by=user,
+                    kennel=existing_kennel,
+                    defaults={
+                        "payload": {
+                            "relationship": "Owner",
+                            "signup_kennel_name": kennel_name,
+                        },
+                        "notes": "Kennel claim created automatically during account signup.",
                     },
-                    "notes": "Kennel claim created automatically during account signup.",
-                },
-            )
-        else:
-            submission = Submission.objects.create(
-                kind=Submission.Kind.KENNEL_CREATE,
-                submitted_by=user,
-                payload={"name": kennel_name, "slug": kennel_slug},
-                notes="Kennel profile requested automatically during account signup.",
-            )
-        if submission.verification_status == SubmissionVerificationStatus.UNCHECKED:
+                )
+            else:
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.KENNEL_CREATE,
+                    submitted_by=user,
+                    payload={"name": kennel_name, "slug": kennel_slug},
+                    notes="Kennel profile requested automatically during account signup.",
+                )
+        if submission and submission.verification_status == SubmissionVerificationStatus.UNCHECKED:
             verify_submission(submission)
 
         if verification_required:

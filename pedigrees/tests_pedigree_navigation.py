@@ -29,6 +29,7 @@ class PedigreeNavigationTests(TestCase):
 
     def test_public_pedigree_supports_keyboard_and_back_navigation(self):
         url = reverse("pedigrees:detail", args=[self.public.slug])
+        self.client.force_login(self.member)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'aria-label="Pedigree research navigation"')
@@ -56,6 +57,7 @@ class PedigreeNavigationTests(TestCase):
         self.assertEqual(self.client.get(url).status_code, 404)
 
     def test_unapproved_dog_remains_inaccessible_publicly(self):
+        self.client.force_login(self.member)
         self.assertEqual(
             self.client.get(reverse(
                 "pedigrees:detail", args=[self.private.slug]

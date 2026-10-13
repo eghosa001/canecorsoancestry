@@ -25,16 +25,13 @@ class MemberSubmissionTests(TestCase):
             role=KennelMembership.Role.CONTRIBUTOR,
         )
 
-    def test_new_dog_submission_starts_with_paid_package(self):
+    def test_new_dog_submission_starts_with_private_form(self):
         self.client.force_login(self.user)
 
         response = self.client.get(reverse("accounts:submit-dog"))
 
-        self.assertRedirects(
-            response,
-            f"{reverse('accounts:new-payment')}?package=single_dog",
-            fetch_redirect_response=False,
-        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Save dog privately")
         self.assertFalse(
             Submission.objects.filter(
                 submitted_by=self.user,

@@ -43,6 +43,8 @@
     </div>
   {% endif %}
 
+  <p class="mating-help muted">New dog not in the archive? Registered breeders with verified kennel access can <a href="{% url 'accounts:submit-dog' %}">submit it privately</a> for review before it becomes an official public record.</p>
+
   <p class="mating-help muted">Search is resolved on the server, so this works across the full dog database without loading thousands of dogs into the page. Exact registration numbers are best when names are duplicated.</p>
 
   {% if error %}

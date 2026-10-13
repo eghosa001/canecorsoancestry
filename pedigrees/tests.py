@@ -571,3 +571,22 @@ class PedigreeServiceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/csv", response["Content-Type"])
         self.assertIn("Export Dog", response.content.decode())
+
+    def test_guest_virtual_mating_requires_registration_and_no_calculation(self):
+        from unittest.mock import patch
+        sire = Dog.objects.create(name="Gate Guest Sire", slug="gate-guest-sire", sex=Dog.Sex.MALE, is_public=True)
+        dam = Dog.objects.create(name="Gate Guest Dam", slug="gate-guest-dam", sex=Dog.Sex.FEMALE, is_public=True)
+        with patch("pedigrees.views.virtual_mating_analysis") as compute:
+            response = self.client.get(reverse("pedigrees:virtual-mating"), {
+                "sire_q": sire.name, "dam_q": dam.name,
+            })
+        self.assertContains(response, "Register to start your pairing analysis")
+        self.assertNotContains(response, "Projected offspring COI")
+        compute.assert_not_called()
+
+    def test_anonymous_pedigree_reports_and_export_require_login(self):
+        dog = Dog.objects.create(name="Protected Gate Dog", slug="protected-gate-dog", is_public=True)
+        for name in ("detail", "reverse", "export"):
+            response = self.client.get(reverse("pedigrees:" + name, args=[dog.slug]))
+            self.assertEqual(response.status_code, 302)
+            self.assertIn("next=", response.url)

@@ -18,6 +18,9 @@ from .models import PaymentSubmissionLink, SubmissionPayment
 from .payments import PaystackError, record_successful_payment, webhook_signature_valid
 
 
+from .tests_dog_drafts import DogDraftListingTests  # Include new checkout tests in scoped payment CI.
+
+
 class PaidSubmissionTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(

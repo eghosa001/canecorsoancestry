@@ -1,3 +1,4 @@
+import uuid
 from io import BytesIO
 from pathlib import Path
 
@@ -195,8 +196,9 @@ class MemberSignUpForm(UserCreationForm):
     username = forms.CharField(required=False, widget=forms.HiddenInput())
     kennel_name = forms.CharField(
         max_length=180,
-        label="Kennel name",
-        help_text="This is the public account name shown across the site.",
+        required=False,
+        label="Kennel name (optional)",
+        help_text="Only breeders need a kennel. Leave blank to join for pedigree research.",
     )
     email = forms.EmailField(
         required=True,
@@ -210,6 +212,8 @@ class MemberSignUpForm(UserCreationForm):
 
     def clean_kennel_name(self):
         name = " ".join(self.cleaned_data["kennel_name"].split()).strip()
+        if not name:
+            return ""
         account_username = slugify(name)[:150]
         if not account_username:
             raise forms.ValidationError("Enter a usable kennel name.")
@@ -226,14 +230,16 @@ class MemberSignUpForm(UserCreationForm):
     def clean(self):
         cleaned = super().clean()
         kennel_name = cleaned.get("kennel_name")
-        if kennel_name:
-            cleaned["username"] = slugify(kennel_name)[:150]
-            self.instance.username = cleaned["username"]
+        cleaned["username"] = (
+            slugify(kennel_name)[:150]
+            if kennel_name else f"member-{uuid.uuid4().hex[:16]}"
+        )
+        self.instance.username = cleaned["username"]
         return cleaned
 
     def save(self, commit=True):
         user = super().save(commit=False)
-        user.username = slugify(self.cleaned_data["kennel_name"])[:150]
+        user.username = self.cleaned_data["username"]
         user.email = self.cleaned_data["email"]
         user.is_staff = False
         user.is_superuser = False
