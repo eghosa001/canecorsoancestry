@@ -4,7 +4,7 @@ from django.test import RequestFactory, SimpleTestCase, override_settings
 from scripts.oracle_runner.oracle_middleware import OracleEdgeOnlyMiddleware
 
 
-@override_settings(SECRET_KEY="oracle-test-secret")
+@override_settings(SECRET_KEY="oracle-test-secret", ORIGIN_EDGE_SECRET="derived-oracle-test")
 class OracleOriginGuardTests(SimpleTestCase):
     def setUp(self):
         self.middleware = OracleEdgeOnlyMiddleware(lambda request: HttpResponse("ready"))
@@ -23,7 +23,7 @@ class OracleOriginGuardTests(SimpleTestCase):
         request = self.factory.get(
             "/accounts/login/",
             HTTP_X_CCA_EDGE="1",
-            HTTP_X_CCA_ORIGIN_SECRET="oracle-test-secret",
+            HTTP_X_CCA_ORIGIN_SECRET="derived-oracle-test",
         )
         self.assertEqual(self.middleware(request).status_code, 200)
 
@@ -35,6 +35,14 @@ class OracleOriginGuardTests(SimpleTestCase):
             HTTP_X_CCA_ORIGIN_SECRET="separate-worker-only-credential",
         )
         self.assertEqual(self.middleware(request).status_code, 200)
+
+    def test_root_django_secret_is_rejected_even_with_edge_marker(self):
+        request = self.factory.get(
+            "/accounts/login/",
+            HTTP_X_CCA_EDGE="1",
+            HTTP_X_CCA_ORIGIN_SECRET="oracle-test-secret",
+        )
+        self.assertEqual(self.middleware(request).status_code, 403)
 
     def test_health_probe_is_read_only_and_public(self):
         self.assertEqual(self.middleware(self.factory.get("/healthz/")).status_code, 200)

@@ -22,14 +22,11 @@ class OracleEdgeOnlyMiddleware:
 
         signature = request.headers.get("X-CCA-Origin-Secret", "")
         marker = request.headers.get("X-CCA-Edge", "")
-        # Transitional acceptance keeps the existing Worker online while
-        # the independently derived Worker credential is rolled out.
-        dedicated = getattr(settings, "ORIGIN_EDGE_SECRET", settings.SECRET_KEY)
-        valid = bool(signature) and (
-            hmac.compare_digest(signature, dedicated)
-            or hmac.compare_digest(signature, settings.SECRET_KEY)
-        )
-        if not (marker == "1" and valid):
+        # Root session-signing secrets must never authenticate edge requests.
+        # The isolated credential is mandatory in Oracle production settings.
+        dedicated = getattr(settings, "ORIGIN_EDGE_SECRET", "")
+        if not (marker == "1" and bool(signature) and bool(dedicated)
+                and hmac.compare_digest(signature, dedicated)):
             response = HttpResponseForbidden("Origin access denied.")
             response["Cache-Control"] = "no-store"
             response["X-Robots-Tag"] = "noindex, nofollow"

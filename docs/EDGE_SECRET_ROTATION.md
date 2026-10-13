@@ -19,3 +19,17 @@ old fallback from both Oracle and core middleware. Then inspect that the Worker
 secret is derived only and is never equal to DJANGO_SECRET_KEY.
 
 Never change Worker first: old Oracle would reject the new credential.
+
+## Final fail-closed production enforcement (phase 3)
+
+The prior fallback to the Django signing secret has now been removed from
+`OracleEdgeOnlyMiddleware` and `core.middleware._trusted_edge_request`
+for Oracle's configured origin credential. Oracle refuses to start unless
+`CCA_ORIGIN_EDGE_SECRET` is present and differs from `DJANGO_SECRET_KEY`.
+The deploy-time sign-in and R2 storage probes use the derived origin credential,
+while internal maintenance/storage probes retain their separate existing
+root-gated signatures for backwards compatibility.
+
+Deploy phase 3 only **after PR #406 has deployed and the new Worker edge has
+passed a real login and public smoke**. Otherwise, the old Worker would
+receive HTTP 403 at every protected origin route.

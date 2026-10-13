@@ -7,7 +7,9 @@ from config.settings.production import *  # noqa: F403,F401
 
 # Cloudflare Worker should never retain the root Django SECRET_KEY. This
 # credential is domain-separated by HMAC during deployment.
-ORIGIN_EDGE_SECRET = os.getenv("CCA_ORIGIN_EDGE_SECRET", SECRET_KEY)  # noqa: F405
+ORIGIN_EDGE_SECRET = os.getenv("CCA_ORIGIN_EDGE_SECRET", "").strip()
+if not ORIGIN_EDGE_SECRET or ORIGIN_EDGE_SECRET == SECRET_KEY:  # noqa: F405
+    raise ImproperlyConfigured("Oracle production requires a distinct Cloudflare origin credential.")
 
 # Oracle uses R2 object storage directly through its authenticated Cloudflare
 # gateway. Production storage must not import retired provider settings.

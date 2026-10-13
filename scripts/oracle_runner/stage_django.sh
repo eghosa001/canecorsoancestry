@@ -391,18 +391,25 @@ PY
 done
 [[ "$ready" == 1 ]] || { echo "::error::Oracle Django release/DB readiness failed."; exit 1; }
 
+origin_edge_secret="$(python3 - <<'PY'
+import hashlib
+import hmac
+import os
+print(hmac.new(os.environ["DJANGO_SECRET_KEY"].encode("utf-8"), b"cca-origin-edge-auth-v1", hashlib.sha256).hexdigest())
+PY
+)"
 code="$(curl --connect-timeout 2 --max-time 10 -sS -o /dev/null -w '%{http_code}' "$URL/accounts/login/")"
 [[ "$code" == 403 ]] || { echo "::error::Direct-origin protection failed: HTTP $code"; exit 1; }
 code="$(curl --connect-timeout 2 --max-time 20 -sS -o /dev/null -w '%{http_code}' \
   -H 'X-CCA-Edge: 1' \
-  -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
+  -H "X-CCA-Origin-Secret: $origin_edge_secret" \
   -H "X-CCA-Maintenance-Probe: $DJANGO_SECRET_KEY" \
   -H 'X-Forwarded-Proto: https' \
   "$URL/accounts/login/")"
 [[ "$code" == 200 ]] || { echo "::error::Staged Django sign-in failed: HTTP $code"; exit 1; }
 code="$(curl --connect-timeout 2 --max-time 40 -sS -o "$probe_output" -w '%{http_code}' \
   -X POST -H 'X-CCA-Edge: 1' \
-  -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
+  -H "X-CCA-Origin-Secret: $origin_edge_secret" \
   -H "X-CCA-Storage-Probe: $DJANGO_SECRET_KEY" \
   -H "X-CCA-Maintenance-Probe: $DJANGO_SECRET_KEY" \
   -H 'X-Forwarded-Proto: https' \
