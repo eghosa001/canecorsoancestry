@@ -5,13 +5,13 @@
   <header class="page-heading">
     <p class="eyebrow">Pedigree analysis</p>
     <h1>Virtual mating</h1>
-    <p>Compare a public sire and dam using the ancestry already connected in the database. This is a hypothetical pedigree analysis only and does not create a litter or registration.</p>
+    <p>Registered members can compare a public sire and dam using the ancestry already connected in the database. This is a hypothetical pedigree analysis only and does not create a litter or registration.</p>
   </header>
 
   <form class="mating-form mating-form-expanded" method="get">
     <div class="mating-select">
       <label for="sire_q">Sire</label>
-      <input type="hidden" id="sire" name="sire" value="{% if sire %}{{ sire.pk }}{% endif %}">
+      <input type="hidden" id="sire" name="sire" value="{% if sire %}{{ sire.pk }}{% else %}{{ sire_selected_id }}{% endif %}">
       <input type="search" id="sire_q" name="sire_q" value="{{ sire_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-autocomplete-target="sire" data-dog-sex="male" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Search sire name or registration" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="search" enterkeyhint="search" required>
     </div>
 
@@ -19,7 +19,7 @@
 
     <div class="mating-select">
       <label for="dam_q">Dam</label>
-      <input type="hidden" id="dam" name="dam" value="{% if dam %}{{ dam.pk }}{% endif %}">
+      <input type="hidden" id="dam" name="dam" value="{% if dam %}{{ dam.pk }}{% else %}{{ dam_selected_id }}{% endif %}">
       <input type="search" id="dam_q" name="dam_q" value="{{ dam_query }}" data-dog-autocomplete data-dog-autocomplete-mode="fill" data-dog-autocomplete-target="dam" data-dog-sex="female" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Search dam name or registration" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="search" enterkeyhint="search" required>
     </div>
 
@@ -32,8 +32,18 @@
       </select>
     </div>
 
-    <button class="btn btn-gold" type="submit">Analyse pairing</button>
+    <button class="btn btn-gold" type="submit">Start pairing analysis</button>
   </form>
+
+  {% if membership_required %}
+    <div class="notice" role="status" aria-live="polite">
+      <strong>Register to start your pairing analysis.</strong>
+      <p>Virtual mating and pedigree calculations are for registered members. Your selected sire and dam will be kept when you sign in or create an account.</p>
+      <div class="button-row"><a class="btn btn-gold" href="{{ member_signup_url }}">Create free member account</a><a class="btn btn-outline" href="{{ member_login_url }}">Sign in</a></div>
+    </div>
+  {% endif %}
+
+  <p class="mating-help muted">New dog not in the archive? Registered breeders with verified kennel access can <a href="{% url 'accounts:submit-dog' %}">submit it privately</a> for review before it becomes an official public record.</p>
 
   <p class="mating-help muted">Search is resolved on the server, so this works across the full dog database without loading thousands of dogs into the page. Exact registration numbers are best when names are duplicated.</p>
 

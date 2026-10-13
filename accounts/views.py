@@ -4,6 +4,7 @@ import json
 import logging
 import urllib.error
 from urllib.parse import urlparse
+from django.utils.http import url_has_allowed_host_and_scheme
 import uuid
 from datetime import timedelta
 from functools import wraps
@@ -240,10 +241,23 @@ class AccountPasswordResetView(PasswordResetView):
         return super().form_valid(form)
 
 
+def _safe_signup_next(request):
+    target = (request.POST.get("next") or request.GET.get("next") or "").strip()
+    if (
+        target.startswith("/")
+        and url_has_allowed_host_and_scheme(
+            target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        )
+    ):
+        return target
+    return ""
+
+
 def signup(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
 
+    member_next = _safe_signup_next(request)
     form = MemberSignUpForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         verification_required = (
@@ -258,33 +272,37 @@ def signup(request):
         kennel_slug = slugify(kennel_name)[:190]
         Profile.objects.update_or_create(
             user=user,
-            defaults={"display_name": kennel_name},
+            defaults={"display_name": kennel_name or "Member"},
         )
-        existing_kennel = Kennel.objects.filter(
-            Q(name__iexact=kennel_name) | Q(slug__iexact=kennel_slug)
-        ).first()
-        if existing_kennel:
-            submission, _ = Submission.objects.get_or_create(
-                kind=Submission.Kind.KENNEL_CLAIM,
-                status=Submission.Status.PENDING,
-                submitted_by=user,
-                kennel=existing_kennel,
-                defaults={
-                    "payload": {
-                        "relationship": "Owner",
-                        "signup_kennel_name": kennel_name,
+        # Research-only members do not need to invent a kennel identity.
+        # Breeder accounts still enter the audited claim/create workflow.
+        submission = None
+        if kennel_name:
+            existing_kennel = Kennel.objects.filter(
+                Q(name__iexact=kennel_name) | Q(slug__iexact=kennel_slug)
+            ).first()
+            if existing_kennel:
+                submission, _ = Submission.objects.get_or_create(
+                    kind=Submission.Kind.KENNEL_CLAIM,
+                    status=Submission.Status.PENDING,
+                    submitted_by=user,
+                    kennel=existing_kennel,
+                    defaults={
+                        "payload": {
+                            "relationship": "Owner",
+                            "signup_kennel_name": kennel_name,
+                        },
+                        "notes": "Kennel claim created automatically during account signup.",
                     },
-                    "notes": "Kennel claim created automatically during account signup.",
-                },
-            )
-        else:
-            submission = Submission.objects.create(
-                kind=Submission.Kind.KENNEL_CREATE,
-                submitted_by=user,
-                payload={"name": kennel_name, "slug": kennel_slug},
-                notes="Kennel profile requested automatically during account signup.",
-            )
-        if submission.verification_status == SubmissionVerificationStatus.UNCHECKED:
+                )
+            else:
+                submission = Submission.objects.create(
+                    kind=Submission.Kind.KENNEL_CREATE,
+                    submitted_by=user,
+                    payload={"name": kennel_name, "slug": kennel_slug},
+                    notes="Kennel profile requested automatically during account signup.",
+                )
+        if submission and submission.verification_status == SubmissionVerificationStatus.UNCHECKED:
             verify_submission(submission)
 
         if verification_required:
@@ -308,6 +326,8 @@ def signup(request):
                         "We could not send the verification email. Please try again later.",
                     )
                 else:
+                    if member_next:
+                        request.session["ancestry_signup_next"] = member_next
                     return render(
                         request,
                         "registration/verification_sent.html",
@@ -316,9 +336,9 @@ def signup(request):
         else:
             login(request, user)
             messages.success(request, "Welcome to Cane Corso Ancestry.")
-            return redirect("dashboard")
+            return redirect(member_next or "dashboard")
 
-    return render(request, "registration/signup.html", {"form": form})
+    return render(request, "registration/signup.html", {"form": form, "member_next": member_next})
 
 
 def verify_email(request, uidb64, token):
@@ -335,6 +355,14 @@ def verify_email(request, uidb64, token):
             user.save(update_fields=("is_active",))
         login(request, user)
         messages.success(request, "Email verified. Your member account is active.")
+        target = request.session.pop("ancestry_signup_next", "")
+        if (
+            target.startswith("/")
+            and url_has_allowed_host_and_scheme(
+                target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+            )
+        ):
+            return redirect(target)
         return redirect("dashboard")
 
     return render(request, "registration/verification_invalid.html", status=400)
@@ -402,6 +430,11 @@ def submission_list(request):
     )
     paginator = Paginator(submissions, 50)
     page_obj = paginator.get_page(request.GET.get("page"))
+    for item in page_obj.object_list:
+        item.requires_listing_payment = (
+            item.kind == Submission.Kind.DOG
+            and bool((item.payload or {}).get("_paid_submission"))
+        )
     return render(
         request,
         "accounts/submission_list.html",

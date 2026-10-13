@@ -1,8 +1,13 @@
 import csv
+from functools import wraps
+from urllib.parse import urlencode
 from time import perf_counter
 from uuid import UUID
 
+from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
+from django.urls import reverse
 from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
@@ -20,6 +25,19 @@ from .services import (
 
 
 ALLOWED_GENERATIONS = {4, 6, 8, 10}
+
+
+def member_analysis_only(view):
+    """Do not return pedigree analysis, descendants or exports to non-members."""
+    @wraps(view)
+    def gated(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        if not request.user.is_active or not can_use_member_features(request.user):
+            raise PermissionDenied
+        return view(request, *args, **kwargs)
+
+    return gated
 
 
 def _public_dogs():
@@ -85,6 +103,7 @@ def pedigree_index(request):
     )
 
 
+@member_analysis_only
 def pedigree_detail(request, slug):
     dog = get_object_or_404(_public_dogs(), slug=slug)
     generations = _requested_generations(request)
@@ -104,11 +123,13 @@ def pedigree_detail(request, slug):
     return render(request, "pedigrees/pedigree_detail.html", context)
 
 
+@member_analysis_only
 def pedigree_export(request, slug):
     dog = get_object_or_404(_public_dogs(), slug=slug)
     return _csv_response(dog, _requested_generations(request), public_only=True)
 
 
+@member_analysis_only
 def reverse_pedigree(request, slug):
     dog = get_object_or_404(_public_dogs(), slug=slug)
     generations = _requested_generations(request)
@@ -191,6 +212,31 @@ def virtual_mating(request):
     sire_id = (request.GET.get("sire") or "").strip()
     dam_id = (request.GET.get("dam") or "").strip()
 
+    if not request.user.is_authenticated:
+        # Guests may select names, but NO calculation or ancestor resolution occurs.
+        # The GET URL itself preserves their selections through login/signup.
+        next_query = urlencode({"next": request.get_full_path()})
+        return render(request, "pedigrees/virtual_mating.html", {
+            "sire": None,
+            "dam": None,
+            "sire_query": sire_query,
+            "dam_query": dam_query,
+            "sire_selected_id": sire_id,
+            "dam_selected_id": dam_id,
+            "generations": generations,
+            "generation_options": sorted(ALLOWED_GENERATIONS),
+            "analysis": None,
+            "error": "",
+            "can_save_research": False,
+            "membership_required": bool(
+                sire_query or dam_query or sire_id or dam_id
+            ),
+            "member_login_url": f"{reverse('login')}?{next_query}",
+            "member_signup_url": f"{reverse('accounts:signup')}?{next_query}",
+        })
+    if not request.user.is_active or not can_use_member_features(request.user):
+        raise PermissionDenied
+
     sire = dam = None
     sire_error = dam_error = ""
 
@@ -262,6 +308,6 @@ def virtual_mating(request):
             "generations": generations,
             "generation_options": sorted(ALLOWED_GENERATIONS),
             "error": error,
-            "can_save_research": can_use_member_features(request.user),
+            "can_save_research": True,
         },
     )

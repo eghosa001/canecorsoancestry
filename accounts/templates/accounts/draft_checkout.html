@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Pay for dog listing · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell member-form-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Unpublished dog</p>
+    <h1>Complete listing payment</h1>
+    <p><strong>{{ submission.payload.name }}</strong> · {{ submission.kennel.name }}</p>
+    <p>This dog's details are saved privately. The ₦{{ price_naira }} listing fee is required before an authorized moderator can publish it.</p>
+  </header>
+  <section class="panel">
+    <p>Payment does not guarantee approval. Verification, duplicate checks, and moderation must also pass.</p>
+    <form method="post">{% csrf_token %}<button class="btn btn-gold" type="submit">Pay ₦{{ price_naira }} securely with Paystack</button></form>
+    <p><a class="text-link" href="{% url 'accounts:submissions' %}">Back to my submissions</a></p>
+  </section>
+</section>
+{% endblock %}

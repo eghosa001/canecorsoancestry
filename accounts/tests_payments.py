@@ -18,6 +18,9 @@ from .models import PaymentSubmissionLink, SubmissionPayment
 from .payments import PaystackError, record_successful_payment, webhook_signature_valid
 
 
+from .tests_dog_drafts import DogDraftListingTests  # Include new checkout tests in scoped payment CI.
+
+
 class PaidSubmissionTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
@@ -74,7 +77,7 @@ class PaidSubmissionTests(TestCase):
             user=self.user,
         )
         self.assertTrue(litter_form.is_valid(), litter_form.errors)
-        self.assertEqual(litter_form.cleaned_data["amount_kobo"], 100000)
+        self.assertEqual(litter_form.cleaned_data["amount_kobo"], 150000)
 
     @patch("accounts.views.verify_transaction")
     def test_member_can_recheck_pending_payment_status(self, verify):
