@@ -5,6 +5,10 @@ from django.core.exceptions import ImproperlyConfigured
 
 from config.settings.production import *  # noqa: F403,F401
 
+# Cloudflare Worker should never retain the root Django SECRET_KEY. This
+# credential is domain-separated by HMAC during deployment.
+ORIGIN_EDGE_SECRET = os.getenv("CCA_ORIGIN_EDGE_SECRET", SECRET_KEY)  # noqa: F405
+
 # Oracle uses R2 object storage directly through its authenticated Cloudflare
 # gateway. Production storage must not import retired provider settings.
 R2_GATEWAY_URL = os.getenv("R2_GATEWAY_URL", "https://canecorsoancestry-edge.aighewieghosa111.workers.dev").rstrip("/")

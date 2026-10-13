@@ -90,6 +90,8 @@ trap cleanup_stage EXIT
 # file; never log, echo or upload environment content as an Actions artifact.
 python3 - "$temporary_env" <<'PY'
 import base64
+import hashlib
+import hmac
 import os
 import sys
 from pathlib import Path
@@ -100,6 +102,9 @@ email_ready = all(os.environ.get(key, "") for key in email_keys)
 values = {
     "DJANGO_SETTINGS_MODULE": "scripts.oracle_runner.oracle_settings",
     "DJANGO_SECRET_KEY": secret,
+    "CCA_ORIGIN_EDGE_SECRET": hmac.new(
+        secret.encode("utf-8"), b"cca-origin-edge-auth-v1", hashlib.sha256
+    ).hexdigest(),
     "DJANGO_ALLOWED_HOSTS": (
         "canecorsoancestry-site-edge.aighewieghosa111.workers.dev,"
         "127.0.0.1,localhost"

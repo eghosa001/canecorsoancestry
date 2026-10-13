@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 
@@ -108,6 +108,19 @@ class SecurityHardeningTests(TestCase):
             HTTP_X_FORWARDED_FOR="198.51.100.200",
         )
         self.assertEqual(blocked.status_code, 429)
+
+    @override_settings(ORIGIN_EDGE_SECRET="separate-edge-secret")
+    def test_separate_edge_secret_is_trusted(self):
+        url = reverse("login")
+        from core.middleware import AbuseProtectionMiddleware
+        from django.test import RequestFactory
+        request = RequestFactory().post(
+            url, REMOTE_ADDR="127.0.0.1",
+            HTTP_X_CCA_EDGE="1",
+            HTTP_X_CCA_ORIGIN_SECRET="separate-edge-secret",
+            HTTP_X_FORWARDED_FOR="198.51.100.25",
+        )
+        self.assertEqual(AbuseProtectionMiddleware._principal(request), "anon:198.51.100.25")
 
     def test_attested_edge_uses_forwarded_client_address(self):
         url = reverse("login")
