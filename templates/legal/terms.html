@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Terms of use · Cane Corso Ancestry{% endblock %}
+{% block meta_description %}Terms for researching, submitting and verifying Cane Corso pedigree records.{% endblock %}
+{% block content %}<section class="page-shell"><header class="page-heading"><p class="eyebrow">Community participation</p><h1>Terms of use</h1></header><div class="panel">
+<h2>Service purpose</h2><p>Cane Corso Ancestry is a pedigree and bloodline research tool, not a dog registration authority. Database identifiers do not replace kennel-club registration numbers.</p>
+<h2>Information contributed</h2><p>Share only details, photographs and documents you have permission to use. Do not falsify parentage, kennel ownership, health records, titles or provenance. Records may require evidence, review, correction, restriction or removal.</p>
+<h2>Research limitations</h2><p>Imported and community-submitted claims are not necessarily independently verified. COI reflects only recorded ancestry and missing ancestors do not prove zero inbreeding. Professional veterinary guidance is necessary for important breeding and animal-health decisions.</p>
+<h2>Accounts and moderation</h2><p>Keep account credentials secure and do not impersonate kennels or staff. Member ownership and staff authorization are separate. Moderation may block unsupported, misleading or abusive claims.</p>
+<h2>Paid submissions</h2><p>Paid slots provide submission review, not guaranteed publication or independent verification. Consult the <a href="{% url 'billing-policy' %}">payments and refund policy</a> before payment.</p>
+<h2>Contact</h2>{% if support_email %}<p>For privacy, billing or account concerns, contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>.</p>{% else %}<p class="muted">A verified support email must be configured before commercial launch.</p>{% endif %}
+<p class="muted">Legal review and operator details must be finalized before unrestricted commercial launch.</p>
+</div></section>{% endblock %}

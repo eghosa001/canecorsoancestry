@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Privacy notice · Cane Corso Ancestry{% endblock %}
+{% block meta_description %}How Cane Corso Ancestry handles pedigree, account, kennel, payment and evidence information.{% endblock %}
+{% block content %}<section class="page-shell"><header class="page-heading"><p class="eyebrow">Public information</p><h1>Privacy notice</h1></header><div class="panel">
+<h2>Information we collect</h2><p>Member accounts may contain email, profile and kennel details, credentials, dog and litter submissions, ownership claims, review messages and supporting documents. Technical logs may contain connection details. Payment records contain Paystack references, amounts and status; complete card numbers are not collected by the site.</p>
+<h2>Purposes</h2><p>We use information to operate accounts, provide pedigree research, moderate claims, maintain history, process paid review slots, handle complaints and disputes, detect abuse, and protect the database.</p>
+<h2>Public and private records</h2><p>Approved dog and kennel details may be searchable publicly. Member-only evidence, private documents, microchip identifiers, health supporting files and unapproved dog submissions are not intended for public display. Imported pedigree references are not necessarily independently verified.</p>
+<h2>Services and retention</h2><p>Cloudflare supports delivery and storage; Paystack processes payments. Data is retained when reasonably necessary for genealogy integrity, dispute handling, fraud prevention and applicable legal obligations. Requests for correction or eligible personal-data deletion can be reviewed, but historical relationships or audit records may need to be retained or de-identified.</p>
+<h2>Contact</h2>{% if support_email %}<p>For privacy, billing or account concerns, contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>.</p>{% else %}<p class="muted">A verified support email must be configured before commercial launch.</p>{% endif %}
+<p class="muted">The operator must review this notice with legal advice and provide the final retention schedule and legal identity before commercial launch.</p>
+</div></section>{% endblock %}

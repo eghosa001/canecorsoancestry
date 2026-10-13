@@ -73,6 +73,7 @@ def site_metadata(request):
     public_root = request.build_absolute_uri("/").rstrip("/")
     return {
         "site_name": settings.SITE_NAME,
+        "support_email": getattr(settings, "SUPPORT_EMAIL", ""),
         "site_url": public_root,
         "canonical_url": request.build_absolute_uri(request.path),
         "page_noindex": request.path.startswith(PRIVATE_PREFIXES) or _private_research_path(request),

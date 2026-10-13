@@ -21,6 +21,7 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 SITE_NAME = "Cane Corso Ancestry"
 SITE_URL = os.getenv("SITE_URL", "http://127.0.0.1:8000").rstrip("/")
+SUPPORT_EMAIL = os.getenv("CCA_SUPPORT_EMAIL", "").strip()
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "")
 PAYSTACK_BASE_URL = os.getenv("PAYSTACK_BASE_URL", "https://api.paystack.co").rstrip("/")
 PAYSTACK_TIMEOUT_SECONDS = int(os.getenv("PAYSTACK_TIMEOUT_SECONDS", "12"))

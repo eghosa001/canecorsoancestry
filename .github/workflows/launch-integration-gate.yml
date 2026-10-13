@@ -1,0 +1,28 @@
+name: Production launch integration gate
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+  pull_request:
+    paths:
+      - "scripts/oracle_runner/launch_integration_gate.sh"
+      - ".github/workflows/launch-integration-gate.yml"
+permissions:
+  contents: read
+jobs:
+  script-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n scripts/oracle_runner/launch_integration_gate.sh
+  live:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: bash scripts/oracle_runner/launch_integration_gate.sh

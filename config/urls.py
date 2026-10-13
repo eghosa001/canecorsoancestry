@@ -10,7 +10,7 @@ from accounts.views import merge_dogs_view, merge_dog_suggestions
 from accounts.views import AccountPasswordResetView
 from core.media_views import media_file
 from core.sitemaps import SITEMAPS
-from core.views import dashboard, healthz, home, robots_txt, storage_probe
+from core.views import dashboard, healthz, home, robots_txt, storage_probe, privacy_notice, terms_notice, billing_notice
 
 handler404 = "core.views.branded_not_found"
 handler500 = "core.views.branded_server_error"
@@ -20,6 +20,9 @@ urlpatterns = [
     path("healthz/", healthz, name="healthz"),
     path("__internal/storage-probe/", storage_probe, name="storage-probe"),
     path("robots.txt", robots_txt, name="robots"),
+    path("privacy/", privacy_notice, name="privacy"),
+    path("terms/", terms_notice, name="terms"),
+    path("billing-policy/", billing_notice, name="billing-policy"),
     path(
         "sitemap.xml",
         sitemap_index,
