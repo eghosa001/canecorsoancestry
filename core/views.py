@@ -194,6 +194,24 @@ def branded_server_error(request):
     return render(request, "500.html", status=500)
 
 
+def privacy_notice(request):
+    return render(request, "legal/privacy.html", {"support_email": settings.SUPPORT_EMAIL})
+
+
+def terms_notice(request):
+    return render(request, "legal/terms.html", {"support_email": settings.SUPPORT_EMAIL})
+
+
+def billing_notice(request):
+    from accounts.models import SubmissionPayment
+    return render(request, "legal/billing.html", {
+        "support_email": settings.SUPPORT_EMAIL,
+        "single_price": f"{SubmissionPayment.price_for(SubmissionPayment.Package.SINGLE_DOG) // 100:,}",
+        "multi_price": f"{SubmissionPayment.price_for(SubmissionPayment.Package.MULTI_DOG) // 100:,}",
+        "litter_price": f"{SubmissionPayment.price_for(SubmissionPayment.Package.LITTER) // 100:,}",
+    })
+
+
 def robots_txt(request):
     body = "\n".join([
         "User-agent: *", "Allow: /",

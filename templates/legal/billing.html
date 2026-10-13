@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Payments and refunds · Cane Corso Ancestry{% endblock %}
+{% block meta_description %}Paystack package fees, review eligibility and billing-support guidance.{% endblock %}
+{% block content %}<section class="page-shell"><header class="page-heading"><p class="eyebrow">Submission services</p><h1>Payments and refunds</h1></header><div class="panel">
+<h2>Current package prices</h2><p>One dog: <strong>₦{{ single_price }}</strong>. A batch of 2–6 dogs from the same verified kennel: <strong>₦{{ multi_price }}</strong>. One litter and its puppies: <strong>₦{{ litter_price }}</strong>. The secure checkout shows the amount before payment.</p>
+<p>Charges cover submission review, not guaranteed publication or verification. This is not an official dog-registration fee. New member submissions remain private until payment is confirmed and authorized moderation approves them.</p>
+<h2>Payment processing</h2><p>Paystack handles payment processing. Keep your payment reference. After an interrupted checkout, check transaction status before starting a second payment.</p>
+<h2>Billing problems and refunds</h2><p>For an incorrect amount, duplicate or unauthorized charge, contact support with the transaction reference. Refunds or reversals are assessed under applicable consumer law, provider procedures and the transaction circumstances. A declined record does not automatically become public or receive a verification badge.</p>
+<h2>Contact</h2>{% if support_email %}<p>For privacy, billing or account concerns, contact <a href="mailto:{{ support_email }}">{{ support_email }}</a>.</p>{% else %}<p class="muted">A verified support email must be configured before commercial launch.</p>{% endif %}
+<p class="muted">The operator must approve the final refund schedule, complaints process and statutory disclosures before enabling unrestricted live payments.</p>
+</div></section>{% endblock %}

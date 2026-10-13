@@ -30,3 +30,15 @@ class BrandedErrorPageTests(TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertContains(response, "Temporary service issue", status_code=500)
         self.assertContains(response, "Return home", status_code=500)
+
+
+class PublicPolicyPagesTests(TestCase):
+    def test_public_policies_use_live_prices_and_footer_navigation(self):
+        response = self.client.get("/billing-policy/")
+        self.assertContains(response, "₦1,500")
+        self.assertNotContains(response, "₦1,000")
+        self.assertContains(response, "review, not guaranteed publication")
+        for path in ("/privacy/", "/terms/"):
+            self.assertEqual(self.client.get(path).status_code, 200)
+        self.assertContains(self.client.get("/"), 'href="/privacy/"')
+        self.assertContains(self.client.get("/"), 'href="/terms/"')

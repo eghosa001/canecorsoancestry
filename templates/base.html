@@ -90,7 +90,7 @@
   </main>
   <footer class="site-footer">
     <div><strong>Cane Corso Ancestry</strong><p>Pedigree, provenance and bloodline research. Not a registration authority.</p></div>
-    <div class="footer-links"><a href="{% url 'registry:dog-search' %}">Dogs</a><a href="{% url 'registry:kennel-list' %}">Kennels</a><a href="{% url 'pedigrees:index' %}">Pedigrees</a></div>
+    <div class="footer-links"><a href="{% url 'registry:dog-search' %}">Dogs</a><a href="{% url 'registry:kennel-list' %}">Kennels</a><a href="{% url 'pedigrees:index' %}">Pedigrees</a><a href="{% url 'privacy' %}">Privacy</a><a href="{% url 'terms' %}">Terms</a><a href="{% url 'billing-policy' %}">Payments &amp; refunds</a>{% if support_email %}<a href="mailto:{{ support_email }}">Contact</a>{% endif %}</div>
   </footer>
   <script src="{% static 'core/site.js' %}?v=20261009-iphone-v3" defer></script>
 </body>
