@@ -17,7 +17,11 @@
 - The previous prepayment multi-dog and litter workflows are retained.
   Litter package price is now ₦1,500 (existing paid checkouts remain valid).
 - Run `python manage.py bootstrap_nigerian_kennel_archives` to create private
-  unverified archive placeholders for Pet Palace Kennels and Ofreelife Kennels.
+  unverified archive placeholders for Pet Palace Kennels and Ofreelife Kennels
+  by default. To prepare **any other kennel**, pass one or more names, e.g.
+  `python manage.py bootstrap_nigerian_kennel_archives --kennel "Other Kennel"`.
+  The archive, ownership verification and paid publishing workflow works for
+  every kennel; the named defaults are examples, not an eligibility restriction.
   This does NOT import unverifiable historical pedigree data, assert ownership
   or publish any dog. Authorized archive linkage must use the existing audited
   kennel-claim and provenance reconciliation pathways.

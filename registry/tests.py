@@ -15,6 +15,32 @@ from .views import _public_profile_dog
 
 
 class DogModelTests(TestCase):
+    def test_archive_bootstrap_accepts_any_kennel_without_modifying_existing(self):
+        from django.core.management import call_command
+        from django.utils import timezone
+
+        existing = Kennel.objects.create(
+            name="Established Archive Kennel",
+            slug="established-archive-kennel",
+            verified_at=timezone.now(),
+            is_public=True,
+        )
+        for _ in range(2):
+            call_command(
+                "bootstrap_nigerian_kennel_archives",
+                kennel_names=["Regional Kennel", "Regional Kennel", existing.name],
+                verbosity=0,
+            )
+        archive = Kennel.objects.get(slug="regional-kennel")
+        self.assertFalse(archive.is_public)
+        self.assertIsNone(archive.verified_at)
+        self.assertFalse(archive.memberships.exists())
+        self.assertFalse(archive.dogs.exists())
+        self.assertEqual(Kennel.objects.filter(slug="regional-kennel").count(), 1)
+        existing.refresh_from_db()
+        self.assertTrue(existing.is_public)
+        self.assertIsNotNone(existing.verified_at)
+
     def test_dog_cannot_be_its_own_parent(self):
         dog = Dog.objects.create(name="Karma", slug="karma")
         dog.sire = dog
