@@ -157,7 +157,7 @@ class PaidSubmissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Paystack is not configured on the server yet.")
         self.assertContains(response, "₦1,500")
-        self.assertContains(response, "₦1,000")
+        self.assertNotContains(response, "₦1,000")
         self.assertEqual(SubmissionPayment.objects.filter(user=self.user).count(), 0)
 
     @patch("accounts.views.initialize_transaction")

@@ -283,14 +283,20 @@ def live_virtual_mating_probe():
     if response.status_code != 200:
         raise AssertionError(f"Virtual mating returned HTTP {response.status_code}")
     body = response.text
-    if "Projected offspring COI" not in body or "Virtual mating result" not in body:
-        raise AssertionError("Virtual mating did not render a completed analysis")
+    # Guests may select parents but must not receive an analysis until login.
+    if "Register to start your pairing analysis" not in body:
+        raise AssertionError("Guest virtual mating did not require registration")
+    if "Projected offspring COI" in body or "Virtual mating result" in body:
+        raise AssertionError("Guest virtual mating leaked member-only analysis")
+    if sire["name"] not in body or dam["name"] not in body:
+        raise AssertionError("Guest mating selection was not preserved")
     if 'class="notice error"' in body:
         raise AssertionError("Virtual mating rendered an application error")
     return {
         "sire": sire["name"],
         "dam": dam["name"],
         "seconds": round(elapsed, 3),
+        "status": "guest selection preserved; analysis gated",
     }
 
 

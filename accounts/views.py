@@ -635,6 +635,9 @@ def new_payment(request):
             "recent_payments": recent_payments,
             "has_verified_kennel": verified_kennels.exists(),
             "paystack_configured": bool(settings.PAYSTACK_SECRET_KEY),
+            "single_dog_price_naira": SubmissionPayment.price_for(SubmissionPayment.Package.SINGLE_DOG) // 100,
+            "multi_dog_price_naira": SubmissionPayment.price_for(SubmissionPayment.Package.MULTI_DOG) // 100,
+            "litter_price_naira": SubmissionPayment.price_for(SubmissionPayment.Package.LITTER) // 100,
         },
     )
 
