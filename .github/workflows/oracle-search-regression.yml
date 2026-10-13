@@ -1,0 +1,36 @@
+name: Oracle production dog search regression
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "29 7 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/oracle_runner/production_search_regression.py"
+      - ".github/workflows/oracle-search-regression.yml"
+  pull_request:
+    paths:
+      - "scripts/oracle_runner/production_search_regression.py"
+      - ".github/workflows/oracle-search-regression.yml"
+permissions:
+  contents: read
+jobs:
+  lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m py_compile scripts/oracle_runner/production_search_regression.py
+  live:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Capture direct Oracle traceback if named public search breaks
+        run: |
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = local
+          sudo -n podman exec -i cca-oracle-staging python manage.py shell < scripts/oracle_runner/production_search_regression.py
