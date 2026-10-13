@@ -32,9 +32,10 @@ Worker configuration pins Oracle's private VPC service. Never set the origin to 
 ## Data protection and recovery
 
 - `.github/workflows/oracle-hourly-db-backups.yml`: hourly encrypted live local PostgreSQL snapshots to Cloudflare R2; rotating archives retained for seven days.
-- `.github/workflows/database-recovery-drill.yml`: monthly read-only download/decryption/archive integrity check of the latest offsite snapshot. **Not** a full isolated restore rehearsal.
+- `.github/workflows/database-recovery-drill.yml`: monthly encrypted R2 archive download, decryption, and **full restore into a bounded, network-isolated disposable PostgreSQL 17 container**; validates dog and migration counts without connecting to or overwriting production.
+- `.github/workflows/oracle-backup-freshness.yml`: independent two-hourly offsite-backup age check; a stale or malformed R2 pointer fails the Actions workflow.
 - `.github/workflows/production-data-health.yml`: checks the local primary, live Django schema, pedigree and ownership invariants plus public images and password recovery.
-- Restoring a database requires a separate isolated rehearsal and a controlled downtime/recovery plan. Never restore over `cca_live` in place without safeguards.
+- Disaster recovery after a real incident still requires an operator-approved downtime/cutover plan. Never restore over `cca_live` in place without safeguards. Run the new isolated recovery drill before declaring restores production-certified.
 
 The historical Supabase and Northflank stacks are not data-preserving rollback targets after Oracle accepted writes; their old database is not synchronized. Retired one-shot migrations must not be re-run.
 

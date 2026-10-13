@@ -17,8 +17,10 @@ readonly TEMP="$ROOT/recovery-drill-${GITHUB_RUN_ID:?}"
 readonly INDEX="$TEMP/latest.json"
 readonly SEALED="$TEMP/latest.sealed"
 readonly DUMP="$TEMP/recovered.dump"
+readonly RESTORE_CONTAINER="cca-restore-$GITHUB_RUN_ID"
 sudo -n install -d -m 0700 "$TEMP"
 cleanup() {
+  sudo -n podman rm -f "$RESTORE_CONTAINER" >/dev/null 2>&1 || true
   sudo -n rm -f "$INDEX" "$SEALED" "$DUMP"
   sudo -n rmdir "$TEMP" || true
 }
@@ -79,5 +81,37 @@ for table in registry_dog registry_dogimage registry_submission django_migration
   fi
 done
 rm -f "$RUNNER_TEMP/cca-restore-list-$GITHUB_RUN_ID.txt"
-echo "PASS: Oracle-primary R2 archive downloaded, SHA256 verified, authenticated, decrypted and parsed with pg_restore; required application data tables are present."
-echo "Read-only recovery integrity check; no production tables or services modified."
+# Actually restore to a new disposable PostgreSQL 17 instance. This is deliberately
+# network-isolated, memory/CPU bounded and never connects to the live primary.
+sudo -n podman run -d --name "$RESTORE_CONTAINER" --network none \
+  --memory 768m --cpus 1 --pids-limit 128 \
+  -e POSTGRES_HOST_AUTH_METHOD=trust \
+  -v "$TEMP:/backups:ro,Z" \
+  docker.io/library/postgres:17 >/dev/null
+ready=0
+for attempt in $(seq 1 30); do
+  if sudo -n podman exec "$RESTORE_CONTAINER" pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+    ready=1
+    break
+  fi
+  sleep 1
+done
+test "$ready" = 1 || { echo "::error::Isolated PostgreSQL restore container did not start"; exit 1; }
+sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;' >/dev/null
+sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -c 'CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public;' >/dev/null
+sudo -n podman exec -u 0 "$RESTORE_CONTAINER" pg_restore \
+  --exit-on-error --no-owner --no-acl -U postgres -d postgres /backups/recovered.dump >/dev/null
+restored_dogs="$(sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres -d postgres -Atqc \
+  'SELECT COUNT(*) FROM django_app.registry_dog;')"
+restored_migrations="$(sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres -d postgres -Atqc \
+  'SELECT COUNT(*) FROM django_app.django_migrations;')"
+[[ "$restored_dogs" =~ ^[0-9]+$ && "$restored_dogs" -ge 33000 ]] || {
+  echo "::error::Isolated restore is missing expected canonical dog data"; exit 1;
+}
+[[ "$restored_migrations" =~ ^[0-9]+$ && "$restored_migrations" -gt 0 ]] || {
+  echo "::error::Isolated restore is missing Django migration state"; exit 1;
+}
+echo "PASS: Encrypted R2 archive restored to independent PostgreSQL 17; $restored_dogs dogs and $restored_migrations migrations."
+echo "Production database was not accessed for restore or modified."
