@@ -100,17 +100,26 @@
         <dt>Date of birth</dt><dd>{{ dog.date_of_birth|default:"Not recorded" }}</dd>
         <dt>Colour</dt><dd>{{ dog.colour|default:"Not recorded" }}</dd>
         <dt>Bloodline</dt><dd>{{ dog.bloodline|default:"Not recorded" }}</dd>
-        <dt>COI (8 generations)</dt>
+        <dt>COI ({{ coi_label }})</dt>
         <dd>
           {% if coi_percent != None %}
             <strong>{% if coi_below_display_precision %}&lt;0.01%{% else %}{{ coi_percent|floatformat:2 }}%{% endif %}</strong>
-            <small class="profile-coi-context">{% if coi_percent == 0 %}No shared ancestor found within eight recorded generations{% else %}Based on shared published ancestors within eight generations{% endif %}. Only sire/dam ancestry is included; missing ancestors can make the estimate too low.</small>
+            <small class="profile-coi-context">{% if coi_percent == 0 %}No shared ancestor found within {{ coi_label }}{% else %}Based on shared published ancestors within {{ coi_label }}{% endif %}. Only sire/dam ancestry is included; missing ancestors can make the estimate too low.</small>
           {% elif coi_display_state == "insufficient" %}
             <strong>Not enough ancestry</strong>
             <small class="profile-coi-context">Both parents are needed. {{ coi_error }}</small>
           {% else %}
             <strong>Cannot calculate</strong>
             <small class="profile-coi-context">Pedigree links need review. {{ coi_error }}</small>
+          {% endif %}
+          {% if can_select_coi %}
+          <form method="get" class="button-row profile-coi-controls" aria-label="Compare COI by generation">
+            <label for="profile-coi-generations">Compare at</label>
+            <select id="profile-coi-generations" name="coi_generations">
+              {% for option in coi_options %}<option value="{{ option.value }}" {% if option.selected %}selected{% endif %}>{{ option.label }}</option>{% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline">Recalculate</button>
+          </form>
           {% endif %}
         </dd>
         <dt>Country</dt><dd>{{ dog.country|default:"Not recorded" }}</dd>

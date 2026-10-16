@@ -2,7 +2,7 @@
 {% block title %}{{ dog.name }} pedigree · Cane Corso Ancestry{% endblock %}
 {% block content %}
 <section class="pedigree-page">
-<header class="pedigree-toolbar page-shell"><div><p class="eyebrow">Pedigree</p><h1>{{ dog.name }}</h1><p>{{ generations }} generation view</p></div><div class="generation-switch no-print" aria-label="Pedigree depth">{% for option in generation_options %}<a class="{% if generations == option %}active{% endif %}" href="?generations={{ option }}&amp;coi_generations={{ analysis.coi_generations }}">{{ option }} generations</a>{% endfor %}</div></header>
+<header class="pedigree-toolbar page-shell"><div><p class="eyebrow">Pedigree</p><h1>{{ dog.name }}</h1><p>{{ generations }} generation view</p></div><div class="generation-switch no-print" aria-label="Pedigree depth">{% for option in generation_options %}<a class="{% if generations == option %}active{% endif %}" href="?generations={{ option }}&amp;coi_generations={{ analysis.coi_generation_value }}">{{ option }} generations</a>{% endfor %}</div></header>
 <nav class="page-shell button-row no-print" aria-label="Pedigree research navigation">
   <a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">← Dog profile</a>
   <a class="btn btn-outline" href="{% url 'pedigrees:reverse' dog.slug %}">Explore descendants</a>

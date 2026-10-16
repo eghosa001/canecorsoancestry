@@ -86,7 +86,7 @@ from registry.services import (
 
 from registry.verification import current_findings, verification_checklist, verify_submission
 
-from pedigrees.services import coi_linkage_summary, pedigree_analysis, pedigree_export_rows, virtual_mating_analysis
+from pedigrees.services import coi_linkage_summary, pedigree_analysis, pedigree_export_rows, requested_coi_generations, virtual_mating_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -2171,11 +2171,7 @@ def member_pedigree_detail(request, pk):
     except ValueError:
         requested = 4
     generations = requested if requested in {4, 6, 8, 10} else 4
-    requested_coi_depth = request.GET.get("coi_generations", "8")
-    coi_generations = (
-        int(requested_coi_depth)
-        if requested_coi_depth in {"4", "6", "8", "10"} else 8
-    )
+    coi_generations = requested_coi_generations(request.GET.get("coi_generations"))
     analysis = pedigree_analysis(
         dog, generations, public_only=False, coi_generations=coi_generations,
     )

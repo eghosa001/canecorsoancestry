@@ -16,7 +16,14 @@ class PedigreeCycleError(ValueError):
 
 
 ANALYSIS_CACHE_SECONDS = 60 * 60
-DEFAULT_COI_GENERATIONS = 8
+DEFAULT_COI_GENERATIONS = 8  # Retained for explicitly bounded internal diagnostics.
+COI_GENERATION_CHOICES = (2, 4, 6, 8, 10)
+
+
+def requested_coi_generations(value):
+    """All recorded direct ancestors by default; explicit member depth is optional."""
+    return int(value) if str(value) in {str(depth) for depth in COI_GENERATION_CHOICES} else None
+
 
 
 def _bounded_generations(generations):
@@ -1357,12 +1364,10 @@ def _analysis_payload(snapshot):
     }
 
 
-def _current_analysis_coi(snapshot, coi_generations=DEFAULT_COI_GENERATIONS):
-    """Recalculate bounded COI independently of the visible pedigree-board cache.
+def _current_analysis_coi(snapshot, coi_generations=None):
+    """Calculate COI from all recorded direct ancestors unless members select a limit.
 
-    COI defaults to eight generations even if the board only shows four.
-    Ancestors outside the visible board but inside the COI depth can change the
-    result without changing the visible board's cache key.
+    COI depth remains independent of the visible pedigree-board depth.
     """
     visible_parents = snapshot["layers"][1]
     if not all(visible_parents):
@@ -1392,7 +1397,7 @@ def _current_analysis_coi(snapshot, coi_generations=DEFAULT_COI_GENERATIONS):
     }
 
 
-def pedigree_analysis(dog, generations=4, public_only=False, coi_generations=DEFAULT_COI_GENERATIONS):
+def pedigree_analysis(dog, generations=4, public_only=False, coi_generations=None):
     """Return the board and cached advanced metrics under a pedigree revision key."""
     snapshot = _pedigree_snapshot(dog, generations, public_only=public_only)
     cache_key = (
@@ -1428,7 +1433,16 @@ def pedigree_analysis(dog, generations=4, public_only=False, coi_generations=DEF
     return {
         **payload,
         **_current_analysis_coi(snapshot, coi_generations=coi_generations),
-        "coi_generations": _bounded_generations(coi_generations),
+        "coi_generations": coi_generations,
+        "coi_generation_value": str(coi_generations) if coi_generations is not None else "all",
+        "coi_generation_label": f"{coi_generations} generations" if coi_generations is not None else "all available generations",
+        "coi_options": [
+            {"value": "all", "label": "All available", "selected": coi_generations is None},
+            *[
+                {"value": str(depth), "label": f"{depth} generations", "selected": coi_generations == depth}
+                for depth in COI_GENERATION_CHOICES
+            ],
+        ],
         "layers": _layers_from_snapshot(snapshot),
         "contributions": contributions,
         "linebreeding": linebreeding,

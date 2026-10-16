@@ -19,6 +19,7 @@ from registry.querysets import public_dog_match_filter, published_dogs
 from .services import (
     descendant_generations,
     pedigree_analysis,
+    requested_coi_generations,
     pedigree_export_rows,
     virtual_mating_analysis,
 )
@@ -109,9 +110,7 @@ def pedigree_detail(request, slug):
     generations = _requested_generations(request)
     analysis = pedigree_analysis(
         dog, generations, public_only=True,
-        coi_generations=_requested_generations(
-            request, default=8, parameter="coi_generations"
-        ),
+        coi_generations=requested_coi_generations(request.GET.get("coi_generations")),
     )
 
     context = {
