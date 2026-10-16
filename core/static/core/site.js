@@ -338,14 +338,8 @@
               });
             } else {
               item.href = "/dogs/" + encodeURIComponent(dog.slug) + "/?source=search";
-              item.addEventListener("click", function (event) {
-                event.preventDefault();
-                event.stopPropagation();
-                var target = item.href;
-                close();
-                input.blur();
-                window.location.assign(target);
-              });
+              // Let Safari follow the native anchor. Removing the link before
+              // WebKit commits its tap can abandon dog-profile navigation.
             }
 
             var title = document.createElement("strong");
