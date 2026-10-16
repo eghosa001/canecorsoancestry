@@ -15,6 +15,7 @@ from core.seo import json_ld
 
 from pedigrees.services import (
     PedigreeCycleError,
+    DEFAULT_COI_GENERATIONS,
     direct_relative_health,
     inbreeding_coefficient,
     mate_relationships,
@@ -415,9 +416,9 @@ def dog_detail(request, slug):
         return get_object_or_404(published_dogs(), slug=slug)
 
 
-    # Calculate using all reachable *published* pedigree links, not merely
-    # the four generations shown on the pedigree page. An absent/unpublished
-    # parent is unknown ancestry, never evidence of a true zero coefficient.
+    # Standard display: only published parents/grandparents and their direct
+    # ancestor lines within eight generations. Siblings never enter the COI.
+    # Missing/unpublished ancestry must not be labelled a true zero.
     # select_related has already loaded the two parents, so no extra query.
     public_parent_count = sum(
         bool(parent and parent.is_effectively_public) for parent in (dog.sire, dog.dam)
@@ -429,7 +430,9 @@ def dog_detail(request, slug):
         coi_error = "Both sire and dam must be linked and published to estimate COI."
     else:
         try:
-            coi_percent = inbreeding_coefficient(dog, public_only=True) * 100
+            coi_percent = inbreeding_coefficient(
+                dog, public_only=True, generations=DEFAULT_COI_GENERATIONS,
+            ) * 100
             coi_error = ""
         except PedigreeCycleError:
             coi_percent = None
