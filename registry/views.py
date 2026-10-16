@@ -15,7 +15,8 @@ from core.seo import json_ld
 
 from pedigrees.services import (
     PedigreeCycleError,
-    DEFAULT_COI_GENERATIONS,
+    COI_GENERATION_CHOICES,
+    requested_coi_generations,
     direct_relative_health,
     inbreeding_coefficient,
     mate_relationships,
@@ -38,7 +39,7 @@ from .models import (
     Submission,
     public_verification_label,
 )
-from .permissions import can_contribute_to_dog
+from .permissions import can_contribute_to_dog, can_use_member_features
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
 
@@ -416,10 +417,22 @@ def dog_detail(request, slug):
         return get_object_or_404(published_dogs(), slug=slug)
 
 
-    # Standard display: only published parents/grandparents and their direct
-    # ancestor lines within eight generations. Siblings never enter the COI.
-    # Missing/unpublished ancestry must not be labelled a true zero.
-    # select_related has already loaded the two parents, so no extra query.
+    # All available published direct ancestors are included by default.
+    # A signed-in member may compare specific depths; guests cannot override it.
+    # Missing/unpublished parentage must not be misreported as a true zero.
+    can_select_coi = bool(request.user.is_active and can_use_member_features(request.user))
+    coi_generations = (
+        requested_coi_generations(request.GET.get("coi_generations"))
+        if can_select_coi else None
+    )
+    coi_label = f"{coi_generations} generations" if coi_generations is not None else "all available generations"
+    coi_options = [
+        {"value": "all", "label": "All available", "selected": coi_generations is None},
+        *[
+            {"value": str(depth), "label": f"{depth} generations", "selected": coi_generations == depth}
+            for depth in COI_GENERATION_CHOICES
+        ],
+    ]
     public_parent_count = sum(
         bool(parent and parent.is_effectively_public) for parent in (dog.sire, dog.dam)
     )
@@ -431,7 +444,7 @@ def dog_detail(request, slug):
     else:
         try:
             coi_percent = inbreeding_coefficient(
-                dog, public_only=True, generations=DEFAULT_COI_GENERATIONS,
+                dog, public_only=True, generations=coi_generations,
             ) * 100
             coi_error = ""
         except PedigreeCycleError:
@@ -525,6 +538,9 @@ def dog_detail(request, slug):
             "mates_truncated": mates_truncated,
             "relative_health": relative_health,
             "coi_percent": coi_percent,
+            "can_select_coi": can_select_coi,
+            "coi_label": coi_label,
+            "coi_options": coi_options,
             "coi_error": coi_error,
             "coi_display_state": coi_display_state,
             "coi_below_display_precision": coi_below_display_precision,
