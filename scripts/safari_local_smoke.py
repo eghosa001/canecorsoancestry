@@ -298,9 +298,19 @@ def run():
             assert "/pedigrees/safari-dog/" in page.url, (
                 f"Safari login did not return to requested pedigree: {page.url}"
             )
-            assert page.locator(".pedigree-board").is_visible(), (
-                "Safari member View pedigree did not render the ancestry board; "
-                f"url={page.url}; body={page.locator('body').inner_text()[:1200]}"
+            board = page.locator(".pedigree-board")
+            board.wait_for(state="attached")
+            board_state = board.evaluate("""el => {
+                const r = el.getBoundingClientRect(), css = getComputedStyle(el);
+                const parent = el.parentElement, p = parent.getBoundingClientRect();
+                return {rect:[r.x,r.y,r.width,r.height], display:css.display,
+                    visibility:css.visibility, opacity:css.opacity,
+                    parentRect:[p.x,p.y,p.width,p.height],
+                    parentVisibility:getComputedStyle(parent).visibility};
+            }""")
+            assert board.is_visible(), (
+                "Safari member View pedigree did not render a visible ancestry board; "
+                f"url={page.url}; state={board_state}; body={page.locator('body').inner_text()[:600]}"
             )
             assert "all available generations" in page.locator(".advanced-analysis").inner_text(), (
                 "Member pedigree did not use all recorded ancestry for COI by default"
