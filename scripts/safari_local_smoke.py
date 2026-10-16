@@ -262,7 +262,21 @@ def run():
             assert response and response.status == 200, "Safari View Dog card returned 404"
             assert page.locator(".profile-title-row h1").inner_text() == "Safari Dog"
 
-            go(page, "/accounts/login/")
+            # Follow the actual View pedigree button in iPhone WebKit, not
+            # merely the dog profile URL. Guests must reach sign-in with the
+            # exact pedigree destination retained, and signed-in members
+            # must receive the pedigree board instead of a 404.
+            go(page, "/dogs/safari-dog/")
+            with page.expect_navigation(wait_until="domcontentloaded") as navigation:
+                page.get_by_role("link", name="View pedigree", exact=True).tap()
+            redirected = navigation.value
+            assert redirected and redirected.status == 200, (
+                "Safari View pedigree guest navigation did not reach login"
+            )
+            assert "/accounts/login/" in page.url, f"Unexpected pedigree destination: {page.url}"
+            assert "next=/pedigrees/safari-dog/" in page.url, (
+                f"Safari lost pedigree destination during sign-in: {page.url}"
+            )
             page.locator("input[name='username']").fill("safari-smoke@example.test")
             page.locator("input[name='password']").fill("safari-smoke-password")
             page.locator("input[name='username']").locator("xpath=ancestor::form").locator("button[type='submit']").click()
@@ -280,6 +294,40 @@ def run():
                 raise AssertionError(
                     f"Safari login did not complete, errors={problems}, url={page.url}, page={excerpt}"
                 ) from exc
+
+            assert "/pedigrees/safari-dog/" in page.url, (
+                f"Safari login did not return to requested pedigree: {page.url}"
+            )
+            board = page.locator(".pedigree-board")
+            board.wait_for(state="attached")
+            board_state = board.evaluate("""el => {
+                const r = el.getBoundingClientRect(), css = getComputedStyle(el);
+                const parent = el.parentElement, p = parent.getBoundingClientRect();
+                return {rect:[r.x,r.y,r.width,r.height], display:css.display,
+                    visibility:css.visibility, opacity:css.opacity,
+                    parentRect:[p.x,p.y,p.width,p.height],
+                    parentVisibility:getComputedStyle(parent).visibility};
+            }""")
+            assert board.is_visible(), (
+                "Safari member View pedigree did not render a visible ancestry board; "
+                f"url={page.url}; state={board_state}; body={page.locator('body').inner_text()[:600]}"
+            )
+            assert "all available generations" in page.locator(".advanced-analysis").inner_text(), (
+                "Member pedigree did not use all recorded ancestry for COI by default"
+            )
+            with page.expect_navigation(wait_until="domcontentloaded") as navigation:
+                page.get_by_role("link", name="6 generations", exact=True).tap()
+            changed = navigation.value
+            assert changed and changed.status == 200, "Safari 6-generation pedigree returned an error"
+            assert "generations=6" in page.url, "Safari generation switch lost its target"
+            page.locator("#coi-generations").select_option("2")
+            with page.expect_navigation(wait_until="domcontentloaded") as navigation:
+                page.get_by_role("button", name="Recalculate COI").tap()
+            recalculated = navigation.value
+            assert recalculated and recalculated.status == 200, (
+                "Safari COI generation change returned an error"
+            )
+            assert "coi_generations=2" in page.url, "Safari COI depth was not preserved"
 
             dog_id = os.environ["SAFARI_TEST_DOG_ID"]
             go(page, f"/member/dogs/{dog_id}/photo/")
