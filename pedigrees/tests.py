@@ -462,6 +462,115 @@ class PedigreeServiceTests(TestCase):
         self.assertEqual(counts, {"First Dam": 4, "Second Dam": 2})
         self.assertEqual(len(groups[0]["offspring"]), 2)
 
+    def test_eight_generation_coi_excludes_ninth_generation_and_siblings(self):
+        """Direct ancestors outside the selected window must not inflate COI."""
+        shared = Dog.objects.create(
+            name="Depth Nine Shared", slug="depth-nine-shared", is_public=True,
+        )
+        sire = Dog.objects.create(name="Depth Sire", slug="depth-sire", is_public=True)
+        dam = Dog.objects.create(name="Depth Dam", slug="depth-dam", is_public=True)
+        child = Dog.objects.create(
+            name="Depth Child", slug="depth-child", sire=sire, dam=dam, is_public=True,
+        )
+        for side, parent in (("sire", sire), ("dam", dam)):
+            current = parent
+            for generation in range(2, 9):
+                ancestor = Dog.objects.create(
+                    name=f"{side} Depth {generation}",
+                    slug=f"{side}-depth-{generation}",
+                    is_public=True,
+                )
+                current.sire = ancestor
+                current.save(update_fields=["sire"])
+                current = ancestor
+            current.sire = shared
+            current.save(update_fields=["sire"])
+
+        self.assertEqual(
+            inbreeding_coefficient(child, public_only=True, generations=8), 0.0,
+        )
+        ten_generation = inbreeding_coefficient(
+            child, public_only=True, generations=10,
+        )
+        self.assertGreater(ten_generation, 0.0)
+        self.assertAlmostEqual(
+            inbreeding_coefficient(child, public_only=True), ten_generation,
+        )
+        self.assertEqual(
+            pedigree_analysis(child, generations=4, public_only=True)["coi_percent"],
+            0.0,
+        )
+        eight_pair = virtual_mating_analysis(
+            sire, dam, generations=8, public_only=True,
+        )
+        ten_pair = virtual_mating_analysis(
+            sire, dam, generations=10, public_only=True,
+        )
+        self.assertEqual(eight_pair["projected_inbreeding"], 0.0)
+        self.assertAlmostEqual(ten_pair["projected_inbreeding"], ten_generation)
+        self.assertAlmostEqual(
+            ten_pair["contribution_total"], ten_pair["projected_inbreeding"],
+        )
+
+        # A sibling is a relative, not an extra ancestor of this child.
+        Dog.objects.create(
+            name="Depth Sibling", slug="depth-sibling",
+            sire=sire, dam=dam, is_public=True,
+        )
+        self.assertEqual(
+            inbreeding_coefficient(child, public_only=True, generations=8), 0.0,
+        )
+
+    def test_bounded_coi_accounts_for_inbred_common_ancestor_without_extra_paths(self):
+        """A terminal ancestor's deeper inbreeding must respect the chosen depth."""
+        grandfather = Dog.objects.create(name="COI Founder M", slug="coi-founder-m", is_public=True)
+        grandmother = Dog.objects.create(name="COI Founder F", slug="coi-founder-f", is_public=True)
+        brother = Dog.objects.create(
+            name="COI Inbred Ancestor Sire", slug="coi-inbred-sire",
+            sire=grandfather, dam=grandmother, is_public=True,
+        )
+        sister = Dog.objects.create(
+            name="COI Inbred Ancestor Dam", slug="coi-inbred-dam",
+            sire=grandfather, dam=grandmother, is_public=True,
+        )
+        shared = Dog.objects.create(
+            name="COI Inbred Shared Ancestor", slug="coi-inbred-shared",
+            sire=brother, dam=sister, is_public=True,
+        )
+        sire = Dog.objects.create(name="COI Inbred Pair Sire", slug="coi-inbred-pair-sire",
+                                  sire=shared, is_public=True)
+        dam = Dog.objects.create(name="COI Inbred Pair Dam", slug="coi-inbred-pair-dam",
+                                 sire=shared, is_public=True)
+
+        self.assertAlmostEqual(projected_inbreeding(sire, dam, generations=2), 0.125)
+        self.assertAlmostEqual(projected_inbreeding(sire, dam, generations=4), 0.15625)
+        result = virtual_mating_analysis(sire, dam, generations=4, public_only=True)
+        self.assertAlmostEqual(result["projected_inbreeding"], 0.15625)
+        self.assertAlmostEqual(result["contribution_total"], 0.15625)
+        self.assertEqual(
+            [row["dog"].pk for row in result["contributions"]], [shared.pk],
+        )
+
+    def test_pedigree_coi_depth_is_independent_of_chart_depth(self):
+        member = get_user_model().objects.create_user(
+            username="coi-depth-pedigree-member", password="coi-depth-pass",
+        )
+        self.client.force_login(member)
+        sire = Dog.objects.create(name="COI Depth Chart Sire", slug="coi-depth-chart-sire",
+                                 is_public=True)
+        dam = Dog.objects.create(name="COI Depth Chart Dam", slug="coi-depth-chart-dam",
+                                is_public=True)
+        dog = Dog.objects.create(name="COI Depth Chart Child", slug="coi-depth-chart-child",
+                                 sire=sire, dam=dam, is_public=True)
+        url = reverse("pedigrees:detail", args=[dog.slug])
+        default = self.client.get(url)
+        self.assertEqual(default.context["generations"], 4)
+        self.assertEqual(default.context["analysis"]["coi_generations"], 8)
+        selected = self.client.get(url, {"generations": "4", "coi_generations": "10"})
+        self.assertEqual(selected.context["analysis"]["coi_generations"], 10)
+        self.assertContains(selected, "COI uses 10 generations")
+        self.assertContains(selected, "coi_generations=10")
+
     def test_inbreeding_coefficient_uses_kinship_without_full_matrix(self):
         common = Dog.objects.create(name="COI Common", slug="coi-common-fast")
         sire = Dog.objects.create(name="COI Sire", slug="coi-sire-fast", sire=common)
