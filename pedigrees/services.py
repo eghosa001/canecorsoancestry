@@ -766,19 +766,21 @@ def coi_linkage_summary(dog, public_only=True, generations=DEFAULT_COI_GENERATIO
         return result
 
     def reachable(root):
-        seen = set()
+        # A repeated ancestor may be reached by both short and long paths.
+        # Retain the shortest depth so every in-range direct ancestor is found.
+        seen_depth = {}
         pending = [(root, 1)]
         while pending:
             node, generation = pending.pop()
-            if node in seen or node not in links:
+            if node not in links or seen_depth.get(node, generations + 1) <= generation:
                 continue
-            seen.add(node)
+            seen_depth[node] = generation
             if generation < generations:
                 pending.extend(
                     (parent, generation + 1)
                     for parent in links[node] if parent in links
                 )
-        return seen
+        return set(seen_depth)
 
     sire_records = reachable(sire_id)
     dam_records = reachable(dam_id)
@@ -1139,15 +1141,13 @@ def virtual_mating_analysis(sire, dam, generations=8, public_only=True):
                     valid_path_pairs += 1
             if not valid_path_pairs:
                 continue
-            # This is explanatory only: exact COI is the bounded kinship above.
+            # Show the ancestor's own COI at its nearest valid depth.
+            closest_remaining = generations - 1 - max(
+                min(path["generation"] for path in left_paths[dog_id]),
+                min(path["generation"] for path in right_paths[dog_id]),
+            )
             ancestor_inbreeding = max(0.0, (2.0 * kinship(
-                dog_id, dog_id, generations - 1 - max(
-                    min(p["generation"] for p in left_paths[dog_id]),
-                    min(p["generation"] for p in right_paths[dog_id]),
-                ), generations - 1 - max(
-                    min(p["generation"] for p in left_paths[dog_id]),
-                    min(p["generation"] for p in right_paths[dog_id]),
-                ),
+                dog_id, dog_id, closest_remaining, closest_remaining,
             )) - 1.0)
 
             left_labels = [
