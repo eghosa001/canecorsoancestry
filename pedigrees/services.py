@@ -1358,11 +1358,11 @@ def _analysis_payload(snapshot):
 
 
 def _current_analysis_coi(snapshot, coi_generations=DEFAULT_COI_GENERATIONS):
-    """Recalculate COI from all currently linked ancestors, independent of board cache.
+    """Recalculate bounded COI independently of the visible pedigree-board cache.
 
-    The ancestor summary caches only the requested visible generations. The COI
-    can change when a deeper ancestor is approved or re-linked, even if those
-    visible generations (and the summary cache key) do not change.
+    COI defaults to eight generations even if the board only shows four.
+    Ancestors outside the visible board but inside the COI depth can change the
+    result without changing the visible board's cache key.
     """
     visible_parents = snapshot["layers"][1]
     if not all(visible_parents):
