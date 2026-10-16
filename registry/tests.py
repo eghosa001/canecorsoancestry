@@ -1029,7 +1029,7 @@ class DogModelTests(TestCase):
                                    sire=sire, dam=dam, is_public=True)
         response = self.client.get(reverse("registry:dog-detail", args=[child.slug]))
         self.assertContains(response, "<strong>0.00%</strong>")
-        self.assertContains(response, "No shared ancestor found within eight recorded generations")
+        self.assertContains(response, "No shared ancestor found within all available generations")
 
     def test_profile_tiny_positive_coi_does_not_round_to_zero(self):
         sire = Dog.objects.create(name="Tiny Father", slug="tiny-coi-father", is_public=True)
