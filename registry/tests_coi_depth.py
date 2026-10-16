@@ -48,6 +48,22 @@ class DogProfileCoiDepthTests(TestCase):
         self.assertContains(default, 'value="4"')
         self.assertContains(default, 'value="6"')
 
+    def test_member_pedigree_keeps_all_depth_coi_when_board_shows_four(self):
+        member = get_user_model().objects.create_user(
+            username="coi-pedigree-member", password="test-only-password",
+        )
+        self.client.force_login(member)
+        report_url = reverse("pedigrees:detail", args=[self.dog.slug])
+        full = self.client.get(report_url, {"generations": "4"})
+        self.assertEqual(full.status_code, 200)
+        self.assertGreater(full.context["analysis"]["coi_percent"], 0)
+        self.assertContains(full, 'value="all" selected')
+        short = self.client.get(report_url, {
+            "generations": "4", "coi_generations": "2",
+        })
+        self.assertEqual(short.context["analysis"]["coi_percent"], 0)
+        self.assertContains(short, 'value="2" selected')
+
     def test_guest_query_cannot_change_public_coi(self):
         default = self.client.get(self.url)
         overridden = self.client.get(self.url, {"coi_generations": "2"})
