@@ -497,8 +497,11 @@ class PedigreeServiceTests(TestCase):
             inbreeding_coefficient(child, public_only=True), ten_generation,
         )
         self.assertEqual(
-            pedigree_analysis(child, generations=4, public_only=True)["coi_percent"],
+            pedigree_analysis(child, generations=4, public_only=True, coi_generations=8)["coi_percent"],
             0.0,
+        )
+        self.assertGreater(
+            pedigree_analysis(child, generations=4, public_only=True)["coi_percent"], 0.0,
         )
         eight_pair = virtual_mating_analysis(
             sire, dam, generations=8, public_only=True,
@@ -565,7 +568,8 @@ class PedigreeServiceTests(TestCase):
         url = reverse("pedigrees:detail", args=[dog.slug])
         default = self.client.get(url)
         self.assertEqual(default.context["generations"], 4)
-        self.assertEqual(default.context["analysis"]["coi_generations"], 8)
+        self.assertIsNone(default.context["analysis"]["coi_generations"])
+        self.assertContains(default, "COI uses all available generations")
         selected = self.client.get(url, {"generations": "4", "coi_generations": "10"})
         self.assertEqual(selected.context["analysis"]["coi_generations"], 10)
         self.assertContains(selected, "COI uses 10 generations")
