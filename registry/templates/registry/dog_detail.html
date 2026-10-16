@@ -104,7 +104,7 @@
         <dd>
           {% if coi_percent != None %}
             <strong>{% if coi_below_display_precision %}&lt;0.01%{% else %}{{ coi_percent|floatformat:2 }}%{% endif %}</strong>
-            <small class="profile-coi-context">{% if coi_percent == 0 %}No shared ancestor found within {{ coi_label }}{% else %}Based on shared published ancestors within {{ coi_label }}{% endif %}. Only sire/dam ancestry is included; missing ancestors can make this estimate too low.</small>
+            <small class="profile-coi-context">{% if coi_percent == 0 %}No shared ancestor found within {{ coi_label }}{% else %}Based on shared published ancestors within {{ coi_label }}{% endif %}. Only sire/dam ancestry is included; missing ancestors can make the estimate too low.</small>
           {% elif coi_display_state == "insufficient" %}
             <strong>Not enough ancestry</strong>
             <small class="profile-coi-context">Both parents are needed. {{ coi_error }}</small>
