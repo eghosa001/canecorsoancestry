@@ -255,6 +255,12 @@ def run():
             assert thumb.count() == 1, "Approved dog image missing from search"
             assert thumb.evaluate("el => getComputedStyle(el).objectFit") == "contain"
             assert thumb.evaluate("el => getComputedStyle(el).transform") == "none"
+            # A native Safari tap on a browse card must load the real profile, not a 404.
+            with page.expect_navigation(wait_until="load") as navigation:
+                page.locator(".search-result-card").first.tap()
+            response = navigation.value
+            assert response and response.status == 200, "Safari View Dog card returned 404"
+            assert page.locator(".profile-title-row h1").inner_text() == "Safari Dog"
 
             go(page, "/accounts/login/")
             page.locator("input[name='username']").fill("safari-smoke@example.test")
