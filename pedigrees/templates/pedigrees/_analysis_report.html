@@ -3,7 +3,7 @@
     <div>
       <p class="eyebrow">Advanced pedigree analysis</p>
       <h2 id="advanced-analysis-title">Depth-aware ancestry summary</h2>
-      <p class="muted">{{ generations }} generations shown. COI uses all connected, available ancestry.</p>
+      <p class="muted">{{ generations }} generations shown. COI uses {{ analysis.coi_generations }} generations of direct ancestors (father, mother, grandparents and earlier). Siblings and offspring are not additional COI ancestors.</p>
     </div>
     <div class="button-row no-print">
       <button class="btn btn-outline" type="button" onclick="window.print()">Print pedigree</button>
@@ -14,9 +14,17 @@
       {% endif %}
     </div>
   </div>
+  <form method="get" class="button-row no-print" aria-label="COI calculation generations">
+    <input type="hidden" name="generations" value="{{ generations }}">
+    <label for="coi-generations">Compare COI at</label>
+    <select id="coi-generations" name="coi_generations">
+      {% for option in generation_options %}<option value="{{ option }}" {% if analysis.coi_generations == option %}selected{% endif %}>{{ option }} generations</option>{% endfor %}
+    </select>
+    <button class="btn btn-outline" type="submit">Recalculate COI</button>
+  </form>
   <div class="analysis-grid analysis-grid-four analysis-mobile-summary">
     <article class="analysis-card">
-      <p class="eyebrow">Coefficient of inbreeding (COI)</p>
+      <p class="eyebrow">Coefficient of inbreeding (COI) · {{ analysis.coi_generations }} generations</p>
       <strong class="analysis-number">
         {% if analysis.coi_percent != None %}
           {% if analysis.coi_below_display_precision %}&lt;0.01%{% else %}{{ analysis.coi_percent|floatformat:2 }}%{% endif %}
@@ -25,8 +33,8 @@
       </strong>
       <span>
         {% if analysis.coi_percent != None %}
-          {% if analysis.coi_percent == 0 %}No common ancestor in linked records; missing ancestors can conceal relationships.
-          {% else %}Calculated from all connected ancestors.{% endif %}
+          {% if analysis.coi_percent == 0 %}No shared ancestor in this recorded depth; missing ancestors can conceal relationships.
+          {% else %}Calculated from shared ancestors on the sire and dam lines within this depth.{% endif %}
         {% elif analysis.coi_status == "insufficient" %}Both sire and dam must be linked and available.
         {% else %}{{ analysis.cycle_error|default:"Pedigree parent links need review." }}{% endif %}
       </span>

@@ -95,7 +95,7 @@
         <article class="analysis-card">
           <p class="eyebrow">Projected offspring COI</p>
           <strong class="analysis-number">{{ analysis.projected_percent|floatformat:2 }}%</strong>
-          <span>Wright-style coefficient from connected ancestry</span>
+          <span>Shared sire/dam ancestors within {{ generations }} recorded generations</span>
         </article>
         <article class="analysis-card">
           <p class="eyebrow">Sire ↔ dam relationship</p>
@@ -175,7 +175,7 @@
               </tbody>
             </table>
           </div>
-          <p class="mating-method-note muted">Path contributions describe the independent ancestry routes that feed the projected COI. The headline COI remains the exact kinship calculation for the connected pedigree graph.</p>
+          <p class="mating-method-note muted">Only independent routes through shared ancestors of the sire and dam are counted. The headline COI and path contributions use the same {{ generations }}-generation limit, with the proposed offspring's parents as generation 1.</p>
         {% else %}
           <p class="empty-state">There are no shared ancestors within this pedigree depth, so no common-ancestor contribution is shown.</p>
         {% endif %}

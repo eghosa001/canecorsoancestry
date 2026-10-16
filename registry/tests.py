@@ -1029,7 +1029,7 @@ class DogModelTests(TestCase):
                                    sire=sire, dam=dam, is_public=True)
         response = self.client.get(reverse("registry:dog-detail", args=[child.slug]))
         self.assertContains(response, "<strong>0.00%</strong>")
-        self.assertContains(response, "No common ancestor in linked records")
+        self.assertContains(response, "No shared ancestor found within eight recorded generations")
 
     def test_profile_tiny_positive_coi_does_not_round_to_zero(self):
         sire = Dog.objects.create(name="Tiny Father", slug="tiny-coi-father", is_public=True)
@@ -1061,7 +1061,7 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "0.00%")
         self.assertNotContains(response, "12.50%")
-        self.assertContains(response, "Missing ancestors can make the estimate too low")
+        self.assertContains(response, "missing ancestors can make the estimate too low")
 
     def test_profile_cycle_shows_actionable_coi_error_not_fabricated_number(self):
         father = Dog.objects.create(

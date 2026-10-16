@@ -16,6 +16,7 @@ class PedigreeCycleError(ValueError):
 
 
 ANALYSIS_CACHE_SECONDS = 60 * 60
+DEFAULT_COI_GENERATIONS = 8
 
 
 def _bounded_generations(generations):
@@ -716,8 +717,8 @@ def _relationship_matrix(*dogs, public_only=False):
     return ordered, index, matrix
 
 
-def inbreeding_coefficient(dog, public_only=False):
-    """Return Wright's inbreeding coefficient without allocating a full NxN matrix."""
+def inbreeding_coefficient(dog, public_only=False, generations=None):
+    """Return pedigree COI; optionally limit each ancestral path to N generations."""
     # With an unknown sire or dam, no recorded ancestral loop can connect
     # the parents. Returning zero avoids an unnecessary recursive database query.
     if not dog.sire_id or not dog.dam_id:
@@ -728,13 +729,18 @@ def inbreeding_coefficient(dog, public_only=False):
     sire_id, dam_id = links[dog.pk]
     if sire_id not in links or dam_id not in links:
         return 0.0
-    return max(
-        0.0,
-        _kinship_from_links(sire_id, dam_id, ordered, links),
+    kinship = (
+        _kinship_from_links(sire_id, dam_id, ordered, links)
+        if generations is None else _bounded_kinship_calculator(ordered, links)(
+            sire_id, dam_id,
+            _bounded_generations(generations) - 1,
+            _bounded_generations(generations) - 1,
+        )
     )
+    return max(0.0, kinship)
 
 
-def coi_linkage_summary(dog, public_only=True):
+def coi_linkage_summary(dog, public_only=True, generations=DEFAULT_COI_GENERATIONS):
     """Explain a recorded COI without guessing missing ancestry.
 
     Return ancestor-branch sizes and genuinely shared canonical IDs using the
@@ -750,6 +756,7 @@ def coi_linkage_summary(dog, public_only=True):
     }
     if dog is None or not dog.sire_id or not dog.dam_id:
         return result
+    generations = _bounded_generations(generations)
     try:
         ordered, links = _pedigree_order(dog, public_only=public_only)
     except PedigreeCycleError:
@@ -759,21 +766,30 @@ def coi_linkage_summary(dog, public_only=True):
         return result
 
     def reachable(root):
-        seen = set()
-        pending = [root]
+        # A repeated ancestor may be reached by both short and long paths.
+        # Retain the shortest depth so every in-range direct ancestor is found.
+        seen_depth = {}
+        pending = [(root, 1)]
         while pending:
-            node = pending.pop()
-            if node in seen or node not in links:
+            node, generation = pending.pop()
+            if node not in links or seen_depth.get(node, generations + 1) <= generation:
                 continue
-            seen.add(node)
-            pending.extend(parent for parent in links[node] if parent in links)
-        return seen
+            seen_depth[node] = generation
+            if generation < generations:
+                pending.extend(
+                    (parent, generation + 1)
+                    for parent in links[node] if parent in links
+                )
+        return set(seen_depth)
 
     sire_records = reachable(sire_id)
     dam_records = reachable(dam_id)
+    kinship = _bounded_kinship_calculator(ordered, links)(
+        sire_id, dam_id, generations - 1, generations - 1,
+    )
     return {
         "status": "estimated",
-        "coi_percent": max(0, _kinship_from_links(sire_id, dam_id, ordered, links)) * 100,
+        "coi_percent": max(0, kinship) * 100,
         "sire_records": len(sire_records),
         "dam_records": len(dam_records),
         "shared_ancestors": len(sire_records & dam_records),
@@ -816,18 +832,66 @@ def _kinship_from_links(left_id, right_id, ordered, links):
     return _kinship_calculator(ordered, links)(left_id, right_id)
 
 
-def projected_inbreeding(sire, dam, public_only=False):
-    """Return projected offspring COI for a sire/dam pairing as a 0..1 float."""
+def _bounded_kinship_calculator(ordered, links):
+    """Kinship constrained to each side's remaining ancestor generations.
+
+    Depth follows *each pedigree position*, not only the closest occurrence of
+    a repeated dog. That prevents a short branch from exposing out-of-range
+    ancestors through another, longer branch to the same canonical dog.
+    """
+    order = {dog_id: position for position, dog_id in enumerate(ordered)}
+    memo = {}
+
+    def kinship(a_id, b_id, a_remaining, b_remaining):
+        if not a_id or not b_id or a_id not in links or b_id not in links:
+            return 0.0
+        if order[a_id] < order[b_id]:
+            a_id, b_id = b_id, a_id
+            a_remaining, b_remaining = b_remaining, a_remaining
+        key = (a_id, b_id, a_remaining, b_remaining)
+        if key in memo:
+            return memo[key]
+
+        if a_id == b_id:
+            # A terminal ancestor is treated as a founder only at this depth.
+            # Deeper self-inbreeding cannot leak through the opposite branch.
+            remaining = min(a_remaining, b_remaining)
+            sire_id, dam_id = links[a_id]
+            value = (
+                0.5 * (1.0 + kinship(sire_id, dam_id, remaining - 1, remaining - 1))
+                if remaining > 0 else 0.5
+            )
+        elif a_remaining <= 0:
+            value = 0.0
+        else:
+            sire_id, dam_id = links[a_id]
+            value = (
+                0.5 * kinship(sire_id, b_id, a_remaining - 1, b_remaining)
+                + 0.5 * kinship(dam_id, b_id, a_remaining - 1, b_remaining)
+            )
+        memo[key] = value
+        return value
+
+    return kinship
+
+
+def projected_inbreeding(sire, dam, public_only=False, generations=None):
+    """Return projected offspring COI; an optional depth counts offspring parents as G1."""
     if sire is None or dam is None:
         return None
     if sire.pk == dam.pk:
         raise ValueError("Sire and dam must be different dogs.")
 
     ordered, links = _pedigree_order(sire, dam, public_only=public_only)
-    return max(
-        0.0,
-        _kinship_from_links(sire.pk, dam.pk, ordered, links),
+    kinship = (
+        _kinship_from_links(sire.pk, dam.pk, ordered, links)
+        if generations is None else _bounded_kinship_calculator(ordered, links)(
+            sire.pk, dam.pk,
+            _bounded_generations(generations) - 1,
+            _bounded_generations(generations) - 1,
+        )
     )
+    return max(0.0, kinship)
 
 
 def _ancestry_occurrence_paths(root_id, links, generations=10):
@@ -1024,42 +1088,48 @@ def virtual_mating_analysis(sire, dam, generations=8, public_only=True):
     ordered = _ordered_from_links((sire.pk, dam.pk), links)
     revision = _pedigree_links_revision(links)
     cache_key = (
-        f"cca:virtual-mating:v2:{sire.pk}:{dam.pk}:{generations}:"
+        f"cca:virtual-mating:v3:{sire.pk}:{dam.pk}:{generations}:"
         f"{int(public_only)}:{revision}"
     )
     payload = cache.get(cache_key)
     cache_hit = payload is not None
 
     if payload is None:
-        kinship = _kinship_calculator(ordered, links)
-        projected = max(0.0, kinship(sire.pk, dam.pk))
-        sire_inbreeding = max(0.0, (2.0 * kinship(sire.pk, sire.pk)) - 1.0)
-        dam_inbreeding = max(0.0, (2.0 * kinship(dam.pk, dam.pk)) - 1.0)
+        kinship = _bounded_kinship_calculator(ordered, links)
+        projected = max(0.0, kinship(
+            sire.pk, dam.pk, generations - 1, generations - 1,
+        ))
+        sire_inbreeding = max(0.0, (2.0 * kinship(
+            sire.pk, sire.pk, generations, generations,
+        )) - 1.0)
+        dam_inbreeding = max(0.0, (2.0 * kinship(
+            dam.pk, dam.pk, generations, generations,
+        )) - 1.0)
 
+        # The parents occupy offspring generation 1, not generation 0.
         left_paths = _ancestry_occurrence_paths(
-            sire.pk,
-            links,
-            generations=generations,
+            sire.pk, links, generations=generations - 1,
         )
         right_paths = _ancestry_occurrence_paths(
-            dam.pk,
-            links,
-            generations=generations,
+            dam.pk, links, generations=generations - 1,
         )
         common_ids = left_paths.keys() & right_paths.keys()
         common_rows = []
 
         for dog_id in common_ids:
-            ancestor_inbreeding = max(
-                0.0,
-                (2.0 * kinship(dog_id, dog_id)) - 1.0,
-            )
             contribution = 0.0
             valid_path_pairs = 0
             for left_path in left_paths[dog_id]:
                 for right_path in right_paths[dog_id]:
                     if not _independent_path_pair(left_path, right_path):
                         continue
+                    # An ancestor's own COI must respect *both* paths' depth.
+                    remaining = generations - 1 - max(
+                        left_path["generation"], right_path["generation"]
+                    )
+                    ancestor_inbreeding = max(0.0, (2.0 * kinship(
+                        dog_id, dog_id, remaining, remaining,
+                    )) - 1.0)
                     contribution += (
                         0.5
                         ** (
@@ -1069,6 +1139,16 @@ def virtual_mating_analysis(sire, dam, generations=8, public_only=True):
                         )
                     ) * (1.0 + ancestor_inbreeding)
                     valid_path_pairs += 1
+            if not valid_path_pairs:
+                continue
+            # Show the ancestor's own COI at its nearest valid depth.
+            closest_remaining = generations - 1 - max(
+                min(path["generation"] for path in left_paths[dog_id]),
+                min(path["generation"] for path in right_paths[dog_id]),
+            )
+            ancestor_inbreeding = max(0.0, (2.0 * kinship(
+                dog_id, dog_id, closest_remaining, closest_remaining,
+            )) - 1.0)
 
             left_labels = [
                 "Selected sire"
@@ -1277,12 +1357,12 @@ def _analysis_payload(snapshot):
     }
 
 
-def _current_analysis_coi(snapshot):
-    """Recalculate COI from all currently linked ancestors, independent of board cache.
+def _current_analysis_coi(snapshot, coi_generations=DEFAULT_COI_GENERATIONS):
+    """Recalculate bounded COI independently of the visible pedigree-board cache.
 
-    The ancestor summary caches only the requested visible generations. The COI
-    can change when a deeper ancestor is approved or re-linked, even if those
-    visible generations (and the summary cache key) do not change.
+    COI defaults to eight generations even if the board only shows four.
+    Ancestors outside the visible board but inside the COI depth can change the
+    result without changing the visible board's cache key.
     """
     visible_parents = snapshot["layers"][1]
     if not all(visible_parents):
@@ -1294,7 +1374,8 @@ def _current_analysis_coi(snapshot):
         }
     try:
         percent = inbreeding_coefficient(
-            snapshot["dog"], public_only=snapshot["public_only"]
+            snapshot["dog"], public_only=snapshot["public_only"],
+            generations=coi_generations,
         ) * 100.0
     except PedigreeCycleError:
         return {
@@ -1311,7 +1392,7 @@ def _current_analysis_coi(snapshot):
     }
 
 
-def pedigree_analysis(dog, generations=4, public_only=False):
+def pedigree_analysis(dog, generations=4, public_only=False, coi_generations=DEFAULT_COI_GENERATIONS):
     """Return the board and cached advanced metrics under a pedigree revision key."""
     snapshot = _pedigree_snapshot(dog, generations, public_only=public_only)
     cache_key = (
@@ -1346,7 +1427,8 @@ def pedigree_analysis(dog, generations=4, public_only=False):
 
     return {
         **payload,
-        **_current_analysis_coi(snapshot),
+        **_current_analysis_coi(snapshot, coi_generations=coi_generations),
+        "coi_generations": _bounded_generations(coi_generations),
         "layers": _layers_from_snapshot(snapshot),
         "contributions": contributions,
         "linebreeding": linebreeding,

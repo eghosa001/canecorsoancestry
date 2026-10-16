@@ -2171,7 +2171,14 @@ def member_pedigree_detail(request, pk):
     except ValueError:
         requested = 4
     generations = requested if requested in {4, 6, 8, 10} else 4
-    analysis = pedigree_analysis(dog, generations, public_only=False)
+    requested_coi_depth = request.GET.get("coi_generations", "8")
+    coi_generations = (
+        int(requested_coi_depth)
+        if requested_coi_depth in {"4", "6", "8", "10"} else 8
+    )
+    analysis = pedigree_analysis(
+        dog, generations, public_only=False, coi_generations=coi_generations,
+    )
 
     return render(
         request,

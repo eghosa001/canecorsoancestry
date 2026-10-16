@@ -44,9 +44,9 @@ def _public_dogs():
     return published_dogs().select_related("kennel")
 
 
-def _requested_generations(request, default=4):
+def _requested_generations(request, default=4, parameter="generations"):
     try:
-        requested = int(request.GET.get("generations", str(default)))
+        requested = int(request.GET.get(parameter, str(default)))
     except ValueError:
         requested = default
     return requested if requested in ALLOWED_GENERATIONS else default
@@ -107,7 +107,12 @@ def pedigree_index(request):
 def pedigree_detail(request, slug):
     dog = get_object_or_404(_public_dogs(), slug=slug)
     generations = _requested_generations(request)
-    analysis = pedigree_analysis(dog, generations, public_only=True)
+    analysis = pedigree_analysis(
+        dog, generations, public_only=True,
+        coi_generations=_requested_generations(
+            request, default=8, parameter="coi_generations"
+        ),
+    )
 
     context = {
         "dog": dog,
