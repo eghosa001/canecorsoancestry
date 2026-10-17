@@ -42,7 +42,7 @@ from .models import (
     public_verification_label,
 )
 from .permissions import can_access_public_pedigree_analysis, can_contribute_to_dog
-from .genetic_health import MARKER_CODES, marker_status_rows
+from .genetic_health import MARKER_CODES, marker_status_rows, unstructured_breed_claim
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
 
@@ -547,9 +547,7 @@ def dog_detail(request, slug):
         label = (record.test_type or "").strip().lower()
         if label.upper() in MARKER_CODES:
             continue  # Structured marker is shown once, as a reviewed badge.
-        if "breed" in label and any(
-            word in label for word in ("dna", "composition", "identification", "purity")
-        ):
+        if unstructured_breed_claim(record.test_type):
             continue  # Only BreedDNAReport + owner consent enables public breed percent.
         other_health_records.append(record)
 

@@ -7,6 +7,7 @@ from django.db import connection
 from django.db.models import Case, CharField, Count, F, Q, Value, When, Window
 from django.db.models.functions import RowNumber
 
+from registry.genetic_health import unstructured_breed_claim
 from registry.models import Dog, HealthRecord, Kennel
 from registry.querysets import published_dogs
 
@@ -506,6 +507,8 @@ def direct_relative_health(
         breed_dna_report__consent_public_summary=False
     ).select_related("dog").order_by("dog__name", "test_type", "-tested_on")
     for record in records:
+        if unstructured_breed_claim(record.test_type):
+            continue
         if include_subject_records and record.dog_id == dog.pk:
             subject_records.append(record)
         if record.dog_id in relatives:

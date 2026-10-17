@@ -41,3 +41,15 @@ def marker_status_rows(records):
             "tone": classified[1] if classified else "untested",
         })
     return rows
+
+
+def unstructured_breed_claim(test_type):
+    """Legacy free-text breed claims are not approved breed-composition reports.
+
+    Prevent accidental public display of e.g. "100% Cane Corso. DSRA CLEAR"
+    when no normalized, owner-authorized BreedDNAReport exists.
+    """
+    label = (test_type or "").strip().lower()
+    return "breed" in label and any(
+        word in label for word in ("dna", "composition", "identification", "purity")
+    )
