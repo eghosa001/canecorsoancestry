@@ -235,6 +235,7 @@
 
   <article class="panel" id="health">
     <div class="panel-heading"><h2>Health & DNA</h2>{% if user.is_authenticated and not staff_identity %}<a class="profile-review-chip" href="{% url 'accounts:open-dispute' dog.pk %}?reason=health&amp;field=health">Report detail →</a>{% endif %}</div>
+    {% if has_public_health_records %}
     <section class="breed-dna-card" aria-label="DNA breed verification and genetic screening">
       <div class="breed-dna-label">
         <svg class="breed-dna-icon" viewBox="0 0 24 24" role="img" aria-label="DNA" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3c10 3 6 15 16 18M20 3C10 6 14 18 4 21M7 6h10M8.5 10h7M8.5 14h7M7 18h10"/></svg>
@@ -250,11 +251,7 @@
           {% endfor %}
         </div>
         {% endif %}
-        {% if breed_dna.consent_full_report and breed_dna.evidence_document.is_public %}
-          <a class="breed-dna-report-link" href="{{ breed_dna.evidence_document.file.url }}" rel="noopener noreferrer" target="_blank">View owner-authorized DNA report →</a>
-        {% else %}
-          <small>Full laboratory report kept private.</small>
-        {% endif %}
+        <small>Original laboratory certificate retained privately for moderator review.</small>
         <small>Breed percentages are estimates from an external laboratory, not an independent breed-purity certification.</small>
       {% else %}
         <strong class="breed-dna-unverified">Breed DNA not yet verified</strong>
@@ -278,6 +275,9 @@
         <small>Status is based only on reviewed genetic-test results. Not tested does not mean Clear.</small>
       </div>
     </section>
+    {% else %}
+      <div class="empty-state"><strong>No available records</strong><p>No laboratory-verified health or DNA test results are currently published for this dog. Missing records do not mean the dog is unaffected.</p></div>
+    {% endif %}
     {% if can_contribute %}
     <div class="health-upload-actions">
       <div><strong>Have a new health or DNA report?</strong><p>Dog owners can upload another certificate at any time. Each submission is reviewed before publication.</p></div>
@@ -291,7 +291,7 @@
         {% for record in dog.display_health_records %}
           <tr><td>{{ record.test_type }}</td><td>{{ record.result }}</td><td>{{ record.tested_on|default:"—" }}</td><td>{{ record.public_verification_label }}</td></tr>
         {% empty %}
-          <tr><td colspan="4">No health or DNA information has been published for this dog.</td></tr>
+          <tr><td colspan="4">No available records.</td></tr>
         {% endfor %}
         </tbody>
       </table>

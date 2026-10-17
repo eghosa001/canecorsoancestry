@@ -743,6 +743,7 @@ def approve_submission(
             tested_on=_date_from_payload(payload.get("tested_on")),
             verification_state=VerificationState.HEALTH_VERIFIED,
             notes=submission.notes,
+            is_public=payload.get("publish_primary") is not False,
         )
         document_type = (
             DogDocument.DocumentType.DNA
@@ -754,7 +755,7 @@ def approve_submission(
             title=f"{test_type} supporting evidence",
             document_type=document_type,
             file=submission.attachment.name,
-            is_public=allow_full,
+            is_public=False,
             submitted_by=submission.submitted_by,
             source_submission=submission,
         )
@@ -765,7 +766,27 @@ def approve_submission(
                 provider=provider,
                 cane_corso_percentage=payload["cane_corso_percentage"],
                 composition=composition,
-                consent_full_report=allow_full,
+                consent_full_report=False,
+            )
+        for code, chosen in sorted((payload.get("reviewed_markers") or {}).items()):
+            status = chosen.get("status") if isinstance(chosen, dict) else None
+            if code not in MARKER_CODES or status not in {"Clear", "Carrier", "Affected"}:
+                raise ValueError("Invalid reviewed genetic marker or laboratory result.")
+            if code == test_type.strip().upper():
+                continue
+            extra_record = HealthRecord.objects.create(
+                dog=submission.dog,
+                test_type=code, result=status,
+                tested_on=_date_from_payload(payload.get("tested_on")),
+                verification_state=VerificationState.HEALTH_VERIFIED,
+                is_public=chosen.get("publish") is True,
+                notes="Moderator reviewed private lab evidence for submission " + str(submission.pk),
+            )
+            VerificationEvent.objects.create(
+                dog=submission.dog,
+                health_record=extra_record,
+                state=VerificationState.HEALTH_VERIFIED, reviewer=reviewer,
+                note="Genetic marker independently transcribed from confidential laboratory evidence.",
             )
         VerificationEvent.objects.create(
             dog=submission.dog,
@@ -974,6 +995,8 @@ def approve_submission(
         if document is None:
             raise ValueError("Document visibility request has no target document.")
         desired_public = bool(payload.get("is_public"))
+        if desired_public and document.source_submission_id and document.source_submission.kind == Submission.Kind.HEALTH:
+            raise ValueError("Original health/DNA certificates cannot be made public.")
         if desired_public and BreedDNAReport.objects.filter(
             evidence_document=document, consent_full_report=False
         ).exists():

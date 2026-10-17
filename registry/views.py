@@ -365,7 +365,7 @@ def _public_profile_dog(slug):
                 )
             ),
             _has_subject_health=Exists(
-                HealthRecord.objects.filter(dog_id=OuterRef("pk"))
+                HealthRecord.objects.filter(dog_id=OuterRef("pk"), is_public=True)
             ),
             _has_breed_dna=Exists(
                 BreedDNAReport.objects.filter(health_record__dog_id=OuterRef("pk"), consent_public_summary=True)
@@ -539,6 +539,7 @@ def dog_detail(request, slug):
         BreedDNAReport.objects.filter(
             health_record__dog=dog,
             health_record__verification_state=VerificationState.HEALTH_VERIFIED,
+            health_record__is_public=True,
             consent_public_summary=True,
         ).select_related("health_record", "evidence_document")
         .order_by("-health_record__tested_on", "-health_record__created_at").first()
@@ -565,6 +566,7 @@ def dog_detail(request, slug):
             "relative_health": relative_health,
             "breed_dna": breed_dna,
             "genetic_screenings": genetic_screenings,
+            "has_public_health_records": bool(dog.display_health_records or breed_dna),
             "can_submit_breed_dna": can_submit_breed_dna,
             "coi_percent": coi_percent,
             "can_select_coi": can_select_coi,
