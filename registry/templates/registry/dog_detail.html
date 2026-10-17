@@ -113,12 +113,14 @@
             <small class="profile-coi-context">Pedigree links need review. {{ coi_error }}</small>
           {% endif %}
           {% if can_select_coi %}
-          <form method="get" class="button-row profile-coi-controls" aria-label="Compare COI by generation">
-            <label for="profile-coi-generations">Compare at</label>
-            <select id="profile-coi-generations" name="coi_generations">
-              {% for option in coi_options %}<option value="{{ option.value }}" {% if option.selected %}selected{% endif %}>{{ option.label }}</option>{% endfor %}
-            </select>
-            <button type="submit" class="btn btn-outline">Recalculate</button>
+          <form method="get" class="profile-coi-controls" aria-label="Compare COI by generation">
+            <div class="profile-coi-selection">
+              <label for="profile-coi-generations">Compare at</label>
+              <select id="profile-coi-generations" name="coi_generations">
+                {% for option in coi_options %}<option value="{{ option.value }}" {% if option.selected %}selected{% endif %}>{{ option.label }}</option>{% endfor %}
+              </select>
+            </div>
+            <button type="submit" class="btn btn-outline profile-coi-recalculate">Recalculate</button>
           </form>
           {% endif %}
         </dd>
