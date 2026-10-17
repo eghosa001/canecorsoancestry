@@ -586,7 +586,7 @@ class DogModelTests(TestCase):
         self.assertEqual(response.context["siblings"], [])
         self.assertEqual(response.context["offspring"], [])
         self.assertEqual(response.context["relative_health"], [])
-        self.assertContains(response, "No health or DNA information has been published")
+        self.assertContains(response, "No available records")
 
     def test_isolated_dog_with_health_keeps_record_and_skips_relation_query(self):
         dog = Dog.objects.create(
