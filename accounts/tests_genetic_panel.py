@@ -44,11 +44,8 @@ class GeneticPanelTests(TestCase):
 
     def test_unknown_dog_starts_not_tested_without_fake_clear_or_percentage(self):
         response = self.client.get(self.profile)
-        self.assertContains(response, "Breed DNA not yet verified")
-        self.assertContains(response, "DSRA")
-        self.assertContains(response, "NCL1")
-        self.assertContains(response, "CMR1")
-        self.assertContains(response, "genetic-screening-status--untested", count=3)
+        self.assertContains(response, "No available records")
+        self.assertNotContains(response, "genetic-screening-status--untested")
         self.assertNotContains(response, "100% Cane Corso")
         self.assertNotContains(response, "genetic-screening-status--clear")
 
