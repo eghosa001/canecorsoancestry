@@ -6,6 +6,7 @@
 {% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and health information.{% endblock %}
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'core/dog-portrait-gallery.css' %}?v=20261011-stable-gallery-v7">
+  <link rel="stylesheet" href="{% static 'core/breed-dna.css' %}?v=20261017-1">
   {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}?v=20261002-2">{% elif dog.source_image_url %}<meta property="og:image" content="{{ dog.source_image_url }}">{% endif %}
   <script type="application/ld+json">{{ structured_data }}</script>
 {% endblock %}
@@ -234,6 +235,26 @@
 
   <article class="panel" id="health">
     <div class="panel-heading"><h2>Health & DNA</h2>{% if user.is_authenticated and not staff_identity %}<a class="profile-review-chip" href="{% url 'accounts:open-dispute' dog.pk %}?reason=health&amp;field=health">Report detail →</a>{% endif %}</div>
+    {% if breed_dna %}
+      <section class="breed-dna-card" aria-label="Reviewed DNA breed composition">
+        <div class="breed-dna-label"><span aria-hidden="true">🧬</span> DNA Breed Composition · Evidence reviewed</div>
+        <strong class="breed-dna-score">{{ breed_dna.cane_corso_percentage|floatformat:"-2" }}% Cane Corso</strong>
+        <p>DNA tested · {{ breed_dna.provider }} · Report reviewed by Cane Corso Ancestry</p>
+        <div class="breed-dna-breakdown" aria-label="Breed composition percentages">
+          {% for entry in breed_dna.composition %}
+            <div class="breed-dna-entry"><span>{{ entry.breed }}</span><strong>{{ entry.percentage }}%</strong></div>
+          {% endfor %}
+        </div>
+        {% if breed_dna.consent_full_report and breed_dna.evidence_document.is_public %}
+          <a class="text-link" href="{{ breed_dna.evidence_document.file.url }}" rel="noopener" target="_blank">View owner-authorized DNA report →</a>
+        {% else %}
+          <small>Full laboratory report kept private at the owner's request.</small>
+        {% endif %}
+        <small>Breed percentages reflect the named laboratory's estimates; evidence review is not independent DNA testing or pedigree registration.</small>
+      </section>
+    {% elif can_submit_breed_dna %}
+      <p class="muted">Have a laboratory breed-composition result? <a class="text-link" href="{% url 'accounts:submit-health-record' dog.pk %}?type=breed">Submit breed DNA report →</a></p>
+    {% endif %}
     <div class="table-scroll">
       <table class="data-table">
         <thead><tr><th>Test</th><th>Result</th><th>Date</th><th>Status</th></tr></thead>

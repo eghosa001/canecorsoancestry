@@ -1120,6 +1120,26 @@ class DogDocument(models.Model):
         return self.title
 
 
+
+class BreedDNAReport(models.Model):
+    """Reviewed external laboratory estimate with explicitly consented file visibility."""
+    health_record = models.OneToOneField(
+        HealthRecord, on_delete=models.CASCADE, related_name="breed_dna_report"
+    )
+    evidence_document = models.OneToOneField(
+        DogDocument, on_delete=models.PROTECT, related_name="breed_dna_report"
+    )
+    provider = models.CharField(max_length=100)
+    cane_corso_percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    composition = models.JSONField(default=list)
+    consent_full_report = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.provider} · {self.health_record.dog.name}"
+
+
+
 class DisputeCase(models.Model):
     class Reason(models.TextChoices):
         PEDIGREE = "pedigree", "Pedigree relationship"

@@ -26,6 +26,7 @@ from pedigrees.services import (
 )
 
 from .models import (
+    BreedDNAReport,
     Dog,
     DogDocument,
     DogImage,
@@ -37,6 +38,7 @@ from .models import (
     Kennel,
     Litter,
     Submission,
+    VerificationState,
     public_verification_label,
 )
 from .permissions import can_access_public_pedigree_analysis, can_contribute_to_dog
@@ -364,6 +366,9 @@ def _public_profile_dog(slug):
             _has_subject_health=Exists(
                 HealthRecord.objects.filter(dog_id=OuterRef("pk"))
             ),
+            _has_breed_dna=Exists(
+                BreedDNAReport.objects.filter(health_record__dog_id=OuterRef("pk"))
+            ),
         )
     )
     dog = dogs.filter(slug=slug).first()
@@ -526,6 +531,22 @@ def dog_detail(request, slug):
         # to display. Preserve the empty Health & DNA section in the template.
         relative_health, dog.display_health_records = [], []
 
+    # Surface only moderator-reviewed lab estimates, never pending submissions.
+    breed_dna = (
+        BreedDNAReport.objects.filter(
+            health_record__dog=dog,
+            health_record__verification_state=VerificationState.HEALTH_VERIFIED,
+        ).select_related("health_record", "evidence_document")
+        .order_by("-health_record__tested_on", "-health_record__created_at").first()
+        if dog._has_breed_dna else None
+    )
+    can_submit_breed_dna = (
+        can_contribute_to_dog(request.user, dog)
+        and dog.kennel_id is not None
+        and dog.kennel.memberships.filter(
+            user=request.user, role="owner"
+        ).exists()
+    )
     return render(
         request,
         "registry/dog_detail.html",
@@ -538,6 +559,8 @@ def dog_detail(request, slug):
             "mates": mates,
             "mates_truncated": mates_truncated,
             "relative_health": relative_health,
+            "breed_dna": breed_dna,
+            "can_submit_breed_dna": can_submit_breed_dna,
             "coi_percent": coi_percent,
             "can_select_coi": can_select_coi,
             "coi_label": coi_label,

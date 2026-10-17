@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from registry.models import (
     Dog,
+    BreedDNAReport,
     DogDocument,
     HealthRecord,
     Kennel,
@@ -173,3 +174,62 @@ class HealthRecordSubmissionTests(TestCase):
         document = DogDocument.objects.get(source_submission=submission)
         self.assertEqual(document.document_type, DogDocument.DocumentType.DNA)
         self.assertFalse(document.is_public)
+
+    def test_breed_dna_validated_and_owner_only(self):
+        self.client.force_login(self.outsider)
+        forbidden = self.client.post(reverse("accounts:submit-health-record", args=[self.dog.pk]), {
+            "evidence_type": "breed", "dna_provider": "Embark",
+            "cane_corso_percentage": "100", "acknowledge_public_summary": "on",
+            "attachment": self.evidence(),
+        })
+        self.assertEqual(forbidden.status_code, 403)
+        self.client.force_login(self.owner)
+        invalid = self.client.post(reverse("accounts:submit-health-record", args=[self.dog.pk]), {
+            "evidence_type": "breed", "dna_provider": "Embark",
+            "cane_corso_percentage": "90", "other_breeds": "Boxer: 5",
+            "acknowledge_public_summary": "on", "attachment": self.evidence(),
+        })
+        self.assertEqual(invalid.status_code, 200)
+        self.assertContains(invalid, "must add up to exactly 100")
+        self.assertFalse(Submission.objects.exists())
+
+    def test_private_breed_report_shows_public_summary_only(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse("accounts:submit-health-record", args=[self.dog.pk]), {
+            "evidence_type": "breed", "dna_provider": "Embark",
+            "cane_corso_percentage": "100", "acknowledge_public_summary": "on",
+            "attachment": self.evidence(),
+        })
+        self.assertEqual(response.status_code, 302)
+        submission = Submission.objects.get(kind=Submission.Kind.HEALTH)
+        self.assertFalse(BreedDNAReport.objects.exists())
+        approve_submission(submission, self.reviewer)
+        report = BreedDNAReport.objects.get(health_record__dog=self.dog)
+        self.assertFalse(report.consent_full_report)
+        self.assertFalse(report.evidence_document.is_public)
+        self.client.logout()
+        page = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
+        self.assertContains(page, "100% Cane Corso")
+        self.assertContains(page, "Embark")
+        self.assertContains(page, "Full laboratory report kept private")
+        self.assertNotContains(page, "View owner-authorized DNA report")
+
+    def test_owner_consented_mixed_breed_full_report(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse("accounts:submit-health-record", args=[self.dog.pk]), {
+            "evidence_type": "breed", "dna_provider": "Other DNA laboratory",
+            "cane_corso_percentage": "92.50", "other_breeds": "Boxer: 7.50",
+            "acknowledge_public_summary": "on", "allow_full_report_publication": "on",
+            "attachment": self.evidence(),
+        })
+        self.assertEqual(response.status_code, 302)
+        approve_submission(Submission.objects.get(kind=Submission.Kind.HEALTH), self.reviewer)
+        report = BreedDNAReport.objects.get(health_record__dog=self.dog)
+        self.assertTrue(report.consent_full_report)
+        self.assertTrue(report.evidence_document.is_public)
+        self.client.logout()
+        page = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
+        self.assertContains(page, "92.5% Cane Corso")
+        self.assertContains(page, "Boxer")
+        self.assertContains(page, "7.5%")
+        self.assertContains(page, "View owner-authorized DNA report")
