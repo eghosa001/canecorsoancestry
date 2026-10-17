@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, direct_dog_edit, kennel_publication, breeding_kennel_review, dog_drafts
+from . import views, direct_dog_edit, kennel_publication, breeding_kennel_review, dog_drafts, health_admin
 
 app_name = "accounts"
 
@@ -58,6 +58,9 @@ urlpatterns = [
     path("notifications/", views.member_account_only(views.notifications), name="notifications"),
     path("moderation/", views.moderation_queue, name="moderation"),
     path("moderation/dogs/", direct_dog_edit.dog_edit_list, name="dog-edit-list"),
+    path("moderation/health-dna/", health_admin.health_genetic_list, name="health-genetic-list"),
+    path("moderation/health-dna/<uuid:pk>/", health_admin.health_genetic_dog, name="health-genetic-dog"),
+    path("moderation/health-dna/<uuid:pk>/withdraw/", health_admin.withdraw_dna_publication, name="health-genetic-withdraw"),
     path("moderation/dogs/add/", direct_dog_edit.dog_direct_create, name="dog-direct-create"),
     path(
         "moderation/kennel-reconciliation/",

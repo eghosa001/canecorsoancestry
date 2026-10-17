@@ -9,6 +9,7 @@
         {% endif %}
         <a href="{% url 'accounts:moderation' %}" {% if workspace_section == "queue" %}aria-current="page"{% endif %}>Review queue</a>
         <a href="{% url 'accounts:dog-edit-list' %}" {% if workspace_section == "dogs" %}aria-current="page"{% endif %}>Manage dogs</a>
+        {% if staff_role == "owner" %}<a href="{% url 'accounts:health-genetic-list' %}" {% if workspace_section == "health_dna" %}aria-current="page"{% endif %}>Health &amp; DNA records</a>{% endif %}
         <a href="{% url 'accounts:dog-direct-create' %}" {% if workspace_section == "dogs" %}aria-current="page"{% endif %}>Add Dog</a>
         <a href="{% url 'accounts:kennel-publication-list' %}" {% if workspace_section == "kennels" %}aria-current="page"{% endif %}>Manage kennels</a>
         {% if staff_role == "owner" %}<a href="{% url 'accounts:merge-dogs' %}" {% if workspace_section == "merge" %}aria-current="page"{% endif %}>Merge dogs</a>{% endif %}

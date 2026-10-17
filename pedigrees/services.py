@@ -502,6 +502,8 @@ def direct_relative_health(
     subject_records = []
     records = HealthRecord.objects.filter(
         dog_id__in=ids
+    ).exclude(
+        breed_dna_report__consent_public_summary=False
     ).select_related("dog").order_by("dog__name", "test_type", "-tested_on")
     for record in records:
         if include_subject_records and record.dog_id == dog.pk:
