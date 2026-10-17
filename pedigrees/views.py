@@ -29,7 +29,7 @@ ALLOWED_GENERATIONS = {4, 6, 8, 10}
 
 
 def member_analysis_only(view):
-    """Do not return pedigree analysis, descendants or exports to non-members."""
+    """Restrict public pedigree research to members and active assigned staff."""
     @wraps(view)
     def gated(request, *args, **kwargs):
         if not request.user.is_authenticated:
