@@ -329,6 +329,26 @@ def run():
             )
             assert "coi_generations=2" in page.url, "Safari COI depth was not preserved"
 
+            # The same COI selector must be tappable and unclipped on iPhone.
+            for width in (375, 430):
+                page.set_viewport_size({"width": width, "height": 844})
+                go(page, "/dogs/safari-dog/")
+                controls = page.locator(".profile-coi-controls")
+                controls.scroll_into_view_if_needed()
+                assert controls.is_visible(), "Mobile dog profile hides COI depth"
+                selector = controls.locator("select")
+                bounds = selector.bounding_box()
+                assert bounds and bounds["x"] >= -1 and bounds["x"] + bounds["width"] <= width + 1, (
+                    f"Safari COI selector clipped at {width}px: {bounds}"
+                )
+                assert selector.evaluate("el => parseFloat(getComputedStyle(el).fontSize)") >= 16
+                selector.select_option("2")
+                with page.expect_navigation(wait_until="domcontentloaded") as navigation:
+                    controls.get_by_role("button", name="Recalculate").tap()
+                assert navigation.value and navigation.value.status == 200
+                assert "coi_generations=2" in page.url
+                assert "COI (2 generations)" in page.locator(".profile-facts").inner_text()
+
             dog_id = os.environ["SAFARI_TEST_DOG_ID"]
             go(page, f"/member/dogs/{dog_id}/photo/")
             buffer = io.BytesIO()
