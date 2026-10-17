@@ -16,6 +16,31 @@ from .views import _public_profile_dog
 
 class DogModelTests(TestCase):
 
+    def test_owner_authorized_normalized_dna_renders_big_percentage(self):
+        from decimal import Decimal
+        from .models import BreedDNAReport
+        dog = Dog.objects.create(name="Normalized DNA", slug="normalized-dna", is_public=True)
+        owner = get_user_model().objects.create_user(username="dna-source-member")
+        evidence = DogDocument.objects.create(
+            dog=dog, title="Lab", file="documents/normalized.pdf",
+            document_type=DogDocument.DocumentType.DNA,
+            is_public=False, submitted_by=owner,
+        )
+        record = HealthRecord.objects.create(
+            dog=dog, test_type="DNA breed composition", result="92.5% Cane Corso",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        BreedDNAReport.objects.create(
+            health_record=record, evidence_document=evidence,
+            provider="Embark", cane_corso_percentage=Decimal("92.50"),
+            consent_public_summary=True,
+            composition=[{"breed": "Cane Corso", "percentage": "92.5"}, {"breed": "Boxer", "percentage": "7.5"}],
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertTrue(response.context["dog"]._has_breed_dna)
+        self.assertIsNotNone(response.context["breed_dna"])
+        self.assertContains(response, "92.5% Cane Corso")
+
     def test_unstructured_breed_claim_never_creates_false_dna_verification(self):
         dog = Dog.objects.create(
             name="Legacy Mixed DNA", slug="legacy-mixed-dna", is_public=True
