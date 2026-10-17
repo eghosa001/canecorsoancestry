@@ -62,17 +62,20 @@ class MemberAnalysisGateTests(TestCase):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
 
-    def test_staff_account_cannot_bypass_member_only_boundary(self):
+    def test_staff_can_research_published_pedigrees_but_not_save_member_pairings(self):
         staff = get_user_model().objects.create_superuser(
             username="gate-staff", email="staff-gate@example.com",
             password="pass12345",
         )
         self.client.force_login(staff)
-        self.assertEqual(self.client.get(self.pairing).status_code, 403)
+        pairing = self.client.get(self.pairing)
+        self.assertEqual(pairing.status_code, 200)
+        self.assertFalse(pairing.context["can_save_research"])
         self.assertEqual(
             self.client.get(reverse("pedigrees:detail", args=[self.sire.slug])).status_code,
-            403,
+            200,
         )
+        self.assertEqual(self.client.post(reverse("accounts:save-pairing")).status_code, 403)
 
     def test_signed_in_reports_and_pairing_are_noindex(self):
         self.client.force_login(self.member)

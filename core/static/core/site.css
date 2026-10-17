@@ -7095,3 +7095,44 @@ html[data-theme="light"] .hero-search input {
     }
   }
 }
+
+/* Mobile COI controls v89: shared on Android Chrome and iOS Safari. */
+.profile-coi-controls {
+  align-items: center;
+  margin-top: 14px;
+}
+.profile-coi-controls select,
+.advanced-analysis form[aria-label="COI calculation generations"] select {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--field-bg);
+  color: var(--text);
+}
+@media (max-width: 760px) {
+  .profile-facts > .profile-coi-label,
+  .profile-facts > .profile-coi-value {
+    grid-column: 1 / -1;
+  }
+  .profile-facts > .profile-coi-label { padding-top: 8px; }
+  .profile-coi-controls,
+  .advanced-analysis form[aria-label="COI calculation generations"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 8px;
+  }
+  .profile-coi-controls > *,
+  .advanced-analysis form[aria-label="COI calculation generations"] > * {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+  .profile-coi-controls select,
+  .advanced-analysis form[aria-label="COI calculation generations"] select {
+    font-size: 16px;
+  }
+}

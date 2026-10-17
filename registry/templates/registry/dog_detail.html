@@ -100,8 +100,8 @@
         <dt>Date of birth</dt><dd>{{ dog.date_of_birth|default:"Not recorded" }}</dd>
         <dt>Colour</dt><dd>{{ dog.colour|default:"Not recorded" }}</dd>
         <dt>Bloodline</dt><dd>{{ dog.bloodline|default:"Not recorded" }}</dd>
-        <dt>COI ({{ coi_label }})</dt>
-        <dd>
+        <dt class="profile-coi-label">COI ({{ coi_label }})</dt>
+        <dd class="profile-coi-value">
           {% if coi_percent != None %}
             <strong>{% if coi_below_display_precision %}&lt;0.01%{% else %}{{ coi_percent|floatformat:2 }}%{% endif %}</strong>
             <small class="profile-coi-context">{% if coi_percent == 0 %}No shared ancestor found within {{ coi_label }}{% else %}Based on shared published ancestors within {{ coi_label }}{% endif %}. Only sire/dam ancestry is included; missing ancestors can make the estimate too low.</small>

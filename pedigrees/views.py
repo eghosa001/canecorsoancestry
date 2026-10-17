@@ -13,7 +13,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 
 from registry.models import Dog
-from registry.permissions import can_use_member_features
+from registry.permissions import can_access_public_pedigree_analysis, can_use_member_features
 from registry.querysets import public_dog_match_filter, published_dogs
 
 from .services import (
@@ -29,12 +29,12 @@ ALLOWED_GENERATIONS = {4, 6, 8, 10}
 
 
 def member_analysis_only(view):
-    """Do not return pedigree analysis, descendants or exports to non-members."""
+    """Restrict public pedigree research to members and active assigned staff."""
     @wraps(view)
     def gated(request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect_to_login(request.get_full_path())
-        if not request.user.is_active or not can_use_member_features(request.user):
+        if not can_access_public_pedigree_analysis(request.user):
             raise PermissionDenied
         return view(request, *args, **kwargs)
 
@@ -238,7 +238,7 @@ def virtual_mating(request):
             "member_login_url": f"{reverse('login')}?{next_query}",
             "member_signup_url": f"{reverse('accounts:signup')}?{next_query}",
         })
-    if not request.user.is_active or not can_use_member_features(request.user):
+    if not can_access_public_pedigree_analysis(request.user):
         raise PermissionDenied
 
     sire = dam = None
@@ -312,6 +312,6 @@ def virtual_mating(request):
             "generations": generations,
             "generation_options": sorted(ALLOWED_GENERATIONS),
             "error": error,
-            "can_save_research": True,
+            "can_save_research": can_use_member_features(request.user),
         },
     )
