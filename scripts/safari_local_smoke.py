@@ -342,12 +342,52 @@ def run():
                     f"Safari COI selector clipped at {width}px: {bounds}"
                 )
                 assert selector.evaluate("el => parseFloat(getComputedStyle(el).fontSize)") >= 16
+                button = controls.get_by_role("button", name="Recalculate")
+                button_bounds = button.bounding_box()
+                assert button_bounds, "Mobile COI recalculate button is hidden"
+                assert button_bounds["y"] >= bounds["y"] + bounds["height"] - 1, (
+                    f"Safari COI recalculate not below generation dropdown at {width}px: "
+                    f"select={bounds}, button={button_bounds}"
+                )
+                assert button_bounds["width"] >= bounds["width"] * .9, (
+                    f"Safari recalculate not full width at {width}px: "
+                    f"select={bounds}, button={button_bounds}"
+                )
+                assert button_bounds["x"] >= -1 and button_bounds["x"] + button_bounds["width"] <= width + 1, (
+                    f"Safari COI button clipped at {width}px: {button_bounds}"
+                )
                 selector.select_option("2")
                 with page.expect_navigation(wait_until="domcontentloaded") as navigation:
-                    controls.get_by_role("button", name="Recalculate").tap()
+                    button.tap()
                 assert navigation.value and navigation.value.status == 200
                 assert "coi_generations=2" in page.url
                 assert "COI (2 generations)" in page.locator(".profile-facts").inner_text()
+
+            # The pair result must appear immediately after submitting on iPhone,
+            # with real database values, navigable ancestor records and the
+            # hypothetical-pedigree disclaimer (not just an input form).
+            page.set_viewport_size({"width": 390, "height": 844})
+            go(page, "/pedigrees/virtual-mating/")
+            page.locator("#sire_q").fill("Safari Pair Sire")
+            page.locator("#dam_q").fill("Safari Pair Dam")
+            with page.expect_navigation(wait_until="domcontentloaded") as navigation:
+                page.get_by_role("button", name="Start pairing analysis").tap()
+            assert navigation.value and navigation.value.status == 200, "Safari mating submit failed"
+            assert "#analysis-outcome" in page.url, f"Result did not jump to dashboard: {page.url}"
+            dashboard = page.locator("#mating-results")
+            assert dashboard.is_visible(), "iPhone returned to input form instead of pairing result"
+            assert "12.50%" in dashboard.inner_text(), "Projected COI is not computed from the fixture"
+            assert dashboard.locator(".mating-metrics .analysis-card").count() == 6, (
+                "Missing computed mating overview cards"
+            )
+            assert page.locator("#mating-common a[href*='safari-pair-founder']").count() > 0, (
+                "Common ancestor cannot be opened from Safari pairing results"
+            )
+            assert page.locator("#mating-projected").count() == 1
+            assert "NOT A REGISTERED LITTER" in dashboard.inner_text()
+            assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 3, (
+                "iPhone virtual mating dashboard causes horizontal overflow"
+            )
 
             dog_id = os.environ["SAFARI_TEST_DOG_ID"]
             go(page, f"/member/dogs/{dog_id}/photo/")
