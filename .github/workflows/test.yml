@@ -123,7 +123,11 @@ jobs:
             fi
 
             # DNA-panel changes have their own focused, evidence/privacy tests.
-            if grep -Eq '^accounts/tests_(genetic_panel|moderator_health_publication)[.]py
+            if grep -Fq "accounts/tests_genetic_panel.py" <<<"$changed" ||
+               grep -Fq "accounts/tests_moderator_health_publication.py" <<<"$changed"; then
+              targets+=("accounts.tests_genetic_panel" "accounts.tests_moderator_health_publication")
+              scoped_accounts=true
+            fi
             if grep -Eq '^accounts/(breeding_kennel_review|tests_breeding_kennel_review)[.]py$' <<<"$changed"; then
               targets+=("accounts.tests_breeding_kennel_review" "registry.tests_breeding_kennel_reconciliation")
               scoped_accounts=true
