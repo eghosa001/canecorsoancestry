@@ -21,6 +21,7 @@
       <p class="muted">{{ dog.pk }} · {{ dog.kennel.name|default:"No recorded kennel" }} · {% if dog.is_public %}Published{% else %}Unpublished{% endif %}</p>
       <div class="button-row">
         <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Dog editor</a>
+        <a class="btn btn-gold" href="{% url 'accounts:reviewed-dog-health' dog.pk %}">Show / hide approved results</a>
         {% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}#health">Public Health &amp; DNA view</a>{% endif %}
       </div>
     </section>

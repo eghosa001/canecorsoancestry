@@ -1755,6 +1755,7 @@ def moderation_submission_detail(request, pk):
             .first()
         )
 
+    from .health_review import HealthTranscriptionForm, health_transcription_initial
     return render(
         request,
         "accounts/moderation_submission_detail.html",
@@ -1784,6 +1785,7 @@ def moderation_submission_detail(request, pk):
                 and can_second_approve(request.user)
             ),
             "reviewer_role": moderation_role(request.user),
+            "health_review_form": (HealthTranscriptionForm(initial=health_transcription_initial(submission)) if submission.kind == Submission.Kind.HEALTH else None),
         },
     )
 
@@ -2448,6 +2450,14 @@ def request_document_visibility(request, pk):
     form = DocumentVisibilityForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
         desired = form.cleaned_data["is_public"]
+        if desired and document.source_submission_id and document.source_submission.kind == Submission.Kind.HEALTH:
+            form.add_error("is_public", "Original health/DNA certificates cannot be public. Publish their reviewed summaries instead.")
+            return render(request, "accounts/submission_form.html", {
+                "form": form, "eyebrow": "Document management",
+                "title": f"Visibility · {document.title}",
+                "intro": "The original medical certificate is private.",
+                "button_label": "Submit visibility request",
+            })
         if desired and BreedDNAReport.objects.filter(
             evidence_document=document, consent_full_report=False
         ).exists():
