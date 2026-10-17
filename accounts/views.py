@@ -1215,19 +1215,19 @@ def submit_health_record(request, pk):
         {
             "form": form,
             "eyebrow": "Health & DNA",
-            "title": f"Submit a health/DNA result for {dog.name}",
+            "title": f"Health & DNA reports · {dog.name}",
             "current_photo_url": _current_dog_photo_url(dog),
             "intro": (
-                "Structured results remain pending until an authorized Moderator checks "
-                "the supporting evidence. The uploaded certificate stays private "
-                "unless its visibility is separately approved. Approved DNA breed percentages "
-                "and provider become public with kennel owner consent and moderator approval. "
-                "The supporting medical certificate image remains private. "
-                "You may upload new health or DNA certificates whenever you wish, including after the dog is published. "
-                "DSRA, NCL1 and CMR1 remain Not tested until their own laboratory results are reviewed."
+                "Add a new laboratory report at any time. The original photo or PDF stays "
+                "private; a moderator checks it before any approved results appear publicly."
             ),
             "breed_dna_form": True,
-            "button_label": "Submit result for review",
+            "owner_health_submissions": list(
+                Submission.objects.filter(
+                    dog=dog, kind=Submission.Kind.HEALTH, submitted_by=request.user
+                ).order_by("-created_at")[:5]
+            ),
+            "button_label": "Send private report for review",
             "multipart": True,
             "dog": dog,
         },

@@ -1,32 +1,60 @@
-/* Prominent black DNA verification card: responsive and high contrast. */
-.breed-dna-card {background:#08090b;color:#fafafa;border:1px solid #303236;border-radius:20px;padding:clamp(1.25rem,3.5vw,2.25rem);margin:.5rem 0 1rem;box-shadow:0 14px 32px rgba(0,0,0,.12);overflow-wrap:anywhere;}
-.breed-dna-label {display:flex;align-items:center;gap:.8rem;color:#fafafa;font-size:clamp(1.15rem,2.5vw,1.85rem);font-weight:670;letter-spacing:-.02em;line-height:1.25;}
-.breed-dna-icon {flex:none;width:28px;height:28px;color:#f6f7f9;}
-.breed-dna-score {display:block;color:#fff;margin:1.25rem 0 .7rem;font-size:clamp(2.05rem,5.6vw,3.8rem);line-height:1.06;font-weight:750;letter-spacing:-.045em;}
-.breed-dna-unverified {display:block;margin:1.25rem 0 .75rem;color:#fff;font-size:clamp(1.5rem,4vw,2.35rem);letter-spacing:-.025em;line-height:1.13;}
-.breed-dna-card .breed-dna-meta {color:#bcbfc5;font-size:clamp(.95rem,2.3vw,1.25rem);line-height:1.5;margin:0 0 1rem;}
-.breed-dna-meta span {padding:0 .2rem;}
-.breed-dna-breakdown {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));gap:.5rem;margin:1rem 0;}
-.breed-dna-entry {display:flex;justify-content:space-between;gap:1rem;background:#18191c;border:1px solid #34363a;border-radius:10px;padding:.7rem .85rem;font-size:.95rem;}
-.breed-dna-entry strong {color:#f6f6f6;white-space:nowrap;}
-.breed-dna-card small {display:block;margin-top:.65rem;color:#a7abb3;font-size:.79rem;line-height:1.55;}
-.breed-dna-card .breed-dna-report-link {display:inline-flex;align-items:center;min-height:44px;color:#f1db9e;font-weight:650;text-decoration:underline;text-underline-offset:3px;padding:.6rem 0;}
-.genetic-screening {border-top:1px solid #33363b;margin-top:1.3rem;padding-top:1.3rem;}
-.genetic-screening h3 {font-size:clamp(1.05rem,2.3vw,1.32rem);color:#f9f9fa;margin:0 0 .75rem;font-weight:680;}
-.genetic-screening-row {display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.85rem 0;border-bottom:1px solid #25282d;min-width:0;}
-.genetic-screening-identity {display:flex;flex-direction:column;gap:.2rem;min-width:0;}
-.genetic-screening-identity strong {font-size:1.02rem;color:#fafafa;font-weight:700;}
-.genetic-screening-identity span {font-size:.8rem;color:#b1b5bd;line-height:1.35;}
-.genetic-screening-status {flex:none;display:inline-flex;align-items:center;gap:.4rem;font-size:.86rem;font-weight:700;padding:.38rem .65rem;border-radius:99px;border:1px solid transparent;line-height:1.2;white-space:nowrap;}
-.genetic-screening-status--clear {color:#88e2b4;background:#123527;border-color:#2b7652;}
-.genetic-screening-status--carrier {color:#f4d18d;background:#3e2c12;border-color:#80622c;}
-.genetic-screening-status--affected {color:#ffb1ae;background:#492022;border-color:#92464b;}
-.genetic-screening-status--untested {color:#c0c5cb;background:#23262a;border-color:#41454b;}
-.health-upload-actions {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin:0 0 1rem;padding:.9rem 0;}
-.health-upload-actions strong {font-weight:700;}
-.health-upload-actions p {color:var(--muted,#767676);font-size:.91rem;margin:.25rem 0 0;}
-.health-upload-actions a {min-height:44px;}
-@media(max-width:540px){.breed-dna-card{border-radius:15px;padding:1.15rem;}.breed-dna-label{gap:.65rem;}.breed-dna-icon{width:25px;height:25px;}.genetic-screening-row{gap:.55rem;}.genetic-screening-status{font-size:.77rem;padding:.35rem .48rem;}.genetic-screening-identity span{font-size:.73rem;}.health-upload-actions a{width:100%;text-align:center;}}
-
-/* Keep the Health heading visible below the sticky mobile profile tabs. */
-#health { scroll-margin-top: 7.5rem; }
+/* Health & DNA · restrained dark verification card, readable on narrow phones. */
+#health {scroll-margin-top:8rem}
+.health-profile-panel{min-width:0}
+.health-profile-heading{display:flex;align-items:flex-start;gap:1rem;justify-content:space-between;margin-bottom:1rem}
+.health-profile-heading h2{margin:.18rem 0 0}
+.health-kicker{margin:0;color:var(--muted,#a0a0a0);font-size:.7rem;font-weight:680;text-transform:uppercase;letter-spacing:.12em}
+.breed-dna-card{background:#090b0c;color:#f8f8f6;border:1px solid #303331;border-radius:20px;padding:clamp(1.1rem,3.5vw,2rem);margin:.2rem 0 1.35rem;box-shadow:0 15px 38px #00000015;overflow-wrap:anywhere}
+.breed-dna-intro{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;min-width:0}
+.breed-dna-symbol{width:35px;height:35px;border:1px solid #3b3c37;border-radius:12px;background:#181b19;color:#dfca93;display:grid;place-items:center;flex:none}
+.breed-dna-symbol svg{width:20px;height:20px}
+.breed-dna-label{font-size:clamp(1.03rem,2vw,1.3rem);letter-spacing:-.015em;font-weight:730;color:#f9f9f7;line-height:1.25}
+.breed-dna-trust{margin-left:auto;white-space:nowrap;display:inline-flex;gap:.3rem;align-items:center;border:1px solid #305745;background:#10271d;border-radius:30px;color:#a8e9c5;padding:.32rem .7rem;font-size:.73rem;font-weight:700}
+.breed-dna-summary{display:flex;gap:clamp(.8rem,3vw,1.6rem);align-items:center;flex-wrap:wrap;margin:1.5rem 0 1rem}
+.breed-dna-score{color:#fff;font-weight:760;font-variant-numeric:tabular-nums;letter-spacing:-.06em;font-size:clamp(3.05rem,7vw,5rem);line-height:1;white-space:nowrap}
+.breed-dna-score span{font-size:.65em;letter-spacing:-.04em}
+.breed-dna-summary-copy{display:flex;flex-direction:column;gap:.24rem}
+.breed-dna-summary-copy strong{font-size:clamp(1.25rem,3vw,1.75rem);letter-spacing:-.025em;line-height:1.2;color:#fff}
+.breed-dna-summary-copy span{font-size:.79rem;color:#b4b6b7}
+.breed-dna-meta{border-top:1px solid #292e2b;padding-top:.95rem;color:#b8bdbe;font-size:.88rem;line-height:1.5;margin:0}
+.breed-dna-meta strong{color:#efefeb}
+.breed-dna-meta span{padding:0 .18rem}
+.breed-dna-breakdown{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));gap:.5rem;margin:1rem 0 0}
+.breed-dna-entry{display:flex;justify-content:space-between;gap:.8rem;padding:.62rem .75rem;border:1px solid #333733;border-radius:10px;background:#181b19;font-size:.85rem}
+.breed-dna-entry strong{color:#efefed;white-space:nowrap}
+.genetic-screening{border-top:1px solid #343937;margin-top:1.25rem;padding-top:1.2rem}
+.genetic-screening--standalone{border-top:0;margin-top:0;padding-top:0}
+.genetic-screening-head{display:flex;justify-content:space-between;align-items:flex-end;gap:.8rem;flex-wrap:wrap;margin-bottom:.5rem}
+.breed-dna-eyebrow{display:block;color:#bba56f;letter-spacing:.11em;text-transform:uppercase;font-size:.67rem;font-weight:740;margin-bottom:.24rem}
+.genetic-screening-head h3{font-size:clamp(1.08rem,2.6vw,1.45rem);color:#f6f6f4;margin:0;letter-spacing:-.016em}
+.genetic-screening-verified{font-size:.73rem;color:#b5c1b9;border:1px solid #343d37;border-radius:30px;padding:.26rem .6rem}
+.genetic-screening-list{display:grid;gap:0}
+.genetic-screening-row{display:flex;justify-content:space-between;align-items:center;gap:.8rem;padding:.96rem 0;border-bottom:1px solid #262b2a;min-width:0}
+.genetic-screening-row:last-child{border-bottom:0;padding-bottom:.3rem}
+.genetic-screening-identity{min-width:0;display:flex;flex-direction:column;gap:.18rem}
+.genetic-screening-identity strong{font-size:1rem;font-weight:750;color:#fff}
+.genetic-screening-identity span{font-size:.78rem;line-height:1.4;color:#b5b9bb}
+.genetic-screening-status{flex:none;display:inline-flex;gap:.32rem;align-items:center;border-radius:30px;padding:.36rem .65rem;font-size:.78rem;font-weight:760;white-space:nowrap;border:1px solid transparent}
+.genetic-screening-status--clear{color:#9ce5bb;background:#123526;border-color:#2d6447}
+.genetic-screening-status--carrier{color:#f6d28e;background:#3b2b10;border-color:#81612a}
+.genetic-screening-status--affected{color:#ffc0be;background:#421c21;border-color:#813b47}
+.genetic-screening-status--untested{color:#c2c6ca;background:#292c2f;border-color:#454c4d}
+.other-health{margin:1.4rem 0}
+.other-health-heading{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:.6rem;margin:0 0 .8rem}
+.other-health-heading h3{font-size:1.12rem;margin:0}
+.other-health-heading span{font-size:.75rem;color:var(--muted,#999)}
+.health-test-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:.68rem}
+.health-test-item{display:flex;justify-content:space-between;align-items:center;gap:.9rem;min-width:0;padding:.9rem 1rem;border:1px solid var(--line,#333);border-radius:12px;background:rgba(125,125,125,.04)}
+.health-test-item-info,.health-test-item-result{display:flex;flex-direction:column;gap:.22rem;min-width:0}
+.health-test-item-info strong,.health-test-item-result strong{font-size:.92rem;overflow-wrap:anywhere}
+.health-test-item-result{text-align:right;align-items:flex-end}
+.health-test-item-result strong{font-size:1.05rem}
+.health-test-item small{font-size:.72rem;color:var(--muted,#999);line-height:1.38}
+.health-empty-state{display:flex;gap:.75rem;align-items:center;padding:1.5rem 1rem;border:1px dashed var(--line,#444);border-radius:14px;margin:.5rem 0 1rem}
+.health-empty-state strong{font-size:1.02rem}
+.health-empty-mark{color:#c7ab69;font-size:1.45rem}
+.health-upload-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 0 .2rem;margin:.2rem 0 0;border-top:1px solid var(--line,#444)}
+.health-upload-actions strong{font-size:.94rem}
+.health-upload-actions p{color:var(--muted,#999);font-size:.8rem;margin:.24rem 0 0;line-height:1.5}
+.health-upload-actions a{min-height:44px}
+@media(max-width:560px){#health{scroll-margin-top:7.5rem}.breed-dna-card{border-radius:16px;padding:1.1rem}.breed-dna-intro{gap:.55rem}.breed-dna-symbol{width:30px;height:30px}.breed-dna-trust{margin-left:0;font-size:.67rem}.breed-dna-summary{gap:.6rem;margin:1.15rem 0 .85rem}.breed-dna-score{font-size:clamp(2.9rem,12vw,4rem)}.breed-dna-summary-copy span{max-width:12rem}.genetic-screening-row{gap:.5rem}.genetic-screening-identity span{font-size:.7rem}.genetic-screening-status{font-size:.72rem;padding:.36rem .48rem}.health-upload-actions a{width:100%;text-align:center}.health-test-item{padding:.8rem}}

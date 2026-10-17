@@ -176,7 +176,7 @@ class HealthRecordSubmissionForm(forms.Form):
         validators=[
             validate_document_upload,
         ],
-        help_text="Required evidence. PDF or a readable image from your phone, camera or files, up to 20 MB. Kept private unless separately approved for publication.",
+        help_text="Required private evidence: PDF or a clear photo (maximum 20 MB). The original file is never published.",
     )
     notes = forms.CharField(
         required=False,
@@ -241,6 +241,16 @@ class HealthRecordSubmissionForm(forms.Form):
             if marker in MARKER_CODES and (cleaned.get("result") or "").strip().lower() not in SCREENING_RESULTS:
                 self.add_error("result", "For DSRA, NCL1 and CMR1 enter Clear, Carrier or Affected exactly as on the report.")
         return cleaned
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Related results stay together and the private evidence upload is last.
+        self.order_fields([
+            "evidence_type", "genetic_marker", "genetic_status",
+            "test_type", "result", "tested_on",
+            "dna_provider", "cane_corso_percentage", "other_breeds",
+            "acknowledge_public_summary", "attachment", "notes",
+        ])
 
     def clean_attachment(self):
         return normalize_image_upload(self.cleaned_data.get("attachment"))

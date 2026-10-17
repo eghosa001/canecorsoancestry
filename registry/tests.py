@@ -39,7 +39,8 @@ class DogModelTests(TestCase):
         response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertTrue(response.context["dog"]._has_breed_dna)
         self.assertIsNotNone(response.context["breed_dna"])
-        self.assertContains(response, "92.5% Cane Corso")
+        self.assertContains(response, 'class="breed-dna-score">92.5')
+        self.assertContains(response, "Cane Corso")
 
     def test_unstructured_breed_claim_never_creates_false_dna_verification(self):
         dog = Dog.objects.create(
@@ -66,7 +67,7 @@ class DogModelTests(TestCase):
             verification_state=VerificationState.HEALTH_VERIFIED,
         )
         response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
-        self.assertContains(response, "Other health records")
+        self.assertContains(response, "Other health screening")
         self.assertContains(response, "Hip score")
         self.assertNotContains(response, "Breed DNA not yet verified")
         self.assertNotContains(response, "genetic-screening-status--untested")
@@ -82,7 +83,7 @@ class DogModelTests(TestCase):
         response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertContains(response, "genetic-screening-status--clear", count=1)
         self.assertContains(response, "genetic-screening-status--untested", count=2)
-        self.assertNotContains(response, "Other health records")
+        self.assertNotContains(response, "Other health screening")
         self.assertNotContains(response, "Breed DNA not yet verified")
 
 

@@ -73,6 +73,20 @@ class GeneticPanelTests(TestCase):
         self.client.force_login(self.outsider)
         self.assertEqual(self.submit_marker("CMR1", "Clear").status_code, 403)
 
+    def test_owner_report_history_shows_pending_status_without_exposing_certificate(self):
+        self.client.force_login(self.owner)
+        self.assertEqual(self.submit_marker("CMR1", "Carrier").status_code, 302)
+        page = self.client.get(self.url)
+        self.assertContains(page, "Recent submissions")
+        self.assertContains(page, "Awaiting review")
+        self.assertContains(page, "CMR1")
+        self.assertContains(page, "Your report stays private")
+        self.assertNotContains(page, "genetics.pdf")
+        self.client.logout()
+        public = self.client.get(self.profile)
+        self.assertNotContains(public, "genetics.pdf")
+        self.assertNotContains(public, "genetic-screening-status--carrier")
+
     def test_rejects_missing_or_unrecognized_marker_status_without_creating_submission(self):
         self.client.force_login(self.owner)
         for status in ("", "Not tested", "Healthy"):
