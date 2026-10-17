@@ -43,6 +43,7 @@ from .models import (
 )
 from .permissions import can_access_public_pedigree_analysis, can_contribute_to_dog
 from .genetic_health import MARKER_CODES, marker_status_rows, unstructured_breed_claim
+from .dna import percentage_text
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
 
@@ -584,6 +585,7 @@ def dog_detail(request, slug):
             "mates_truncated": mates_truncated,
             "relative_health": relative_health,
             "breed_dna": breed_dna,
+            "breed_dna_percentage": percentage_text(breed_dna.cane_corso_percentage) if breed_dna else "",
             "genetic_screenings": genetic_screenings,
             "other_health_records": other_health_records,
             "show_dna_card": bool(breed_dna or genetic_screenings),

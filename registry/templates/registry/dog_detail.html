@@ -242,7 +242,7 @@
         <svg class="breed-dna-icon" viewBox="0 0 24 24" role="img" aria-label="DNA" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3c10 3 6 15 16 18M20 3C10 6 14 18 4 21M7 6h10M8.5 10h7M8.5 14h7M7 18h10"/></svg>
         <span>Breed DNA Verification</span>
       </div>
-        <strong class="breed-dna-score">{{ breed_dna.cane_corso_percentage|floatformat:"-2" }}% Cane Corso</strong>
+        <strong class="breed-dna-score">{{ breed_dna_percentage }}% Cane Corso</strong>
         <p class="breed-dna-meta">DNA-tested <span aria-hidden="true">·</span> {{ breed_dna.provider }} <span aria-hidden="true">·</span> Report reviewed</p>
         {% if breed_dna.composition|length > 1 %}
         <div class="breed-dna-breakdown" aria-label="Laboratory breed estimate breakdown">
