@@ -1,0 +1,104 @@
+/* Owner and moderator Health & DNA workflows. Isolated from unrelated forms. */
+.health-owner-shell{max-width:980px}
+.health-owner-shell .page-heading h1{font-size:clamp(1.7rem,4.8vw,2.6rem)}
+.health-owner-intro{display:flex;gap:.9rem;align-items:center;padding:1.1rem 1.2rem;border:1px solid #3a493e;background:linear-gradient(120deg,#15251b,#18211d);border-radius:16px;color:#f6f7f4;margin:1.3rem 0}
+.health-owner-intro-icon{display:grid;place-items:center;color:#e4c481;background:#283b2c;border:1px solid #4c634e;border-radius:13px;width:42px;height:42px;flex:none;font-size:1.5rem}
+.health-owner-intro strong{font-size:1.03rem}
+.health-owner-intro p{font-size:.84rem;line-height:1.5;color:#c2cdc5;margin:.2rem 0 0}
+.health-section-heading{display:flex;justify-content:space-between;align-items:baseline;gap:.8rem;flex-wrap:wrap;margin-bottom:.8rem}
+.health-section-heading h2{margin:0;font-size:1.15rem}
+.health-status-history{margin:1.4rem 0}
+.health-history-grid{display:grid;gap:.55rem}
+.health-history-item{border:1px solid var(--line,#454545);border-radius:12px;padding:.85rem 1rem;display:flex;justify-content:space-between;align-items:center;gap:.85rem;min-width:0}
+.health-history-item>div{min-width:0;display:flex;flex-direction:column;gap:.22rem}
+.health-history-item strong{font-size:.9rem;overflow-wrap:anywhere}
+.health-history-item small{font-size:.75rem;color:var(--muted,#a2a2a2)}
+.health-workflow-pill{display:inline-flex;align-items:center;justify-content:center;border-radius:30px;padding:.28rem .57rem;line-height:1.28;white-space:nowrap;font-size:.73rem;font-weight:750;border:1px solid}
+.health-workflow-pill--approved{color:#b1e7bf;background:#153923;border-color:#47714f}
+.health-workflow-pill--pending{color:#e3cc9b;background:#392b14;border-color:#796233}
+.health-workflow-pill--needs{color:#f6d591;background:#4a3311;border-color:#8d6f2f}
+.health-workflow-pill--rejected{color:#f4b9b6;background:#451d20;border-color:#874449}
+.health-upload-form>.form-grid{display:flex;flex-direction:column;gap:1rem}
+.health-form-step{padding:1.2rem;background:rgba(128,128,128,.035);border:1px solid var(--line,#494949);border-radius:16px;min-width:0}
+.health-step-title{display:flex;align-items:center;gap:.75rem;margin-bottom:1.05rem}
+.health-step-title>span{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:11px;border:1px solid #b79b66;color:#d5b57a;font-size:.78rem;font-weight:760}
+.health-step-title>div{display:flex;flex-direction:column;gap:.16rem}
+.health-step-title strong{font-size:1.1rem}
+.health-step-title small{font-size:.75rem;color:var(--muted,#aaa)}
+.health-step-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.9rem;align-items:start;min-width:0}
+.health-step-fields .form-field{min-width:0}
+.health-step-fields .form-field[hidden]{display:none!important}
+.health-step-fields .health-field--evidence_type,
+.health-step-fields .health-field--genetic_marker,
+.health-step-fields .health-field--test_type,
+.health-step-fields .health-field--result,
+.health-step-fields .health-field--dna_provider,
+.health-step-fields .health-field--other_breeds,
+.health-step-fields .health-field--attachment,
+.health-step-fields .health-field--notes,
+.health-step-fields .health-field--acknowledge_public_summary{grid-column:1/-1}
+.health-step-fields label{display:block;font-size:.85rem;font-weight:710;margin-bottom:.32rem}
+.health-step-fields input:not([type="checkbox"]),.health-step-fields select,.health-step-fields textarea{width:100%;min-height:44px;max-width:100%;min-width:0}
+.health-step-fields input[type="file"]{padding:.72rem;border:1px dashed var(--line,#777);border-radius:11px;background:rgba(125,125,125,.06)}
+.health-step-fields small{display:block;max-width:68ch;line-height:1.5;font-size:.74rem;color:var(--muted,#aaa);margin-top:.28rem}
+.health-private-caption{font-size:.78rem;color:var(--muted,#a6a6a6);line-height:1.55;margin:.9rem 0}
+.health-submit-actions{justify-content:flex-start;gap:.75rem}
+.health-submit-actions .btn{min-height:46px}
+.health-review-panel{overflow:hidden}
+.health-review-step{display:flex;flex-direction:column;gap:.16rem;padding:1rem 0 .75rem}
+.health-review-step>span{font-size:.7rem;text-transform:uppercase;letter-spacing:.13em;font-weight:760;color:var(--gold,#c8a96d)}
+.health-review-step>strong{font-size:1.1rem}
+.health-evidence-card{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;border-radius:15px;padding:1.1rem;background:rgba(85,108,87,.12);border:1px solid var(--line,#555)}
+.health-evidence-icon{display:grid;place-items:center;width:46px;height:46px;flex:none;border-radius:12px;color:#d4bd89;background:rgba(114,116,87,.2);font-size:1.45rem}
+.health-evidence-card>div:nth-child(2){display:flex;flex-direction:column;gap:.28rem;flex:1;min-width:170px}
+.health-evidence-card strong{font-size:.92rem}
+.health-evidence-card small{line-height:1.5;color:var(--muted,#aaa);font-size:.79rem}
+.health-evidence-card .btn{min-height:44px}
+.health-review-help{font-size:.86rem;line-height:1.6;color:var(--muted,#aaa);max-width:70ch}
+.health-review-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin:1rem 0}
+.health-review-field{min-width:0}
+.health-review-field--wide{grid-column:1/-1}
+.health-review-field label{display:block;font-size:.83rem;font-weight:720;margin-bottom:.3rem}
+.health-review-fields input,.health-review-fields textarea{min-width:0;max-width:100%;width:100%;min-height:44px}
+.health-review-subtitle{font-size:1.05rem;margin:1.3rem 0 .75rem}
+.health-marker-review-grid{display:grid;gap:.52rem}
+.health-marker-review-row{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.85rem;border:1px solid var(--line,#555);border-radius:11px;min-width:0}
+.health-marker-review-row>div:first-child{display:flex;flex-direction:column;gap:.2rem;min-width:0}
+.health-marker-review-row strong{font-size:.93rem}
+.health-marker-review-row small{font-size:.74rem;line-height:1.45;color:var(--muted,#aaa)}
+.health-marker-review-controls{display:flex;gap:.7rem;align-items:center;justify-content:flex-end;flex-wrap:wrap;flex:none}
+.health-marker-review-controls select{min-height:44px;min-width:130px}
+.health-marker-review-controls label{display:inline-flex;align-items:center;gap:.4rem;font-size:.78rem;font-weight:700;cursor:pointer}
+.health-marker-review-controls input[type=checkbox],.health-review-confirm input[type=checkbox]{min-width:18px;min-height:18px;accent-color:#c5ab75}
+.health-review-confirm{display:grid;gap:.75rem;margin:1.2rem 0}
+.health-review-confirm label{display:flex;align-items:flex-start;gap:.65rem;font-size:.84rem;line-height:1.45}
+.health-review-save{min-height:46px}
+.health-review-management-link{display:inline-flex;margin-top:1rem}
+.health-review-overline{color:var(--muted,#999);font-size:.67rem;text-transform:uppercase;letter-spacing:.1em;font-weight:720;margin:0 0 .25rem}
+.health-count-badge{border:1px solid var(--line,#666);padding:.25rem .55rem;min-width:30px;text-align:center;border-radius:30px;font-size:.75rem}
+.health-review-workspace .panel{margin-bottom:1.1rem}
+.health-result-editor-row{display:flex;justify-content:space-between;align-items:center;gap:.9rem;flex-wrap:wrap;padding:1rem 0;border-bottom:1px solid var(--line,#555)}
+.health-result-editor-row:last-of-type{border-bottom:0}
+.health-result-editor-row>div:first-child{min-width:0;display:flex;flex-direction:column;gap:.25rem}
+.health-result-editor-row>div:first-child strong{font-size:.94rem;overflow-wrap:anywhere}
+.health-result-editor-row>div:first-child small{font-size:.74rem;color:var(--muted,#aaa)}
+.health-result-editor-copy span{font-size:.91rem}
+.health-result-editor-action{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap}
+.health-result-editor-action form{margin:0}
+.health-result-editor-action button{min-height:42px}
+.health-empty-editor{padding:1rem 0;color:var(--muted,#aaa)}
+.health-admin-shell .panel{margin-bottom:1rem}
+@media(max-width:650px){
+.health-owner-intro{align-items:flex-start;padding:1rem}
+.health-owner-intro-icon{width:34px;height:34px}
+.health-form-step{padding:1rem}
+.health-step-fields,.health-review-fields{grid-template-columns:1fr}
+.health-step-fields .form-field{grid-column:1/-1}
+.health-submit-actions .btn{width:100%;text-align:center}
+.health-marker-review-row{align-items:stretch;flex-direction:column}
+.health-marker-review-controls{justify-content:space-between}
+.health-marker-review-controls select{width:100%}
+.health-evidence-card>a{width:100%;text-align:center}
+.health-result-editor-action{width:100%;justify-content:space-between}
+.health-history-item{gap:.5rem}
+}
