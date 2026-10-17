@@ -602,6 +602,11 @@ class HealthRecord(models.Model):
         default=VerificationState.COMMUNITY,
     )
     notes = models.TextField(blank=True)
+    # Privately held evidence for explicitly reviewed staff archival entries.
+    evidence_document = models.OneToOneField(
+        "registry.DogDocument", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="staff_health_record",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1097,6 +1102,8 @@ class DogDocument(models.Model):
     )
     file = models.FileField(upload_to="documents/%Y/%m/")
     is_public = models.BooleanField(default=False)
+    # Staff archival evidence is never exposed to kennel members or guests.
+    staff_review_only = models.BooleanField(default=False)
     submitted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -1132,6 +1139,9 @@ class BreedDNAReport(models.Model):
     provider = models.CharField(max_length=100)
     cane_corso_percentage = models.DecimalField(max_digits=5, decimal_places=2)
     composition = models.JSONField(default=list)
+    # Existing member-submitted reports carried explicit public-summary consent.
+    # Historical staff entries default to False when explicitly created.
+    consent_public_summary = models.BooleanField(default=True)
     consent_full_report = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

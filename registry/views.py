@@ -367,7 +367,7 @@ def _public_profile_dog(slug):
                 HealthRecord.objects.filter(dog_id=OuterRef("pk"))
             ),
             _has_breed_dna=Exists(
-                BreedDNAReport.objects.filter(health_record__dog_id=OuterRef("pk"))
+                BreedDNAReport.objects.filter(health_record__dog_id=OuterRef("pk"), consent_public_summary=True)
             ),
         )
     )
@@ -536,6 +536,7 @@ def dog_detail(request, slug):
         BreedDNAReport.objects.filter(
             health_record__dog=dog,
             health_record__verification_state=VerificationState.HEALTH_VERIFIED,
+            consent_public_summary=True,
         ).select_related("health_record", "evidence_document")
         .order_by("-health_record__tested_on", "-health_record__created_at").first()
         if dog._has_breed_dna else None

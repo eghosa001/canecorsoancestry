@@ -16,6 +16,7 @@
     </div>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">All dogs</a>
+      {% if owner %}<a class="btn btn-outline" href="{% url 'accounts:health-genetic-dog' dog.pk %}">Health &amp; genetic records</a>{% endif %}
       {% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">Public profile</a>{% endif %}
     </div>
   </header>
