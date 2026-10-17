@@ -12,6 +12,7 @@ KENNEL_PUBLICATION = ("registry", "0015_kennel_publication_controls")
 ARCHIVE_HYPOTHESIS = ("registry", "0016_unverified_breeding_kennel_hypotheses")
 STAFF_DEREGISTRATION = ("registry", "0017_moderation_staff_deregistration")
 BREED_DNA_REPORT = ("registry", "0018_breed_dna_report")
+HISTORICAL_HEALTH_PRIVACY = ("registry", "0019_staff_health_evidence_privacy")
 ALLOWED_MIGRATION = SAVED_PAIRING  # Backward compatibility for old tests/runbooks.
 
 # Model, field, constant default, and whether the field creates a DB index.
@@ -177,6 +178,45 @@ def _breed_dna_reference_is_exact(field, target, on_delete):
     )
 
 
+def _historical_health_privacy_is_exact(migration):
+    """Only the three additive fields enabling private archival evidence."""
+    if (
+        migration.dependencies != [BREED_DNA_REPORT]
+        or len(migration.operations) != 3
+        or any(not isinstance(op, AddField) for op in migration.operations)
+    ):
+        return False
+
+    health, document, dna = migration.operations
+    reference = health.field
+    staff_only = document.field
+    summary_consent = dna.field
+    if any(op.preserve_default is False for op in migration.operations):
+        return False
+
+    return (
+        health.model_name == "healthrecord"
+        and health.name == "evidence_document"
+        and type(reference) is models.OneToOneField
+        and str(reference.remote_field.model).lower() == "registry.dogdocument"
+        and reference.remote_field.on_delete is models.PROTECT
+        and reference.remote_field.related_name == "staff_health_record"
+        and reference.null and reference.blank and reference.unique
+        and document.model_name == "dogdocument"
+        and document.name == "staff_review_only"
+        and type(staff_only) is models.BooleanField
+        and staff_only.default is False
+        and staff_only.db_index is False
+        and not staff_only.null and not staff_only.unique
+        and dna.model_name == "breeddnareport"
+        and dna.name == "consent_public_summary"
+        and type(summary_consent) is models.BooleanField
+        and summary_consent.default is True
+        and summary_consent.db_index is False
+        and not summary_consent.null and not summary_consent.unique
+    )
+
+
 def validate_pending_schema_changes(plan):
     """Reject other pending versions, combined plans, reversals, and drift."""
     if not plan:
@@ -196,6 +236,8 @@ def validate_pending_schema_changes(plan):
     if identity == STAFF_DEREGISTRATION and _staff_deregistration_is_exact(migration):
         return True
     if identity == BREED_DNA_REPORT and _breed_dna_is_exact(migration):
+        return True
+    if identity == HISTORICAL_HEALTH_PRIVACY and _historical_health_privacy_is_exact(migration):
         return True
     raise ValueError("Unapproved production migration or unexpected operations.")
 

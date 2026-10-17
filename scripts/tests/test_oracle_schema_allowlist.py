@@ -261,5 +261,51 @@ class ApprovedSchemaMigrationTests(unittest.TestCase):
         self.assertNotIn("UPDATE django_app.registry_dog", sql)
 
 
+    def test_historical_health_privacy_is_exactly_three_additive_fields(self):
+        import copy
+        mod = importlib.import_module("registry.migrations.0019_staff_health_evidence_privacy")
+        migration = mod.Migration("0019_staff_health_evidence_privacy", "registry")
+        self.assertTrue(validate_pending_schema_changes([(migration, False)]))
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(migration, True)])
+        for index, key, value in (
+            (0, "related_name", "faked_owner_consent"),
+            (1, "default", True),
+            (2, "default", False),
+        ):
+            changed = copy.deepcopy(migration)
+            if index == 0:
+                changed.operations[index].field.remote_field.related_name = value
+            else:
+                setattr(changed.operations[index].field, key, value)
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                validate_pending_schema_changes([(changed, False)])
+        changed = copy.deepcopy(migration)
+        changed.operations.pop()
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(changed, False)])
+
+    def test_historical_privacy_sql_is_admin_only_atomic_and_backed_up(self):
+        root = Path(__file__).resolve().parents[1] / "oracle_runner"
+        stage = (root / "stage_django.sh").read_text()
+        sql = (root / "approved_registry_0019.sql").read_text()
+        self.assertIn("registry.0019_staff_health_evidence_privacy", stage)
+        self.assertLess(
+            stage.index("bash scripts/oracle_runner/backup_local_postgres.sh"),
+            stage.index("< scripts/oracle_runner/approved_registry_0019.sql"),
+        )
+        for expected in (
+            "BEGIN;", "COMMIT;", "cca_shadow_admin", "django_app.django_migrations",
+            "ADD COLUMN evidence_document_id bigint NULL",
+            "ADD COLUMN staff_review_only boolean NOT NULL DEFAULT false",
+            "ADD COLUMN consent_public_summary boolean NOT NULL DEFAULT true",
+        ):
+            self.assertIn(expected, sql)
+        self.assertEqual(sql.count("ADD COLUMN "), 3)
+        self.assertNotIn("UPDATE django_app.registry_dog", sql)
+        self.assertNotIn("GRANT ALTER", stage + sql)
+        self.assertNotIn("GRANT ALL", stage + sql)
+
+
 if __name__ == "__main__":
     unittest.main()
