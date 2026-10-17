@@ -13,7 +13,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 
 from registry.models import Dog
-from registry.permissions import can_use_member_features
+from registry.permissions import can_access_public_pedigree_analysis, can_use_member_features
 from registry.querysets import public_dog_match_filter, published_dogs
 
 from .services import (
