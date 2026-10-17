@@ -418,9 +418,10 @@ def dog_detail(request, slug):
 
 
     # All available published direct ancestors are included by default.
-    # A signed-in member may compare specific depths; guests cannot override it.
+    # Members and active assigned staff can compare depths, across all devices.
+    # Guests retain the full published-ancestry default without a selector.
     # Missing/unpublished parentage must not be misreported as a true zero.
-    can_select_coi = bool(request.user.is_active and can_use_member_features(request.user))
+    can_select_coi = can_access_public_pedigree_analysis(request.user)
     coi_generations = (
         requested_coi_generations(request.GET.get("coi_generations"))
         if can_select_coi else None
