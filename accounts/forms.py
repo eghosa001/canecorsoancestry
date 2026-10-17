@@ -202,10 +202,6 @@ class HealthRecordSubmissionForm(forms.Form):
         required=False, label="I consent to publishing the testing company and breed percentages",
         help_text="This summary is public only after moderation, even if the full report stays private.",
     )
-    allow_full_report_publication = forms.BooleanField(
-        required=False, label="I also consent to publication of the complete uploaded DNA report",
-        help_text="Optional. The whole file, including any identifiers, becomes public after review.",
-    )
 
     def clean(self):
         cleaned = super().clean()

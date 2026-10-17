@@ -4,7 +4,7 @@
   if (!type) return;
   const marker = document.getElementById("id_genetic_marker");
   const breedFields = ["dna_provider", "cane_corso_percentage", "other_breeds",
-    "acknowledge_public_summary", "allow_full_report_publication"];
+    "acknowledge_public_summary"];
   const markers = ["genetic_marker", "genetic_status"];
   const other = ["test_type", "result"];
   function update() {

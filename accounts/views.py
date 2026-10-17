@@ -1193,7 +1193,7 @@ def submit_health_record(request, pk):
                             "cane_corso_percentage": str(form.cleaned_data["cane_corso_percentage"]),
                             "other_breeds": form.cleaned_data["other_breeds"],
                             "acknowledge_public_summary": True,
-                            "allow_full_report_publication": form.cleaned_data["allow_full_report_publication"],
+                            "allow_full_report_publication": False,  # Supporting image remains private.
                         } if form.cleaned_data["evidence_type"] == "breed" else {}),
                     },
                     attachment=upload,
