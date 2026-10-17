@@ -39,7 +39,7 @@ from .models import (
     Submission,
     public_verification_label,
 )
-from .permissions import can_contribute_to_dog, can_use_member_features
+from .permissions import can_access_public_pedigree_analysis, can_contribute_to_dog
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
 
