@@ -32,6 +32,8 @@ class MemberAnalysisGateTests(TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Register to start your pairing analysis")
+        self.assertContains(response, f'action="{self.pairing}#mating-access"')
+        self.assertContains(response, 'id="mating-access"')
         self.assertContains(response, "Gate Sire")
         self.assertContains(response, "Gate Dam")
         self.assertContains(response, "/member/signup/?next=")
