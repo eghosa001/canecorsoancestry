@@ -65,6 +65,18 @@ def can_use_member_features(user):
     )
 
 
+def can_access_public_pedigree_analysis(user):
+    """Members and active assigned staff may research published ancestry.
+
+    This never grants member-owned editing, submissions or saved research.
+    """
+    return bool(
+        getattr(user, "is_authenticated", False)
+        and getattr(user, "is_active", False)
+        and (can_use_member_features(user) or moderation_role(user) is not None)
+    )
+
+
 def can_contribute_to_kennel(user, kennel):
     if not can_use_member_features(user):
         return False
