@@ -42,6 +42,7 @@ from .models import (
     public_verification_label,
 )
 from .permissions import can_access_public_pedigree_analysis, can_contribute_to_dog
+from .genetic_health import marker_status_rows
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
 
@@ -531,6 +532,8 @@ def dog_detail(request, slug):
         # to display. Preserve the empty Health & DNA section in the template.
         relative_health, dog.display_health_records = [], []
 
+    genetic_screenings = marker_status_rows(dog.display_health_records)
+
     # Surface only moderator-reviewed lab estimates, never pending submissions.
     breed_dna = (
         BreedDNAReport.objects.filter(
@@ -561,6 +564,7 @@ def dog_detail(request, slug):
             "mates_truncated": mates_truncated,
             "relative_health": relative_health,
             "breed_dna": breed_dna,
+            "genetic_screenings": genetic_screenings,
             "can_submit_breed_dna": can_submit_breed_dna,
             "coi_percent": coi_percent,
             "can_select_coi": can_select_coi,

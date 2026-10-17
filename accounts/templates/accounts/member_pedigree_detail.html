@@ -7,6 +7,7 @@
   <a class="btn btn-outline" href="{% url 'accounts:my-pedigrees' %}">← My pedigrees</a>
   {% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">Public dog profile</a>{% endif %}
   <a class="btn btn-outline" href="#advanced-analysis-title">Jump to analysis</a>
+  <a class="btn btn-gold" href="{% url 'accounts:submit-health-record' dog.pk %}">Upload health / DNA</a>
 </nav>
 <p class="page-shell muted no-print" id="private-pedigree-navigation-help">Swipe sideways to explore generations, or focus the ancestry tree and use arrow keys. Private kennel dogs remain restricted to authorized members.</p>
 {% if cycle_error %}<div class="notice error page-shell">{{ cycle_error }}</div>{% endif %}

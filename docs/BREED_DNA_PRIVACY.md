@@ -26,3 +26,13 @@ the existing member submission and moderation workflow. Staff cannot manufacture
 owner consent. Existing approved member reports retain their original summary
 consent through the additive migration default. The Super Admin can withdraw
 all public DNA details for a particular dog; evidence and audit history remain.
+
+## Reviewed inherited conditions and repeat uploads
+
+DSRA, NCL1 and CMR1 appear as Clear, Carrier, Affected, or Not tested on
+published dog profiles. Only specifically approved laboratory-evidenced
+results can produce a health classification. No available result (including
+ambiguous results) means Not tested, NEVER a presumption of genetic clearance.
+DNA breed-composition percentages continue to require separate owner consent.
+The original member Health & DNA submission form is reusable for newly
+received test certificates, including after dog/pedigree publication.
