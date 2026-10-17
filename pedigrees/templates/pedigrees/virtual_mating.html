@@ -8,7 +8,7 @@
     <p>Registered members, administrators and active moderators can compare a public sire and dam using the ancestry already connected in the database. This is a hypothetical pedigree analysis only and does not create a litter or registration.</p>
   </header>
 
-  <form id="pairing-form" class="mating-form mating-form-expanded" method="get" action="{% url 'pedigrees:virtual-mating' %}#analysis-outcome">
+  <form id="pairing-form" class="mating-form mating-form-expanded" method="get" action="{% url 'pedigrees:virtual-mating' %}{% if user.is_authenticated %}#analysis-outcome{% else %}#mating-access{% endif %}">
     <div class="mating-select">
       <label for="sire_q">Sire</label>
       <input type="hidden" id="sire" name="sire" value="{% if sire %}{{ sire.pk }}{% else %}{{ sire_selected_id }}{% endif %}">
@@ -36,7 +36,7 @@
   </form>
 
   {% if membership_required %}
-    <div class="notice" role="status" aria-live="polite">
+    <div id="mating-access" class="notice" role="status" aria-live="polite">
       <strong>Register to start your pairing analysis.</strong>
       <p>Virtual mating and pedigree calculations are for registered members and authorized staff. Your selected sire and dam will be kept when you sign in or create an account.</p>
       <div class="button-row"><a class="btn btn-gold" href="{{ member_signup_url }}">Create free member account</a><a class="btn btn-outline" href="{{ member_login_url }}">Sign in</a></div>
