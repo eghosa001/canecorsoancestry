@@ -5,7 +5,7 @@
   <header class="page-heading">
     <p class="eyebrow">Pedigree analysis</p>
     <h1>Virtual mating</h1>
-    <p>Registered members can compare a public sire and dam using the ancestry already connected in the database. This is a hypothetical pedigree analysis only and does not create a litter or registration.</p>
+    <p>Registered members, administrators and active moderators can compare a public sire and dam using the ancestry already connected in the database. This is a hypothetical pedigree analysis only and does not create a litter or registration.</p>
   </header>
 
   <form class="mating-form mating-form-expanded" method="get">
@@ -38,7 +38,7 @@
   {% if membership_required %}
     <div class="notice" role="status" aria-live="polite">
       <strong>Register to start your pairing analysis.</strong>
-      <p>Virtual mating and pedigree calculations are for registered members. Your selected sire and dam will be kept when you sign in or create an account.</p>
+      <p>Virtual mating and pedigree calculations are for registered members and authorized staff. Your selected sire and dam will be kept when you sign in or create an account.</p>
       <div class="button-row"><a class="btn btn-gold" href="{{ member_signup_url }}">Create free member account</a><a class="btn btn-outline" href="{{ member_login_url }}">Sign in</a></div>
     </div>
   {% endif %}
