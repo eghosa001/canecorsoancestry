@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Review submission · Cane Corso Ancestry{% endblock %}
 {% block content %}
 <section class="page-shell moderation-page">
@@ -134,27 +135,40 @@
   {% endif %}
 
   {% if submission.kind == "health" and submission.dog %}
-  <section class="panel">
-    <div class="panel-heading"><h2>Transcribe laboratory results</h2><span>Open the member's private picture or PDF, select the results actually present, then save. Approval remains separate.</span></div>
+  <link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261017-1">
+  <section class="panel health-review-panel">
+    <div class="health-review-step"><span>01 · Private evidence</span><strong>Review the laboratory certificate</strong></div>
+    {% if submission.attachment %}
+      <div class="health-evidence-card">
+        <div class="health-evidence-icon" aria-hidden="true">▤</div>
+        <div><strong>Original report · Confidential</strong><small>View the member's picture or PDF before entering results. This file is not shown on the public profile.</small></div>
+        <a class="btn btn-outline" href="{{ submission.attachment.url }}" target="_blank" rel="noopener noreferrer">Open private report ↗</a>
+      </div>
+    {% endif %}
+    <div class="health-review-step"><span>02 · Transcribe verified findings</span><strong>Choose what the public may see</strong></div>
+    <p class="health-review-help">Enter only results confirmed by the private report. Each DSRA, NCL1 or CMR1 result can be shown or hidden independently. Publication still requires the normal approval action.</p>
     {% if submission.status == "pending" %}
       <form method="post" action="{% url 'accounts:transcribe-health-submission' submission.pk %}" class="member-form">
         {% csrf_token %}
-        <div class="form-grid">
-          {% for field in health_review_form %}
-            <div class="form-field">
-              <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
-              {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-              {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
-            </div>
-          {% endfor %}
+        <div class="health-review-fields">
+          <div class="health-review-field"><label for="{{ health_review_form.laboratory.id_for_label }}">Laboratory</label>{{ health_review_form.laboratory }}</div>
+          <div class="health-review-field"><label for="{{ health_review_form.breed_percentage.id_for_label }}">Cane Corso percentage</label>{{ health_review_form.breed_percentage }}</div>
+          <div class="health-review-field health-review-field--wide"><label for="{{ health_review_form.other_breeds.id_for_label }}">Other breeds (if reported)</label>{{ health_review_form.other_breeds }}</div>
         </div>
-        <button class="btn btn-gold" type="submit">Save transcribed results (pending approval)</button>
+        <h3 class="health-review-subtitle">Genetic marker results</h3>
+        <div class="health-marker-review-grid">
+          <div class="health-marker-review-row"><div><strong>DSRA</strong><small>Dental-Skeletal-Retinal Anomaly</small></div><div class="health-marker-review-controls">{{ health_review_form.status_DSRA }}<label>{{ health_review_form.publish_DSRA }} Publish result</label></div></div>
+          <div class="health-marker-review-row"><div><strong>NCL1</strong><small>Neuronal Ceroid Lipofuscinosis 1</small></div><div class="health-marker-review-controls">{{ health_review_form.status_NCL1 }}<label>{{ health_review_form.publish_NCL1 }} Publish result</label></div></div>
+          <div class="health-marker-review-row"><div><strong>CMR1</strong><small>Canine Multifocal Retinopathy 1</small></div><div class="health-marker-review-controls">{{ health_review_form.status_CMR1 }}<label>{{ health_review_form.publish_CMR1 }} Publish result</label></div></div>
+        </div>
+        <div class="health-review-confirm"><label>{{ health_review_form.publish_primary }} Show other reviewed result</label><label>{{ health_review_form.reviewed }} I checked these results against the original certificate</label></div>
+        {% for field in health_review_form %}{% for error in field.errors %}<p class="field-error">{{ field.label }}: {{ error }}</p>{% endfor %}{% endfor %}
+        <button class="btn btn-gold health-review-save" type="submit">Save findings for approval →</button>
       </form>
     {% else %}
       <p>Submission already reviewed. You can still change individual public-summary toggles.</p>
     {% endif %}
-    <p class="muted">Absent/unreported tests are never automatically marked Clear. The original image remains confidential.</p>
-    <a class="text-link" href="{% url 'accounts:reviewed-dog-health' submission.dog.pk %}">Manage public-result visibility for this dog →</a>
+    <a class="text-link health-review-management-link" href="{% url 'accounts:reviewed-dog-health' submission.dog.pk %}">Manage approved public results →</a>
   </section>
   {% endif %}
   <section class="panel">

@@ -2,7 +2,8 @@
 {% load static %}
 {% block title %}{{ title }} · Cane Corso Ancestry{% endblock %}
 {% block content %}
-<section class="page-shell member-form-shell">
+{% if breed_dna_form %}<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261017-1">{% endif %}
+<section class="page-shell member-form-shell {% if breed_dna_form %}health-owner-shell{% endif %}">
   <header class="page-heading">
     <p class="eyebrow">{{ eyebrow }}</p>
     <h1>{{ title }}</h1>
@@ -51,21 +52,65 @@
   </section>
   {% endif %}
   {% if breed_dna_form %}
-  <section class="panel">
-    <h2>Submit new health &amp; genetic reports whenever you need</h2>
-    <p class="muted">Upload one laboratory result per submission. Select DSRA, NCL1 or CMR1 to classify one of the highlighted inherited conditions. If the dog has not been tested for a condition, it will remain Not tested. Every new report needs approval before appearing on the public profile.</p>
-  </section>
+    <section class="health-owner-intro" aria-label="Health report upload process">
+      <div class="health-owner-intro-icon" aria-hidden="true">✧</div>
+      <div><strong>Your report stays private</strong><p>Select the test, enter exactly what the laboratory reported, and attach the original image or PDF. A moderator reviews every new submission.</p></div>
+    </section>
+    {% if owner_health_submissions %}
+      <section class="health-status-history" aria-label="My recent health submissions">
+        <div class="health-section-heading">
+          <h2>Recent submissions</h2>
+          <a href="{% url 'accounts:submissions' %}" class="text-link">View all →</a>
+        </div>
+        <div class="health-history-grid">
+          {% for item in owner_health_submissions %}
+            <div class="health-history-item">
+              <div><strong>{{ item.payload.test_type|default:"Health / DNA report" }}</strong><small>{{ item.created_at|date:"j M Y" }}</small></div>
+              {% if item.status == "approved" %}
+                <span class="health-workflow-pill health-workflow-pill--approved">Approved</span>
+              {% elif item.status == "rejected" %}
+                <span class="health-workflow-pill health-workflow-pill--rejected">Rejected</span>
+              {% elif item.verification_status == "awaiting_evidence" %}
+                <span class="health-workflow-pill health-workflow-pill--needs">Evidence requested</span>
+              {% else %}
+                <span class="health-workflow-pill health-workflow-pill--pending">Awaiting review</span>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
   {% endif %}
   <form class="member-form" method="post" {% if multipart %}enctype="multipart/form-data"{% endif %}>
     {% csrf_token %}
     {% if form.non_field_errors %}<div class="notice error">{{ form.non_field_errors }}</div>{% endif %}
+    {% if breed_dna_form %}<div class="health-upload-form">{% endif %}
     <div class="form-grid">
       {% for field in form %}
+        {% if breed_dna_form %}
+          {% if field.name == "evidence_type" %}
+            <div class="health-form-step">
+              <div class="health-step-title"><span>01</span><div><strong>Choose report type</strong><small>Which examination was performed?</small></div></div>
+              <div class="health-step-fields">
+          {% elif field.name == "genetic_marker" %}
+              </div>
+            </div>
+            <div class="health-form-step">
+              <div class="health-step-title"><span>02</span><div><strong>Record the result</strong><small>Use the values printed on the laboratory certificate.</small></div></div>
+              <div class="health-step-fields">
+          {% elif field.name == "attachment" %}
+              </div>
+            </div>
+            <div class="health-form-step">
+              <div class="health-step-title"><span>03</span><div><strong>Upload supporting evidence</strong><small>A photograph or PDF is required and stays private.</small></div></div>
+              <div class="health-step-fields">
+          {% endif %}
+        {% endif %}
         {% if field.is_hidden %}
           {{ field }}
           {% for error in field.errors %}<span class="field-error">{{ field.label }}: {{ error }}</span>{% endfor %}
         {% else %}
-          <div class="form-field {% if field.field.widget.input_type == 'textarea' %}form-wide{% endif %}">
+          <div class="form-field {% if field.field.widget.input_type == 'textarea' %}form-wide{% endif %} {% if breed_dna_form %}health-field health-field--{{ field.name }}{% endif %}">
             <label for="{{ field.id_for_label }}">{{ field.label }}</label>
             {{ field }}
             {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
@@ -73,11 +118,14 @@
           </div>
         {% endif %}
       {% endfor %}
+      {% if breed_dna_form %}</div></div>{% endif %}
     </div>
-    <div class="button-row">
+    {% if breed_dna_form %}<p class="health-private-caption">Only the approved summary can appear on your dog's profile. The uploaded certificate remains private.</p>{% endif %}
+    <div class="button-row {% if breed_dna_form %}health-submit-actions{% endif %}">
       <button class="btn btn-gold" type="submit">{{ button_label }}</button>
       <a class="btn btn-outline" href="{% url 'accounts:submissions' %}">Cancel</a>
     </div>
+    {% if breed_dna_form %}</div>{% endif %}
   </form>
 </section>
 {% if breed_dna_form %}

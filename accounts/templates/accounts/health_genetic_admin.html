@@ -1,12 +1,14 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Health & Genetic Records · Cane Corso Ancestry{% endblock %}
 {% block content %}
-<section class="page-shell">
+<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261017-1">
+<section class="page-shell health-admin-shell">
   <header class="page-heading moderation-heading">
     <div>
       <p class="eyebrow">Super Admin · private evidence workspace</p>
-      <h1>Health &amp; Genetic Records</h1>
-      <p>Review original laboratory evidence, record verified health results and protect owners' DNA publication consent. This site reviews external reports; it does not perform genetic tests.</p>
+      <h1>Health &amp; DNA records</h1>
+      <p>Manage verified test summaries and private supporting evidence for the selected dog.</p>
     </div>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:health-genetic-list' %}">Find a dog</a>
@@ -87,12 +89,12 @@
 
     <section class="panel">
       <h2>DNA publication consent</h2>
-      <p>Reviewed DNA breed composition may be privately retained. Only the kennel owner can authorize new public breed percentages or full-report visibility. Staff cannot grant or impersonate this consent.</p>
+      <p>Reviewed DNA breed composition may be privately retained. Only the kennel owner can authorize public breed percentages. Full original reports remain private.</p>
       {% if visible_dna_count %}
       <p><strong>{{ visible_dna_count }} DNA report{{ visible_dna_count|pluralize }}</strong> currently have publication permission on file.</p>
       <form method="post" action="{% url 'accounts:health-genetic-withdraw' dog.pk %}" class="member-form">
         {% csrf_token %}
-        <label><input type="checkbox" name="confirmation" value="hide_all" required> Hide all publicly authorized breed percentages and full DNA reports for this dog, retaining evidence privately.</label>
+        <label><input type="checkbox" name="confirmation" value="hide_all" required> Hide this dog's published DNA composition summaries; retain the private evidence.</label>
         <div><button class="btn btn-outline" type="submit">Withdraw all DNA publication</button></div>
       </form>
       {% else %}
