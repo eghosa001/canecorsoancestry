@@ -263,6 +263,18 @@ else
       -U cca_shadow_admin -d cca_live \
       < scripts/oracle_runner/approved_registry_0019.sql
     echo "PASS: Private evidence reference and owner-publication consent fields applied atomically."
+  elif [[ "$schema_approval" == "PASS: Only approved registry.0020_health_record_public_visibility is pending." ]]; then
+    echo "Applying one audited additive public health-summary visibility field."
+    app_schema_can_create="$(sudo -n "$PODMAN_BIN" exec cca-pg-shadow \
+      psql -X -At -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+      -c "SELECT has_schema_privilege('cca_app', 'django_app', 'CREATE');")"
+    [[ "$app_schema_can_create" == f ]] || {
+      echo "::error::Runtime DB account unexpectedly has schema CREATE privileges."; exit 1;
+    }
+    sudo -n "$PODMAN_BIN" exec -i cca-pg-shadow psql -X -v ON_ERROR_STOP=1 \
+      -U cca_shadow_admin -d cca_live \
+      < scripts/oracle_runner/approved_registry_0020.sql
+    echo "PASS: Moderator public-summary switches ready; original health records retained."
   elif [[ "$schema_approval" == "PASS: Only approved accounts.0005_saved_pairing is pending." ]]; then
   # PostgreSQL intentionally grants the production app no schema DDL rights.
   # Borrow CREATE on this schema for the reviewed transaction, then revoke it

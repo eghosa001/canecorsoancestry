@@ -13,6 +13,7 @@ ARCHIVE_HYPOTHESIS = ("registry", "0016_unverified_breeding_kennel_hypotheses")
 STAFF_DEREGISTRATION = ("registry", "0017_moderation_staff_deregistration")
 BREED_DNA_REPORT = ("registry", "0018_breed_dna_report")
 HISTORICAL_HEALTH_PRIVACY = ("registry", "0019_staff_health_evidence_privacy")
+HEALTH_RESULT_VISIBILITY = ("registry", "0020_health_record_public_visibility")
 ALLOWED_MIGRATION = SAVED_PAIRING  # Backward compatibility for old tests/runbooks.
 
 # Model, field, constant default, and whether the field creates a DB index.
@@ -217,6 +218,28 @@ def _historical_health_privacy_is_exact(migration):
     )
 
 
+def _health_result_visibility_is_exact(migration):
+    if (
+        migration.dependencies != [HISTORICAL_HEALTH_PRIVACY]
+        or len(migration.operations) != 1
+        or not isinstance(migration.operations[0], AddField)
+    ):
+        return False
+    operation = migration.operations[0]
+    field = operation.field
+    return (
+        operation.model_name == "healthrecord"
+        and operation.name == "is_public"
+        and type(field) is models.BooleanField
+        and field.default is True
+        and field.db_index is False
+        and not field.null
+        and not field.unique
+        and not field.primary_key
+        and operation.preserve_default is not False
+    )
+
+
 def validate_pending_schema_changes(plan):
     """Reject other pending versions, combined plans, reversals, and drift."""
     if not plan:
@@ -238,6 +261,8 @@ def validate_pending_schema_changes(plan):
     if identity == BREED_DNA_REPORT and _breed_dna_is_exact(migration):
         return True
     if identity == HISTORICAL_HEALTH_PRIVACY and _historical_health_privacy_is_exact(migration):
+        return True
+    if identity == HEALTH_RESULT_VISIBILITY and _health_result_visibility_is_exact(migration):
         return True
     raise ValueError("Unapproved production migration or unexpected operations.")
 
