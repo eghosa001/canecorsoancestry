@@ -211,7 +211,7 @@ class HealthRecordSubmissionTests(TestCase):
         page = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
         self.assertContains(page, "100% Cane Corso")
         self.assertContains(page, "Embark")
-        self.assertContains(page, "Original laboratory certificate retained privately")
+        self.assertContains(page, "Original report privately reviewed")
         self.assertNotContains(page, "View owner-authorized DNA report")
 
     def test_owner_consented_mixed_breed_summary_but_private_certificate(self):
