@@ -47,3 +47,5 @@ records are independently show/hide toggleable with audit history and stored
 private evidence retained. Breed percentages additionally require owner consent.
 The public dog profile displays "No available records" when nothing verified
 is being published. Raw genetic/medical certificates stay private.
+
+**Policy update:** Full laboratory reports and images are kept private regardless of any older full-report consent flag. Only owner-authorized, moderator-reviewed typed breed percentages and independently reviewed health results can be published. The full-file publication option has been retired.

@@ -1221,8 +1221,8 @@ def submit_health_record(request, pk):
                 "Structured results remain pending until an authorized Moderator checks "
                 "the supporting evidence. The uploaded certificate stays private "
                 "unless its visibility is separately approved. Approved DNA breed percentages "
-                "and provider become public; the entire report is public only with explicit "
-                "kennel owner consent and moderator approval. "
+                "and provider become public with kennel owner consent and moderator approval. "
+                "The supporting medical certificate image remains private. "
                 "You may upload new health or DNA certificates whenever you wish, including after the dog is published. "
                 "DSRA, NCL1 and CMR1 remain Not tested until their own laboratory results are reviewed."
             ),

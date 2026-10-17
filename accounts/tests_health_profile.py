@@ -211,10 +211,10 @@ class HealthRecordSubmissionTests(TestCase):
         page = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
         self.assertContains(page, "100% Cane Corso")
         self.assertContains(page, "Embark")
-        self.assertContains(page, "Full laboratory report kept private")
+        self.assertContains(page, "Original laboratory certificate retained privately")
         self.assertNotContains(page, "View owner-authorized DNA report")
 
-    def test_owner_consented_mixed_breed_full_report(self):
+    def test_owner_consented_mixed_breed_summary_but_private_certificate(self):
         self.client.force_login(self.owner)
         response = self.client.post(reverse("accounts:submit-health-record", args=[self.dog.pk]), {
             "evidence_type": "breed", "dna_provider": "Other DNA laboratory",
@@ -225,11 +225,11 @@ class HealthRecordSubmissionTests(TestCase):
         self.assertEqual(response.status_code, 302)
         approve_submission(Submission.objects.get(kind=Submission.Kind.HEALTH), self.reviewer)
         report = BreedDNAReport.objects.get(health_record__dog=self.dog)
-        self.assertTrue(report.consent_full_report)
-        self.assertTrue(report.evidence_document.is_public)
+        self.assertFalse(report.consent_full_report)
+        self.assertFalse(report.evidence_document.is_public)
         self.client.logout()
         page = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
         self.assertContains(page, "92.5% Cane Corso")
         self.assertContains(page, "Boxer")
         self.assertContains(page, "7.5%")
-        self.assertContains(page, "View owner-authorized DNA report")
+        self.assertNotContains(page, "View owner-authorized DNA report")

@@ -390,7 +390,7 @@ def _public_profile_dog(slug):
         if dog._has_profile_titles else []
     )
     dog.display_documents = (
-        list(DogDocument.objects.filter(dog=dog, is_public=True).order_by("-created_at"))
+        list(DogDocument.objects.filter(dog=dog, is_public=True).exclude(source_submission__kind="health").order_by("-created_at"))
         if dog._has_public_documents else []
     )
     # The approved source text holds a reference to the reviewed document.
