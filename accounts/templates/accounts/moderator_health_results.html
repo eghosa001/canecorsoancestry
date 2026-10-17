@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Health result visibility · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<section class="page-shell moderation-page">
+  <header class="page-heading">
+    <p class="eyebrow">Private moderation workspace</p>
+    <h1>{{ dog.name }} — Health &amp; DNA</h1>
+    <p>Choose which independently verified typed results are visible. The original medical images remain private.</p>
+    <div class="button-row"><a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">Health uploads queue</a>{% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}#health">Open public profile</a>{% endif %}</div>
+  </header>
+  <section class="panel">
+    <h2>Pending laboratory pictures / PDFs</h2>
+    {% for item in pending %}
+      <div class="review-diff-row">
+        <span>{{ item.created_at|date:"d M Y" }} · {{ item.payload.test_type|default:"Health/DNA" }}</span>
+        <a class="text-link" href="{% url 'accounts:moderation-submission' item.pk %}">Review image and transcribe →</a>
+      </div>
+    {% empty %}<p class="muted">No pending health reports for this dog.</p>{% endfor %}
+  </section>
+  <section class="panel">
+    <h2>Approved structured health records</h2>
+    <p class="muted">A hidden record remains in moderation history. Public breed DNA summaries still require owner permission.</p>
+    {% for item in records %}
+      <div class="review-diff-row">
+        <div><strong>{{ item.test_type }}</strong><p>{{ item.result }} · {{ item.tested_on|default:"Date not provided" }}</p><small>{{ item.public_verification_label }}</small></div>
+        <div>
+          {% if item.is_public and item.verification_state == "health" and not item.breed_dna_report or item.is_public and item.verification_state == "health" and item.breed_dna_report.consent_public_summary %}
+            <span class="submission-state green">Public summary enabled</span>
+            <form method="post" action="{% url 'accounts:toggle-health-result' dog.pk item.pk %}">{% csrf_token %}<input type="hidden" name="visibility" value="hide"><button type="submit" class="btn btn-outline">Hide result</button></form>
+          {% else %}
+            <span class="submission-state yellow">Visibility off</span>
+            <form method="post" action="{% url 'accounts:toggle-health-result' dog.pk item.pk %}">{% csrf_token %}<input type="hidden" name="visibility" value="show"><button type="submit" class="btn btn-gold">Show verified result</button></form>
+          {% endif %}
+        </div>
+      </div>
+    {% empty %}
+      <div class="empty-state"><strong>No available records</strong><p>No reviewed health results have been entered for this dog.</p></div>
+    {% endfor %}
+  </section>
+</section>
+{% endblock %}

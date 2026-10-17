@@ -602,6 +602,7 @@ class HealthRecord(models.Model):
         default=VerificationState.COMMUNITY,
     )
     notes = models.TextField(blank=True)
+    is_public = models.BooleanField(default=True)  # Only the result summary, never evidence.
     # Privately held evidence for explicitly reviewed staff archival entries.
     evidence_document = models.OneToOneField(
         "registry.DogDocument", null=True, blank=True, on_delete=models.PROTECT,

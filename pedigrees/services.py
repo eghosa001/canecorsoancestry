@@ -501,7 +501,7 @@ def direct_relative_health(
         ids.add(dog.pk)
     subject_records = []
     records = HealthRecord.objects.filter(
-        dog_id__in=ids
+        dog_id__in=ids, is_public=True
     ).exclude(
         breed_dna_report__consent_public_summary=False
     ).select_related("dog").order_by("dog__name", "test_type", "-tested_on")

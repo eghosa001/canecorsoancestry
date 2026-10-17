@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, direct_dog_edit, kennel_publication, breeding_kennel_review, dog_drafts, health_admin
+from . import views, direct_dog_edit, kennel_publication, breeding_kennel_review, dog_drafts, health_admin, health_review
 
 app_name = "accounts"
 
@@ -59,6 +59,9 @@ urlpatterns = [
     path("moderation/", views.moderation_queue, name="moderation"),
     path("moderation/dogs/", direct_dog_edit.dog_edit_list, name="dog-edit-list"),
     path("moderation/health-dna/", health_admin.health_genetic_list, name="health-genetic-list"),
+    path("moderation/health-results/<uuid:pk>/", health_review.reviewed_dog_health, name="reviewed-dog-health"),
+    path("moderation/health-results/<uuid:pk>/toggle/<int:record_id>/", health_review.toggle_health_result, name="toggle-health-result"),
+    path("moderation/health-submissions/<uuid:pk>/transcribe/", health_review.transcribe_health_submission, name="transcribe-health-submission"),
     path("moderation/health-dna/<uuid:pk>/", health_admin.health_genetic_dog, name="health-genetic-dog"),
     path("moderation/health-dna/<uuid:pk>/withdraw/", health_admin.withdraw_dna_publication, name="health-genetic-withdraw"),
     path("moderation/dogs/add/", direct_dog_edit.dog_direct_create, name="dog-direct-create"),

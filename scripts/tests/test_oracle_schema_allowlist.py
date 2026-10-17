@@ -306,6 +306,35 @@ class ApprovedSchemaMigrationTests(unittest.TestCase):
         self.assertNotIn("GRANT ALTER", stage + sql)
         self.assertNotIn("GRANT ALL", stage + sql)
 
+    def test_exact_additive_health_visibility_and_oracle_backup(self):
+        import copy
+        mod = importlib.import_module("registry.migrations.0020_health_record_public_visibility")
+        migration = mod.Migration("0020_health_record_public_visibility", "registry")
+        self.assertTrue(validate_pending_schema_changes([(migration, False)]))
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(migration, True)])
+        altered = copy.deepcopy(migration)
+        altered.operations[0].field.default = False
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(altered, False)])
+        altered = copy.deepcopy(migration)
+        altered.operations[0].name = "consent_public_summary"
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(altered, False)])
+        root = Path(__file__).resolve().parents[1] / "oracle_runner"
+        stage = (root / "stage_django.sh").read_text()
+        sql = (root / "approved_registry_0020.sql").read_text()
+        self.assertIn("registry.0020_health_record_public_visibility", stage)
+        self.assertLess(stage.index("bash scripts/oracle_runner/backup_local_postgres.sh"),
+                        stage.index("< scripts/oracle_runner/approved_registry_0020.sql"))
+        self.assertEqual(sql.count("ADD COLUMN "), 1)
+        self.assertIn("ADD COLUMN is_public boolean NOT NULL DEFAULT true", sql)
+        self.assertIn("BEGIN;", sql)
+        self.assertIn("COMMIT;", sql)
+        self.assertIn("cca_shadow_admin", sql)
+        self.assertNotIn("GRANT ALTER", sql)
+        self.assertNotIn("GRANT ALL", sql)
+
 
 if __name__ == "__main__":
     unittest.main()

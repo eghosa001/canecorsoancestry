@@ -20,6 +20,14 @@ def _can_read_media(user, path):
     # Archival staff uploads must not inherit kennel-member document access.
     if DogDocument.objects.filter(file=path, staff_review_only=True).exists():
         return can_review_submissions(user), False
+    if DogDocument.objects.filter(
+        file=path, source_submission__kind=Submission.Kind.HEALTH
+    ).exists():
+        if can_review_submissions(user):
+            return True, False
+        return user.is_authenticated and DogDocument.objects.filter(
+            file=path, submitted_by=user
+        ).exists(), False
 
     visible_dog = Q(dog__is_public=True, dog__hidden_by_moderation=False) & (
         Q(dog__kennel__isnull=True) | Q(dog__kennel__hide_dogs=False)
