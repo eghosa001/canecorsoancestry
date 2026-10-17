@@ -11,6 +11,7 @@ SAVED_PAIRING = ("accounts", "0005_saved_pairing")
 KENNEL_PUBLICATION = ("registry", "0015_kennel_publication_controls")
 ARCHIVE_HYPOTHESIS = ("registry", "0016_unverified_breeding_kennel_hypotheses")
 STAFF_DEREGISTRATION = ("registry", "0017_moderation_staff_deregistration")
+BREED_DNA_REPORT = ("registry", "0018_breed_dna_report")
 ALLOWED_MIGRATION = SAVED_PAIRING  # Backward compatibility for old tests/runbooks.
 
 # Model, field, constant default, and whether the field creates a DB index.
@@ -122,6 +123,60 @@ def _staff_deregistration_is_exact(migration):
     )
 
 
+def _breed_dna_is_exact(migration):
+    """Approve only the additive, consent-aware third-party DNA report table."""
+    if (
+        migration.dependencies != [STAFF_DEREGISTRATION]
+        or len(migration.operations) != 1
+        or not isinstance(migration.operations[0], CreateModel)
+        or migration.operations[0].name != "BreedDNAReport"
+    ):
+        return False
+    fields = dict(migration.operations[0].fields)
+    if set(fields) != {
+        "id", "provider", "cane_corso_percentage", "composition",
+        "consent_full_report", "created_at", "evidence_document", "health_record",
+    }:
+        return False
+    id_field = fields["id"]
+    provider = fields["provider"]
+    percentage = fields["cane_corso_percentage"]
+    composition = fields["composition"]
+    consent = fields["consent_full_report"]
+    created = fields["created_at"]
+    return (
+        type(id_field) is models.BigAutoField
+        and id_field.primary_key and not id_field.null
+        and type(provider) is models.CharField and provider.max_length == 100
+        and not provider.null and not provider.blank
+        and type(percentage) is models.DecimalField
+        and percentage.max_digits == 5 and percentage.decimal_places == 2
+        and not percentage.null
+        and type(composition) is models.JSONField and composition.default is list
+        and not composition.null
+        and type(consent) is models.BooleanField and consent.default is False
+        and not consent.null
+        and type(created) is models.DateTimeField and created.auto_now_add
+        and _breed_dna_reference_is_exact(
+            fields["evidence_document"], "registry.dogdocument", models.PROTECT
+        )
+        and _breed_dna_reference_is_exact(
+            fields["health_record"], "registry.healthrecord", models.CASCADE
+        )
+    )
+
+
+def _breed_dna_reference_is_exact(field, target, on_delete):
+    return (
+        type(field) is models.OneToOneField
+        and str(field.remote_field.model).lower() == target
+        and field.remote_field.on_delete is on_delete
+        and field.remote_field.related_name == "breed_dna_report"
+        and not field.null
+        and not field.blank
+    )
+
+
 def validate_pending_schema_changes(plan):
     """Reject other pending versions, combined plans, reversals, and drift."""
     if not plan:
@@ -139,6 +194,8 @@ def validate_pending_schema_changes(plan):
     if identity == ARCHIVE_HYPOTHESIS and _archive_hypothesis_is_exact(migration):
         return True
     if identity == STAFF_DEREGISTRATION and _staff_deregistration_is_exact(migration):
+        return True
+    if identity == BREED_DNA_REPORT and _breed_dna_is_exact(migration):
         return True
     raise ValueError("Unapproved production migration or unexpected operations.")
 
