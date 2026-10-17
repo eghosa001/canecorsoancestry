@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from .dna import parse_breed_composition
+from .genetic_health import MARKER_CODES, SCREENING_RESULTS
 from .models import (
     BreedDNAReport,
     Dog,
@@ -723,6 +724,15 @@ def approve_submission(
             test_type = "DNA breed composition"
             result = f'{composition[0]["percentage"]}% Cane Corso'
             allow_full = payload.get("allow_full_report_publication") is True
+        if evidence_type == "dna":
+            marker = str(payload.get("genetic_marker") or "").strip().upper()
+            status = str(payload.get("genetic_status") or "").strip()
+            if marker:
+                if marker not in MARKER_CODES or status not in {"Clear", "Carrier", "Affected"}:
+                    raise ValueError("Featured genetic tests require a valid marker and result.")
+                test_type, result = marker, status
+            elif test_type.upper() in MARKER_CODES and result.lower() not in SCREENING_RESULTS:
+                raise ValueError("Unrecognized DSRA, NCL1 or CMR1 test result.")
         if not test_type or not result:
             raise ValueError("Health/DNA submissions require both a test name and result.")
 

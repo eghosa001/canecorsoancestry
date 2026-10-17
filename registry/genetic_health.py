@@ -26,7 +26,7 @@ def marker_status_rows(records):
     latest = {}
     for record in records:
         code = (record.test_type or "").strip().upper()
-        if code not in MARKER_CODES or record.verification_state != "health_verified":
+        if code not in MARKER_CODES or record.verification_state != "health":
             continue
         rank = (record.tested_on or date.min, record.created_at, record.pk or 0)
         if code not in latest or rank > latest[code][0]:

@@ -13,6 +13,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 
 from registry.dna import parse_breed_composition, percentage_text
+from registry.genetic_health import MARKER_CODES, RESULT_CHOICES, SCREENING_MARKERS, SCREENING_RESULTS
 from registry.models import DisputeCase, Dog, DogDocument, DogImage, DogIdentityNumber, DogRegistration, DogSource, Kennel, KennelMembership, Litter, ModerationRoleAssignment, Submission, SubmissionEvidence, VerificationState
 
 from .models import Profile, SubmissionPayment
@@ -141,11 +142,21 @@ class HealthRecordSubmissionForm(forms.Form):
         choices=EVIDENCE_TYPES,
         label="Record type",
     )
+    genetic_marker = forms.ChoiceField(
+        choices=[("", "Other genetic test / DNA parentage"), *SCREENING_MARKERS],
+        required=False, label="Featured genetic screening marker",
+        help_text="Choose the exact DSRA, NCL1 or CMR1 genetic test shown on the laboratory report.",
+    )
+    genetic_status = forms.ChoiceField(
+        choices=[("", "Select the laboratory result"), *RESULT_CHOICES],
+        required=False, label="Result for featured marker",
+        help_text="Only select a result printed on the uploaded laboratory report.",
+    )
     test_type = forms.CharField(
         max_length=100,
         required=False,
-        label="Test / marker",
-        help_text="For example: hip score, elbow score, cardiac exam, DM, DSRA or DNA parentage.",
+        label="Other test / marker",
+        help_text="For example: hip score, elbow score, cardiac examination, DM or DNA parentage.",
     )
     result = forms.CharField(
         max_length=160,
@@ -215,11 +226,24 @@ class HealthRecordSubmissionForm(forms.Form):
                 else:
                     cleaned["test_type"] = "DNA breed composition"
                     cleaned["result"] = f'{percentage_text(cleaned["cane_corso_percentage"])}% Cane Corso'
+        elif cleaned.get("evidence_type") == "dna" and cleaned.get("genetic_marker"):
+            code = cleaned["genetic_marker"]
+            status = cleaned.get("genetic_status")
+            if code not in MARKER_CODES:
+                self.add_error("genetic_marker", "Choose a supported genetic screening marker.")
+            if status not in {item[0] for item in RESULT_CHOICES}:
+                self.add_error("genetic_status", "Choose the result shown on the laboratory report.")
+            if code in MARKER_CODES and status in {item[0] for item in RESULT_CHOICES}:
+                cleaned["test_type"] = code
+                cleaned["result"] = status
         else:
             if not (cleaned.get("test_type") or "").strip():
                 self.add_error("test_type", "Enter the test name.")
             if not (cleaned.get("result") or "").strip():
                 self.add_error("result", "Enter the result.")
+            marker = (cleaned.get("test_type") or "").strip().upper()
+            if marker in MARKER_CODES and (cleaned.get("result") or "").strip().lower() not in SCREENING_RESULTS:
+                self.add_error("result", "For DSRA, NCL1 and CMR1 enter Clear, Carrier or Affected exactly as on the report.")
         return cleaned
 
     def clean_attachment(self):
