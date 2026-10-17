@@ -226,5 +226,40 @@ class ApprovedSchemaMigrationTests(unittest.TestCase):
             validate_pending_schema_changes([(changed, False)])
 
 
+    def test_breed_dna_migration_needs_exact_consent_schema(self):
+        import copy
+        mod = importlib.import_module("registry.migrations.0018_breed_dna_report")
+        migration = mod.Migration("0018_breed_dna_report", "registry")
+        self.assertTrue(validate_pending_schema_changes([(migration, False)]))
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(migration, True)])
+        changed = copy.deepcopy(migration)
+        for name, field in changed.operations[0].fields:
+            if name == "consent_full_report":
+                field.default = True
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(changed, False)])
+        changed = copy.deepcopy(migration)
+        changed.operations[0].name = "OtherTable"
+        with self.assertRaises(ValueError):
+            validate_pending_schema_changes([(changed, False)])
+
+    def test_breed_dna_production_sql_is_backed_up_and_admin_only(self):
+        root = Path(__file__).resolve().parents[1] / "oracle_runner"
+        stage = (root / "stage_django.sh").read_text()
+        sql = (root / "approved_registry_0018.sql").read_text()
+        self.assertIn("registry.0018_breed_dna_report", stage)
+        self.assertLess(
+            stage.index("bash scripts/oracle_runner/backup_local_postgres.sh"),
+            stage.index("< scripts/oracle_runner/approved_registry_0018.sql"),
+        )
+        for required in ("BEGIN;", "COMMIT;", "cca_shadow_admin",
+                         "django_app.django_migrations", "CREATE TABLE django_app.registry_breeddnareport"):
+            self.assertIn(required, sql)
+        self.assertNotIn("GRANT ALTER", sql + stage)
+        self.assertNotIn("GRANT ALL", sql + stage)
+        self.assertNotIn("UPDATE django_app.registry_dog", sql)
+
+
 if __name__ == "__main__":
     unittest.main()
