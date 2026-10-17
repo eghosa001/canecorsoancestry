@@ -1,17 +1,29 @@
-.breed-dna-card {
-  padding: clamp(1rem, 3vw, 1.6rem);
-  margin: .5rem 0 1.25rem;
-  background: #121212;
-  color: #f9f5ec;
-  border: 1px solid #65542c;
-  border-radius: 18px;
-  overflow-wrap: anywhere;
-}
-.breed-dna-label {color: #d4b86f; font-size: .85rem; font-weight: 650; letter-spacing: .03em;}
-.breed-dna-score {display:block; margin: .6rem 0 .4rem; font-size: clamp(1.8rem, 5vw, 3rem); line-height: 1.15; letter-spacing: -.035em;}
-.breed-dna-card p {color: #d7d0c2; margin: 0 0 1rem;}
-.breed-dna-breakdown {display:grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: .5rem; margin-bottom: .9rem;}
-.breed-dna-entry {display:flex; justify-content:space-between; gap:1rem; border:1px solid #403c34; background:#201f1c; border-radius: 9px; padding: .6rem .8rem; font-size: .95rem;}
-.breed-dna-entry strong {color:#f0d894; white-space:nowrap;}
-.breed-dna-card small {display:block; margin-top: .6rem; color: #c8c1b3; line-height:1.45;}
-.breed-dna-card a {display:inline-block; min-height: 44px; padding-top: .6rem;}
+/* Prominent black DNA verification card: responsive and high contrast. */
+.breed-dna-card {background:#08090b;color:#fafafa;border:1px solid #303236;border-radius:20px;padding:clamp(1.25rem,3.5vw,2.25rem);margin:.5rem 0 1rem;box-shadow:0 14px 32px rgba(0,0,0,.12);overflow-wrap:anywhere;}
+.breed-dna-label {display:flex;align-items:center;gap:.8rem;color:#fafafa;font-size:clamp(1.15rem,2.5vw,1.85rem);font-weight:670;letter-spacing:-.02em;line-height:1.25;}
+.breed-dna-icon {flex:none;width:28px;height:28px;color:#f6f7f9;}
+.breed-dna-score {display:block;color:#fff;margin:1.25rem 0 .7rem;font-size:clamp(2.05rem,5.6vw,3.8rem);line-height:1.06;font-weight:750;letter-spacing:-.045em;}
+.breed-dna-unverified {display:block;margin:1.25rem 0 .75rem;color:#fff;font-size:clamp(1.5rem,4vw,2.35rem);letter-spacing:-.025em;line-height:1.13;}
+.breed-dna-card .breed-dna-meta {color:#bcbfc5;font-size:clamp(.95rem,2.3vw,1.25rem);line-height:1.5;margin:0 0 1rem;}
+.breed-dna-meta span {padding:0 .2rem;}
+.breed-dna-breakdown {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));gap:.5rem;margin:1rem 0;}
+.breed-dna-entry {display:flex;justify-content:space-between;gap:1rem;background:#18191c;border:1px solid #34363a;border-radius:10px;padding:.7rem .85rem;font-size:.95rem;}
+.breed-dna-entry strong {color:#f6f6f6;white-space:nowrap;}
+.breed-dna-card small {display:block;margin-top:.65rem;color:#a7abb3;font-size:.79rem;line-height:1.55;}
+.breed-dna-card .breed-dna-report-link {display:inline-flex;align-items:center;min-height:44px;color:#f1db9e;font-weight:650;text-decoration:underline;text-underline-offset:3px;padding:.6rem 0;}
+.genetic-screening {border-top:1px solid #33363b;margin-top:1.3rem;padding-top:1.3rem;}
+.genetic-screening h3 {font-size:clamp(1.05rem,2.3vw,1.32rem);color:#f9f9fa;margin:0 0 .75rem;font-weight:680;}
+.genetic-screening-row {display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.85rem 0;border-bottom:1px solid #25282d;min-width:0;}
+.genetic-screening-identity {display:flex;flex-direction:column;gap:.2rem;min-width:0;}
+.genetic-screening-identity strong {font-size:1.02rem;color:#fafafa;font-weight:700;}
+.genetic-screening-identity span {font-size:.8rem;color:#b1b5bd;line-height:1.35;}
+.genetic-screening-status {flex:none;display:inline-flex;align-items:center;gap:.4rem;font-size:.86rem;font-weight:700;padding:.38rem .65rem;border-radius:99px;border:1px solid transparent;line-height:1.2;white-space:nowrap;}
+.genetic-screening-status--clear {color:#88e2b4;background:#123527;border-color:#2b7652;}
+.genetic-screening-status--carrier {color:#f4d18d;background:#3e2c12;border-color:#80622c;}
+.genetic-screening-status--affected {color:#ffb1ae;background:#492022;border-color:#92464b;}
+.genetic-screening-status--untested {color:#c0c5cb;background:#23262a;border-color:#41454b;}
+.health-upload-actions {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin:0 0 1rem;padding:.9rem 0;}
+.health-upload-actions strong {font-weight:700;}
+.health-upload-actions p {color:var(--muted,#767676);font-size:.91rem;margin:.25rem 0 0;}
+.health-upload-actions a {min-height:44px;}
+@media(max-width:540px){.breed-dna-card{border-radius:15px;padding:1.15rem;}.breed-dna-label{gap:.65rem;}.breed-dna-icon{width:25px;height:25px;}.genetic-screening-row{gap:.55rem;}.genetic-screening-status{font-size:.77rem;padding:.35rem .48rem;}.genetic-screening-identity span{font-size:.73rem;}.health-upload-actions a{width:100%;text-align:center;}}

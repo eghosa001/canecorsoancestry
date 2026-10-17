@@ -1160,7 +1160,11 @@ def submit_health_record(request, pk):
 
     form = HealthRecordSubmissionForm(
         request.POST or None, request.FILES or None,
-        initial={"evidence_type": "breed"} if request.GET.get("type") == "breed" else None,
+        initial=(
+            {"evidence_type": "breed"} if request.GET.get("type") == "breed"
+            else {"evidence_type": "dna", "genetic_marker": request.GET.get("marker", "").upper()}
+            if request.GET.get("type") == "dna" else None
+        ),
     )
     if request.method == "POST" and form.is_valid():
         if form.cleaned_data["evidence_type"] == "breed" and not KennelMembership.objects.filter(
@@ -1180,6 +1184,10 @@ def submit_health_record(request, pk):
                         "test_type": form.cleaned_data["test_type"].strip(),
                         "result": form.cleaned_data["result"].strip(),
                         "tested_on": _date_value(form.cleaned_data["tested_on"]),
+                        **({
+                            "genetic_marker": form.cleaned_data["genetic_marker"],
+                            "genetic_status": form.cleaned_data["genetic_status"],
+                        } if form.cleaned_data["evidence_type"] == "dna" and form.cleaned_data["genetic_marker"] else {}),
                         **({
                             "dna_provider": form.cleaned_data["dna_provider"].strip(),
                             "cane_corso_percentage": str(form.cleaned_data["cane_corso_percentage"]),
@@ -1214,7 +1222,9 @@ def submit_health_record(request, pk):
                 "the supporting evidence. The uploaded certificate stays private "
                 "unless its visibility is separately approved. Approved DNA breed percentages "
                 "and provider become public; the entire report is public only with explicit "
-                "kennel owner consent and moderator approval."
+                "kennel owner consent and moderator approval. "
+                "You may upload new health or DNA certificates whenever you wish, including after the dog is published. "
+                "DSRA, NCL1 and CMR1 remain Not tested until their own laboratory results are reviewed."
             ),
             "breed_dna_form": True,
             "button_label": "Submit result for review",

@@ -50,6 +50,12 @@
     <p class="muted" id="photo-report-selection-status" role="status" aria-live="polite">Select the photograph that needs correction, or use the form below to describe an imported image.</p>
   </section>
   {% endif %}
+  {% if breed_dna_form %}
+  <section class="panel">
+    <h2>Submit new health &amp; genetic reports whenever you need</h2>
+    <p class="muted">Upload one laboratory result per submission. Select DSRA, NCL1 or CMR1 to classify one of the highlighted inherited conditions. If the dog has not been tested for a condition, it will remain Not tested. Every new report needs approval before appearing on the public profile.</p>
+  </section>
+  {% endif %}
   <form class="member-form" method="post" {% if multipart %}enctype="multipart/form-data"{% endif %}>
     {% csrf_token %}
     {% if form.non_field_errors %}<div class="notice error">{{ form.non_field_errors }}</div>{% endif %}
@@ -75,7 +81,7 @@
   </form>
 </section>
 {% if breed_dna_form %}
-<script defer src="{% static 'accounts/breed-dna-form.js' %}?v=20261017-1"></script>
+<script defer src="{% static 'accounts/breed-dna-form.js' %}?v=20261017-2"></script>
 {% endif %}
 {% if photo_report_choices %}
 <script>
