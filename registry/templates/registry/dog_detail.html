@@ -235,14 +235,14 @@
 
   <article class="panel" id="health">
     <div class="panel-heading"><h2>Health & DNA</h2>{% if user.is_authenticated and not staff_identity %}<a class="profile-review-chip" href="{% url 'accounts:open-dispute' dog.pk %}?reason=health&amp;field=health">Report detail →</a>{% endif %}</div>
-    {% if has_public_health_records %}
-    <section class="breed-dna-card" aria-label="DNA breed verification and genetic screening">
+    {% if show_dna_card %}
+    <section class="breed-dna-card" aria-label="Verified breed DNA and genetic health screening">
+      {% if breed_dna %}
       <div class="breed-dna-label">
         <svg class="breed-dna-icon" viewBox="0 0 24 24" role="img" aria-label="DNA" focusable="false" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3c10 3 6 15 16 18M20 3C10 6 14 18 4 21M7 6h10M8.5 10h7M8.5 14h7M7 18h10"/></svg>
         <span>Breed DNA Verification</span>
       </div>
-      {% if breed_dna %}
-        <strong class="breed-dna-score">{{ breed_dna.cane_corso_percentage|floatformat:"-2" }}% Cane Corso</strong>
+        <strong class="breed-dna-score">{{ breed_dna_percentage }}% Cane Corso</strong>
         <p class="breed-dna-meta">DNA-tested <span aria-hidden="true">·</span> {{ breed_dna.provider }} <span aria-hidden="true">·</span> Report reviewed</p>
         {% if breed_dna.composition|length > 1 %}
         <div class="breed-dna-breakdown" aria-label="Laboratory breed estimate breakdown">
@@ -252,14 +252,8 @@
         </div>
         {% endif %}
         <small>Original laboratory certificate retained privately for moderator review.</small>
-        <small>Breed percentages are estimates from an external laboratory, not an independent breed-purity certification.</small>
-      {% else %}
-        <strong class="breed-dna-unverified">Breed DNA not yet verified</strong>
-        <p class="breed-dna-meta">No approved, owner-authorized breed-composition report is available for this dog.</p>
-        {% if can_submit_breed_dna %}
-          <a class="breed-dna-report-link" href="{% url 'accounts:submit-health-record' dog.pk %}?type=breed">Submit breed DNA report →</a>
-        {% endif %}
       {% endif %}
+      {% if genetic_screenings %}
       <div class="genetic-screening">
         <h3>Genetic Health Screening</h3>
         <div class="genetic-screening-list">
@@ -272,10 +266,11 @@
           </div>
         {% endfor %}
         </div>
-        <small>Status is based only on reviewed genetic-test results. Not tested does not mean Clear.</small>
       </div>
+      {% endif %}
     </section>
-    {% else %}
+    {% endif %}
+    {% if not has_public_health_records %}
       <div class="empty-state"><strong>No available records</strong></div>
     {% endif %}
     {% if can_contribute %}
@@ -284,18 +279,19 @@
       <a class="btn btn-gold" href="{% url 'accounts:submit-health-record' dog.pk %}">Upload health / DNA report</a>
     </div>
     {% endif %}
+    {% if other_health_records %}
+    <h3>Other health records</h3>
     <div class="table-scroll">
       <table class="data-table">
         <thead><tr><th>Test</th><th>Result</th><th>Date</th><th>Status</th></tr></thead>
         <tbody>
-        {% for record in dog.display_health_records %}
+        {% for record in other_health_records %}
           <tr><td>{{ record.test_type }}</td><td>{{ record.result }}</td><td>{{ record.tested_on|default:"—" }}</td><td>{{ record.public_verification_label }}</td></tr>
-        {% empty %}
-          <tr><td colspan="4">No available records.</td></tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
+    {% endif %}
   </article>
 
   <div class="profile-section-grid">

@@ -27,3 +27,6 @@
 .health-upload-actions p {color:var(--muted,#767676);font-size:.91rem;margin:.25rem 0 0;}
 .health-upload-actions a {min-height:44px;}
 @media(max-width:540px){.breed-dna-card{border-radius:15px;padding:1.15rem;}.breed-dna-label{gap:.65rem;}.breed-dna-icon{width:25px;height:25px;}.genetic-screening-row{gap:.55rem;}.genetic-screening-status{font-size:.77rem;padding:.35rem .48rem;}.genetic-screening-identity span{font-size:.73rem;}.health-upload-actions a{width:100%;text-align:center;}}
+
+/* Keep the Health heading visible below the sticky mobile profile tabs. */
+#health { scroll-margin-top: 7.5rem; }
