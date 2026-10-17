@@ -15,6 +15,52 @@ from .views import _public_profile_dog
 
 
 class DogModelTests(TestCase):
+
+    def test_unstructured_breed_claim_never_creates_false_dna_verification(self):
+        dog = Dog.objects.create(
+            name="Legacy Mixed DNA", slug="legacy-mixed-dna", is_public=True
+        )
+        HealthRecord.objects.create(
+            dog=dog,
+            test_type="Breed Identification / DNA Breed Composition",
+            result="100% Cane Corso. C DSRA CLEAR",
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertContains(response, "No available records")
+        self.assertNotContains(response, "Breed DNA not yet verified")
+        self.assertNotContains(response, "100% Cane Corso")
+        self.assertNotContains(response, "genetic-screening-status--untested")
+
+    def test_unrelated_health_result_does_not_trigger_empty_dna_card(self):
+        dog = Dog.objects.create(
+            name="Hip Screening", slug="hip-screening", is_public=True
+        )
+        HealthRecord.objects.create(
+            dog=dog, test_type="Hip score", result="A",
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertContains(response, "Other health records")
+        self.assertContains(response, "Hip score")
+        self.assertNotContains(response, "Breed DNA not yet verified")
+        self.assertNotContains(response, "genetic-screening-status--untested")
+
+    def test_reviewed_marker_appears_once_without_false_breed_percent(self):
+        dog = Dog.objects.create(
+            name="One DNA Marker", slug="one-dna-marker", is_public=True
+        )
+        HealthRecord.objects.create(
+            dog=dog, test_type="DSRA", result="Clear",
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertContains(response, "genetic-screening-status--clear", count=1)
+        self.assertContains(response, "genetic-screening-status--untested", count=2)
+        self.assertNotContains(response, "Other health records")
+        self.assertNotContains(response, "Breed DNA not yet verified")
+
+
     def test_archive_bootstrap_accepts_any_kennel_without_modifying_existing(self):
         from django.core.management import call_command
         from django.utils import timezone

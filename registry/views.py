@@ -534,10 +534,12 @@ def dog_detail(request, slug):
 
     # The public verification card is not a generic placeholder. Only a
     # specifically reviewed genetic marker can create a screening badge.
-    genetic_screenings = [
-        row for row in marker_status_rows(dog.display_health_records)
-        if row["tone"] != "untested"
-    ]
+    genetic_screenings = marker_status_rows(dog.display_health_records)
+    # A dog with no confirmed genetic marker result does not get a three-row
+    # "Not tested" card. With any verified result, retain the remaining marker
+    # statuses so visitors can distinguish tested from untested conditions.
+    if not any(row["tone"] != "untested" for row in genetic_screenings):
+        genetic_screenings = []
     # Older data may have a single free-text health row combining an alleged
     # breed percentage with words such as "DSRA CLEAR". Never treat that prose
     # as an independently reviewed breed-composition report or genetic test.
