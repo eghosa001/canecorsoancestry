@@ -303,6 +303,20 @@ class PedigreeServiceTests(TestCase):
         self.assertContains(response, common.name)
         self.assertContains(response, "Pedigree completeness")
         self.assertContains(response, "HYPOTHETICAL PEDIGREE")
+        self.assertContains(response, 'id="mating-results"')
+        self.assertContains(response, 'id="mating-summary"')
+        self.assertContains(response, 'id="mating-common"')
+        self.assertContains(response, 'id="mating-contributions"')
+        self.assertContains(response, 'id="mating-overlap"')
+        self.assertContains(response, 'id="mating-coverage"')
+        self.assertContains(response, 'id="mating-projected"')
+        self.assertContains(response, 'href="#mating-projected"')
+        self.assertContains(
+            response,
+            f'action="{reverse("pedigrees:virtual-mating")}#analysis-outcome"',
+        )
+        self.assertContains(response, 'HYPOTHETICAL PAIRING')
+        self.assertContains(response, "Compare another pairing")
 
     def test_virtual_mating_selected_ids_avoid_duplicate_name_ambiguity(self):
         self.client.force_login(get_user_model().objects.create_user(username="pedigree-member-test_virtual_mating_selected_ids_avoid_duplicate_name_ambiguity", password="test-pass-123"))

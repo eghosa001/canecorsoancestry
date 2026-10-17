@@ -63,6 +63,18 @@ jobs:
               kennel=kennel,
               is_public=True,
           )
+          # Known half-sibling pairing, projected offspring COI = 12.5%.
+          shared = Dog.objects.create(
+              name="Safari Pair Founder", slug="safari-pair-founder", is_public=True,
+          )
+          Dog.objects.create(
+              name="Safari Pair Sire", slug="safari-pair-sire",
+              sex=Dog.Sex.MALE, sire=shared, is_public=True,
+          )
+          Dog.objects.create(
+              name="Safari Pair Dam", slug="safari-pair-dam",
+              sex=Dog.Sex.FEMALE, sire=shared, is_public=True,
+          )
           # A landscape photo exposes unwanted CSS cover-cropping,
           # artificial matte and unintended zoom in the profile test.
           import io

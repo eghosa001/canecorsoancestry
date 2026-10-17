@@ -8,7 +8,7 @@
     <p>Registered members, administrators and active moderators can compare a public sire and dam using the ancestry already connected in the database. This is a hypothetical pedigree analysis only and does not create a litter or registration.</p>
   </header>
 
-  <form class="mating-form mating-form-expanded" method="get">
+  <form id="pairing-form" class="mating-form mating-form-expanded" method="get" action="{% url 'pedigrees:virtual-mating' %}{% if user.is_authenticated %}#analysis-outcome{% else %}#mating-access{% endif %}">
     <div class="mating-select">
       <label for="sire_q">Sire</label>
       <input type="hidden" id="sire" name="sire" value="{% if sire %}{{ sire.pk }}{% else %}{{ sire_selected_id }}{% endif %}">
@@ -36,7 +36,7 @@
   </form>
 
   {% if membership_required %}
-    <div class="notice" role="status" aria-live="polite">
+    <div id="mating-access" class="notice" role="status" aria-live="polite">
       <strong>Register to start your pairing analysis.</strong>
       <p>Virtual mating and pedigree calculations are for registered members and authorized staff. Your selected sire and dam will be kept when you sign in or create an account.</p>
       <div class="button-row"><a class="btn btn-gold" href="{{ member_signup_url }}">Create free member account</a><a class="btn btn-outline" href="{{ member_login_url }}">Sign in</a></div>
@@ -47,17 +47,19 @@
 
   <p class="mating-help muted">Search is resolved on the server, so this works across the full dog database without loading thousands of dogs into the page. Exact registration numbers are best when names are duplicated.</p>
 
+  <div id="analysis-outcome" class="mating-outcome-anchor" tabindex="-1"></div>
   {% if error %}
     <div class="notice error">{{ error }}</div>
   {% endif %}
 
   {% if sire and dam and analysis and not error %}
-    <section class="mating-results" aria-labelledby="mating-result-title">
+    <section id="mating-results" class="mating-results" aria-labelledby="mating-result-title">
       <div class="analysis-heading-row mating-result-heading">
         <div>
           <p class="eyebrow">Virtual mating result</p>
           <h2 id="mating-result-title">{{ sire.name }} × {{ dam.name }}</h2>
           <p class="muted">{{ generations }}-generation analysis of the pedigree currently recorded in Cane Corso Ancestry.</p>
+          <p class="mating-hypothetical-note">HYPOTHETICAL PAIRING — NOT A REGISTERED LITTER</p>
         </div>
       </div>
 
@@ -73,26 +75,19 @@
         </article>
       </div>
 
-      {% if can_save_research %}
-      <section class="panel mating-section" aria-label="Save private breeding research">
-        <div class="panel-heading"><h2>Save this pairing</h2><span>Private to your member account</span></div>
-        <form method="post" action="{% url 'accounts:save-pairing' %}" class="member-form">
-          {% csrf_token %}
-          <input type="hidden" name="sire" value="{{ sire.pk }}">
-          <input type="hidden" name="dam" value="{{ dam.pk }}">
-          <label for="pairing-label">Research label (optional)</label>
-          <input id="pairing-label" name="label" maxlength="120" placeholder="e.g. Spring planning comparison">
-          <label for="pairing-notes">Private notes (optional)</label>
-          <textarea id="pairing-notes" name="notes" rows="2" maxlength="700" placeholder="What would you like to compare later?"></textarea>
-          <div class="button-row"><button class="btn btn-gold" type="submit">Save to My research</button>
-            <a class="btn btn-outline" href="{% url 'accounts:saved-pairings' %}">View saved pairings</a></div>
-        </form>
-        <p class="muted">Saving a pairing never creates an actual litter or changes the pedigree. Future analyses use the newest published ancestry.</p>
-      </section>
-      {% endif %}
 
-      <div class="analysis-grid mating-metrics">
-        <article class="analysis-card">
+
+      <nav class="mating-result-nav" aria-label="Jump to pairing analysis sections">
+        <a href="#mating-summary">Summary</a>
+        <a href="#mating-common">Common ancestors</a>
+        <a href="#mating-contributions">COI contributions</a>
+        <a href="#mating-overlap">Pedigree overlap</a>
+        <a href="#mating-coverage">Completeness</a>
+        <a href="#mating-projected">Projected pedigree</a>
+      </nav>
+
+      <div id="mating-summary" class="analysis-grid mating-metrics">
+        <article class="analysis-card mating-metric-feature">
           <p class="eyebrow">Projected offspring COI</p>
           <strong class="analysis-number">{{ analysis.projected_percent|floatformat:2 }}%</strong>
           <span>Shared sire/dam ancestors within {{ generations }} recorded generations</span>
@@ -101,6 +96,16 @@
           <p class="eyebrow">Sire ↔ dam relationship</p>
           <strong class="analysis-number">{{ analysis.relationship_percent|floatformat:2 }}%</strong>
           <span>Twice the parental kinship coefficient</span>
+        </article>
+        <article class="analysis-card">
+          <p class="eyebrow">Common ancestors</p>
+          <strong class="analysis-number">{{ common|length }}</strong>
+          <span>Distinct shared ancestors found in recorded sire and dam lines</span>
+        </article>
+        <article class="analysis-card">
+          <p class="eyebrow">Pedigree coverage</p>
+          <strong class="analysis-number">{{ analysis.completeness.coverage_percent|floatformat:1 }}%</strong>
+          <span>{{ analysis.completeness.known_slots }} of {{ analysis.completeness.total_slots }} possible ancestry positions recorded</span>
         </article>
         <article class="analysis-card">
           <p class="eyebrow">Sire COI</p>
@@ -114,7 +119,7 @@
         </article>
       </div>
 
-      <section class="panel mating-section">
+      <section id="mating-common" class="panel mating-section">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Shared ancestry</p>
@@ -141,7 +146,7 @@
         </div>
       </section>
 
-      <section class="panel mating-section">
+      <section id="mating-contributions" class="panel mating-section">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">COI contribution</p>
@@ -181,7 +186,7 @@
         {% endif %}
       </section>
 
-      <section class="panel mating-section pedigree-overlap-panel">
+      <section id="mating-overlap" class="panel mating-section pedigree-overlap-panel">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Pedigree overlap</p>
@@ -215,7 +220,7 @@
         {% endif %}
       </section>
 
-      <section class="panel mating-section">
+      <section id="mating-coverage" class="panel mating-section">
         <div class="panel-heading">
           <div>
             <p class="eyebrow">Pedigree completeness</p>
@@ -259,7 +264,7 @@
         {% endif %}
       </section>
 
-      <details class="panel mating-section projected-pedigree">
+      <details id="mating-projected" class="panel mating-section projected-pedigree">
         <summary>
           <span>
             <small class="eyebrow">Hypothetical pedigree</small>
@@ -309,6 +314,24 @@
         </div>
       </details>
 
+      {% if can_save_research %}
+      <section class="panel mating-section" aria-label="Save private breeding research">
+        <div class="panel-heading"><h2>Save this pairing</h2><span>Private to your member account</span></div>
+        <form method="post" action="{% url 'accounts:save-pairing' %}" class="member-form">
+          {% csrf_token %}
+          <input type="hidden" name="sire" value="{{ sire.pk }}">
+          <input type="hidden" name="dam" value="{{ dam.pk }}">
+          <label for="pairing-label">Research label (optional)</label>
+          <input id="pairing-label" name="label" maxlength="120" placeholder="e.g. Spring planning comparison">
+          <label for="pairing-notes">Private notes (optional)</label>
+          <textarea id="pairing-notes" name="notes" rows="2" maxlength="700" placeholder="What would you like to compare later?"></textarea>
+          <div class="button-row"><button class="btn btn-gold" type="submit">Save to My research</button>
+            <a class="btn btn-outline" href="{% url 'accounts:saved-pairings' %}">View saved pairings</a></div>
+        </form>
+        <p class="muted">Saving a pairing never creates an actual litter or changes the pedigree. Future analyses use the newest published ancestry.</p>
+      </section>
+      {% endif %}
+
       <section class="panel mating-section compare-pairing-panel">
         <div class="panel-heading">
           <div>
@@ -317,8 +340,8 @@
           </div>
         </div>
         <div class="button-row">
-          <a class="btn btn-outline" href="{% url 'pedigrees:virtual-mating' %}?sire={{ sire.pk }}&sire_q={{ sire.name|urlencode }}&generations={{ generations }}">Keep sire · choose another dam</a>
-          <a class="btn btn-outline" href="{% url 'pedigrees:virtual-mating' %}?dam={{ dam.pk }}&dam_q={{ dam.name|urlencode }}&generations={{ generations }}">Keep dam · choose another sire</a>
+          <a class="btn btn-outline" href="{% url 'pedigrees:virtual-mating' %}?sire={{ sire.pk }}&amp;sire_q={{ sire.name|urlencode }}&amp;generations={{ generations }}">Keep sire · choose another dam</a>
+          <a class="btn btn-outline" href="{% url 'pedigrees:virtual-mating' %}?dam={{ dam.pk }}&amp;dam_q={{ dam.name|urlencode }}&amp;generations={{ generations }}">Keep dam · choose another sire</a>
           <a class="btn btn-gold" href="{% url 'pedigrees:virtual-mating' %}?generations={{ generations }}">Start new pairing</a>
         </div>
       </section>

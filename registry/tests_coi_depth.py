@@ -47,6 +47,13 @@ class DogProfileCoiDepthTests(TestCase):
         self.assertContains(default, 'value="2"')
         self.assertContains(default, 'value="4"')
         self.assertContains(default, 'value="6"')
+        self.assertContains(default, 'class="profile-coi-selection"')
+        self.assertContains(default, 'class="btn btn-outline profile-coi-recalculate"')
+        html = default.content.decode("utf-8")
+        self.assertLess(
+            html.index('id="profile-coi-generations"'),
+            html.index('profile-coi-recalculate'),
+        )
 
     def test_member_pedigree_keeps_all_depth_coi_when_board_shows_four(self):
         member = get_user_model().objects.create_user(
