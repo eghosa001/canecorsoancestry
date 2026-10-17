@@ -41,7 +41,7 @@ class ModeratorLabResultTests(TestCase):
         response = self.client.post(self.submit_url, {
             "evidence_type": kind, "test_type": "Hip scores",
             "result": "A", "attachment": SimpleUploadedFile(
-                "health-scan.jpg", b"\xff\xd8\xff\xdbphoto", content_type="image/jpeg"
+                "health-scan.pdf", b"\xff\xd8\xff\xdbphoto", content_type="image/jpeg"
             ),
         })
         self.assertEqual(response.status_code, 302)
