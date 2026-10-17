@@ -4,6 +4,9 @@ from datetime import date
 from django.db import transaction
 from django.utils import timezone
 
+from .dna import parse_breed_composition
+from django.core.exceptions import ValidationError
+
 from .models import (
     Dog,
     DogIdentityNumber,
@@ -916,6 +919,24 @@ def _health_checks(findings, submission, run_id, payload):
             expected="Target dog, test name and result",
             submitted=f"dog={submission.dog_id or 'missing'}, test={test_type or 'missing'}, result={result or 'missing'}",
         )
+
+    if payload.get("evidence_type") == "breed":
+        provider = str(payload.get("dna_provider") or "").strip()
+        invalid = not provider or len(provider) > 100 or not payload.get("acknowledge_public_summary")
+        try:
+            parse_breed_composition(
+                payload.get("cane_corso_percentage"), payload.get("other_breeds", "")
+            )
+        except ValidationError:
+            invalid = True
+        if invalid:
+            _add_finding(
+                findings, submission=submission, run_id=run_id,
+                code="health_record_incomplete",
+                message="DNA breed composition needs a testing company, valid 100% total and owner summary consent.",
+                expected="Named lab, owner consent and percentages totaling 100%",
+                submitted="The required breed DNA fields are incomplete or invalid.",
+            )
 
     if not submission.attachment:
         _add_finding(

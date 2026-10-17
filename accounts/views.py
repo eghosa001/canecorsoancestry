@@ -37,11 +37,13 @@ from registry.coi_identity_audit import audit_registration_backed_duplicates
 from registry.models import (
     DisputeCase,
     Dog,
+    BreedDNAReport,
     DogDocument,
     DogImage,
     DogSource,
     EvidenceRequest,
     HealthRecord,
+    KennelMembership,
     Kennel,
     Litter,
     ModerationAudit,
@@ -1156,8 +1158,15 @@ def submit_health_record(request, pk):
     if not can_contribute_to_dog(request.user, dog):
         raise PermissionDenied
 
-    form = HealthRecordSubmissionForm(request.POST or None, request.FILES or None)
+    form = HealthRecordSubmissionForm(
+        request.POST or None, request.FILES or None,
+        initial={"evidence_type": "breed"} if request.GET.get("type") == "breed" else None,
+    )
     if request.method == "POST" and form.is_valid():
+        if form.cleaned_data["evidence_type"] == "breed" and not KennelMembership.objects.filter(
+            user=request.user, kennel=dog.kennel, role=KennelMembership.Role.OWNER
+        ).exists():
+            raise PermissionDenied("Only the kennel owner can consent to public DNA results.")
         upload = form.cleaned_data["attachment"]
         try:
             with transaction.atomic():
@@ -1171,6 +1180,13 @@ def submit_health_record(request, pk):
                         "test_type": form.cleaned_data["test_type"].strip(),
                         "result": form.cleaned_data["result"].strip(),
                         "tested_on": _date_value(form.cleaned_data["tested_on"]),
+                        **({
+                            "dna_provider": form.cleaned_data["dna_provider"].strip(),
+                            "cane_corso_percentage": str(form.cleaned_data["cane_corso_percentage"]),
+                            "other_breeds": form.cleaned_data["other_breeds"],
+                            "acknowledge_public_summary": True,
+                            "allow_full_report_publication": form.cleaned_data["allow_full_report_publication"],
+                        } if form.cleaned_data["evidence_type"] == "breed" else {}),
                     },
                     attachment=upload,
                     notes=form.cleaned_data["notes"],
@@ -1196,8 +1212,11 @@ def submit_health_record(request, pk):
             "intro": (
                 "Structured results remain pending until an authorized Moderator checks "
                 "the supporting evidence. The uploaded certificate stays private "
-                "unless its visibility is separately approved."
+                "unless its visibility is separately approved. Approved DNA breed percentages "
+                "and provider become public; the entire report is public only with explicit "
+                "kennel owner consent and moderator approval."
             ),
+            "breed_dna_form": True,
             "button_label": "Submit result for review",
             "multipart": True,
             "dog": dog,
@@ -2419,6 +2438,16 @@ def request_document_visibility(request, pk):
     form = DocumentVisibilityForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
         desired = form.cleaned_data["is_public"]
+        if desired and BreedDNAReport.objects.filter(
+            evidence_document=document, consent_full_report=False
+        ).exists():
+            form.add_error("is_public", "The kennel owner did not consent to publish the DNA report.")
+            return render(request, "accounts/submission_form.html", {
+                "form": form, "eyebrow": "Document management",
+                "title": f"Visibility · {document.title}",
+                "intro": "Full DNA reports require explicit owner publication consent.",
+                "button_label": "Submit visibility request",
+            })
         if desired == document.is_public:
             messages.info(request, "The document already has that visibility.")
             return redirect("accounts:documents")

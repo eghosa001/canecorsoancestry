@@ -13,7 +13,9 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.text import slugify
 
+from .dna import parse_breed_composition
 from .models import (
+    BreedDNAReport,
     Dog,
     DogAlias,
     DogDocument,
@@ -695,8 +697,32 @@ def approve_submission(
         if submission.dog is None or not submission.attachment:
             raise ValueError("Health/DNA submission requires a target dog and supporting evidence.")
 
+        evidence_type = str(payload.get("evidence_type") or "health")
+        is_breed = evidence_type == "breed"
         test_type = str(payload.get("test_type") or "").strip()
         result = str(payload.get("result") or "").strip()
+        provider, composition, allow_full = "", [], False
+        if is_breed:
+            if not payload.get("acknowledge_public_summary"):
+                raise ValueError("DNA breed composition requires owner's summary consent.")
+            if not KennelMembership.objects.filter(
+                user_id=submission.submitted_by_id,
+                kennel_id=submission.dog.kennel_id,
+                role=KennelMembership.Role.OWNER,
+            ).exists():
+                raise ValueError("DNA breed summary consent must come from the kennel owner.")
+            provider = str(payload.get("dna_provider") or "").strip()
+            if not provider or len(provider) > 100:
+                raise ValueError("The DNA testing laboratory must be named.")
+            try:
+                composition = parse_breed_composition(
+                    payload.get("cane_corso_percentage"), payload.get("other_breeds", "")
+                )
+            except ValidationError as exc:
+                raise ValueError("Invalid breed DNA percentages: " + "; ".join(exc.messages)) from exc
+            test_type = "DNA breed composition"
+            result = f'{composition[0]["percentage"]}% Cane Corso'
+            allow_full = payload.get("allow_full_report_publication") is True
         if not test_type or not result:
             raise ValueError("Health/DNA submissions require both a test name and result.")
 
@@ -708,21 +734,29 @@ def approve_submission(
             verification_state=VerificationState.HEALTH_VERIFIED,
             notes=submission.notes,
         )
-        evidence_type = str(payload.get("evidence_type") or "health")
         document_type = (
             DogDocument.DocumentType.DNA
-            if evidence_type == "dna"
+            if evidence_type in {"dna", "breed"}
             else DogDocument.DocumentType.HEALTH
         )
-        DogDocument.objects.create(
+        document = DogDocument.objects.create(
             dog=submission.dog,
             title=f"{test_type} supporting evidence",
             document_type=document_type,
             file=submission.attachment.name,
-            is_public=False,
+            is_public=allow_full,
             submitted_by=submission.submitted_by,
             source_submission=submission,
         )
+        if is_breed:
+            BreedDNAReport.objects.create(
+                health_record=health_record,
+                evidence_document=document,
+                provider=provider,
+                cane_corso_percentage=payload["cane_corso_percentage"],
+                composition=composition,
+                consent_full_report=allow_full,
+            )
         VerificationEvent.objects.create(
             dog=submission.dog,
             health_record=health_record,
@@ -929,7 +963,12 @@ def approve_submission(
         document = submission.document
         if document is None:
             raise ValueError("Document visibility request has no target document.")
-        document.is_public = bool(payload.get("is_public"))
+        desired_public = bool(payload.get("is_public"))
+        if desired_public and BreedDNAReport.objects.filter(
+            evidence_document=document, consent_full_report=False
+        ).exists():
+            raise ValueError("The owner has not consented to public disclosure of this DNA report.")
+        document.is_public = desired_public
         document.save(update_fields=("is_public",))
 
     else:

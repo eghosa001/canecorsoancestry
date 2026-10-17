@@ -12,6 +12,7 @@ from django.utils.text import slugify
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 
+from registry.dna import parse_breed_composition, percentage_text
 from registry.models import DisputeCase, Dog, DogDocument, DogImage, DogIdentityNumber, DogRegistration, DogSource, Kennel, KennelMembership, Litter, ModerationRoleAssignment, Submission, SubmissionEvidence, VerificationState
 
 from .models import Profile, SubmissionPayment
@@ -133,6 +134,7 @@ class HealthRecordSubmissionForm(forms.Form):
     EVIDENCE_TYPES = (
         ("health", "Health test"),
         ("dna", "DNA / parentage test"),
+        ("breed", "DNA breed composition"),
     )
 
     evidence_type = forms.ChoiceField(
@@ -141,11 +143,13 @@ class HealthRecordSubmissionForm(forms.Form):
     )
     test_type = forms.CharField(
         max_length=100,
+        required=False,
         label="Test / marker",
         help_text="For example: hip score, elbow score, cardiac exam, DM, DSRA or DNA parentage.",
     )
     result = forms.CharField(
         max_length=160,
+        required=False,
         help_text="Enter the result exactly as shown on the supporting evidence.",
     )
     tested_on = forms.DateField(
@@ -168,6 +172,55 @@ class HealthRecordSubmissionForm(forms.Form):
         widget=forms.Textarea(attrs={"rows": 3}),
         help_text="Optional context for the administrator reviewing this result.",
     )
+
+    dna_provider = forms.CharField(
+        max_length=100, required=False, label="DNA testing company",
+        help_text="Embark, Wisdom Panel, or the laboratory named on the report.",
+    )
+    cane_corso_percentage = forms.DecimalField(
+        required=False, max_digits=5, decimal_places=2, min_value=0, max_value=100,
+        label="Cane Corso percentage",
+        help_text="Copy the breed estimate from the report; do not infer it from pedigree.",
+    )
+    other_breeds = forms.CharField(
+        required=False, max_length=2000, label="Other breeds and percentages",
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Neapolitan Mastiff: 5\nBoxer: 2.5"}),
+        help_text="One per line: Breed name: percentage. Together with Cane Corso, total 100%.",
+    )
+    acknowledge_public_summary = forms.BooleanField(
+        required=False, label="I consent to publishing the testing company and breed percentages",
+        help_text="This summary is public only after moderation, even if the full report stays private.",
+    )
+    allow_full_report_publication = forms.BooleanField(
+        required=False, label="I also consent to publication of the complete uploaded DNA report",
+        help_text="Optional. The whole file, including any identifiers, becomes public after review.",
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("evidence_type") == "breed":
+            if not cleaned.get("dna_provider", "").strip():
+                self.add_error("dna_provider", "Enter the testing laboratory.")
+            if cleaned.get("cane_corso_percentage") is None:
+                self.add_error("cane_corso_percentage", "Enter the percentage on the report.")
+            if not cleaned.get("acknowledge_public_summary"):
+                self.add_error("acknowledge_public_summary", "Owner consent to the public summary is required.")
+            if cleaned.get("cane_corso_percentage") is not None:
+                try:
+                    cleaned["breed_composition"] = parse_breed_composition(
+                        cleaned["cane_corso_percentage"], cleaned.get("other_breeds", "")
+                    )
+                except ValidationError as exc:
+                    self.add_error("other_breeds", exc)
+                else:
+                    cleaned["test_type"] = "DNA breed composition"
+                    cleaned["result"] = f'{percentage_text(cleaned["cane_corso_percentage"])}% Cane Corso'
+        else:
+            if not (cleaned.get("test_type") or "").strip():
+                self.add_error("test_type", "Enter the test name.")
+            if not (cleaned.get("result") or "").strip():
+                self.add_error("result", "Enter the result.")
+        return cleaned
 
     def clean_attachment(self):
         return normalize_image_upload(self.cleaned_data.get("attachment"))

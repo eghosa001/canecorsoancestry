@@ -1,0 +1,17 @@
+.breed-dna-card {
+  padding: clamp(1rem, 3vw, 1.6rem);
+  margin: .5rem 0 1.25rem;
+  background: #121212;
+  color: #f9f5ec;
+  border: 1px solid #65542c;
+  border-radius: 18px;
+  overflow-wrap: anywhere;
+}
+.breed-dna-label {color: #d4b86f; font-size: .85rem; font-weight: 650; letter-spacing: .03em;}
+.breed-dna-score {display:block; margin: .6rem 0 .4rem; font-size: clamp(1.8rem, 5vw, 3rem); line-height: 1.15; letter-spacing: -.035em;}
+.breed-dna-card p {color: #d7d0c2; margin: 0 0 1rem;}
+.breed-dna-breakdown {display:grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: .5rem; margin-bottom: .9rem;}
+.breed-dna-entry {display:flex; justify-content:space-between; gap:1rem; border:1px solid #403c34; background:#201f1c; border-radius: 9px; padding: .6rem .8rem; font-size: .95rem;}
+.breed-dna-entry strong {color:#f0d894; white-space:nowrap;}
+.breed-dna-card small {display:block; margin-top: .6rem; color: #c8c1b3; line-height:1.45;}
+.breed-dna-card a {display:inline-block; min-height: 44px; padding-top: .6rem;}

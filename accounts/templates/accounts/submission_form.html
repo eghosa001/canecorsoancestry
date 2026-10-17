@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}{{ title }} · Cane Corso Ancestry{% endblock %}
 {% block content %}
 <section class="page-shell member-form-shell">
@@ -73,6 +74,9 @@
     </div>
   </form>
 </section>
+{% if breed_dna_form %}
+<script defer src="{% static 'accounts/breed-dna-form.js' %}?v=20261017-1"></script>
+{% endif %}
 {% if photo_report_choices %}
 <script>
   const field = document.getElementById("id_target_image");
