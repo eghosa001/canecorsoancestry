@@ -42,7 +42,7 @@ from .models import (
     public_verification_label,
 )
 from .permissions import can_access_public_pedigree_analysis, can_contribute_to_dog
-from .genetic_health import marker_status_rows
+from .genetic_health import MARKER_CODES, marker_status_rows
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
 
@@ -532,7 +532,26 @@ def dog_detail(request, slug):
         # to display. Preserve the empty Health & DNA section in the template.
         relative_health, dog.display_health_records = [], []
 
-    genetic_screenings = marker_status_rows(dog.display_health_records)
+    # The public verification card is not a generic placeholder. Only a
+    # specifically reviewed genetic marker can create a screening badge.
+    genetic_screenings = [
+        row for row in marker_status_rows(dog.display_health_records)
+        if row["tone"] != "untested"
+    ]
+    # Older data may have a single free-text health row combining an alleged
+    # breed percentage with words such as "DSRA CLEAR". Never treat that prose
+    # as an independently reviewed breed-composition report or genetic test.
+    # Keep such text in the private moderation database for correction.
+    other_health_records = []
+    for record in dog.display_health_records:
+        label = (record.test_type or "").strip().lower()
+        if label.upper() in MARKER_CODES:
+            continue  # Structured marker is shown once, as a reviewed badge.
+        if "breed" in label and any(
+            word in label for word in ("dna", "composition", "identification", "purity")
+        ):
+            continue  # Only BreedDNAReport + owner consent enables public breed percent.
+        other_health_records.append(record)
 
     # Surface only moderator-reviewed lab estimates, never pending submissions.
     breed_dna = (
@@ -566,7 +585,9 @@ def dog_detail(request, slug):
             "relative_health": relative_health,
             "breed_dna": breed_dna,
             "genetic_screenings": genetic_screenings,
-            "has_public_health_records": bool(dog.display_health_records or breed_dna),
+            "other_health_records": other_health_records,
+            "show_dna_card": bool(breed_dna or genetic_screenings),
+            "has_public_health_records": bool(other_health_records or breed_dna or genetic_screenings),
             "can_submit_breed_dna": can_submit_breed_dna,
             "coi_percent": coi_percent,
             "can_select_coi": can_select_coi,

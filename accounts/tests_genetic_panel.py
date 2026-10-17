@@ -69,9 +69,46 @@ class GeneticPanelTests(TestCase):
         page = self.client.get(self.profile)
         self.assertContains(page, 'genetic-screening-status--clear')
         self.assertContains(page, 'genetic-screening-status--carrier')
-        self.assertContains(page, "genetic-screening-status--untested", count=1)
+        self.assertNotContains(page, "genetic-screening-status--untested")
         self.client.force_login(self.outsider)
         self.assertEqual(self.submit_marker("CMR1", "Clear").status_code, 403)
+
+    def test_free_text_breed_claim_does_not_create_conflicting_verification_card(self):
+        HealthRecord.objects.create(
+            dog=self.dog,
+            test_type="Breed Identification / DNA Breed Composition",
+            result="100% Cane Corso. C DSRA CLEAR",
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        page = self.client.get(self.profile)
+        self.assertContains(page, "No available records")
+        self.assertNotContains(page, "Breed DNA not yet verified")
+        self.assertNotContains(page, "100% Cane Corso")
+        self.assertNotContains(page, "genetic-screening-status--untested")
+
+    def test_unrelated_health_record_has_no_false_dna_badges_or_empty_table(self):
+        HealthRecord.objects.create(
+            dog=self.dog,
+            test_type="Hip scoring", result="A",
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        page = self.client.get(self.profile)
+        self.assertContains(page, "Other health records")
+        self.assertContains(page, "Hip scoring")
+        self.assertNotContains(page, "Breed DNA not yet verified")
+        self.assertNotContains(page, "genetic-screening-status--untested")
+        self.assertNotContains(page, "No available records")
+
+    def test_approved_marker_is_one_badge_not_duplicate_table_row(self):
+        HealthRecord.objects.create(
+            dog=self.dog, test_type="DSRA", result="Clear",
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        page = self.client.get(self.profile)
+        self.assertContains(page, "genetic-screening-status--clear", count=1)
+        self.assertNotContains(page, "Other health records")
+        self.assertNotContains(page, "Breed DNA not yet verified")
+        self.assertNotContains(page, "genetic-screening-status--untested")
 
     def test_rejects_missing_or_unrecognized_marker_status_without_creating_submission(self):
         self.client.force_login(self.owner)
