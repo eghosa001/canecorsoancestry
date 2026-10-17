@@ -24,8 +24,8 @@
       <div class="review-diff-row">
         <div><strong>{{ item.test_type }}</strong><p>{{ item.result }} · {{ item.tested_on|default:"Date not provided" }}</p><small>{{ item.public_verification_label }}</small></div>
         <div>
-          {% if item.is_public %}
-            <span class="submission-state green">Visibility on</span>
+          {% if item.is_public and item.verification_state == "health" and not item.breed_dna_report or item.is_public and item.verification_state == "health" and item.breed_dna_report.consent_public_summary %}
+            <span class="submission-state green">Public summary enabled</span>
             <form method="post" action="{% url 'accounts:toggle-health-result' dog.pk item.pk %}">{% csrf_token %}<input type="hidden" name="visibility" value="hide"><button type="submit" class="btn btn-outline">Hide result</button></form>
           {% else %}
             <span class="submission-state yellow">Visibility off</span>

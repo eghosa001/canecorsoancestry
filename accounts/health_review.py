@@ -120,7 +120,12 @@ def transcribe_health_submission(request, pk):
                     "publish": bool(data.get("publish_" + code)),
                 }
         payload["reviewed_markers"] = markers
-        payload["publish_primary"] = bool(data.get("publish_primary"))
+        primary_code = (payload.get("test_type") or "").strip().upper()
+        if primary_code in markers:
+            payload["result"] = markers[primary_code]["status"]
+            payload["publish_primary"] = markers[primary_code]["publish"]
+        else:
+            payload["publish_primary"] = bool(data.get("publish_primary"))
         submission.payload = payload
         submission.save(update_fields=["payload", "updated_at"])
         record_audit(
