@@ -48,7 +48,7 @@ class GeneticPanelTests(TestCase):
         self.assertContains(response, "DSRA")
         self.assertContains(response, "NCL1")
         self.assertContains(response, "CMR1")
-        self.assertContains(response, "Not tested", count=3)
+        self.assertContains(response, "genetic-screening-status--untested", count=3)
         self.assertNotContains(response, "100% Cane Corso")
         self.assertNotContains(response, "genetic-screening-status--clear")
 
@@ -72,7 +72,7 @@ class GeneticPanelTests(TestCase):
         page = self.client.get(self.profile)
         self.assertContains(page, 'genetic-screening-status--clear')
         self.assertContains(page, 'genetic-screening-status--carrier')
-        self.assertContains(page, "Not tested", count=1)
+        self.assertContains(page, "genetic-screening-status--untested", count=1)
         self.client.force_login(self.outsider)
         self.assertEqual(self.submit_marker("CMR1", "Clear").status_code, 403)
 
