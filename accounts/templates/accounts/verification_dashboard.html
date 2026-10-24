@@ -24,48 +24,6 @@
     </div>
   </header>
 
-  <section class="panel staff-access-panel" id="staff-access" aria-labelledby="staff-access-title">
-    <div class="panel-heading">
-      <div>
-        <p class="eyebrow">Super Admin · Staff access</p>
-        <h2 id="staff-access-title">Suspend or reactivate a specific moderator</h2>
-        <p>Choose exactly one Moderator or Senior Moderator by their Admin number and username. Only the selected account will change. Deactivation blocks sign-in but keeps all audit history.</p>
-      </div>
-    </div>
-    {% if manageable_staff %}
-      <form id="staff-access-form" method="post" action="{% url 'accounts:moderation-set-status' %}" class="staff-access-form">
-        {% csrf_token %}
-        <div class="staff-access-field">
-          <label for="staff-target">1. Select the staff account</label>
-          <select id="staff-target" name="user_id" required>
-            <option value="" selected disabled>Choose a moderator account…</option>
-            {% for member in manageable_staff %}
-              <option value="{{ member.pk }}">{% if member.moderation_assignment %}{{ member.moderation_assignment.public_label }}{% else %}Admin account{% endif %} · {{ member.username }} · {% if member.moderation_assignment %}{{ member.moderation_assignment.get_role_display }}{% else %}Staff{% endif %} · {% if member.is_active %}Active{% else %}Deactivated{% endif %}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="staff-access-field">
-          <label for="staff-action">2. Choose what to do</label>
-          <select id="staff-action" name="action" required>
-            <option value="" selected disabled>Choose an action…</option>
-            <option value="deactivate">Deactivate — block sign-in</option>
-            <option value="activate">Reactivate — restore sign-in</option>
-          </select>
-        </div>
-        <div class="staff-access-field staff-access-reason">
-          <label for="staff-access-reason">3. Reason for this change</label>
-          <textarea id="staff-access-reason" name="reason" rows="2" minlength="5" maxlength="2000" required placeholder="State why this specific account should be deactivated or reactivated"></textarea>
-        </div>
-        <div class="staff-access-submit">
-          <button class="btn btn-gold" type="submit">Apply to selected moderator</button>
-          <p class="muted">No one is selected by default. You will be asked to confirm the exact account before the change.</p>
-        </div>
-      </form>
-    {% else %}
-      <p class="muted">No Moderator or Senior Moderator accounts are registered yet. Create a staff account under <a href="#staff-accounts">Staff accounts</a>.</p>
-    {% endif %}
-  </section>
-
   <div class="moderation-summary">
     <article><strong>{{ pending_count }}</strong><span>Pending submissions</span><a class="text-link" href="{% url 'accounts:moderation' %}">Open queue →</a></article>
     <article><strong>{{ yellow_count }}</strong><span>Yellow review</span><a class="text-link" href="{% url 'accounts:moderation' %}?risk=yellow">View yellow →</a></article>
@@ -241,6 +199,51 @@
       </article>
     </div>
   
+    </div>
+  </details>
+
+  <details class="panel staff-access-panel moderation-details ux-disclosure" id="staff-access" aria-labelledby="staff-access-title">
+    <summary><span><strong>Moderator access</strong><small>Deactivate or restore one staff account with a recorded reason and confirmation.</small></span></summary>
+    <div class="ux-disclosure-body">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Super Admin · Staff access</p>
+        <h2 id="staff-access-title">Suspend or reactivate a specific moderator</h2>
+        <p>Choose exactly one Moderator or Senior Moderator by their Admin number and username. Only the selected account will change. Deactivation blocks sign-in but keeps all audit history.</p>
+      </div>
+    </div>
+    {% if manageable_staff %}
+      <form id="staff-access-form" method="post" action="{% url 'accounts:moderation-set-status' %}" class="staff-access-form">
+        {% csrf_token %}
+        <div class="staff-access-field">
+          <label for="staff-target">1. Select the staff account</label>
+          <select id="staff-target" name="user_id" required>
+            <option value="" selected disabled>Choose a moderator account…</option>
+            {% for member in manageable_staff %}
+              <option value="{{ member.pk }}">{% if member.moderation_assignment %}{{ member.moderation_assignment.public_label }}{% else %}Admin account{% endif %} · {{ member.username }} · {% if member.moderation_assignment %}{{ member.moderation_assignment.get_role_display }}{% else %}Staff{% endif %} · {% if member.is_active %}Active{% else %}Deactivated{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="staff-access-field">
+          <label for="staff-action">2. Choose what to do</label>
+          <select id="staff-action" name="action" required>
+            <option value="" selected disabled>Choose an action…</option>
+            <option value="deactivate">Deactivate — block sign-in</option>
+            <option value="activate">Reactivate — restore sign-in</option>
+          </select>
+        </div>
+        <div class="staff-access-field staff-access-reason">
+          <label for="staff-access-reason">3. Reason for this change</label>
+          <textarea id="staff-access-reason" name="reason" rows="2" minlength="5" maxlength="2000" required placeholder="State why this specific account should be deactivated or reactivated"></textarea>
+        </div>
+        <div class="staff-access-submit">
+          <button class="btn btn-gold" type="submit">Apply to selected moderator</button>
+          <p class="muted">No one is selected by default. You will be asked to confirm the exact account before the change.</p>
+        </div>
+      </form>
+    {% else %}
+      <p class="muted">No Moderator or Senior Moderator accounts are registered yet. Create a staff account under <a href="#staff-accounts">Staff accounts</a>.</p>
+    {% endif %}
     </div>
   </details>
 
