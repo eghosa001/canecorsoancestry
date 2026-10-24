@@ -75,7 +75,7 @@ class StructuredNavigationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         html = response.content.decode("utf-8")
         self.assertIn("Administration tools", html)
-        self.assertIn("Open review queue", html)
+        self.assertIn(">Review queue</a>", html)
         self.assertIn('href="/member/moderation/merge-dogs/"', html)
         self.assertIn('href="/admin/"', html)
         self.assertLess(html.index('class="moderation-summary"'), html.index('id="staff-access"'))
