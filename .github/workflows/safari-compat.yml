@@ -68,8 +68,8 @@ jobs:
           )
           HealthRecord.objects.create(
               dog=dog,
-              test_type="Purity Verification/Health Test — Very long laboratory finding",
-              result="100% Cane Corso. CMR1 CLEAR. DSRA CLEAR.",
+              test_type="Hip and elbow screening with extended clinical observations",
+              result="Bilateral joint evaluation clear with longitudinal follow-up advised.",
               verification_state=VerificationState.HEALTH_VERIFIED,
               is_public=True,
           )
