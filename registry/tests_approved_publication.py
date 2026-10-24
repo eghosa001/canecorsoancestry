@@ -1,4 +1,4 @@
-"""End-to-end moderation publication: pending is private; final approval is visible.
+"""End-to-end moderation publication: approvals and public visibility are separate.
 
 Use the actual Django public URLs, templates, FileField media authorization and
 review service. All files live in a temporary local test storage, never R2.
@@ -164,14 +164,22 @@ class ApprovedPublicContentTests(TestCase):
             dog=self.dog, number="CORRECT-REG-01",
         ).exists())
 
-    def test_approved_health_is_public_but_attached_evidence_stays_private(self, _verification):
+    def test_approved_health_requires_explicit_staff_publication_and_evidence_stays_private(self, _verification):
         sub = self.submission(
             Submission.Kind.HEALTH, attachment=self.upload("health-evidence.jpg"),
             payload={"test_type": "Hip screening", "result": "Clear", "evidence_type": "health"},
         )
         self.assertNotContains(self.profile(), "Hip screening")
         self.approve(sub)
-        self.assertTrue(HealthRecord.objects.filter(dog=self.dog, test_type="Hip screening", result="Clear").exists())
+        record = HealthRecord.objects.get(dog=self.dog, test_type="Hip screening", result="Clear")
+        self.assertFalse(record.is_public)
+        self.assertNotContains(self.profile(), "Hip screening")
+        self.client.force_login(self.reviewer)
+        response = self.client.post(
+            reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk]),
+            {"visibility": "show"},
+        )
+        self.assertEqual(response.status_code, 302)
         self.assertContains(self.profile(), "Hip screening")
         self.assertContains(self.profile(), "Clear")
         doc = DogDocument.objects.get(source_submission=sub)
