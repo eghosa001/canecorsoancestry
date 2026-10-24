@@ -437,8 +437,10 @@ def main():
                 dark_accent = page.evaluate(
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()"
                 )
-                if dark_bg.lower() != "#0c1514" or dark_accent.lower() != "#9cc8af":
-                    raise AssertionError(f"Unexpected dark-theme tokens: {dark_bg}, {dark_accent}")
+                # Dark mode was intentionally restored to the pre-Figma
+                # charcoal-and-gold palette; light mode remains Evergreen.
+                if dark_bg.lower() != "#101110" or dark_accent.lower() != "#c7a25d":
+                    raise AssertionError(f"Unexpected restored dark-theme tokens: {dark_bg}, {dark_accent}")
                 assert_visual_contrast(
                     page,
                     ".hero-search input",
