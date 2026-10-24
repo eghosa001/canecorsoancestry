@@ -32,7 +32,7 @@ def legacy_mixed_health_rows(test_type, result):
         return None
     rows = []
     seen = set()
-    for piece in re.split(r"(?<!\\d)\\.(?!\\d)|;|\\n", (result or "").strip()):
+    for piece in re.split(r"(?<!\d)\.(?!\d)|;|\n", (result or "").strip()):
         entry = piece.strip()
         if not entry:
             continue
