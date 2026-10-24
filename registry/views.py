@@ -38,10 +38,11 @@ from .models import (
     Litter,
     Submission,
     VerificationState,
+    VerificationEvent,
     public_verification_label,
 )
 from .permissions import can_access_public_pedigree_analysis, can_contribute_to_dog
-from .genetic_health import MARKER_CODES, marker_status_rows, unstructured_breed_claim
+from .genetic_health import MARKER_CODES, SCREENING_RESULTS, marker_status_rows, unstructured_breed_claim
 from .dna import percentage_text
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
@@ -518,14 +519,37 @@ def dog_detail(request, slug):
         # to display. Preserve the empty Health & DNA section in the template.
         relative_health, dog.display_health_records = [], []
 
-    # The public verification card is not a generic placeholder. Only a
-    # specifically reviewed genetic marker can create a screening badge.
+    # The public verification card must show reviewed data, not a generic placeholder.
     genetic_screenings = marker_status_rows(dog.display_health_records)
-    # A dog with no confirmed genetic marker result does not get a three-row
-    # "Not tested" card. With any verified result, retain the remaining marker
-    # statuses so visitors can distinguish tested from untested conditions.
+    # Do not show three unsupported "Not tested" badges until a featured test exists.
     if not any(row["tone"] != "untested" for row in genetic_screenings):
         genetic_screenings = []
+    # Additional conditions are sourced from a moderator-reviewed approval event,
+    # not an untrusted string in the member's original notes.
+    possible_extra_ids = [
+        record.pk for record in dog.display_health_records
+        if (record.notes or "").startswith("Moderator condition transcribed from approved submission ")
+    ]
+    confirmed_extra_ids = set(
+        VerificationEvent.objects.filter(
+            health_record_id__in=possible_extra_ids,
+            note__startswith="Additional condition manually checked against approved private laboratory report ",
+        ).values_list("health_record_id", flat=True)
+    ) if possible_extra_ids else set()
+    seen_additional = set()
+    for record in sorted(dog.display_health_records, key=lambda item: (item.created_at, item.pk), reverse=True):
+        label = (record.test_type or "").strip()
+        if record.pk not in confirmed_extra_ids or not label or label.upper() in MARKER_CODES:
+            continue
+        if label.casefold() in seen_additional:
+            continue
+        seen_additional.add(label.casefold())
+        status = (record.result or "").strip()
+        classified = SCREENING_RESULTS.get(status.lower())
+        genetic_screenings.append({
+            "code": label, "name": "Additional laboratory screening",
+            "status": status, "tone": classified[1] if classified else "other",
+        })
     # Older data may have a single free-text health row combining an alleged
     # breed percentage with words such as "DSRA CLEAR". Never treat that prose
     # as an independently reviewed breed-composition report or genetic test.
@@ -533,8 +557,8 @@ def dog_detail(request, slug):
     other_health_records = []
     for record in dog.display_health_records:
         label = (record.test_type or "").strip().lower()
-        if label.upper() in MARKER_CODES:
-            continue  # Structured marker is shown once, as a reviewed badge.
+        if label.upper() in MARKER_CODES or record.pk in confirmed_extra_ids:
+            continue  # A reviewed genetic marker is already displayed in the DNA card.
         if unstructured_breed_claim(record.test_type):
             continue  # Only BreedDNAReport + owner consent enables public breed percent.
         other_health_records.append(record)
