@@ -1,0 +1,198 @@
+name: Comprehensive Playwright and Django audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "27 3 * * 1"
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cca-full-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DATABASE_URL: sqlite:////tmp/cca-qa-inventory.sqlite3
+      CCA_QA_REPORT_ROOT: artifacts/full-qa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: Enumerate every Django URL and registered Admin model
+        run: python -m scripts.qa_feature_inventory
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cca-audit-inventory
+          path: artifacts/full-qa/
+          if-no-files-found: error
+          retention-days: 14
+
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [accounts, registry, pedigrees, core]
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      PYTHONPATH: "."
+      DATABASE_URL: sqlite:////tmp/cca-isolated-test.sqlite3
+      APP: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: Backend integration, COI, permissions and mocked Paystack tests
+        shell: bash
+        run: |
+          mkdir -p artifacts/full-qa
+          set -o pipefail
+          python manage.py test "$APP" --verbosity 1 2>&1 | tee "artifacts/full-qa/backend-$APP.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cca-audit-backend-${{ matrix.app }}
+          path: artifacts/full-qa/
+          if-no-files-found: warn
+          retention-days: 14
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      BROWSER: ${{ matrix.browser }}
+      DJANGO_SETTINGS_MODULE: config.settings.qa_browser
+      CCA_QA_ISOLATED: "1"
+      PYTHONPATH: "."
+      PYTHONUNBUFFERED: "1"
+      CCA_QA_REPORT_ROOT: artifacts/full-qa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Provision private, file-backed email and media sandbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DATABASE_URL=sqlite:///$RUNNER_TEMP/cca-audit-$BROWSER.sqlite3" >> "$GITHUB_ENV"
+          echo "CCA_QA_MAIL_ROOT=$RUNNER_TEMP/cca-qa-mail" >> "$GITHUB_ENV"
+          echo "CCA_QA_MEDIA_ROOT=$RUNNER_TEMP/cca-qa-media" >> "$GITHUB_ENV"
+          echo "CCA_QA_FIXTURE_ROOT=$RUNNER_TEMP/cca-qa-fixtures" >> "$GITHUB_ENV"
+          mkdir -p artifacts/full-qa
+      - name: Install Django and exact browser engine
+        run: |
+          python -m pip install -r requirements.txt playwright
+          python -m playwright install --with-deps "$BROWSER"
+      - name: Confirm isolation and provision role, upload and pedigree fixtures
+        run: |
+          python -m py_compile scripts/qa_extended_seed.py scripts/qa_comprehensive_browser.py
+          python manage.py check
+          python manage.py migrate --noinput
+          python -m scripts.seed_browser_audit
+          python -m scripts.qa_extended_seed
+      - name: Run the isolated site
+        shell: bash
+        run: |
+          set -euo pipefail
+          python manage.py runserver --noreload 127.0.0.1:8000 > "artifacts/full-qa/django-$BROWSER.log" 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -n 120 "artifacts/full-qa/django-$BROWSER.log"
+          exit 1
+      - name: Complete cross-role Playwright browser journeys
+        run: python -m scripts.qa_comprehensive_browser --browser "$BROWSER"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cca-audit-browser-${{ matrix.browser }}
+          path: artifacts/full-qa/
+          retention-days: 14
+          if-no-files-found: warn
+
+  existing-role-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DATABASE_URL: sqlite:////tmp/cca-existing-role-audit.sqlite3
+      PYTHONPATH: "."
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: |
+          pip install -r requirements.txt playwright
+          python -m playwright install --with-deps chromium webkit
+          python manage.py migrate --noinput
+          python -m scripts.seed_browser_audit
+      - name: Start local Django server
+        shell: bash
+        run: |
+          mkdir -p artifacts/full-qa
+          python manage.py runserver --noreload 127.0.0.1:8000 > artifacts/full-qa/legacy-django.log 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -n 100 artifacts/full-qa/legacy-django.log
+          exit 1
+      - name: Legacy role navigation, moderation approval and synthetic merge
+        run: python -m scripts.role_browser_audit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cca-audit-existing-role
+          path: |
+            artifacts/role-browser-audit/
+            artifacts/full-qa/
+          if-no-files-found: warn
+          retention-days: 14
+
+  consolidated-report:
+    if: always()
+    needs: [inventory, backend, browser, existing-role-audit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cca-audit-*
+          merge-multiple: true
+          path: artifacts/collected/
+      - name: Reconcile all browser, permission and backend results
+        run: python -m scripts.qa_audit_summary
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cca-comprehensive-audit-report
+          path: artifacts/qa-final/
+          retention-days: 30
+          if-no-files-found: error
