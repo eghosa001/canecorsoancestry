@@ -22,7 +22,6 @@ RESULT_CHOICES = (
     ("Carrier", "Carrier — one copy detected"),
     ("Affected", "Affected / at risk — two copies detected"),
     ("Inconclusive", "Inconclusive — no definitive result"),
-    ("Not tested", "Not tested — only when explicitly stated in a report"),
 )
 
 
