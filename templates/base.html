@@ -35,6 +35,7 @@
   <link rel="stylesheet" href="{% static 'core/typeface-restore.css' %}?v=20261010-original-georgia-v2">
   {% block extra_head %}{% endblock %}
   <link rel="stylesheet" href="{% static 'core/evergreen-heritage.css' %}?v=20261024-heritage-v1">
+  <link rel="stylesheet" href="{% static 'core/structured-pages.css' %}?v=20261024-structure-v1">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -94,5 +95,6 @@
     <div class="footer-links"><a href="{% url 'registry:dog-search' %}">Dogs</a><a href="{% url 'registry:kennel-list' %}">Kennels</a><a href="{% url 'pedigrees:index' %}">Pedigrees</a><a href="{% url 'privacy' %}">Privacy</a><a href="{% url 'terms' %}">Terms</a><a href="{% url 'billing-policy' %}">Payments &amp; refunds</a>{% if support_email %}<a href="mailto:{{ support_email }}">Contact</a>{% endif %}</div>
   </footer>
   <script src="{% static 'core/site.js' %}?v=20261016-native-dog-link-v4" defer></script>
+  <script src="{% static 'core/structured-nav.js' %}?v=20261024-structure-v1" defer></script>
 </body>
 </html>
