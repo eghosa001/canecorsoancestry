@@ -1,9 +1,13 @@
 """Focused public profile COI depth, membership, and Safari navigation tests."""
+from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.template.defaultfilters import floatformat
 from django.test import TestCase
 from django.urls import reverse
 
+from registry.admin import DogAdmin
 from registry.models import Dog, ModerationRoleAssignment
+from pedigrees.services import public_profile_coi
 
 
 class DogProfileCoiDepthTests(TestCase):
@@ -30,6 +34,39 @@ class DogProfileCoiDepthTests(TestCase):
         self.assertContains(response, "COI (all available generations)")
         self.assertGreater(response.context["coi_percent"], 0)
         self.assertFalse(response.context["can_select_coi"])
+
+    def test_admin_public_coi_matches_frontend_default_exactly(self):
+        public_response = self.client.get(self.url)
+        public_value = public_response.context["coi_percent"]
+        admin_result = public_profile_coi(self.dog, generations=None)
+        admin_view = DogAdmin(Dog, admin.site)
+        self.assertEqual(admin_result["coi_percent"], public_value)
+        self.assertEqual(admin_result["coi_display_state"], "estimated")
+        formatted = "<0.01%" if admin_result["coi_below_display_precision"] else f"{floatformat(public_value, 2)}%"
+        self.assertIn(formatted, str(admin_view.public_coi_display(self.dog)))
+        self.assertIn("public_coi_display", admin_view.get_readonly_fields(None, self.dog))
+
+    def test_admin_and_frontend_both_refuse_unpublished_parentage(self):
+        self.dog.dam.is_public = False
+        self.dog.dam.save(update_fields=["is_public"])
+        self.dog.refresh_from_db()
+        frontend = self.client.get(self.url)
+        admin_result = public_profile_coi(self.dog, generations=None)
+        admin_text = str(DogAdmin(Dog, admin.site).public_coi_display(self.dog))
+        self.assertIsNone(frontend.context["coi_percent"])
+        self.assertEqual(frontend.context["coi_display_state"], "insufficient")
+        self.assertEqual(admin_result["coi_percent"], frontend.context["coi_percent"])
+        self.assertIn(frontend.context["coi_error"], admin_text)
+
+    def test_admin_all_depth_does_not_inherit_a_member_comparison_filter(self):
+        user = get_user_model().objects.create_user(username="coi-admin-parity-member")
+        self.client.force_login(user)
+        limited = self.client.get(self.url, {"coi_generations": "2"})
+        self.assertEqual(limited.context["coi_percent"], 0)
+        full = self.client.get(self.url)
+        admin_result = public_profile_coi(self.dog)
+        self.assertGreater(admin_result["coi_percent"], 0)
+        self.assertEqual(full.context["coi_percent"], admin_result["coi_percent"])
 
     def test_members_can_select_two_four_six_or_eight_then_restore_all(self):
         member = get_user_model().objects.create_user(
