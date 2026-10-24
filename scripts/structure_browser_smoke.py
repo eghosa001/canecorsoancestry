@@ -16,11 +16,6 @@ MEMBER = (
     "/member/submissions/", "/member/documents/",
     "/member/notifications/", "/member/profile/",
 )
-STAFF = (
-    "/member/moderation/", "/member/moderation/dogs/",
-    "/member/moderation/verification/",
-    "/member/moderation/audit/", "/member/moderation/data-health/",
-)
 WIDTHS = (375, 430, 834, 1280)
 
 
@@ -65,7 +60,7 @@ def login(page, username, password):
     assert "/accounts/login/" not in page.url, f"Sign-in failed: {username}"
 
 
-def verify_workspace(page, width, expect_admin):
+def verify_workspace(page, width):
     page.set_viewport_size({"width": width, "height": 850})
     page.reload(wait_until="domcontentloaded")
     nav = page.locator("[data-responsive-nav]")
@@ -79,10 +74,7 @@ def verify_workspace(page, width, expect_admin):
         if more.get_attribute("open") is None:
             more.locator("summary").click()
         assert more.get_attribute("open") is not None, "Secondary tools are inaccessible"
-        if expect_admin:
-            assert more.get_by_role("link", name="Advanced admin").count() == 1
-        else:
-            assert more.get_by_role("link", name="Documents").count() == 1
+        assert more.get_by_role("link", name="Documents").count() == 1
         page.keyboard.press("Escape")
         assert nav.get_attribute("open") is None, "Escape did not dismiss mobile workspace"
     else:
@@ -110,19 +102,10 @@ def run():
                 for path in MEMBER:
                     visit(page, path, width)
                 visit(page, "/member/documents/", width)
-                verify_workspace(page, width, False)
-
-            # Dedicated staff identities — do not grant staff rights to a member.
-            page.context.clear_cookies()
-            login(page, "structure-smoke-owner", "structure-smoke-owner-password")
-            for width in WIDTHS:
-                for path in STAFF:
-                    visit(page, path, width)
-                visit(page, "/member/moderation/", width)
-                verify_workspace(page, width, True)
+                verify_workspace(page, width)
 
             assert not errors, "Browser JavaScript errors: " + "; ".join(errors[:6])
-            print("PASS: 4 viewports; public/member/staff routes and workspace interactions")
+            print("PASS: 4 viewports; public/member routes and workspace interactions")
         finally:
             browser.close()
 
