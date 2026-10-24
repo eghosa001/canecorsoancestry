@@ -77,7 +77,7 @@ class GeneticPanelTests(TestCase):
         page = self.client.get(self.profile)
         self.assertContains(page, 'genetic-screening-status--clear')
         self.assertContains(page, 'genetic-screening-status--carrier')
-        self.assertContains(page, "genetic-screening-status--untested", count=1)
+        self.assertNotContains(page, "genetic-screening-status--untested")
         self.client.force_login(self.outsider)
         self.assertEqual(self.submit_marker("CMR1", "Clear").status_code, 403)
 
