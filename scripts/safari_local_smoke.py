@@ -30,6 +30,32 @@ def run():
             page.on("pageerror", lambda e: errors.append(str(e)))
             go(page, "/")
             assert page.locator(".site-header").is_visible()
+            featured_cards = page.locator(".featured-dog-grid .dog-card")
+            assert featured_cards.count(), "Mobile fixture has no popular dog cards to inspect"
+            featured_shape = page.evaluate("""() => {
+              const grid = document.querySelector(".featured-dog-grid");
+              const card = grid.querySelector(".dog-card");
+              const title = card.querySelector(".dog-card-body h3");
+              const image = card.querySelector(".dog-card-media");
+              const cardRect = card.getBoundingClientRect();
+              const textRect = title.getBoundingClientRect();
+              return {
+                columns: getComputedStyle(grid).gridTemplateColumns.trim().split(/\\s+/).length,
+                overflow: document.documentElement.scrollWidth - innerWidth,
+                cardWidth: cardRect.width,
+                imageWidth: image.getBoundingClientRect().width,
+                titleWidth: textRect.width,
+                titleScroll: title.scrollWidth - title.clientWidth,
+                titleRight: textRect.right,
+                cardRight: cardRect.right,
+              };
+            }""")
+            assert featured_shape["columns"] == 1, f"Mobile popular dogs are still squeezed into two columns: {featured_shape}"
+            assert featured_shape["cardWidth"] > 260 and featured_shape["titleWidth"] > 110, f"Popular dog content lacks usable width: {featured_shape}"
+            assert featured_shape["titleScroll"] <= 2 and featured_shape["titleRight"] <= featured_shape["cardRight"] + 2, (
+                f"Popular dog title is clipped: {featured_shape}"
+            )
+            assert featured_shape["overflow"] <= 3, f"Popular dogs cause document overflow: {featured_shape}"
             nav = page.locator(".mobile-nav")
             nav.locator("summary").tap()
             assert nav.get_attribute("open") is not None, "iPhone menu will not open"
@@ -99,6 +125,36 @@ def run():
             assert bounds and bounds["height"] >= 54, "Suggestions are not tappable above keyboard"
             suggestions.locator(".dog-suggestion").first.tap()
             page.wait_for_url("**/dogs/safari-dog/**", timeout=10_000)
+
+            # Check the visible profile navigation and actual long-form lab
+            # evidence on iPhone; no tab or result may extend past the card.
+            profile_layout = page.evaluate("""() => {
+              const tabs = document.querySelector(".profile-tabs");
+              const health = document.querySelector(".health-test-item");
+              if (!tabs || !health) return null;
+              const healthRect = health.getBoundingClientRect();
+              const parts = [...health.querySelectorAll(".health-test-item-info, .health-test-item-result")];
+              const positions = [...tabs.querySelectorAll("a")].map(a => a.getBoundingClientRect());
+              return {
+                pageOverflow: document.documentElement.scrollWidth - innerWidth,
+                tabsOverflow: tabs.scrollWidth - tabs.clientWidth,
+                tabRows: new Set(positions.map(r => Math.round(r.top))).size,
+                allTabsVisible: positions.every(r => r.left >= -2 && r.right <= innerWidth + 2),
+                healthWidth: healthRect.width,
+                healthFits: parts.every(p => p.getBoundingClientRect().right <= healthRect.right + 2),
+                healthRows: parts.length === 2 && parts[1].getBoundingClientRect().top >= parts[0].getBoundingClientRect().bottom - 2,
+              };
+            }""")
+            assert profile_layout, "Public dog profile is missing the navigation or health evidence fixture"
+            assert profile_layout["pageOverflow"] <= 3 and profile_layout["tabsOverflow"] <= 3, (
+                f"Mobile dog profile has horizontal overflow: {profile_layout}"
+            )
+            assert profile_layout["allTabsVisible"] and profile_layout["tabRows"] >= 2, (
+                f"Profile tabs are clipped rather than readable: {profile_layout}"
+            )
+            assert profile_layout["healthFits"] and profile_layout["healthRows"], (
+                f"Verified health result is cramped or overflows: {profile_layout}"
+            )
 
             # Dog photos retain their native landscape aspect ratio; no
             # zoom/crop, hard grey matte or CSS image scaling on profiles.
