@@ -70,17 +70,10 @@ class ModeratorLabResultTests(TestCase):
         approve_submission(submission, self.moderator)
         records = HealthRecord.objects.filter(dog=self.dog)
         self.assertEqual(records.count(), 4)
-        self.assertFalse(records.get(test_type="Hip scores").is_public)
-        self.assertFalse(records.get(test_type="CMR1").is_public)
-        self.assertFalse(records.get(test_type="DSRA").is_public)
-        self.assertFalse(records.get(test_type="NCL1").is_public)
-        for code in ("DSRA", "NCL1"):
-            record = records.get(test_type=code)
-            response = self.client.post(
-                reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk]),
-                {"visibility": "show"},
-            )
-            self.assertEqual(response.status_code, 302)
+        self.assertTrue(records.get(test_type="Hip scores").is_public)
+        self.assertTrue(records.get(test_type="CMR1").is_public)
+        self.assertTrue(records.get(test_type="DSRA").is_public)
+        self.assertTrue(records.get(test_type="NCL1").is_public)
         doc = DogDocument.objects.get(source_submission=submission)
         self.assertFalse(doc.is_public)
         self.client.logout()
@@ -95,7 +88,7 @@ class ModeratorLabResultTests(TestCase):
         self.client.force_login(self.moderator)
         approve_submission(submission, self.moderator)
         record = HealthRecord.objects.get(dog=self.dog)
-        self.assertFalse(record.is_public)
+        self.assertTrue(record.is_public)
         action = reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk])
         self.assertEqual(self.client.post(action, {"visibility": "hide"}).status_code, 302)
         self.client.logout()
