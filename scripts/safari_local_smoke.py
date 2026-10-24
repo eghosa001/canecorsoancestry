@@ -30,6 +30,34 @@ def run():
             page.on("pageerror", lambda e: errors.append(str(e)))
             go(page, "/")
             assert page.locator(".site-header").is_visible()
+            # Theme regression: Oct 17 original charcoal/gold on dark only.
+            # Existing Evergreen light mode remains visually unchanged.
+            theme_button = page.locator(".mobile-header-theme")
+            assert page.evaluate("""() => [...document.querySelectorAll('[data-legacy-dark-stylesheet]')]
+              .every(link => link.media === 'not all')"""), "Old CSS leaked into light mode"
+            theme_button.tap()
+            page.wait_for_load_state("networkidle")
+            dark = page.evaluate("""() => ({
+              active: document.documentElement.dataset.theme,
+              stylesEnabled: [...document.querySelectorAll('[data-legacy-dark-stylesheet]')]
+                .every(link => link.media === 'all'),
+              background: getComputedStyle(document.body).backgroundColor,
+              gold: getComputedStyle(document.documentElement).getPropertyValue('--gold').trim(),
+              font: getComputedStyle(document.querySelector('.brand')).fontFamily,
+            })""")
+            assert dark["active"] == "dark" and dark["stylesEnabled"], f"Original dark styles not active: {dark}"
+            assert dark["background"] == "rgb(16, 17, 16)", f"Dark background differs from the original: {dark}"
+            assert dark["gold"] == "#c7a25d", f"Original warm-gold palette was not restored: {dark}"
+            assert "Georgia" in dark["font"], f"Original serif identity not restored: {dark}"
+            theme_button.tap()
+            light = page.evaluate("""() => ({
+              active: document.documentElement.dataset.theme,
+              stylesDisabled: [...document.querySelectorAll('[data-legacy-dark-stylesheet]')]
+                .every(link => link.media === 'not all'),
+              canvas: getComputedStyle(document.documentElement).getPropertyValue('--cca-canvas').trim(),
+            })""")
+            assert light["active"] == "light" and light["stylesDisabled"], f"Light mode was altered: {light}"
+            assert light["canvas"] == "#f2f1ea", f"Light theme colors changed: {light}"
             featured_cards = page.locator(".featured-dog-grid .dog-card")
             assert featured_cards.count(), "Mobile fixture has no popular dog cards to inspect"
             featured_shape = page.evaluate("""() => {
