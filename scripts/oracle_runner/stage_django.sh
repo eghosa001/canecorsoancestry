@@ -275,6 +275,20 @@ else
       -U cca_shadow_admin -d cca_live \
       < scripts/oracle_runner/approved_registry_0020.sql
     echo "PASS: Moderator public-summary switches ready; original health records retained."
+  elif [[ "$schema_approval" == "PASS: Only approved registry.0021_auto_publish_approved_health is pending." ]]; then
+    echo "Applying one approved, backup-protected health TEXT visibility backfill."
+    # This is an audited data UPDATE only; no table/column changes, no
+    # publication of confidential laboratory documents or private DNA estimates.
+    app_schema_can_create="$(sudo -n "$PODMAN_BIN" exec cca-pg-shadow \
+      psql -X -At -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+      -c "SELECT has_schema_privilege('cca_app', 'django_app', 'CREATE');")"
+    [[ "$app_schema_can_create" == f ]] || {
+      echo "::error::Runtime app unexpectedly has schema CREATE privileges."; exit 1;
+    }
+    sudo -n "$PODMAN_BIN" exec -i cca-pg-shadow \
+      psql -X -v ON_ERROR_STOP=1 -U cca_shadow_admin -d cca_live \
+      < scripts/oracle_runner/approved_registry_0021.sql
+    echo "PASS: Approved health summaries backfilled with privacy exclusions and migration ledger."
   elif [[ "$schema_approval" == "PASS: Only approved accounts.0005_saved_pairing is pending." ]]; then
   # PostgreSQL intentionally grants the production app no schema DDL rights.
   # Borrow CREATE on this schema for the reviewed transaction, then revoke it
