@@ -22,6 +22,11 @@
     </select>
     <button class="btn btn-outline" type="submit">Recalculate COI</button>
   </form>
+  <aside class="panel cca-coi-disclosure" aria-label="How to interpret this COI estimate">
+    <strong>COI is an ancestry estimate, not a health prediction.</strong>
+    <p>The calculation uses the recorded direct ancestral paths and known common ancestors. It cannot prove that a dog or future puppy is free of inherited disease. Genomic tests, veterinary assessment and independently reviewed health evidence provide different information.</p>
+    <p>Interpret the estimate alongside pedigree coverage ({{ analysis.known_slots }} of {{ analysis.total_slots }} ancestry positions known), uncertain identities and the depth used for this calculation. Missing records never establish that two founders are unrelated.</p>
+  </aside>
   <div class="analysis-grid analysis-grid-four analysis-mobile-summary">
     <article class="analysis-card">
       <p class="eyebrow">Coefficient of inbreeding (COI) · {{ analysis.coi_generation_label }}</p>
