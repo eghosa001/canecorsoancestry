@@ -6,7 +6,7 @@ on:
     - cron: "27 3 * * 1"
   push:
     branches: [main]
-    paths: &qa_paths
+    paths:
       - "accounts/**"
       - "registry/**"
       - "pedigrees/**"
@@ -20,7 +20,19 @@ on:
       - "Dockerfile"
       - ".github/workflows/comprehensive-playwright-audit.yml"
   pull_request:
-    paths: *qa_paths
+    paths:
+      - "accounts/**"
+      - "registry/**"
+      - "pedigrees/**"
+      - "core/**"
+      - "config/**"
+      - "templates/**"
+      - "scripts/qa_*.py"
+      - "scripts/seed_browser_audit.py"
+      - "scripts/role_browser_audit.py"
+      - "requirements.txt"
+      - "Dockerfile"
+      - ".github/workflows/comprehensive-playwright-audit.yml"
 
 permissions:
   contents: read
