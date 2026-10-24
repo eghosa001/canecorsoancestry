@@ -1,4 +1,4 @@
-"""Render legacy health results as short text; do not claim missing DNA evidence."""
+"""Render legacy health results as short text; do not claim missing DNA evidence.
 
 Never convert legacy prose into verified genotype results or DNA breed percentages.
 """
