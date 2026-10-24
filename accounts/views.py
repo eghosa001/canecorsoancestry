@@ -1880,7 +1880,7 @@ def review_submission(request, pk, decision):
                 allow_override=True,
                 override_review=override_review,
             )
-            messages.success(request, "Second approval completed. Submission published.")
+            messages.success(request, "Second approval completed. Health results still require a separate publication decision." if submission.kind == Submission.Kind.HEALTH else "Second approval completed. Submission published.")
 
         elif decision == "second_reject":
             reject_high_risk_override(submission, request.user, notes)
@@ -1896,6 +1896,9 @@ def review_submission(request, pk, decision):
 
     if Submission.objects.filter(pk=submission.pk, status=Submission.Status.PENDING).exists():
         return redirect("accounts:moderation-submission", pk=submission.pk)
+    if submission.kind == Submission.Kind.HEALTH and submission.dog_id:
+        messages.info(request, "Evidence approved. Finish the public card by editing and explicitly publishing the results below.")
+        return redirect("accounts:reviewed-dog-health", pk=submission.dog_id)
     return redirect("accounts:moderation")
 
 
