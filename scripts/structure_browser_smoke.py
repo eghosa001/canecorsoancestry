@@ -56,7 +56,7 @@ def login(page, username, password):
     assert response and response.status == 200
     page.locator("input[name='username']").fill(username)
     page.locator("input[name='password']").fill(password)
-    page.locator("form button[type='submit'], form input[type='submit']").first.click()
+    page.locator(".auth-card form button[type='submit']").click()
     assert "/accounts/login/" not in page.url, f"Sign-in failed: {username}"
 
 
