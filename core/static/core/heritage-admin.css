@@ -64,3 +64,27 @@ input:focus-visible, button:focus-visible, a:focus-visible, select:focus-visible
   #changelist .results { overflow-x: auto; overscroll-behavior-x: contain; }
   input, select, textarea { font-size: 16px; }
 }
+/* Django's built-in automatic theme mode follows operating-system preference. */
+@media (prefers-color-scheme: dark) {
+  html[data-theme="auto"] {
+    --primary: #9cc8af;
+    --secondary: #9cc8af;
+    --accent: #d7a47c;
+    --primary-fg: #092017;
+    --body-fg: #f4f2e9;
+    --body-bg: #0c1514;
+    --body-quiet-color: #b1c0b5;
+    --body-medium-color: #b1c0b5;
+    --header-bg: #0c1514;
+    --header-color: #f4f2e9;
+    --breadcrumbs-bg: #22342f;
+    --breadcrumbs-fg: #f4f2e9;
+    --link-fg: #9cc8af;
+    --link-hover-color: #c7e8cf;
+    --hairline-color: #34443e;
+    --border-color: #34443e;
+    --darkened-bg: #13201e;
+    --selected-bg: #22342f;
+    --selected-row: #22342f;
+  }
+}
