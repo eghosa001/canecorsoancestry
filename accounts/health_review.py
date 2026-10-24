@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from registry.dna import parse_breed_composition, percentage_text
-from registry.genetic_health import MARKER_CODES, SCREENING_MARKERS, SCREENING_RESULTS, unstructured_breed_claim
+from registry.genetic_health import MARKER_CODES, SCREENING_MARKERS, SCREENING_RESULTS, readable_health_result, unstructured_breed_claim
 from registry.models import (
     BreedDNAReport, Dog, HealthRecord, ModerationAudit, Submission, VerificationState, VerificationEvent,
 )
@@ -45,7 +45,8 @@ class HealthTranscriptionForm(forms.Form):
             self.fields["status_" + code] = forms.ChoiceField(
                 required=False,
                 choices=(("", "No verified result in this image"), ("Clear", "Clear"),
-                         ("Carrier", "Carrier"), ("Affected", "Affected")),
+                         ("Carrier", "Carrier"), ("Affected", "Affected"),
+                         ("Inconclusive", "Inconclusive"), ("Not tested", "Not tested")),
                 label=code + " — " + label,
             )
             self.fields["publish_" + code] = forms.BooleanField(
@@ -168,7 +169,8 @@ def reviewed_dog_health(request, pk):
 class ReviewedHealthResultForm(forms.Form):
     """Edit the public-facing transcription; never rewrite the private report."""
     test_type = forms.CharField(max_length=100, label="Test or condition on the report")
-    result = forms.CharField(max_length=160, label="Reported result")
+    result = forms.CharField(max_length=160, label="Reported result",
+        widget=forms.TextInput(attrs={"list": "health-reported-status-options", "autocomplete": "off"}))
     tested_on = forms.DateField(
         required=False, label="Test date",
         widget=forms.DateInput(attrs={"type": "date"}),
@@ -235,7 +237,7 @@ class ReviewedHealthResultForm(forms.Form):
             code = (data.get("test_type") or "").strip().upper()
             result = (data.get("result") or "").strip()
             if code in MARKER_CODES and result.lower() not in SCREENING_RESULTS:
-                self.add_error("result", "Use Clear, Carrier or Affected for a featured genetic marker.")
+                self.add_error("result", "Choose Clear, Carrier, Affected, Inconclusive or Not tested as stated in the report.")
             if unstructured_breed_claim(code):
                 self.add_error("test_type", "Breed composition must use the dedicated owner-consented DNA report.")
         return data
@@ -250,7 +252,8 @@ class AdditionalHealthConditionForm(forms.Form):
         empty_label="Choose approved report…",
     )
     test_type = forms.CharField(max_length=100, label="Exact genetic condition / test name")
-    result = forms.CharField(max_length=160, label="Result exactly as reported")
+    result = forms.CharField(max_length=160, label="Result exactly as reported",
+        widget=forms.TextInput(attrs={"list": "health-reported-status-options", "autocomplete": "off"}))
     tested_on = forms.DateField(
         required=False, widget=forms.DateInput(attrs={"type": "date"}), label="Test date",
     )
@@ -304,7 +307,7 @@ def add_reviewed_health_condition(request, pk):
             messages.error(request, "This condition and date have already been transcribed from that document.")
             return redirect("accounts:reviewed-dog-health", pk=pk)
         record = HealthRecord.objects.create(
-            dog=dog, test_type=data["test_type"].strip(), result=data["result"].strip(),
+            dog=dog, test_type=data["test_type"].strip(), result=readable_health_result(data["result"]),
             tested_on=data.get("tested_on"), verification_state=VerificationState.HEALTH_VERIFIED,
             is_public=False, notes=source_marker,
         )
@@ -377,7 +380,7 @@ def edit_reviewed_health_result(request, pk, record_id):
                         record.result = percentage_text(data["breed_percentage"]) + "% Cane Corso"
                     else:
                         record.test_type = data["test_type"].strip()
-                        record.result = data["result"].strip()
+                        record.result = readable_health_result(data["result"])
                     record.is_public = intent == "publish"
                     record.save(update_fields=["test_type", "result", "tested_on", "is_public"])
                     record_audit(
