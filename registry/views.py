@@ -565,9 +565,24 @@ def dog_detail(request, slug):
             continue  # Only BreedDNAReport + owner consent enables public breed percent.
         interpreted = describe_orthopaedic_result(record.test_type, record.result)
         if interpreted:
+            verified = record.verification_state == VerificationState.HEALTH_VERIFIED
+            pedigree_source = "supplied pedigree" in (record.result or "").lower()
             for assessment in interpreted:
+                details = dict(assessment)
+                if not verified:
+                    details["headline"] = assessment["headline"] + " (reported)"
+                    details["explanation"] = (
+                        "The supplied pedigree lists " + assessment["grade"] + ". "
+                        if pedigree_source else
+                        "The available record lists " + assessment["grade"] + ". "
+                    ) + "This grade has not been independently verified against a veterinary screening report."
+                    details["source_label"] = (
+                        "Source: supplied pedigree" if pedigree_source else "Source: unverified record"
+                    )
+                else:
+                    details["source_label"] = "Veterinary evidence reviewed"
                 orthopaedic_screenings.append({
-                    **assessment,
+                    **details,
                     "tested_on": record.tested_on,
                     "verification_label": record.public_verification_label,
                 })
