@@ -78,7 +78,7 @@ class ModeratorFinalPublicationTests(TestCase):
             "result": "Probably fine", "reviewed": "on",
         })
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Use Clear, Carrier or Affected")
+        self.assertContains(response, "Choose Clear, Carrier, Affected, Inconclusive or Not tested")
         response = self.client.post(self.edit_url, {
             "intent": "publish", "test_type": "DSRA", "result": "Carrier",
         })
