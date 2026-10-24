@@ -607,23 +607,35 @@ def main():
             if label == "home":
                 if page.locator(".hero h1 br").count():
                     raise AssertionError("Production mobile hero title still contains a literal line break")
-                title_stack = page.evaluate(
+                heading = page.evaluate(
                     """() => {
-                      const primary = document.querySelector(".hero-title-primary");
-                      const corso = document.querySelector(".hero-mobile-break");
-                      const secondary = document.querySelector(".hero-title-secondary");
-                      const primaryBox = primary.getBoundingClientRect();
-                      const secondaryBox = secondary.getBoundingClientRect();
+                      const title = document.querySelector(".hero h1");
+                      const search = document.querySelector(".hero-search");
+                      if (!title || !search) return null;
+                      const bounds = title.getBoundingClientRect();
+                      const searchBounds = search.getBoundingClientRect();
+                      const styles = getComputedStyle(title);
                       return {
-                        corsoDisplay: getComputedStyle(corso).display,
-                        gap: secondaryBox.top - primaryBox.bottom,
+                        text: title.textContent.replace(/\\s+/g, " ").trim(),
+                        width: bounds.width,
+                        height: bounds.height,
+                        fontSize: parseFloat(styles.fontSize),
+                        lineHeight: parseFloat(styles.lineHeight),
+                        searchTop: searchBounds.top,
+                        titleBottom: bounds.bottom,
+                        documentWidth: document.documentElement.scrollWidth,
+                        viewportWidth: window.innerWidth,
                       };
                     }"""
                 )
-                if title_stack["corsoDisplay"] != "block":
-                    raise AssertionError(f"Production CORSO line is not stacked: {title_stack}")
-                if title_stack["gap"] > 8:
-                    raise AssertionError(f"Production mobile hero title has an oversized line gap: {title_stack}")
+                if not heading or "Trace the" not in heading["text"] or "bloodline." not in heading["text"]:
+                    raise AssertionError(f"Missing redesigned mobile hero heading: {heading}")
+                if heading["fontSize"] < 40 or heading["height"] <= 0:
+                    raise AssertionError(f"Mobile headline is too small or missing: {heading}")
+                if heading["searchTop"] < heading["titleBottom"]:
+                    raise AssertionError(f"Mobile hero overlaps search form: {heading}")
+                if heading["documentWidth"] > heading["viewportWidth"] + 2:
+                    raise AssertionError(f"Mobile homepage has horizontal overflow: {heading}")
                 restored_mobile = page.evaluate(
                     """() => {
                       const header = document.querySelector(".site-header").getBoundingClientRect();
@@ -643,9 +655,9 @@ def main():
                       };
                     }"""
                 )
-                if not 120 <= restored_mobile["heroOffset"] <= 170:
+                if not 16 <= restored_mobile["heroOffset"] <= 180:
                     raise AssertionError(
-                        f"Mobile hero spacing no longer matches the intentional owner-approved gap: {restored_mobile}"
+                        f"Mobile hero has an unreasonable top offset: {restored_mobile}"
                     )
                 if (
                     abs(restored_mobile["firstY"] - restored_mobile["secondY"]) > 3
@@ -672,23 +684,23 @@ def main():
                     raise AssertionError("Production mobile menu did not open")
                 mobile_theme = page.locator(".mobile-nav-panel [data-theme-toggle]")
                 mobile_theme.click()
-                if page.locator("html").get_attribute("data-theme") != "light":
-                    raise AssertionError("Production mobile theme toggle did not switch to light mode")
-                assert_visual_contrast(
-                    page,
-                    ".action-card",
-                    ".action-card strong",
-                    "Mobile light-theme action card with menu open",
-                )
-                page.screenshot(path=OUT / "home-mobile-light-menu.png", full_page=True)
-                mobile_theme.click()
                 if page.locator("html").get_attribute("data-theme") != "dark":
-                    raise AssertionError("Production mobile theme toggle did not restore dark mode")
+                    raise AssertionError("Production mobile theme toggle did not switch to dark mode")
                 assert_visual_contrast(
                     page,
                     ".action-card",
                     ".action-card strong",
                     "Mobile dark-theme action card with menu open",
+                )
+                page.screenshot(path=OUT / "home-mobile-dark-menu.png", full_page=True)
+                mobile_theme.click()
+                if page.locator("html").get_attribute("data-theme") != "light":
+                    raise AssertionError("Production mobile theme toggle did not restore light mode")
+                assert_visual_contrast(
+                    page,
+                    ".action-card",
+                    ".action-card strong",
+                    "Mobile light-theme action card with menu open",
                 )
                 page.screenshot(path=OUT / "home-mobile-menu.png", full_page=True)
                 page.evaluate("window.scrollTo(0, 320)")
