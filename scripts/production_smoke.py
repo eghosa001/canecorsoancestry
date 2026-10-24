@@ -437,7 +437,7 @@ def main():
                 dark_accent = page.evaluate(
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()"
                 )
-                if dark_bg.lower() != "#0c1514" or dark_accent.lower() != "#9cc8af":
+                if dark_bg.lower() != "#101110" or dark_accent.lower() != "#c7a25d":
                     raise AssertionError(f"Unexpected dark-theme tokens: {dark_bg}, {dark_accent}")
                 assert_visual_contrast(
                     page,
