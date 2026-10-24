@@ -97,7 +97,9 @@ jobs:
           if grep -q '^registry/' <<<"$changed"; then
             targets+=("registry.tests.DogModelTests")
           fi
-          if grep -Eq '^registry/(legacy_health|tests_legacy_health|views)[.]py
+          if grep -q "tests_legacy_health" <<<"$changed"; then
+            targets+=("registry.tests_legacy_health")
+          fi
           if grep -Eq '^registry/(genetic_health|views)[.]py$' <<<"$changed"; then
             targets+=("accounts.tests_genetic_panel")
           fi
