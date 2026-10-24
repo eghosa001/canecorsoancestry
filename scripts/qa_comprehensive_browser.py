@@ -20,7 +20,8 @@ import django
 django.setup()
 
 from django.contrib.auth import get_user_model
-from registry.models import Dog, Submission
+from accounts.models import SavedPairing, SubmissionPayment
+from registry.models import Dog, Submission, KennelMembership, SubmissionEvidence
 from playwright.sync_api import sync_playwright
 
 BASE = "http://127.0.0.1:8000"
@@ -280,6 +281,108 @@ def test_owner_admin(page):
     page.screenshot(path=OUT / "super-admin-dog-edit.png", full_page=True)
 
 
+def test_member_kennel_ownership_claim(page):
+    sign_in(page, "member2")
+    kennel_id = CREDS["unclaimed_kennel_id"]
+    go(page, f"/member/kennels/{kennel_id}/claim/")
+    page.locator("#id_relationship").fill("Owner (test account only)")
+    page.locator("#id_ownership_certificate").set_input_files(CREDS["fixtures"]["evidence.pdf"])
+    page.locator("#id_cac_certificate").set_input_files(CREDS["fixtures"]["evidence.pdf"])
+    submit_form_containing(page, "#id_relationship")
+    page.wait_for_url("**/member/submissions/", wait_until="domcontentloaded", timeout=15000)
+    evidence = db_call(lambda: Submission.objects.filter(
+        submitted_by_id=CREDS["roles"]["member2"]["id"],
+        kind=Submission.Kind.KENNEL_CLAIM, kennel_id=kennel_id
+    ).first())
+    assert evidence and evidence.status == Submission.Status.PENDING, "Ownership claim not queued"
+    assert db_call(lambda: SubmissionEvidence.objects.filter(submission_id=evidence.pk).count()) == 2, (
+        "Ownership certificate and optional CAC evidence were not both saved"
+    )
+    assert not db_call(lambda: KennelMembership.objects.filter(
+        user_id=CREDS["roles"]["member2"]["id"], kennel_id=kennel_id
+    ).exists()), "Owner privileges granted without moderation"
+
+
+def test_member_private_health_upload(page):
+    sign_in(page, "member")
+    dog_id = CREDS["dog_id"]
+    go(page, f"/member/dogs/{dog_id}/health/")
+    title = "QA joint evaluation " + uuid.uuid4().hex[:7]
+    page.locator("#id_evidence_type").select_option("health")
+    page.locator("#id_test_type").fill(title)
+    page.locator("#id_result").fill("Synthetic normal result for CI only")
+    page.locator("#id_attachment").set_input_files(CREDS["fixtures"]["evidence.pdf"])
+    submit_form_containing(page, "#id_attachment")
+    page.wait_for_url("**/member/submissions/", wait_until="domcontentloaded", timeout=15000)
+    record = db_call(lambda: Submission.objects.filter(
+        submitted_by_id=CREDS["roles"]["member"]["id"], dog_id=dog_id,
+        kind=Submission.Kind.HEALTH, payload__test_type=title
+    ).first())
+    assert record and record.attachment, "Private health evidence missing"
+    assert record.status == Submission.Status.PENDING, "Unapproved lab result was published"
+
+
+def test_saved_pairing_add_remove(page):
+    sign_in(page, "member")
+    dam = db_call(lambda: str(Dog.objects.get(slug="browser-audit-dam").pk))
+    go(page, f"/pedigrees/virtual-mating/?sire={CREDS['dog_id']}&dam={dam}")
+    label = "QA saved pairing " + uuid.uuid4().hex[:7]
+    page.locator("#pairing-label").fill(label)
+    page.get_by_role("button", name="Save to My research", exact=True).click()
+    page.wait_for_url("**/member/research/pairings/", wait_until="domcontentloaded", timeout=15000)
+    assert label in page.locator("main").inner_text(), "Saved pairing not visible in workspace"
+    saved = db_call(lambda: SavedPairing.objects.filter(
+        member_id=CREDS["roles"]["member"]["id"], label=label
+    ).first())
+    assert saved is not None, "Pairing not persisted"
+    go(page, f"/member/research/pairings/")
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.locator(f'form[action*="{saved.pk}/delete/"] button[type="submit"]').click()
+    page.wait_for_url("**/member/research/pairings/", wait_until="domcontentloaded", timeout=15000)
+    assert not db_call(lambda: SavedPairing.objects.filter(pk=saved.pk).exists()), (
+        "Removing saved research did not delete the pairing"
+    )
+    assert label not in page.locator("main").inner_text(), "Deleted pairing still displayed"
+
+
+def test_safe_payment_screen_without_live_gateway(page):
+    sign_in(page, "member")
+    go(page, "/member/payments/new/?package=single_dog")
+    before = db_call(lambda: SubmissionPayment.objects.filter(
+        user_id=CREDS["roles"]["member"]["id"]
+    ).count())
+    page.locator("#id_kennel").select_option(CREDS["kennel_id"])
+    page.locator("#id_package").select_option("single_dog")
+    page.locator("#id_dog_count").fill("1")
+    submit_form_containing(page, "#id_kennel")
+    page.locator("body").get_by_text("Paystack is not configured", exact=False).wait_for(timeout=10000)
+    after = db_call(lambda: SubmissionPayment.objects.filter(
+        user_id=CREDS["roles"]["member"]["id"]
+    ).count())
+    assert before == after, "QA environment attempted an external payment"
+
+
+def test_super_admin_edit_and_delete_private_dog(page):
+    name = "QA Admin Delete Dog " + uuid.uuid4().hex[:8]
+    slug = "qa-admin-delete-" + uuid.uuid4().hex[:12]
+    pk = db_call(lambda: Dog.objects.create(name=name, slug=slug, sex=Dog.Sex.MALE).pk)
+    sign_in(page, "owner")
+    go(page, f"/admin/registry/dog/{pk}/change/")
+    updated = name + " Edited"
+    page.locator("#id_name").fill(updated)
+    page.locator('input[name="_save"]').click()
+    page.wait_for_url("**/admin/registry/dog/", wait_until="domcontentloaded", timeout=15000)
+    assert db_call(lambda: Dog.objects.get(pk=pk).name) == updated, (
+        "Django Admin did not persist private dog text edits"
+    )
+    go(page, f"/admin/registry/dog/{pk}/delete/")
+    page.locator('#content form input[type="submit"]').first.click()
+    page.wait_for_url("**/admin/registry/dog/", wait_until="domcontentloaded", timeout=15000)
+    assert not db_call(lambda: Dog.objects.filter(pk=pk).exists()), (
+        "Django Admin did not delete isolated private dog"
+    )
+
+
 CASES = [
     ("guest", "public_search_navigation_responsive", test_visitor),
     ("member", "email_signup_verification_password_reset", test_account_email_lifecycle),
@@ -293,6 +396,11 @@ CASES = [
     ("member2", "cross_account_dog_authorization", test_cross_account_and_roles),
     ("editor", "kennel_editor_permissions", test_editor_contributor_access),
     ("moderator", "staff_isolation", test_staff_and_admin_boundaries),
+    ("member2", "kennel_claim_with_private_certificate", test_member_kennel_ownership_claim),
+    ("member", "health_evidence_pending_moderation", test_member_private_health_upload),
+    ("member", "saved_pairing_create_delete", test_saved_pairing_add_remove),
+    ("member", "paystack_unconfigured_safety", test_safe_payment_screen_without_live_gateway),
+    ("super_admin", "private_dog_admin_edit_delete", test_super_admin_edit_and_delete_private_dog),
     ("super_admin", "django_admin_synthetic_dog", test_owner_admin),
 ]
 
