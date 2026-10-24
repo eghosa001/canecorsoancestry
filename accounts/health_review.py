@@ -24,7 +24,7 @@ from registry.verification import verify_submission
 class HealthTranscriptionForm(forms.Form):
     publish_primary = forms.BooleanField(
         required=False, initial=True,
-        label="Show the main reviewed result on the public dog profile",
+        label="Flag the main result for the final public-card review",
     )
     laboratory = forms.CharField(required=False, max_length=100, label="Laboratory named in the image")
     breed_percentage = forms.DecimalField(
@@ -49,7 +49,7 @@ class HealthTranscriptionForm(forms.Form):
                 label=code + " — " + label,
             )
             self.fields["publish_" + code] = forms.BooleanField(
-                required=False, label="Display approved " + code + " result publicly",
+                required=False, label="Flag " + code + " for the final public-card review",
             )
 
     def clean(self):
@@ -141,7 +141,7 @@ def transcribe_health_submission(request, pk):
             note="Reviewer transcribed structured results from original private laboratory evidence.",
         )
         verify_submission(submission)
-    messages.success(request, "Laboratory results saved for review. Approve the submission separately to publish enabled summaries.")
+    messages.success(request, "Laboratory transcription saved. Approve the evidence, then open the dog\'s results workspace to explicitly publish each public summary.")
     return redirect("accounts:moderation-submission", pk=pk)
 
 
