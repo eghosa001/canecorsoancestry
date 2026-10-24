@@ -330,7 +330,7 @@ class OriginalDarkThemeReversionTests(TestCase):
         page = self.client.get(reverse("home"))
         self.assertContains(page, "evergreen-heritage.css?v=20261024-heritage-v1")
         self.assertContains(page, "pre-figma-dark.css?v=20261024-original-dark-v1")
-        self.assertContains(page, "data-legacy-dark-stylesheet", count=5)
+        self.assertContains(page, "data-legacy-dark-stylesheet", count=4)
         self.assertContains(page, 'media="not all"', count=3)
         self.assertContains(page, 'core/structured-pages.css')
         self.assertContains(page, 'data-theme="light"')
