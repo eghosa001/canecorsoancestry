@@ -743,7 +743,8 @@ def approve_submission(
             tested_on=_date_from_payload(payload.get("tested_on")),
             verification_state=VerificationState.HEALTH_VERIFIED,
             notes=submission.notes,
-            is_public=payload.get("publish_primary") is not False,
+            # Approval verifies the evidence; a moderator publishes the public card separately.
+            is_public=False,
         )
         document_type = (
             DogDocument.DocumentType.DNA
@@ -779,7 +780,7 @@ def approve_submission(
                 test_type=code, result=status,
                 tested_on=_date_from_payload(payload.get("tested_on")),
                 verification_state=VerificationState.HEALTH_VERIFIED,
-                is_public=chosen.get("publish") is True,
+                is_public=False,  # Explicit post-approval moderator publication is required.
                 notes="Moderator reviewed private lab evidence for submission " + str(submission.pk),
             )
             VerificationEvent.objects.create(
