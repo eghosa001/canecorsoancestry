@@ -628,8 +628,8 @@ def main():
                       };
                     }"""
                 )
-                if not heading or "Trace the" not in heading["text"] or "bloodline." not in heading["text"]:
-                    raise AssertionError(f"Missing redesigned mobile hero heading: {heading}")
+                if not heading or not all(word in heading["text"] for word in ("CANE", "CORSO", "ITALIANO")):
+                    raise AssertionError(f"Missing original mobile hero wording: {heading}")
                 if heading["fontSize"] < 40 or heading["height"] <= 0:
                     raise AssertionError(f"Mobile headline is too small or missing: {heading}")
                 if heading["searchTop"] < heading["titleBottom"]:
