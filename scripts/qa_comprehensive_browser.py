@@ -354,8 +354,15 @@ def test_safe_payment_screen_without_live_gateway(page):
     page.locator("#id_kennel").select_option(CREDS["kennel_id"])
     page.locator("#id_package").select_option("single_dog")
     page.locator("#id_dog_count").fill("1")
-    submit_form_containing(page, "#id_kennel")
-    page.locator("body").get_by_text("Paystack is not configured", exact=False).wait_for(timeout=10000)
+    # Without a gateway key, the real UI disables checkout completely.
+    # Test the expected guard instead of trying to click a disabled button.
+    button = page.locator("[data-paystack-start-submit]")
+    assert button.count() == 1 and button.is_disabled(), (
+        "Unconfigured payment gateway did not disable checkout"
+    )
+    assert page.get_by_text("Paystack is not configured on the server yet.", exact=False).is_visible(), (
+        "Missing explanation for disabled Paystack checkout"
+    )
     after = db_call(lambda: SubmissionPayment.objects.filter(
         user_id=CREDS["roles"]["member"]["id"]
     ).count())
