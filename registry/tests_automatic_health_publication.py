@@ -53,8 +53,8 @@ class AutomaticHealthPublicationTests(TestCase):
         )
         migration = import_module("registry.migrations.0021_auto_publish_approved_health")
         from django.apps import apps
-        with connection.schema_editor(atomic=False) as editor:
-            migration.publish_approved_health_summaries(apps, editor)
+        editor = type("MigrationEditor", (), {"connection": connection})()
+        migration.publish_approved_health_summaries(apps, editor)
         for record in (first, second, pending, withheld, breed):
             record.refresh_from_db()
         self.assertTrue(first.is_public)
