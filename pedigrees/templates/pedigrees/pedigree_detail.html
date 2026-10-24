@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% load static %}
+{% block extra_head %}<script src="{% static 'core/heritage-pedigree.js' %}?v=20261024-heritage-v1" defer></script>{% endblock %}
 {% block title %}{{ dog.name }} pedigree · Cane Corso Ancestry{% endblock %}
 {% block content %}
 <section class="pedigree-page">
@@ -8,9 +10,28 @@
   <a class="btn btn-outline" href="{% url 'pedigrees:reverse' dog.slug %}">Explore descendants</a>
   <a class="btn btn-outline" href="#advanced-analysis-title">Jump to analysis</a>
 </nav>
+<div class="page-shell no-print cca-tree-tools" role="toolbar" aria-label="Pedigree viewer controls">
+  <button class="btn btn-outline" type="button" data-pedigree-step="-1" aria-label="Previous generation">← Previous</button>
+  <button class="btn btn-outline" type="button" data-pedigree-step="1" aria-label="Next generation">Next →</button>
+  <button class="btn btn-outline" type="button" data-pedigree-zoom="-0.1" aria-label="Zoom out">−</button>
+  <output id="cca-tree-zoom" aria-live="polite">100%</output>
+  <button class="btn btn-outline" type="button" data-pedigree-zoom="0.1" aria-label="Zoom in">+</button>
+  <button class="btn btn-outline" type="button" data-pedigree-fit>Reset view</button>
+  <button class="btn btn-outline" type="button" data-pedigree-repeats aria-pressed="false">Highlight shared ancestors</button>
+</div>
+<div class="page-shell no-print cca-tree-legend">
+  <div class="cca-evidence-legend" aria-label="Evidence legend">
+    <span data-evidence="verified">Evidence reviewed</span>
+    <span data-evidence="owner">Owner-reported</span>
+    <span data-evidence="unverified">Unverified</span>
+    <span data-evidence="missing">Missing data</span>
+  </div>
+  <p>This legend describes possible evidence states across the platform, not a verification claim about any individual dog.</p>
+  <p class="cca-tree-status" id="cca-tree-status" role="status" aria-live="polite">Select a repeated ancestor to highlight every position linked to the same dog.</p>
+</div>
 <p class="page-shell muted no-print" id="pedigree-navigation-help">Swipe sideways to explore generations. Keyboard users can focus the pedigree tree and use the arrow keys to scroll. Parent and repeated-ancestor cards open individual published dog profiles.</p>
 {% if cycle_error %}<div class="notice error page-shell">{{ cycle_error }}</div>{% endif %}
-<div class="pedigree-scroll" role="region" tabindex="0" aria-describedby="pedigree-navigation-help" aria-label="{{ generations }} generation pedigree for {{ dog.name }}"><div class="pedigree-board">{% for layer in layers %}<section class="pedigree-column"><h2>{{ layer.label }}</h2><div class="pedigree-nodes">{% for node in layer.nodes %}{% if node.dog %}<a class="pedigree-node {% if node.repeated %}repeated{% endif %}" href="{% url 'registry:dog-detail' node.dog.slug %}"><small class="pedigree-relationship">{{ node.relationship }}</small><strong>{{ node.dog.name }}</strong><span>{{ node.dog.get_sex_display }}{% if node.dog.colour %} · {{ node.dog.colour }}{% endif %}</span>{% if node.repeated %}<small>Repeated ancestor</small>{% endif %}</a>{% else %}<div class="pedigree-node missing"><small class="pedigree-relationship">{{ node.relationship }}</small><strong>Unknown</strong><span>Unknown ancestor</span></div>{% endif %}{% endfor %}</div></section>{% endfor %}</div></div>
+<div class="pedigree-scroll" id="cca-pedigree-scroll" role="region" tabindex="0" aria-describedby="pedigree-navigation-help" aria-label="{{ generations }} generation pedigree for {{ dog.name }}"><div class="pedigree-board">{% for layer in layers %}<section class="pedigree-column"><h2>{{ layer.label }}</h2><div class="pedigree-nodes">{% for node in layer.nodes %}{% if node.dog %}<a class="pedigree-node {% if node.repeated %}repeated{% endif %}" data-dog-id="{{ node.dog.pk }}" href="{% url 'registry:dog-detail' node.dog.slug %}"><small class="pedigree-relationship">{{ node.relationship }}</small><strong>{{ node.dog.name }}</strong><span>{{ node.dog.get_sex_display }}{% if node.dog.colour %} · {{ node.dog.colour }}{% endif %}</span>{% if node.repeated %}<small>Repeated ancestor</small>{% endif %}</a>{% else %}<div class="pedigree-node missing"><small class="pedigree-relationship">{{ node.relationship }}</small><strong>Unknown</strong><span>Unknown ancestor</span></div>{% endif %}{% endfor %}</div></section>{% endfor %}</div></div>
 {% include "pedigrees/_analysis_report.html" %}
 </section>
 {% endblock %}
