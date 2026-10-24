@@ -71,7 +71,7 @@ def latest_email(previous, needle, timeout=12):
                 body = path.read_text(errors="replace")
             except OSError:
                 continue
-            if needle in body and "\\n" in body:
+            if needle in body and "\n" in body:
                 return body
         time.sleep(0.1)
     raise AssertionError(f"No isolated test email received for {needle}")
