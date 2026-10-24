@@ -527,7 +527,7 @@ def dog_detail(request, slug):
     # not an untrusted string in the member's original notes.
     possible_extra_ids = [
         record.pk for record in dog.display_health_records
-        if (record.notes or "").startswith("Moderator condition transcribed from approved submission ")
+        if (record.notes or "").startswith("Moderator condition transcribed from ")
     ]
     confirmed_extra_ids = set(
         VerificationEvent.objects.filter(
