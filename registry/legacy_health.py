@@ -22,11 +22,12 @@ _BREED_CLAIM = re.compile(
 )
 
 
-def legacy_mixed_health_rows(test_type, result):
-    """Return display rows for the known old mixed field, or None for other tests.
+def legacy_mixed_health_rows(test_type, result, *, record_verified=False):
+    """Split old mixed records and respect their staff health-review decision.
 
-    Unverified even if the original broad record was marked reviewed: that
-    did not independently establish DNA ancestry or each separate marker.
+    The recorded screening status (e.g. Clear) and evidence verification are
+    distinct. A reviewed health record can confirm its recorded marker statuses,
+    but a breed percentage still needs the owner-consented DNA report.
     """
     if not _LEGACY_TITLE.fullmatch((test_type or "").strip()):
         return None
@@ -46,13 +47,14 @@ def legacy_mixed_health_rows(test_type, result):
             code = marker.group(1).upper()
             status = SCREENING_RESULTS[marker.group(2).lower()][0]
             if code not in seen:
-                rows.append({"test": code, "result": status, "verified": False})
+                rows.append({"test": code, "result": status, "verified": record_verified})
                 seen.add(code)
             else:
                 # Conflicting claims cannot be silently resolved or shown as Clear.
                 existing = next(row for row in rows if row["test"] == code)
                 if existing["result"] != status:
                     existing["result"] = "Result unclear"
+                    existing["verified"] = False
             continue
         # Unknown text stays visible, not silently discarded.
         rows.append({"test": "Other reported finding", "result": entry, "verified": False})
