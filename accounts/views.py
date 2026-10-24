@@ -2201,7 +2201,7 @@ def member_pedigree_detail(request, pk):
         requested = int(request.GET.get("generations", "4"))
     except ValueError:
         requested = 4
-    generations = requested if requested in {4, 6, 8, 10} else 4
+    generations = requested if requested in {4, 5, 6, 8, 10} else 4
     coi_generations = requested_coi_generations(request.GET.get("coi_generations"))
     analysis = pedigree_analysis(
         dog, generations, public_only=False, coi_generations=coi_generations,
@@ -2213,7 +2213,7 @@ def member_pedigree_detail(request, pk):
         {
             "dog": dog,
             "generations": generations,
-            "generation_options": (4, 6, 8, 10),
+            "generation_options": (4, 5, 6, 8, 10),
             "analysis": analysis,
             "layers": analysis["layers"],
             "repeated": analysis["repeated"],
@@ -2234,7 +2234,7 @@ def member_pedigree_export(request, pk):
         requested = int(request.GET.get("generations", "4"))
     except ValueError:
         requested = 4
-    generations = requested if requested in {4, 6, 8, 10} else 4
+    generations = requested if requested in {4, 5, 6, 8, 10} else 4
 
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = (
