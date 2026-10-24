@@ -18,6 +18,16 @@ class LegacyHealthParsingTests(SimpleTestCase):
         )
         self.assertTrue(all(not row["verified"] for row in rows))
 
+    def test_decimal_breed_claim_is_not_published_as_verified_dna(self):
+        rows = legacy_mixed_health_rows(
+            "Purity Verification/Health Test",
+            "92.5% Cane Corso. CMR1 CLEAR",
+        )
+        self.assertEqual(
+            [(r["test"], r["result"]) for r in rows],
+            [("Breed purity", "Not verified"), ("CMR1", "Clear")],
+        )
+
     def test_conflicting_status_is_not_shown_as_clear(self):
         rows = legacy_mixed_health_rows(
             "Purity Verification/Health Test",
