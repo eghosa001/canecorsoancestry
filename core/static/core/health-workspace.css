@@ -102,3 +102,18 @@
 .health-result-editor-action{width:100%;justify-content:space-between}
 .health-history-item{gap:.5rem}
 }
+
+/* Final moderator publication editor: compact, contrast-safe, consistent with public DNA card. */
+.health-final-editor{max-width:1000px}
+.health-final-preview{border-radius:16px;border:1px solid #373a40;background:#0c0d10;color:#f7f7f7;padding:1.4rem;margin:1rem 0 1.2rem;min-width:0}
+.health-final-preview-heading{display:flex;align-items:center;gap:.55rem;font-size:1rem;font-weight:760;color:#f4f4f4;margin-bottom:.9rem}
+.health-final-preview-heading span{font-size:1.5rem;color:#e1cfad}
+.health-final-preview>strong{display:block;font-size:clamp(1.3rem,4.5vw,2.1rem);font-weight:780;overflow-wrap:anywhere;line-height:1.18}
+.health-final-preview>p{font-size:.85rem;color:#acb0b8;margin:.7rem 0 0;overflow-wrap:anywhere}
+.health-final-form .health-review-field{min-width:0}
+.health-final-form input:not([type=checkbox]),.health-final-form textarea{min-width:0;max-width:100%;width:100%;min-height:44px}
+.health-final-form input:disabled{opacity:.65;cursor:not-allowed}
+.health-final-form .errorlist{margin:.3rem 0;font-size:.8rem;color:#d87575}
+.health-final-actions{display:flex;gap:.7rem;flex-wrap:wrap}
+.health-final-actions .btn{min-height:46px}
+@media(max-width:650px){.health-final-preview{padding:1.1rem}.health-final-actions{flex-direction:column}.health-final-actions>.btn{width:100%;text-align:center}}
