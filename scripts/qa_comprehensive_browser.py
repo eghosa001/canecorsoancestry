@@ -167,6 +167,75 @@ def test_member_photo_review_and_corrupt_image(page):
     assert evidence.status == Submission.Status.PENDING, "Photo was published without review"
 
 
+
+def test_document_evidence_upload(page):
+    sign_in(page, "member")
+    go(page, f"/member/dogs/{CREDS['dog_id']}/document/")
+    title = "QA pedigree certificate " + uuid.uuid4().hex[:8]
+    page.locator("#id_title").fill(title)
+    page.locator("#id_attachment").set_input_files(CREDS["fixtures"]["evidence.pdf"])
+    submit_form_containing(page, "#id_attachment")
+    page.wait_for_load_state("domcontentloaded")
+    assert "/member/submissions/" in page.url, "Certificate not added to review"
+    record = db_call(lambda: Submission.objects.filter(
+        submitted_by_id=CREDS["roles"]["member"]["id"],
+        dog_id=CREDS["dog_id"], kind=Submission.Kind.DOCUMENT, payload__title=title,
+    ).first())
+    assert record and record.attachment, "Certificate missing from persisted evidence"
+    assert record.status == Submission.Status.PENDING, "Certificate bypassed moderation"
+
+
+def test_member_correction_review(page):
+    sign_in(page, "member")
+    dog_id = CREDS["dog_id"]
+    before = db_call(lambda: Dog.objects.get(pk=dog_id).colour)
+    go(page, f"/member/dogs/{dog_id}/correction/")
+    proposed = "QA Brindle " + uuid.uuid4().hex[:7]
+    page.locator("#id_colour").fill(proposed)
+    page.locator("#id_notes").fill("Test-only colour proposal to verify pending review.")
+    submit_form_containing(page, "#id_colour")
+    page.wait_for_load_state("domcontentloaded")
+    assert "/member/submissions/" in page.url, "Correction not queued"
+    record = db_call(lambda: Submission.objects.filter(
+        submitted_by_id=CREDS["roles"]["member"]["id"], dog_id=dog_id,
+        kind=Submission.Kind.CORRECTION, payload__colour=proposed
+    ).first())
+    assert record and record.status == Submission.Status.PENDING, "Correction not pending"
+    after = db_call(lambda: Dog.objects.get(pk=dog_id).colour)
+    assert after == before, "Unreviewed correction modified the canonical dog"
+
+
+def test_authenticated_pedigree_and_virtual_mating(page):
+    sign_in(page, "member")
+    go(page, "/pedigrees/browser-audit-offspring/?generations=5")
+    assert "Browser Audit Offspring" in page.locator("main").inner_text()
+    response = page.request.get(BASE + "/pedigrees/browser-audit-offspring/export.csv?generations=5")
+    assert response.status == 200, "Pedigree export failed for logged-in member"
+    assert "text/csv" in response.headers.get("content-type", ""), "Pedigree CSV uses wrong media type"
+    assert "Browser Audit Offspring" in response.text(), "Export does not contain requested dog"
+    dam = db_call(lambda: str(Dog.objects.get(slug="browser-audit-dam").pk))
+    go(page, f"/pedigrees/virtual-mating/?sire={CREDS['dog_id']}&dam={dam}&generations=5")
+    assert "Browser Audit Sire" in page.locator("main").inner_text()
+    assert "Browser Audit Dam" in page.locator("main").inner_text()
+
+
+def test_moderator_creates_private_canonical_dog(page):
+    sign_in(page, "moderator")
+    go(page, "/member/moderation/dogs/add/")
+    name = "QA Moderator New Dog " + uuid.uuid4().hex[:7]
+    page.locator("#id_name").fill(name)
+    page.locator("#id_sex").select_option("female")
+    page.locator("#id_reason").fill("Test-only audited canonical creation with photograph.")
+    page.locator("#id_primary_photo").set_input_files(CREDS["fixtures"]["dog-landscape.jpg"])
+    submit_form_containing(page, "#id_name")
+    page.wait_for_load_state("domcontentloaded")
+    dog = db_call(lambda: Dog.objects.filter(name=name).first())
+    assert dog is not None, "Moderator new dog was not saved"
+    assert not dog.is_public, "Moderator-created canonical dog published without review"
+    assert db_call(lambda: dog.images.count()) > 0, "Moderator dog image did not persist"
+    assert "/member/moderation/dogs/" in page.url, "New dog edit page did not load"
+
+
 def test_cross_account_and_roles(page):
     dog_id = CREDS["dog_id"]
     sign_in(page, "member2")
@@ -206,6 +275,10 @@ CASES = [
     ("member", "dog_draft_photo_database", test_member_draft_with_photo),
     ("member", "dog_draft_invalid", test_invalid_member_draft),
     ("member", "image_upload_rejection_review", test_member_photo_review_and_corrupt_image),
+    ("member", "document_certificate_evidence_review", test_document_evidence_upload),
+    ("member", "dog_correction_pending_canonical_integrity", test_member_correction_review),
+    ("member", "pedigree_csv_and_virtual_mating", test_authenticated_pedigree_and_virtual_mating),
+    ("moderator", "staff_private_dog_create_with_image", test_moderator_creates_private_canonical_dog),
     ("member2", "cross_account_dog_authorization", test_cross_account_and_roles),
     ("editor", "kennel_editor_permissions", test_editor_contributor_access),
     ("moderator", "staff_isolation", test_staff_and_admin_boundaries),
