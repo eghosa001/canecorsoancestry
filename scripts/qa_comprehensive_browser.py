@@ -10,6 +10,7 @@ import json
 import os
 import re
 import traceback
+import time
 import uuid
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -59,11 +60,21 @@ def sign_in(page, role):
     assert "/accounts/login/" not in page.url, f"Login failed for {role}: {page.url}"
 
 
-def latest_email(previous, needle):
-    fresh = sorted(set(MAIL.glob("*")) - previous, key=lambda p: p.stat().st_mtime_ns)
-    matching = [p.read_text(errors="replace") for p in fresh if needle in p.read_text(errors="replace")]
-    assert matching, f"No isolated test email received for {needle}"
-    return matching[-1]
+def latest_email(previous, needle, timeout=12):
+    """Wait for file-based email delivery rather than racing WebKit navigation."""
+    until = time.monotonic() + timeout
+    while time.monotonic() < until:
+        fresh = sorted(set(MAIL.glob("*")) - previous,
+                       key=lambda p: p.stat().st_mtime_ns)
+        for path in reversed(fresh):
+            try:
+                body = path.read_text(errors="replace")
+            except OSError:
+                continue
+            if needle in body and "\\n" in body:
+                return body
+        time.sleep(0.1)
+    raise AssertionError(f"No isolated test email received for {needle}")
 
 
 def test_visitor(page):
