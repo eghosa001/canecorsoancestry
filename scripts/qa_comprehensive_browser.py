@@ -4,6 +4,7 @@ Runs once per browser in independent GitHub-hosted runners. Each scenario
 creates its own browser context and records JUnit, screenshots and traces.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import html
 import json
 import os
@@ -27,6 +28,13 @@ OUT = Path(os.environ.get("CCA_QA_REPORT_ROOT", "artifacts/full-qa"))
 OUT.mkdir(parents=True, exist_ok=True)
 MAIL = Path(os.environ["CCA_QA_MAIL_ROOT"])
 results = []
+
+
+def db_call(action):
+    # Playwright sync API executes in a greenlet with an active event loop.
+    # Run Django ORM queries in a separate ordinary worker thread.
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        return executor.submit(action).result()
 
 
 def go(page, url, status=200):
@@ -87,11 +95,10 @@ def test_account_email_lifecycle(page):
     email_body = latest_email(before, new_email)
     link = re.search(r"/member/verify-email/[^\s]+/[^\s]+/", email_body)
     assert link, "Verification email missing usable activation route"
-    user = get_user_model().objects.get(email=new_email)
+    user = db_call(lambda: get_user_model().objects.get(email=new_email))
     assert not user.is_active, "New account bypassed required email verification"
     go(page, urlparse(BASE + link.group(0)).path)
-    user.refresh_from_db()
-    assert user.is_active, "Activation link did not activate the account"
+    assert db_call(lambda: get_user_model().objects.get(pk=user.pk).is_active), "Activation link did not activate the account"
     assert "/dashboard/" in page.url, "Activation did not authenticate/redirect"
     go(page, link.group(0), status=400)
     go(page, "/accounts/password_reset/")
@@ -118,11 +125,11 @@ def test_member_draft_with_photo(page):
     page.get_by_role("button", name="Save dog privately").click()
     page.wait_for_load_state("domcontentloaded")
     assert "/member/submissions/" in page.url, "Draft was not saved to member submissions"
-    record = Submission.objects.get(submitted_by_id=CREDS["roles"]["member"]["id"],
-                                    kind=Submission.Kind.DOG, payload__name=name)
+    record = db_call(lambda: Submission.objects.get(submitted_by_id=CREDS["roles"]["member"]["id"],
+                                    kind=Submission.Kind.DOG, payload__name=name))
     assert record.attachment, "Draft image was not stored"
     assert record.status == Submission.Status.PENDING, "Draft skipped payment/moderation"
-    assert not Dog.objects.filter(name=name).exists(), "Unpaid dog published as a canonical dog"
+    assert not db_call(lambda: Dog.objects.filter(name=name).exists()), "Unpaid dog published as a canonical dog"
     page.reload(wait_until="domcontentloaded")
     assert name in page.locator("main").inner_text(), "Draft not visible after reload"
 
@@ -134,7 +141,8 @@ def test_invalid_member_draft(page):
     page.locator("#id_kennel").select_option(CREDS["kennel_id"])
     page.get_by_role("button", name="Save dog privately").click()
     assert "/member/submit/dog/" in page.url, "Invalid submission unexpectedly completed"
-    assert page.locator(".field-error").count() > 0, "Missing required dog name not reported"
+    assert (page.locator(".field-error").count() > 0 or
+            not page.locator("#id_name").evaluate("(el) => el.checkValidity()")), "Required name was neither rejected by HTML validation nor the server"
 
 
 def test_member_photo_review_and_corrupt_image(page):
@@ -151,10 +159,10 @@ def test_member_photo_review_and_corrupt_image(page):
     submit_form_containing(page, "#id_attachment")
     page.wait_for_load_state("domcontentloaded")
     assert "/member/submissions/" in page.url, "Photo did not enter review queue"
-    evidence = Submission.objects.filter(
+    evidence = db_call(lambda: Submission.objects.filter(
         dog_id=dog_id, kind=Submission.Kind.IMAGE,
         submitted_by_id=CREDS["roles"]["member"]["id"], payload__caption=caption
-    ).first()
+    ).first())
     assert evidence and evidence.attachment, "Photo upload lacks persisted review evidence"
     assert evidence.status == Submission.Status.PENDING, "Photo was published without review"
 
