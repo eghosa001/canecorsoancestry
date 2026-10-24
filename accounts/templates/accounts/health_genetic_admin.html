@@ -32,6 +32,7 @@
       <h2>Add evidence-backed historical result</h2>
       <p class="muted">Check the report's dog identity, date, test and issuing laboratory before attesting. Supporting files stay staff-only. Health and genetic-marker results appear after saving on published profiles; historical breed percentages are private until the owner consents through the existing member submission process.</p>
       <form method="post" enctype="multipart/form-data" class="member-form">
+        <datalist id="health-reported-status-options"><option value="Clear"><option value="Carrier"><option value="Affected"><option value="Inconclusive"><option value="Not tested"></datalist>
         {% csrf_token %}
         {{ form.non_field_errors }}
         <div class="form-grid">
@@ -47,6 +48,7 @@
         <button class="btn btn-gold" type="submit">Save independently reviewed evidence</button>
       </form>
       <p class="muted">For a breed DNA report, record Cane Corso percentage and each other breed exactly as printed; a staff review is not a substitute for owner consent.</p>
+      {% if dog %}<a class="text-link" href="{% url 'accounts:reviewed-dog-health' dog.pk %}">Edit or publish this dog's individual health statuses →</a>{% endif %}
     </section>
 
     <section class="panel">

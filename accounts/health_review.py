@@ -11,9 +11,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from registry.dna import parse_breed_composition, percentage_text
-from registry.genetic_health import MARKER_CODES, SCREENING_MARKERS, SCREENING_RESULTS, unstructured_breed_claim
+from registry.genetic_health import MARKER_CODES, SCREENING_MARKERS, SCREENING_RESULTS, readable_health_result, unstructured_breed_claim
 from registry.models import (
-    BreedDNAReport, Dog, HealthRecord, ModerationAudit, Submission, VerificationState, VerificationEvent,
+    BreedDNAReport, Dog, DogDocument, HealthRecord, ModerationAudit, Submission, VerificationState, VerificationEvent,
 )
 from registry.permissions import can_review_submissions
 from registry.public_freshness import invalidate_public_content
@@ -45,7 +45,8 @@ class HealthTranscriptionForm(forms.Form):
             self.fields["status_" + code] = forms.ChoiceField(
                 required=False,
                 choices=(("", "No verified result in this image"), ("Clear", "Clear"),
-                         ("Carrier", "Carrier"), ("Affected", "Affected")),
+                         ("Carrier", "Carrier"), ("Affected", "Affected"),
+                         ("Inconclusive", "Inconclusive"), ("Not tested", "Not tested")),
                 label=code + " — " + label,
             )
             self.fields["publish_" + code] = forms.BooleanField(
@@ -168,7 +169,8 @@ def reviewed_dog_health(request, pk):
 class ReviewedHealthResultForm(forms.Form):
     """Edit the public-facing transcription; never rewrite the private report."""
     test_type = forms.CharField(max_length=100, label="Test or condition on the report")
-    result = forms.CharField(max_length=160, label="Reported result")
+    result = forms.CharField(max_length=160, label="Reported result",
+        widget=forms.TextInput(attrs={"list": "health-reported-status-options", "autocomplete": "off"}))
     tested_on = forms.DateField(
         required=False, label="Test date",
         widget=forms.DateInput(attrs={"type": "date"}),
@@ -235,7 +237,7 @@ class ReviewedHealthResultForm(forms.Form):
             code = (data.get("test_type") or "").strip().upper()
             result = (data.get("result") or "").strip()
             if code in MARKER_CODES and result.lower() not in SCREENING_RESULTS:
-                self.add_error("result", "Use Clear, Carrier or Affected for a featured genetic marker.")
+                self.add_error("result", "Choose Clear, Carrier, Affected, Inconclusive or Not tested as stated in the report.")
             if unstructured_breed_claim(code):
                 self.add_error("test_type", "Breed composition must use the dedicated owner-consented DNA report.")
         return data
@@ -245,12 +247,16 @@ class ReviewedHealthResultForm(forms.Form):
 class AdditionalHealthConditionForm(forms.Form):
     """Transcribe a condition missed by the initial extraction from an approved report."""
     source_submission = forms.ModelChoiceField(
-        queryset=Submission.objects.none(),
-        label="Previously approved laboratory document",
-        empty_label="Choose approved report…",
+        queryset=Submission.objects.none(), required=False,
+        label="Approved member report", empty_label="Choose approved report…",
+    )
+    source_document = forms.ModelChoiceField(
+        queryset=DogDocument.objects.none(), required=False,
+        label="Or approved staff laboratory report", empty_label="Choose staff-reviewed report…",
     )
     test_type = forms.CharField(max_length=100, label="Exact genetic condition / test name")
-    result = forms.CharField(max_length=160, label="Result exactly as reported")
+    result = forms.CharField(max_length=160, label="Result exactly as reported",
+        widget=forms.TextInput(attrs={"list": "health-reported-status-options", "autocomplete": "off"}))
     tested_on = forms.DateField(
         required=False, widget=forms.DateInput(attrs={"type": "date"}), label="Test date",
     )
@@ -263,11 +269,17 @@ class AdditionalHealthConditionForm(forms.Form):
         self.fields["source_submission"].queryset = Submission.objects.filter(
             dog=dog, kind=Submission.Kind.HEALTH, status=Submission.Status.APPROVED
         ).exclude(attachment="").order_by("-created_at")
+        self.fields["source_document"].queryset = DogDocument.objects.filter(
+            dog=dog, staff_review_only=True,
+            staff_health_record__verification_state=VerificationState.HEALTH_VERIFIED,
+        ).exclude(file="").order_by("-created_at")
 
     def clean(self):
         data = super().clean()
         test_type = (data.get("test_type") or "").strip()
         result = (data.get("result") or "").strip()
+        if bool(data.get("source_submission")) == bool(data.get("source_document")):
+            self.add_error(None, "Choose exactly one approved source report.")
         if unstructured_breed_claim(test_type):
             self.add_error("test_type", "Breed percentages require a separately verified, owner-consented DNA record.")
         if test_type.upper() in MARKER_CODES and result.lower() not in SCREENING_RESULTS:
@@ -288,15 +300,27 @@ def add_reviewed_health_condition(request, pk):
         messages.error(request, "Check the additional condition and select its approved source document: " + form.errors.as_text())
         return redirect("accounts:reviewed-dog-health", pk=pk)
     data = form.cleaned_data
-    source = data["source_submission"]
     with transaction.atomic():
-        # Never link a public result to an unapproved document or another dog.
-        source = get_object_or_404(
-            Submission.objects.select_for_update(),
-            pk=source.pk, dog=dog, kind=Submission.Kind.HEALTH,
-            status=Submission.Status.APPROVED,
-        )
-        source_marker = "Moderator condition transcribed from approved submission " + str(source.pk)
+        source = None
+        document = None
+        if data.get("source_submission"):
+            # Approved member source, always belonging to this dog.
+            source = get_object_or_404(
+                Submission.objects.select_for_update(),
+                pk=data["source_submission"].pk, dog=dog, kind=Submission.Kind.HEALTH,
+                status=Submission.Status.APPROVED,
+            )
+            source_marker = "Moderator condition transcribed from approved submission " + str(source.pk)
+            source_id = str(source.pk)
+        else:
+            # A historical source previously checked and uploaded by Super Admin.
+            document = get_object_or_404(
+                DogDocument.objects.select_for_update(),
+                pk=data["source_document"].pk, dog=dog, staff_review_only=True,
+                staff_health_record__verification_state=VerificationState.HEALTH_VERIFIED,
+            )
+            source_marker = "Moderator condition transcribed from reviewed staff document " + str(document.pk)
+            source_id = str(document.pk)
         if HealthRecord.objects.filter(
             dog=dog, test_type__iexact=data["test_type"].strip(),
             tested_on=data.get("tested_on"), notes=source_marker,
@@ -304,14 +328,14 @@ def add_reviewed_health_condition(request, pk):
             messages.error(request, "This condition and date have already been transcribed from that document.")
             return redirect("accounts:reviewed-dog-health", pk=pk)
         record = HealthRecord.objects.create(
-            dog=dog, test_type=data["test_type"].strip(), result=data["result"].strip(),
+            dog=dog, test_type=data["test_type"].strip(), result=readable_health_result(data["result"]),
             tested_on=data.get("tested_on"), verification_state=VerificationState.HEALTH_VERIFIED,
             is_public=False, notes=source_marker,
         )
         VerificationEvent.objects.create(
             dog=dog, health_record=record, state=VerificationState.HEALTH_VERIFIED,
             reviewer=request.user,
-            note="Additional condition manually checked against approved private laboratory report " + str(source.pk),
+            note="Additional condition manually checked against approved private laboratory report " + source_id,
         )
         record_audit(
             action=ModerationAudit.Action.VERIFICATION, actor=request.user,
@@ -319,11 +343,12 @@ def add_reviewed_health_condition(request, pk):
             summary={
                 "kind": "additional_health_condition",
                 "health_record_id": record.pk,
-                "source_submission_id": str(source.pk),
+                "source_submission_id": str(source.pk) if source else None,
+                "source_document_id": document.pk if document else None,
                 "test_type": record.test_type, "result": record.result,
                 "public": False,
             },
-            note="Moderator added an omitted laboratory condition; the report remains private.",
+            note="Staff reviewer added a laboratory condition; original evidence remains private.",
         )
     messages.success(request, "Additional condition saved privately. Review its public card, then publish it if appropriate.")
     return redirect("accounts:edit-reviewed-health-result", pk=pk, record_id=record.pk)
@@ -377,7 +402,7 @@ def edit_reviewed_health_result(request, pk, record_id):
                         record.result = percentage_text(data["breed_percentage"]) + "% Cane Corso"
                     else:
                         record.test_type = data["test_type"].strip()
-                        record.result = data["result"].strip()
+                        record.result = readable_health_result(data["result"])
                     record.is_public = intent == "publish"
                     record.save(update_fields=["test_type", "result", "tested_on", "is_public"])
                     record_audit(

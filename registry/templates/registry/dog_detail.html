@@ -6,7 +6,7 @@
 {% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and health information.{% endblock %}
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'core/dog-portrait-gallery.css' %}?v=20261011-stable-gallery-v7">
-  <link rel="stylesheet" href="{% static 'core/breed-dna.css' %}?v=20261024-orthopaedic-compact-v2">
+  <link rel="stylesheet" href="{% static 'core/breed-dna.css' %}?v=20261024-health-status-compact-v3">
   {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}?v=20261002-2">{% elif dog.source_image_url %}<meta property="og:image" content="{{ dog.source_image_url }}">{% endif %}
   <script type="application/ld+json">{{ structured_data }}</script>
 {% endblock %}
@@ -280,8 +280,7 @@
               {% for marker in genetic_screenings %}
                 <div class="genetic-screening-row">
                   <div class="genetic-screening-identity">
-                    <strong>{{ marker.code }}</strong>
-                    <span>{{ marker.name }}</span>
+                    <strong title="{{ marker.name }}">{{ marker.code }}</strong>
                   </div>
                   <span class="genetic-screening-status genetic-screening-status--{{ marker.tone }}">
                     {% if marker.tone == 'clear' %}<span aria-hidden="true">✓</span>{% elif marker.tone == 'untested' %}<span aria-hidden="true">—</span>{% elif marker.tone == 'carrier' %}<span aria-hidden="true">◐</span>{% else %}<span aria-hidden="true">!</span>{% endif %}
@@ -310,17 +309,15 @@
         </div>
       </section>
     {% endif %}
-    {% if other_health_records %}
+    {% if other_health_rows %}
       <section class="other-health" aria-labelledby="other-health-heading">
-        <div class="other-health-heading">
-          <h3 id="other-health-heading">Other health screening</h3>
-          <span>Reviewed test results</span>
-        </div>
-        <div class="health-test-grid">
-          {% for record in other_health_records %}
-            <div class="health-test-item">
-              <div class="health-test-item-info"><strong>{{ record.test_type }}</strong><small>{{ record.tested_on|date:"j M Y"|default:"Test date not supplied" }}</small></div>
-              <div class="health-test-item-result"><strong>{{ record.result }}</strong><small>{{ record.public_verification_label }}</small></div>
+        <h3 id="other-health-heading">Other health results</h3>
+        <div class="health-compact-list">
+          {% for result in other_health_rows %}
+            <div class="health-compact-row">
+              <strong>{{ result.test }}</strong>
+              <span>{{ result.result }}</span>
+              {% if not result.verified %}<small>Not verified</small>{% endif %}
             </div>
           {% endfor %}
         </div>

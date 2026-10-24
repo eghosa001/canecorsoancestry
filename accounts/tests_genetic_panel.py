@@ -77,7 +77,7 @@ class GeneticPanelTests(TestCase):
         page = self.client.get(self.profile)
         self.assertContains(page, 'genetic-screening-status--clear')
         self.assertContains(page, 'genetic-screening-status--carrier')
-        self.assertContains(page, "genetic-screening-status--untested", count=1)
+        self.assertNotContains(page, "genetic-screening-status--untested")
         self.client.force_login(self.outsider)
         self.assertEqual(self.submit_marker("CMR1", "Clear").status_code, 403)
 
@@ -113,6 +113,28 @@ class GeneticPanelTests(TestCase):
             "result": "Probably clear", "attachment": self.evidence(),
         })
         self.assertEqual(response.status_code, 200)
+
+    def test_one_reviewed_marker_does_not_invent_two_not_tested_results(self):
+        record = HealthRecord.objects.create(
+            dog=self.dog, test_type="DSRA", result="Clear",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        response = self.client.get(self.profile)
+        self.assertContains(response, "DSRA")
+        self.assertContains(response, "Clear")
+        self.assertNotContains(response, "genetic-screening-status--untested")
+        self.assertNotContains(response, "NCL1")
+        self.assertNotContains(response, "CMR1")
+
+    def test_inconclusive_marker_is_identifiable_not_falsely_clear(self):
+        HealthRecord.objects.create(
+            dog=self.dog, test_type="CMR1", result="Inconclusive",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        response = self.client.get(self.profile)
+        self.assertContains(response, "CMR1")
+        self.assertContains(response, "Inconclusive")
+        self.assertNotContains(response, "genetic-screening-status--clear")
 
     def test_latest_reviewed_marker_wins_and_unverified_never_means_clear(self):
         now = timezone.now()

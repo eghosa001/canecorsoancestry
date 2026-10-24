@@ -13,16 +13,20 @@ SCREENING_RESULTS = {
     "affected": ("Affected", "affected"),
     "at risk": ("Affected", "affected"),
     "at risk / affected": ("Affected", "affected"),
+    "inconclusive": ("Inconclusive", "other"),
+    "not tested": ("Not tested", "untested"),
+    "pending": ("Pending", "other"),
 }
 RESULT_CHOICES = (
     ("Clear", "Clear — no tested variant detected"),
     ("Carrier", "Carrier — one copy detected"),
     ("Affected", "Affected / at risk — two copies detected"),
+    ("Inconclusive", "Inconclusive — no definitive result"),
 )
 
 
 def marker_status_rows(records):
-    """Most recent explicitly reviewed result only, or Not tested."""
+    """Show only markers supported by actual published, evidence-reviewed results."""
     latest = {}
     for record in records:
         code = (record.test_type or "").strip().upper()
@@ -34,13 +38,23 @@ def marker_status_rows(records):
     rows = []
     for code, name in SCREENING_MARKERS:
         record = latest.get(code, (None, None))[1]
-        classified = SCREENING_RESULTS.get((record.result or "").strip().lower()) if record else None
+        if record is None:
+            continue  # Missing evidence is not an observed negative or an explicit Not tested result.
+        original = (record.result or "").strip()
+        classified = SCREENING_RESULTS.get(original.lower())
         rows.append({
             "code": code, "name": name,
-            "status": classified[0] if classified else "Not tested",
-            "tone": classified[1] if classified else "untested",
+            "status": classified[0] if classified else (original or "Result unclear"),
+            "tone": classified[1] if classified else "other",
         })
     return rows
+
+
+def readable_health_result(value):
+    """Normalize recognized labels without guessing the meaning of unfamiliar lab wording."""
+    original = (value or "").strip()
+    matched = SCREENING_RESULTS.get(original.lower())
+    return matched[0] if matched else original
 
 
 def unstructured_breed_claim(test_type):

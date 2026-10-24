@@ -42,7 +42,7 @@ from .models import (
     public_verification_label,
 )
 from .permissions import can_access_public_pedigree_analysis, can_contribute_to_dog
-from .genetic_health import MARKER_CODES, SCREENING_RESULTS, marker_status_rows, unstructured_breed_claim
+from .genetic_health import MARKER_CODES, SCREENING_RESULTS, marker_status_rows, readable_health_result, unstructured_breed_claim
 from .orthopaedic_health import describe_orthopaedic_result
 from .dna import percentage_text
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
@@ -522,14 +522,12 @@ def dog_detail(request, slug):
 
     # The public verification card must show reviewed data, not a generic placeholder.
     genetic_screenings = marker_status_rows(dog.display_health_records)
-    # Do not show three unsupported "Not tested" badges until a featured test exists.
-    if not any(row["tone"] != "untested" for row in genetic_screenings):
-        genetic_screenings = []
+    # Only actual recorded marker statuses are displayed; never invent missing results.
     # Additional conditions are sourced from a moderator-reviewed approval event,
     # not an untrusted string in the member's original notes.
     possible_extra_ids = [
         record.pk for record in dog.display_health_records
-        if (record.notes or "").startswith("Moderator condition transcribed from approved submission ")
+        if (record.notes or "").startswith("Moderator condition transcribed from ")
     ]
     confirmed_extra_ids = set(
         VerificationEvent.objects.filter(
@@ -549,17 +547,19 @@ def dog_detail(request, slug):
         classified = SCREENING_RESULTS.get(status.lower())
         genetic_screenings.append({
             "code": label, "name": "Additional laboratory screening",
-            "status": status, "tone": classified[1] if classified else "other",
+            "status": classified[0] if classified else (status or "Result unclear"),
+            "tone": classified[1] if classified else "other",
         })
     # Older data may have a single free-text health row combining an alleged
     # breed percentage with words such as "DSRA CLEAR". Never treat that prose
     # as an independently reviewed breed-composition report or genetic test.
     # Keep such text in the private moderation database for correction.
     other_health_records = []
+    other_health_rows = []
     orthopaedic_screenings = []
     for record in dog.display_health_records:
         label = (record.test_type or "").strip().lower()
-        if label.upper() in MARKER_CODES or record.pk in confirmed_extra_ids:
+        if (label.upper() in MARKER_CODES and record.verification_state == VerificationState.HEALTH_VERIFIED) or record.pk in confirmed_extra_ids:
             continue  # A reviewed genetic marker is already displayed in the DNA card.
         if unstructured_breed_claim(record.test_type):
             continue  # Only BreedDNAReport + owner consent enables public breed percent.
@@ -589,6 +589,11 @@ def dog_detail(request, slug):
                 })
             continue  # Display recognized grades as two separately explained findings.
         other_health_records.append(record)
+        other_health_rows.append({
+            "test": record.test_type,
+            "result": readable_health_result(record.result) or "Result not provided",
+            "verified": record.verification_state == VerificationState.HEALTH_VERIFIED,
+        })
 
     # Surface only moderator-reviewed lab estimates, never pending submissions.
     breed_dna = (
@@ -624,6 +629,7 @@ def dog_detail(request, slug):
             "breed_dna_percentage": percentage_text(breed_dna.cane_corso_percentage) if breed_dna else "",
             "genetic_screenings": genetic_screenings,
             "other_health_records": other_health_records,
+            "other_health_rows": other_health_rows,
             "orthopaedic_screenings": orthopaedic_screenings,
             "show_dna_card": bool(breed_dna or genetic_screenings),
             "has_public_health_records": bool(other_health_records or orthopaedic_screenings or breed_dna or genetic_screenings),

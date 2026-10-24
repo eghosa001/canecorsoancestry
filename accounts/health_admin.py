@@ -18,6 +18,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from registry.dna import parse_breed_composition, percentage_text
+from registry.genetic_health import MARKER_CODES, SCREENING_RESULTS, readable_health_result
 from registry.models import (
     BreedDNAReport, Dog, DogDocument, HealthRecord, ModerationAudit,
     VerificationEvent, VerificationState,
@@ -37,7 +38,8 @@ class HistoricalHealthEvidenceForm(forms.Form):
     )
     record_type = forms.ChoiceField(choices=RECORD_TYPES, label="Record category")
     test_type = forms.CharField(max_length=100, required=False, label="Test / genetic marker")
-    result = forms.CharField(max_length=160, required=False, label="Result as stated by laboratory")
+    result = forms.CharField(max_length=160, required=False, label="Result as stated by laboratory",
+        widget=forms.TextInput(attrs={"list": "health-reported-status-options", "autocomplete": "off"}))
     tested_on = forms.DateField(
         required=False, label="Test date", widget=forms.DateInput(attrs={"type": "date"})
     )
@@ -100,6 +102,10 @@ class HistoricalHealthEvidenceForm(forms.Form):
             for field in ("test_type", "result"):
                 if not (data.get(field) or "").strip():
                     self.add_error(field, "Required for a health or genetic test.")
+            if (data.get("test_type") or "").strip().upper() in MARKER_CODES and (
+                (data.get("result") or "").strip().lower() not in SCREENING_RESULTS
+            ):
+                self.add_error("result", "Use the actual recorded status: Clear, Carrier, Affected, Inconclusive or Not tested.")
         return data
 
 
@@ -175,7 +181,7 @@ def health_genetic_dog(request, pk):
             health = HealthRecord.objects.create(
                 dog=dog,
                 test_type=data["test_type"].strip(),
-                result=data["result"].strip(),
+                result=readable_health_result(data["result"]),
                 tested_on=data["tested_on"],
                 verification_state=VerificationState.HEALTH_VERIFIED,
                 notes=notes,
