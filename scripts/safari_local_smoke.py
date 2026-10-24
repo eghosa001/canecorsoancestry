@@ -54,8 +54,8 @@ def run():
               body: getComputedStyle(document.body).fontFamily,
               brand: getComputedStyle(document.querySelector('.brand')).fontFamily,
             })""")
-            assert "Georgia" in dark_fonts["heading"] and dark_fonts["headingWeight"] == "500", (
-                f"Dark headings no longer use the original Georgia weight: {dark_fonts}"
+            assert "Georgia" in dark_fonts["heading"] and dark_fonts["headingWeight"] == "600", (
+                f"Dark homepage hero no longer uses its original Georgia weight: {dark_fonts}"
             )
             assert "Georgia" in dark_fonts["brand"] and "Inter" in dark_fonts["body"], (
                 f"Dark typeface mix differs from pre-Figma: {dark_fonts}"
@@ -76,8 +76,8 @@ def run():
               body: getComputedStyle(document.body).fontFamily,
               brand: getComputedStyle(document.querySelector('.brand')).fontFamily,
             })""")
-            assert "Georgia" in light_fonts["heading"] and light_fonts["headingWeight"] == "500", (
-                f"Light headings no longer use the original Georgia weight: {light_fonts}"
+            assert "Georgia" in light_fonts["heading"] and light_fonts["headingWeight"] == "600", (
+                f"Light homepage hero no longer uses its original Georgia weight: {light_fonts}"
             )
             assert "Georgia" in light_fonts["brand"] and "Inter" in light_fonts["body"], (
                 f"Light typeface mix differs from pre-Figma: {light_fonts}"
