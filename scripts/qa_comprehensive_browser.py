@@ -36,12 +36,17 @@ def go(page, url, status=200):
     return response
 
 
+def submit_form_containing(page, field):
+    # Never select the hidden global search button ahead of a content form.
+    page.locator(field).locator("xpath=ancestor::form").locator("button[type=submit]").first.click()
+
+
 def sign_in(page, role):
     go(page, "/accounts/login/")
     user = CREDS["roles"][role]
     page.locator("#id_username").fill(user["email"])
     page.locator("#id_password").fill(user["password"])
-    page.locator("button[type=submit]").first.click()
+    submit_form_containing(page, "#id_username")
     page.wait_for_load_state("domcontentloaded")
     assert "/accounts/login/" not in page.url, f"Login failed for {role}: {page.url}"
 
@@ -65,7 +70,7 @@ def test_visitor(page):
     go(page, "/dogs/browser-audit-offspring/")
     assert "Browser Audit Offspring" in page.locator("main").inner_text()
     go(page, "/dogs/?q=Browser+Audit+Private")
-    assert "Browser Audit Private" not in page.locator("main").inner_text()
+    assert not any("Browser Audit Private" in card for card in page.locator(".search-result-card").all_inner_texts()), "Unpublished dog leaked in search result cards"
     page.screenshot(path=OUT / "visitor-desktop.png", full_page=True)
 
 
@@ -77,7 +82,7 @@ def test_account_email_lifecycle(page):
     page.locator("#id_email").fill(new_email)
     page.locator("#id_password1").fill(password)
     page.locator("#id_password2").fill(password)
-    page.locator("button[type=submit]").first.click()
+    submit_form_containing(page, "#id_email")
     page.wait_for_load_state("domcontentloaded")
     email_body = latest_email(before, new_email)
     link = re.search(r"/member/verify-email/[^\s]+/[^\s]+/", email_body)
@@ -92,7 +97,7 @@ def test_account_email_lifecycle(page):
     go(page, "/accounts/password_reset/")
     before = set(MAIL.glob("*"))
     page.locator("#id_email").fill(new_email)
-    page.locator("button[type=submit]").first.click()
+    submit_form_containing(page, "#id_email")
     page.wait_for_load_state("domcontentloaded")
     reset_email = latest_email(before, new_email)
     match = re.search(r"/accounts/reset/[^\s]+/[^\s]+/", reset_email)
@@ -137,13 +142,13 @@ def test_member_photo_review_and_corrupt_image(page):
     dog_id = CREDS["dog_id"]
     go(page, f"/member/dogs/{dog_id}/photo/")
     page.locator("#id_attachment").set_input_files(CREDS["fixtures"]["invalid-image.jpg"])
-    page.locator("button[type=submit]").first.click()
+    submit_form_containing(page, "#id_attachment")
     assert page.locator(".field-error").count() > 0, "Fake JPEG accepted"
     go(page, f"/member/dogs/{dog_id}/photo/")
     caption = "QA image " + uuid.uuid4().hex[:8]
     page.locator("#id_attachment").set_input_files(CREDS["fixtures"]["dog-portrait.png"])
     page.locator("#id_caption").fill(caption)
-    page.locator("button[type=submit]").first.click()
+    submit_form_containing(page, "#id_attachment")
     page.wait_for_load_state("domcontentloaded")
     assert "/member/submissions/" in page.url, "Photo did not enter review queue"
     evidence = Submission.objects.filter(
