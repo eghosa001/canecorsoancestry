@@ -1,10 +1,10 @@
 {% load static %}
 <!doctype html>
-<html lang="en" data-theme="dark" data-ui-version="customer-v49">
+<html lang="en" data-theme="light" data-ui-version="evergreen-heritage-v1">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#090a09">
+  <meta name="theme-color" content="#f2f1ea">
   <meta name="description" content="{% block meta_description %}Cane Corso pedigree, bloodline, kennel and provenance research.{% endblock %}">
   <meta name="robots" content="{% if page_noindex %}noindex,nofollow,noarchive{% else %}index,follow{% endif %}">
   <link rel="canonical" href="{{ canonical_url }}">
@@ -19,11 +19,11 @@
     (function () {
       try {
         var savedTheme = localStorage.getItem("cca-theme");
-        var theme = savedTheme === "light" ? "light" : "dark";
+        var theme = savedTheme === "dark" ? "dark" : "light";
         document.documentElement.dataset.theme = theme;
-        document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "light" ? "#f4f0e8" : "#090a09");
+        document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "light" ? "#f2f1ea" : "#0c1514");
       } catch (error) {
-        document.documentElement.dataset.theme = "dark";
+        document.documentElement.dataset.theme = "light";
       }
     })();
   </script>
@@ -33,6 +33,7 @@
   <link rel="stylesheet" href="{% static 'core/dog-photo-safari.css' %}?v=20261010-owner-mobile-v3">
   <link rel="stylesheet" href="{% static 'core/workspace-navigation.css' %}?v=20261009-workspaces-v1">
   <link rel="stylesheet" href="{% static 'core/typeface-restore.css' %}?v=20261010-original-georgia-v2">
+  <link rel="stylesheet" href="{% static 'core/evergreen-heritage.css' %}?v=20261024-heritage-v1">
   {% block extra_head %}{% endblock %}
 </head>
 <body>
