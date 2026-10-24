@@ -42,6 +42,7 @@
     {% endif %}
     <div class="health-review-step"><span>03 · Final human decision</span><strong>Edit the summary and choose visibility</strong></div>
     <form method="post" class="member-form health-final-form">
+      <datalist id="health-reported-status-options"><option value="Clear"><option value="Carrier"><option value="Affected"><option value="Inconclusive"><option value="Not tested"></datalist>
       {% csrf_token %}
       {{ form.non_field_errors }}
       <div class="health-review-fields">
