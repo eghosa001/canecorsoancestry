@@ -31,3 +31,11 @@ PAYSTACK_SECRET_KEY = ""
 SITE_URL = "http://127.0.0.1:8000"
 ALLOWED_HOSTS = ["127.0.0.1", "localhost", "testserver"]
 CSRF_TRUSTED_ORIGINS = ["http://127.0.0.1:8000"]
+
+# Synthetic browser suites sign into 13+ isolated accounts per browser.
+# Preserve every production limiter; extend only the local QA login budget.
+MIDDLEWARE = [
+    "scripts.qa_rate_limit.IsolatedQAAbuseProtectionMiddleware"
+    if name == "core.middleware.AbuseProtectionMiddleware" else name
+    for name in MIDDLEWARE
+]
