@@ -228,7 +228,7 @@ def test_moderator_creates_private_canonical_dog(page):
     page.locator("#id_reason").fill("Test-only audited canonical creation with photograph.")
     page.locator("#id_primary_photo").set_input_files(CREDS["fixtures"]["dog-landscape.jpg"])
     submit_form_containing(page, "#id_name")
-    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_url(re.compile(r"/member/moderation/dogs/[0-9a-f-]+/edit/"), wait_until="domcontentloaded", timeout=10000)
     dog = db_call(lambda: Dog.objects.filter(name=name).first())
     assert dog is not None, "Moderator new dog was not saved"
     assert not dog.is_public, "Moderator-created canonical dog published without review"
