@@ -114,6 +114,28 @@ class GeneticPanelTests(TestCase):
         })
         self.assertEqual(response.status_code, 200)
 
+    def test_one_reviewed_marker_does_not_invent_two_not_tested_results(self):
+        record = HealthRecord.objects.create(
+            dog=self.dog, test_type="DSRA", result="Clear",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        response = self.client.get(self.profile)
+        self.assertContains(response, "DSRA")
+        self.assertContains(response, "Clear")
+        self.assertNotContains(response, "genetic-screening-status--untested")
+        self.assertNotContains(response, "NCL1")
+        self.assertNotContains(response, "CMR1")
+
+    def test_inconclusive_marker_is_identifiable_not_falsely_clear(self):
+        HealthRecord.objects.create(
+            dog=self.dog, test_type="CMR1", result="Inconclusive",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        response = self.client.get(self.profile)
+        self.assertContains(response, "CMR1")
+        self.assertContains(response, "Inconclusive")
+        self.assertNotContains(response, "genetic-screening-status--clear")
+
     def test_latest_reviewed_marker_wins_and_unverified_never_means_clear(self):
         now = timezone.now()
         def record(pk, code, result, state, day):
