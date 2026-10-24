@@ -145,8 +145,8 @@
         <a class="btn btn-outline" href="{{ submission.attachment.url }}" target="_blank" rel="noopener noreferrer">Open private report ↗</a>
       </div>
     {% endif %}
-    <div class="health-review-step"><span>02 · Transcribe verified findings</span><strong>Choose what the public may see</strong></div>
-    <p class="health-review-help">Enter only results confirmed by the private report. Each DSRA, NCL1 or CMR1 result can be shown or hidden independently. Publication still requires the normal approval action.</p>
+    <div class="health-review-step"><span>02 · Transcribe verified findings</span><strong>Prepare results for the final publication step</strong></div>
+    <p class="health-review-help">Enter only results confirmed by the private report. Once the document is approved, its findings remain private until the moderator edits/previews and explicitly publishes them.</p>
     {% if submission.status == "pending" %}
       <form method="post" action="{% url 'accounts:transcribe-health-submission' submission.pk %}" class="member-form">
         {% csrf_token %}
@@ -157,18 +157,18 @@
         </div>
         <h3 class="health-review-subtitle">Genetic marker results</h3>
         <div class="health-marker-review-grid">
-          <div class="health-marker-review-row"><div><strong>DSRA</strong><small>Dental-Skeletal-Retinal Anomaly</small></div><div class="health-marker-review-controls">{{ health_review_form.status_DSRA }}<label>{{ health_review_form.publish_DSRA }} Publish result</label></div></div>
-          <div class="health-marker-review-row"><div><strong>NCL1</strong><small>Neuronal Ceroid Lipofuscinosis 1</small></div><div class="health-marker-review-controls">{{ health_review_form.status_NCL1 }}<label>{{ health_review_form.publish_NCL1 }} Publish result</label></div></div>
-          <div class="health-marker-review-row"><div><strong>CMR1</strong><small>Canine Multifocal Retinopathy 1</small></div><div class="health-marker-review-controls">{{ health_review_form.status_CMR1 }}<label>{{ health_review_form.publish_CMR1 }} Publish result</label></div></div>
+          <div class="health-marker-review-row"><div><strong>DSRA</strong><small>Dental-Skeletal-Retinal Anomaly</small></div><div class="health-marker-review-controls">{{ health_review_form.status_DSRA }}<label>{{ health_review_form.publish_DSRA }} Review for publication</label></div></div>
+          <div class="health-marker-review-row"><div><strong>NCL1</strong><small>Neuronal Ceroid Lipofuscinosis 1</small></div><div class="health-marker-review-controls">{{ health_review_form.status_NCL1 }}<label>{{ health_review_form.publish_NCL1 }} Review for publication</label></div></div>
+          <div class="health-marker-review-row"><div><strong>CMR1</strong><small>Canine Multifocal Retinopathy 1</small></div><div class="health-marker-review-controls">{{ health_review_form.status_CMR1 }}<label>{{ health_review_form.publish_CMR1 }} Review for publication</label></div></div>
         </div>
-        <div class="health-review-confirm"><label>{{ health_review_form.publish_primary }} Show other reviewed result</label><label>{{ health_review_form.reviewed }} I checked these results against the original certificate</label></div>
+        <div class="health-review-confirm"><label>{{ health_review_form.publish_primary }} Flag other reviewed result</label><label>{{ health_review_form.reviewed }} I checked these results against the original certificate</label></div>
         {% for field in health_review_form %}{% for error in field.errors %}<p class="field-error">{{ field.label }}: {{ error }}</p>{% endfor %}{% endfor %}
         <button class="btn btn-gold health-review-save" type="submit">Save findings for approval →</button>
       </form>
     {% else %}
-      <p>Submission already reviewed. You can still change individual public-summary toggles.</p>
+      <p>Document approved. Continue to the moderator's final edit and publication workspace.</p>
     {% endif %}
-    <a class="text-link health-review-management-link" href="{% url 'accounts:reviewed-dog-health' submission.dog.pk %}">Manage approved public results →</a>
+    <a class="text-link health-review-management-link" href="{% url 'accounts:reviewed-dog-health' submission.dog.pk %}">Finish public results: edit, preview and publish →</a>
   </section>
   {% endif %}
   <section class="panel">
