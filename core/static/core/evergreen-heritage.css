@@ -394,3 +394,15 @@ input::placeholder, textarea::placeholder { color: var(--cca-tertiary); opacity:
   .pedigree-scroll { overflow: visible; padding: 0; }
   .pedigree-board { transform: none !important; zoom: 1 !important; }
 }
+
+/* Keep interactive explorer controls compact rather than inheriting the
+   full page-shell section padding from the legacy layout. */
+.page-shell.cca-tree-tools { padding-block: 10px 0; }
+.page-shell.cca-tree-legend { padding-block: 10px 8px; }
+.page-shell.cca-tree-legend p { margin: 6px 0; }
+.page-shell#pedigree-navigation-help { padding-block: 8px 12px; }
+@media (max-width: 760px) {
+  .page-shell.cca-tree-tools { padding-block: 9px 0; }
+  .page-shell.cca-tree-legend { padding-block: 7px; }
+  .page-shell#pedigree-navigation-help { padding-block: 6px; }
+}
