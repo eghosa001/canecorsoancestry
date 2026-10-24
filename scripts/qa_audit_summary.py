@@ -13,6 +13,8 @@ EXPECTED = {
         "dog_draft_photo_database", "dog_draft_invalid",
         "image_upload_rejection_review", "cross_account_dog_authorization",
         "kennel_editor_permissions", "staff_isolation", "django_admin_synthetic_dog",
+        "document_certificate_evidence_review", "dog_correction_pending_canonical_integrity",
+        "pedigree_csv_and_virtual_mating", "staff_private_dog_create_with_image",
     },
     "firefox": None,
     "webkit": None,
@@ -80,9 +82,11 @@ phases = [
 phase_evidence = {
     1: ["feature-inventory.json"], 2: ["isolated SQLite, mail and media fixture jobs"],
     3: ["public_search_navigation_responsive"], 4: ["email_signup_verification_password_reset"],
-    5: ["cross_account_dog_authorization"], 6: ["dog_draft_photo_database", "dog_draft_invalid"],
+    5: ["cross_account_dog_authorization"], 6: ["dog_draft_photo_database", "dog_draft_invalid", "dog_correction_pending_canonical_integrity", "staff_private_dog_create_with_image"],
+    7: ["pedigree_csv_and_virtual_mating", "backend-pedigrees.log", "backend-registry.log"],
+    8: ["pedigree_csv_and_virtual_mating"],
     10: ["backend-accounts.log"], 11: ["existing role browser audit"],
-    13: ["django_admin_synthetic_dog"], 14: ["image_upload_rejection_review"],
+    13: ["django_admin_synthetic_dog"], 14: ["image_upload_rejection_review", "document_certificate_evidence_review"],
     15: ["public_search_navigation_responsive"], 16: ["staff_isolation", "cross_account_dog_authorization"],
     18: ["feature-inventory.json"], 20: ["junit-*.xml", "cases-*.json", "Playwright traces"],
 }
