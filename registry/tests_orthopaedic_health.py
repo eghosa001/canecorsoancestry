@@ -72,7 +72,7 @@ class PublicOrthopaedicGradeTests(TestCase):
         self.assertContains(response, 'class="orthopaedic-compact-row"', count=2)
         self.assertNotContains(response, "Not verified")
         self.assertNotContains(response, "X-ray screening found no signs")
-        self.assertNotContains(response, "orthopaedic-compact-row")
+        self.assertNotContains(response, "orthopaedic-health-card")
         record.refresh_from_db()
         self.assertEqual((record.test_type, record.result), ("HDA ED0", "Certified"))
 
@@ -129,4 +129,4 @@ class PublicOrthopaedicGradeTests(TestCase):
         self.assertContains(response, "Other health screening")
         self.assertContains(response, "HD unknown")
         self.assertContains(response, "ED pending")
-        self.assertNotContains(response, "orthopaedic-health-card")
+        self.assertNotContains(response, "orthopaedic-compact-row")
