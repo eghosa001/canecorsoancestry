@@ -406,3 +406,13 @@ input::placeholder, textarea::placeholder { color: var(--cca-tertiary); opacity:
   .page-shell.cca-tree-legend { padding-block: 7px; }
   .page-shell#pedigree-navigation-help { padding-block: 6px; }
 }
+
+.cca-coi-disclosure {
+  margin-block: 13px 18px;
+  padding: clamp(16px,2vw,22px);
+  border-left: 3px solid var(--cca-copper);
+  background: var(--cca-surface);
+  color: var(--cca-ink);
+}
+.cca-coi-disclosure strong { font-weight: 750; }
+.cca-coi-disclosure p { color: var(--cca-secondary); max-width: 90ch; margin: 8px 0 0; line-height: 1.65; }
