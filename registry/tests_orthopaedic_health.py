@@ -88,6 +88,29 @@ class PublicOrthopaedicGradeTests(TestCase):
         self.assertContains(response, "Not independently verified")
         self.assertNotContains(response, "Health/DNA verified")
 
+    def test_actual_legacy_pedigree_health_summary_is_easy_to_read_and_not_falsely_verified(self):
+        # Matches the existing public dog-profile screenshot exactly.
+        source = HealthRecord.objects.create(
+            dog=self.dog,
+            test_type="Legacy health summary",
+            result="HD A · ED 0 (as shown on supplied pedigree)",
+            verification_state=VerificationState.COMMUNITY,
+            is_public=True,
+        )
+        response = self.client.get(self.url)
+        self.assertContains(response, "Hip &amp; Elbow Joint Screening")
+        self.assertContains(response, "Normal hips (reported)")
+        self.assertContains(response, "Normal elbows (reported)")
+        self.assertContains(response, "Source: supplied pedigree", count=2)
+        self.assertContains(response, "Not independently verified", count=2)
+        self.assertContains(response, "HD-A")
+        self.assertContains(response, "ED-0")
+        self.assertContains(response, 'class="orthopaedic-health-card ', count=2)
+        self.assertNotContains(response, "The X-ray screening found no signs")
+        self.assertNotContains(response, "Legacy health summary")
+        source.refresh_from_db()
+        self.assertEqual(source.result, "HD A · ED 0 (as shown on supplied pedigree)")
+
     def test_private_results_still_have_no_public_card(self):
         HealthRecord.objects.create(
             dog=self.dog, test_type="HDA ED0", result="Recorded",
