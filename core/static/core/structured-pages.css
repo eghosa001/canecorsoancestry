@@ -407,3 +407,10 @@
     line-height: 1.45;
   }
 }
+
+/* Only render the contents of a disclosure once deliberately opened;
+   keep less-frequent controls out of the initial visual hierarchy. */
+.workspace-more:not([open]) > .workspace-more-links,
+.cca-secondary-actions:not([open]) > .cca-secondary-links {
+  display: none !important;
+}
