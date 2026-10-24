@@ -5,7 +5,7 @@
 
       function refreshThemeControls() {
         var isLight = root.dataset.theme === "light";
-        if (meta) meta.setAttribute("content", isLight ? "#f4f0e8" : "#090a09");
+        if (meta) meta.setAttribute("content", isLight ? "#f2f1ea" : "#0c1514");
         buttons.forEach(function (button) {
           button.textContent = button.classList.contains("mobile-header-theme") ? (isLight ? "Dark" : "Light") : (isLight ? "Dark mode" : "Light mode");
           button.setAttribute("aria-label", isLight ? "Switch to dark mode" : "Switch to light mode");

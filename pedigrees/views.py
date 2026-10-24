@@ -25,7 +25,7 @@ from .services import (
 )
 
 
-ALLOWED_GENERATIONS = {4, 6, 8, 10}
+ALLOWED_GENERATIONS = {4, 5, 6, 8, 10}
 
 
 def member_analysis_only(view):
