@@ -11,8 +11,13 @@
     <div class="button-row">
       {% if can_add_dog %}<a class="btn btn-gold" href="{% url 'accounts:dog-direct-create' %}">+ Add Dog</a>{% endif %}
       {% if is_owner %}<a class="btn btn-gold" href="{% url 'accounts:dog-edit-list' %}?proposals=1">Review protected proposals</a>{% endif %}
-      <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">Search dogs</a>
-      <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Back to moderation</a>
+      <details class="cca-secondary-actions">
+        <summary>More navigation <span aria-hidden="true">⌄</span></summary>
+        <div class="cca-secondary-links">
+          <a href="{% url 'accounts:dog-edit-list' %}">Search dogs</a>
+          <a href="{% url 'accounts:moderation' %}">Back to moderation</a>
+        </div>
+      </details>
     </div>
   </header>
   {% if not show_proposals %}
