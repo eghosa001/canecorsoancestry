@@ -178,3 +178,92 @@ class ModeratorFinalPublicationTests(TestCase):
         self.assertContains(public, "Additional laboratory screening")
         self.assertContains(public, "genetic-screening-status--carrier")
         self.assertNotContains(public, "private-source.pdf")
+
+
+    def test_moderator_senior_admin_and_super_admin_can_publish_separate_health_statuses(self):
+        User = get_user_model()
+        senior = User.objects.create_user(username="status-senior")
+        ModerationRoleAssignment.objects.create(
+            user=senior, role=ModerationRoleAssignment.Role.SENIOR,
+        )
+        super_admin = User.objects.create_superuser(
+            username="status-super-admin", email="staff-tests@example.org", password="securepass123"
+        )
+        source = Submission.objects.create(
+            kind=Submission.Kind.HEALTH, dog=self.dog,
+            submitted_by=self.member, status=Submission.Status.APPROVED,
+            attachment="health/verified-dna.pdf",
+            payload={"test_type": "DNA panel", "result": "Reviewed"},
+        )
+        scenarios = (
+            (self.moderator, "Custom marker 1", "Clear"),
+            (senior, "Custom marker 2", "Carrier"),
+            (super_admin, "Custom marker 3", "Affected"),
+        )
+        for actor, condition, result in scenarios:
+            with self.subTest(role=actor.username):
+                self.client.force_login(actor)
+                response = self.client.post(
+                    reverse("accounts:add-reviewed-health-condition", args=[self.dog.pk]),
+                    {
+                        "source_submission": str(source.pk),
+                        "test_type": condition, "result": result, "reviewed": "on",
+                    },
+                )
+                self.assertEqual(response.status_code, 302)
+                record = HealthRecord.objects.get(dog=self.dog, test_type=condition)
+                self.assertFalse(record.is_public)
+                response = self.client.post(
+                    reverse("accounts:edit-reviewed-health-result", args=[self.dog.pk, record.pk]),
+                    {
+                        "intent": "publish", "test_type": condition,
+                        "result": result, "reviewed": "on",
+                    },
+                )
+                self.assertEqual(response.status_code, 302)
+                record.refresh_from_db()
+                self.assertTrue(record.is_public)
+                self.assertContains(self.client.get(self.public_url), condition)
+                self.assertContains(self.client.get(self.public_url), result)
+
+    def test_staff_reviewed_laboratory_document_can_supply_multiple_conditions(self):
+        document = DogDocument.objects.create(
+            dog=self.dog, title="Private laboratory test panel",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file="private/documents/staff-source.pdf", is_public=False,
+            staff_review_only=True, submitted_by=self.moderator,
+        )
+        HealthRecord.objects.create(
+            dog=self.dog, test_type="Panel overview", result="Verified",
+            verification_state=VerificationState.HEALTH_VERIFIED,
+            evidence_document=document, is_public=False,
+        )
+        self.client.force_login(self.moderator)
+        response = self.client.post(
+            reverse("accounts:add-reviewed-health-condition", args=[self.dog.pk]),
+            {
+                "source_document": str(document.pk), "test_type": "Novel retinal condition",
+                "result": "Inconclusive", "reviewed": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        record = HealthRecord.objects.get(dog=self.dog, test_type="Novel retinal condition")
+        self.assertFalse(record.is_public)
+        self.assertIn(str(document.pk), record.notes)
+        self.client.post(
+            reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk]),
+            {"visibility": "show"},
+        )
+        page = self.client.get(self.public_url)
+        self.assertContains(page, "Novel retinal condition")
+        self.assertContains(page, "Inconclusive")
+        self.assertNotContains(page, "staff-source.pdf")
+
+    def test_unapproved_or_missing_laboratory_source_cannot_create_clear_result(self):
+        self.client.force_login(self.moderator)
+        response = self.client.post(
+            reverse("accounts:add-reviewed-health-condition", args=[self.dog.pk]),
+            {"test_type": "DSRA", "result": "Clear", "reviewed": "on"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(HealthRecord.objects.filter(dog=self.dog, test_type="DSRA", result="Clear", notes__startswith="Moderator condition").exists())
