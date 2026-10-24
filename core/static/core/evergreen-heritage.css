@@ -416,3 +416,93 @@ input::placeholder, textarea::placeholder { color: var(--cca-tertiary); opacity:
 }
 .cca-coi-disclosure strong { font-weight: 750; }
 .cca-coi-disclosure p { color: var(--cca-secondary); max-width: 90ch; margin: 8px 0 0; line-height: 1.65; }
+
+
+/* Required compatibility with older v31–v90 !important restoration rules.
+   These overrides intentionally supersede the legacy theme only in the
+   affected UI surfaces; route behavior and data stay unchanged. */
+html[data-theme="light"] .mobile-nav-panel,
+html[data-theme="dark"] .mobile-nav-panel {
+  background: var(--cca-surface) !important;
+  color: var(--cca-ink);
+  border-color: var(--cca-border) !important;
+}
+html[data-theme="light"] .hero-search input,
+html[data-theme="dark"] .hero-search input {
+  background: var(--cca-raised) !important;
+  color: var(--cca-ink) !important;
+  border-color: var(--cca-border) !important;
+  border-radius: 10px !important;
+}
+html[data-theme="light"] .hero-search input::placeholder,
+html[data-theme="dark"] .hero-search input::placeholder { color: var(--cca-tertiary) !important; }
+.hero-search, .hero-search button {
+  border-radius: 12px !important;
+  background: var(--cca-raised);
+}
+.hero-search button, html[data-theme="light"] .hero-search button,
+html[data-theme="dark"] .hero-search button {
+  background: var(--cca-green) !important;
+  color: var(--cca-on-green) !important;
+  border-color: var(--cca-green) !important;
+}
+.home-actions .action-card, .home-actions .action-grid .action-card {
+  min-height: 168px !important;
+  padding: 23px !important;
+  border-radius: 14px !important;
+  border-color: var(--cca-border) !important;
+  background: var(--cca-surface) !important;
+  box-shadow: var(--cca-shadow) !important;
+}
+.home-actions .action-card:hover { box-shadow: 0 14px 28px rgba(18, 45, 32, .11) !important; }
+.home-actions .action-grid { gap: 14px !important; }
+.dashboard-panel, .dashboard-hero {
+  border-radius: 14px !important;
+  border-color: var(--cca-border);
+  background: var(--cca-surface);
+  box-shadow: var(--cca-shadow) !important;
+}
+html[data-theme="light"] .dashboard-sidebar,
+html[data-theme="dark"] .dashboard-sidebar { background: var(--cca-surface); }
+.parent-grid > div, .private-node, .litter-parent-pair span,
+.review-diff, .dispute-card, .duplicate-result-card, .linebreeding-paths > div {
+  color: var(--cca-ink);
+  background: var(--cca-surface);
+  border-color: var(--cca-border);
+}
+.profile-bio p, .search-result-main p, .data-table td,
+.dispute-card p, .review-diff-row span, .diff-before { color: var(--cca-secondary); }
+.field-error, .submission-state.rejected { color: var(--cca-danger); }
+.submission-state.approved, .record-visibility.public,
+.confidence-high, .submission-state.resolved { color: var(--cca-verified); }
+.pedigree-node, .pedigree-column .pedigree-node {
+  border-radius: 10px !important;
+  border-color: var(--cca-border);
+  background: var(--cca-raised) !important;
+  box-shadow: none !important;
+}
+.pedigree-node.repeated {
+  border-color: var(--cca-copper) !important;
+  box-shadow: inset 3px 0 0 var(--cca-copper) !important;
+}
+.pedigree-node.is-related-highlight,
+.pedigree-node.repeated.is-related-highlight {
+  border-color: var(--cca-copper) !important;
+  background: var(--cca-copper-tint) !important;
+  box-shadow: inset 4px 0 0 var(--cca-copper),
+    0 0 0 2px color-mix(in srgb, var(--cca-copper) 18%, transparent) !important;
+}
+.pedigree-node.missing {
+  background: var(--cca-subtle) !important;
+  border-style: dashed;
+  box-shadow: none !important;
+}
+@media (max-width: 760px) {
+  .hero { padding-top: 56px !important; }
+  .home-actions .action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .home-actions .action-card { min-height: 152px !important; padding: 17px !important; }
+  .pedigree-node { min-height: 78px !important; padding: 10px 11px !important; }
+}
+@media (max-width: 380px) {
+  .home-actions .action-grid { grid-template-columns: minmax(0,1fr) !important; }
+}
