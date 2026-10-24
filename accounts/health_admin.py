@@ -185,6 +185,9 @@ def health_genetic_dog(request, pk):
                 tested_on=data["tested_on"],
                 verification_state=VerificationState.HEALTH_VERIFIED,
                 notes=notes,
+                # Approved health/marker text appears automatically. DNA breed
+                # composition remains private until owner summary consent.
+                is_public=category != "breed",
                 evidence_document=evidence,
             )
             if category == "breed":
