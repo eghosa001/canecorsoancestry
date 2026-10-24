@@ -752,6 +752,59 @@ def inbreeding_coefficient(dog, public_only=False, generations=None):
     return max(0.0, kinship)
 
 
+
+def public_profile_coi(dog, generations=None):
+    """Shared COI source for the public dog profile and Django Admin.
+
+    Uses the same *published* direct ancestors and selected depth on both
+    surfaces. Never silently treat a missing/unpublished parent as zero.
+    Private and moderation-hidden dogs have no public-facing COI.
+    """
+    result = {
+        "coi_percent": None,
+        "coi_display_state": "insufficient",
+        "coi_error": "",
+        "public_parentage_complete": False,
+        "coi_below_display_precision": False,
+    }
+    if dog is None or not getattr(dog, "pk", None):
+        return {**result, "coi_error": "Save this dog before calculating COI."}
+    if not dog.is_effectively_public:
+        return {
+            **result,
+            "coi_display_state": "not_public",
+            "coi_error": "This dog is not publicly published.",
+        }
+    parents = (dog.sire, dog.dam)
+    if not all(parent is not None and parent.is_effectively_public for parent in parents):
+        return {
+            **result,
+            "coi_error": "Both sire and dam must be linked and published to estimate COI.",
+        }
+    try:
+        percent = inbreeding_coefficient(
+            dog, public_only=True, generations=generations,
+        ) * 100.0
+    except PedigreeCycleError:
+        return {
+            **result,
+            "public_parentage_complete": True,
+            "coi_display_state": "error",
+            "coi_error": (
+                "Parentage contains a cycle; the records need correction "
+                "before COI can be calculated."
+            ),
+        }
+    return {
+        **result,
+        "coi_percent": percent,
+        "coi_display_state": "estimated",
+        "public_parentage_complete": True,
+        "coi_below_display_precision": 0 < percent < 0.005,
+    }
+
+
+
 def coi_linkage_summary(dog, public_only=True, generations=DEFAULT_COI_GENERATIONS):
     """Explain a recorded COI without guessing missing ancestry.
 
