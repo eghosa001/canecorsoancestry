@@ -127,7 +127,17 @@ jobs:
               scoped_accounts=true
             fi
 
-            if grep -q '^accounts/tests_workspace_navigation[.]py$' <<<"$changed"; then
+            if grep -q '^accounts/tests_structure_navigation[.]py$' <<<"$changed"; then
+            targets+=("accounts.tests_structure_navigation")
+            scoped_accounts=true
+          fi
+
+          if grep -q '^core/context_processors[.]py$' <<<"$changed"; then
+            targets+=("accounts.tests_structure_navigation" "accounts.tests_workspace_navigation")
+            scoped_accounts=true
+          fi
+
+          if grep -q '^accounts/tests_workspace_navigation[.]py$' <<<"$changed"; then
               targets+=("accounts.tests_workspace_navigation")
               scoped_accounts=true
             fi
