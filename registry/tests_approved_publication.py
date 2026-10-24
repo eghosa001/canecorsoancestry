@@ -184,6 +184,7 @@ class ApprovedPublicContentTests(TestCase):
         self.assertContains(self.profile(), "Clear")
         doc = DogDocument.objects.get(source_submission=sub)
         self.assertFalse(doc.is_public)
+        self.client.logout()  # Only the staff reviewer may open private evidence.
         self.assertEqual(self.client.get(doc.file.url).status_code, 404)
         self.assertNotContains(self.profile(), "supporting evidence")
 
