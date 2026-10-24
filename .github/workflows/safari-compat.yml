@@ -11,6 +11,12 @@ on:
       - "registry/templates/registry/dog_detail.html"
       - "registry/tests.py"
       - "core/static/core/premium-polish.css"
+      - "core/static/core/structured-pages.css"
+      - "core/static/core/structured-nav.js"
+      - "accounts/templates/accounts/_workspace_nav.html"
+      - "accounts/templates/accounts/moderation_queue.html"
+      - "accounts/templates/accounts/verification_dashboard.html"
+      - "scripts/structure_browser_smoke.py"
       - "core/static/core/evergreen-heritage.css"
       - "registry/admin.py"
       - "registry/tests_coi_depth.py"
@@ -120,3 +126,5 @@ jobs:
         run: |
           python -m py_compile scripts/safari_local_smoke.py
           python scripts/safari_local_smoke.py
+          python -m py_compile scripts/structure_browser_smoke.py
+          python scripts/structure_browser_smoke.py
