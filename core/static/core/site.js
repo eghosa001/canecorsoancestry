@@ -5,7 +5,11 @@
 
       function refreshThemeControls() {
         var isLight = root.dataset.theme === "light";
-        if (meta) meta.setAttribute("content", isLight ? "#f2f1ea" : "#0c1514");
+        if (meta) meta.setAttribute("content", isLight ? "#f2f1ea" : "#090a09");
+        // Keep the original dark-only CSS in sync when visitors switch themes.
+        document.querySelectorAll("[data-legacy-dark-stylesheet]").forEach(function (link) {
+          link.media = isLight ? "not all" : "all";
+        });
         buttons.forEach(function (button) {
           button.textContent = button.classList.contains("mobile-header-theme") ? (isLight ? "Dark" : "Light") : (isLight ? "Dark mode" : "Light mode");
           button.setAttribute("aria-label", isLight ? "Switch to dark mode" : "Switch to light mode");
