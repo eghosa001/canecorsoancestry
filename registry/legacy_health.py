@@ -1,4 +1,4 @@
-"""Render archived mixed purity/health prose as short, explicitly unverified rows.
+"""Render legacy health results as short text; do not claim missing DNA evidence.
 
 Never convert legacy prose into verified genotype results or DNA breed percentages.
 """
@@ -39,7 +39,7 @@ def legacy_mixed_health_rows(test_type, result, *, record_verified=False):
             continue
         if _BREED_CLAIM.fullmatch(entry):
             if "breed" not in seen:
-                rows.append({"test": "Breed purity", "result": "Not verified", "verified": False})
+                rows.append({"test": "Breed purity", "result": "No DNA report", "verified": False})
                 seen.add("breed")
             continue
         marker = _MARKER_RESULT.fullmatch(entry)

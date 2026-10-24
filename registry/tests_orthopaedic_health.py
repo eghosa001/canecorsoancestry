@@ -83,7 +83,7 @@ class PublicOrthopaedicGradeTests(TestCase):
         )
         response = self.client.get(self.url)
         self.assertContains(response, "Normal elbows")
-        self.assertContains(response, "Not verified")
+        self.assertNotContains(response, "Not verified")
         self.assertNotContains(response, "Health/DNA verified")
 
     def test_actual_legacy_pedigree_health_summary_is_easy_to_read_and_not_falsely_verified(self):
@@ -99,7 +99,7 @@ class PublicOrthopaedicGradeTests(TestCase):
         self.assertContains(response, "Hip &amp; elbow health")
         self.assertContains(response, "Normal hips")
         self.assertContains(response, "Normal elbows")
-        self.assertContains(response, "Not verified", count=2)
+        self.assertNotContains(response, "Not verified")
         self.assertContains(response, "HD-A")
         self.assertContains(response, "ED-0")
         self.assertContains(response, 'class="orthopaedic-compact-row"', count=2)

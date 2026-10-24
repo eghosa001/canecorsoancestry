@@ -6,7 +6,7 @@
 {% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and health information.{% endblock %}
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'core/dog-portrait-gallery.css' %}?v=20261011-stable-gallery-v7">
-  <link rel="stylesheet" href="{% static 'core/breed-dna.css' %}?v=20261024-health-status-compact-v3">
+  <link rel="stylesheet" href="{% static 'core/breed-dna.css' %}?v=20261024-health-status-compact-v4">
   {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}?v=20261002-2">{% elif dog.source_image_url %}<meta property="og:image" content="{{ dog.source_image_url }}">{% endif %}
   <script type="application/ld+json">{{ structured_data }}</script>
 {% endblock %}
@@ -301,9 +301,7 @@
             <div class="orthopaedic-compact-row">
               <strong class="orthopaedic-compact-grade">{{ assessment.grade }}</strong>
               <span class="orthopaedic-compact-result">{{ assessment.headline }}</span>
-              {% if assessment.tone == "unverified" %}
-                <small class="orthopaedic-compact-status">Not verified</small>
-              {% endif %}
+
             </div>
           {% endfor %}
         </div>
@@ -317,7 +315,7 @@
             <div class="health-compact-row">
               <strong>{{ result.test }}</strong>
               <span>{{ result.result }}</span>
-              {% if not result.verified and result.result != "Not verified" %}<small>Not verified</small>{% endif %}
+
             </div>
           {% endfor %}
         </div>

@@ -743,8 +743,9 @@ def approve_submission(
             tested_on=_date_from_payload(payload.get("tested_on")),
             verification_state=VerificationState.HEALTH_VERIFIED,
             notes=submission.notes,
-            # Approval verifies the evidence; a moderator publishes the public card separately.
-            is_public=False,
+            # After staff approval, the text result appears automatically on public dogs.
+            # Raw PDFs/photos remain private; breed composition requires owner consent.
+            is_public=True,
         )
         document_type = (
             DogDocument.DocumentType.DNA
@@ -780,7 +781,7 @@ def approve_submission(
                 test_type=code, result=status,
                 tested_on=_date_from_payload(payload.get("tested_on")),
                 verification_state=VerificationState.HEALTH_VERIFIED,
-                is_public=False,  # Explicit post-approval moderator publication is required.
+                is_public=True,  # Approved marker summary is public automatically.
                 notes="Moderator reviewed private lab evidence for submission " + str(submission.pk),
             )
             VerificationEvent.objects.create(

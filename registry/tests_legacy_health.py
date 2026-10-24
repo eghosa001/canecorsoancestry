@@ -14,7 +14,7 @@ class LegacyHealthParsingTests(SimpleTestCase):
         )
         self.assertEqual(
             [(r["test"], r["result"]) for r in rows],
-            [("Breed purity", "Not verified"), ("CMR1", "Clear"), ("DSRA", "Clear")],
+            [("Breed purity", "No DNA report"), ("CMR1", "Clear"), ("DSRA", "Clear")],
         )
         self.assertTrue(all(not row["verified"] for row in rows))
 
@@ -43,7 +43,7 @@ class LegacyHealthParsingTests(SimpleTestCase):
         )
         self.assertEqual(
             [(r["test"], r["result"]) for r in rows],
-            [("Breed purity", "Not verified"), ("CMR1", "Clear")],
+            [("Breed purity", "No DNA report"), ("CMR1", "Clear")],
         )
 
     def test_conflicting_status_is_not_shown_as_clear(self):
@@ -77,7 +77,8 @@ class PublicLegacyMixedHealthTests(TestCase):
         self.assertContains(page, "CMR1")
         self.assertContains(page, "DSRA")
         self.assertContains(page, "Clear", count=2)
-        self.assertContains(page, "Not verified", count=1)  # Breed purity only.
+        self.assertContains(page, "No DNA report")
+        self.assertNotContains(page, "Not verified")
         self.assertNotContains(page, "<small>Not verified</small>")
         self.assertNotContains(page, "Purity Verification/Health Test")
         self.assertNotContains(page, "100% Cane Corso")
@@ -96,7 +97,7 @@ class PublicLegacyMixedHealthTests(TestCase):
         page = self.client.get(self.url)
         self.assertContains(page, "CMR1")
         self.assertContains(page, "DSRA")
-        self.assertContains(page, "<small>Not verified</small>", count=2)
+        self.assertNotContains(page, "Not verified")
 
     def test_private_mixed_row_is_not_exposed(self):
         HealthRecord.objects.create(

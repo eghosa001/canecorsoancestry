@@ -40,9 +40,9 @@ class ModeratorFinalPublicationTests(TestCase):
         self.assertEqual(self.client.post(self.edit_url, {"intent": "publish"}).status_code, 403)
         self.client.force_login(self.moderator)
         page = self.client.get(self.edit_url)
-        self.assertContains(page, "Save &amp; publish on dog profile")
-        self.assertContains(page, "Save privately")
-        self.assertContains(page, "Public preview")
+        self.assertContains(page, "Save corrections")
+        self.assertNotContains(page, "Save &amp; publish on dog profile")
+        self.assertContains(page, "Published summary preview")
 
     def test_post_approval_edit_and_explicit_publish_change_the_frontend(self):
         self.assertNotContains(self.client.get(self.public_url), 'genetic-screening-status--clear')
@@ -163,12 +163,12 @@ class ModeratorFinalPublicationTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
         new = HealthRecord.objects.get(dog=self.dog, test_type="Novel hereditary condition")
-        self.assertFalse(new.is_public)
+        self.assertTrue(new.is_public)
         self.assertIn(str(source.pk), new.notes)
         self.assertTrue(ModerationAudit.objects.filter(
             dog=self.dog, summary__kind="additional_health_condition",
         ).exists())
-        self.assertNotContains(self.client.get(self.public_url), "Novel hereditary condition")
+        self.assertContains(self.client.get(self.public_url), "Novel hereditary condition")
         self.client.post(
             reverse("accounts:toggle-health-result", args=[self.dog.pk, new.pk]),
             {"visibility": "show"},
@@ -212,7 +212,7 @@ class ModeratorFinalPublicationTests(TestCase):
                 )
                 self.assertEqual(response.status_code, 302)
                 record = HealthRecord.objects.get(dog=self.dog, test_type=condition)
-                self.assertFalse(record.is_public)
+                self.assertTrue(record.is_public)
                 response = self.client.post(
                     reverse("accounts:edit-reviewed-health-result", args=[self.dog.pk, record.pk]),
                     {
@@ -248,7 +248,7 @@ class ModeratorFinalPublicationTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         record = HealthRecord.objects.get(dog=self.dog, test_type="Novel retinal condition")
-        self.assertFalse(record.is_public)
+        self.assertTrue(record.is_public)
         self.assertIn(str(document.pk), record.notes)
         self.client.post(
             reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk]),
