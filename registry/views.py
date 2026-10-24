@@ -43,6 +43,7 @@ from .models import (
 )
 from .permissions import can_access_public_pedigree_analysis, can_contribute_to_dog
 from .genetic_health import MARKER_CODES, SCREENING_RESULTS, marker_status_rows, unstructured_breed_claim
+from .orthopaedic_health import describe_orthopaedic_result
 from .dna import percentage_text
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
@@ -555,12 +556,38 @@ def dog_detail(request, slug):
     # as an independently reviewed breed-composition report or genetic test.
     # Keep such text in the private moderation database for correction.
     other_health_records = []
+    orthopaedic_screenings = []
     for record in dog.display_health_records:
         label = (record.test_type or "").strip().lower()
         if label.upper() in MARKER_CODES or record.pk in confirmed_extra_ids:
             continue  # A reviewed genetic marker is already displayed in the DNA card.
         if unstructured_breed_claim(record.test_type):
             continue  # Only BreedDNAReport + owner consent enables public breed percent.
+        interpreted = describe_orthopaedic_result(record.test_type, record.result)
+        if interpreted:
+            verified = record.verification_state == VerificationState.HEALTH_VERIFIED
+            pedigree_source = "supplied pedigree" in (record.result or "").lower()
+            for assessment in interpreted:
+                details = dict(assessment)
+                if not verified:
+                    details["tone"] = "unverified"
+                    details["headline"] = assessment["headline"] + " (reported)"
+                    details["explanation"] = (
+                        "The supplied pedigree lists " + assessment["grade"] + ". "
+                        if pedigree_source else
+                        "The available record lists " + assessment["grade"] + ". "
+                    ) + "This grade has not been independently verified against a veterinary screening report."
+                    details["source_label"] = (
+                        "Source: supplied pedigree" if pedigree_source else "Source: unverified record"
+                    )
+                else:
+                    details["source_label"] = "Veterinary evidence reviewed"
+                orthopaedic_screenings.append({
+                    **details,
+                    "tested_on": record.tested_on,
+                    "verification_label": record.public_verification_label,
+                })
+            continue  # Display recognized grades as two separately explained findings.
         other_health_records.append(record)
 
     # Surface only moderator-reviewed lab estimates, never pending submissions.
@@ -597,8 +624,9 @@ def dog_detail(request, slug):
             "breed_dna_percentage": percentage_text(breed_dna.cane_corso_percentage) if breed_dna else "",
             "genetic_screenings": genetic_screenings,
             "other_health_records": other_health_records,
+            "orthopaedic_screenings": orthopaedic_screenings,
             "show_dna_card": bool(breed_dna or genetic_screenings),
-            "has_public_health_records": bool(other_health_records or breed_dna or genetic_screenings),
+            "has_public_health_records": bool(other_health_records or orthopaedic_screenings or breed_dna or genetic_screenings),
             "can_submit_breed_dna": can_submit_breed_dna,
             "coi_percent": coi_percent,
             "can_select_coi": can_select_coi,

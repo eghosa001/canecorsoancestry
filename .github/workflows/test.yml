@@ -97,6 +97,9 @@ jobs:
           if grep -q '^registry/' <<<"$changed"; then
             targets+=("registry.tests.DogModelTests")
           fi
+          if grep -Eq '^registry/(orthopaedic_health|tests_orthopaedic_health|views)[.]py$' <<<"$changed"; then
+            targets+=("registry.tests_orthopaedic_health")
+          fi
 
           if grep -Eq '^registry/(models|services|verification|views|querysets)\.py$|^registry/migrations/|^registry/tests_production_hardening\.py$' <<<"$changed"; then
             targets+=("registry.tests_production_hardening")
@@ -117,6 +120,11 @@ jobs:
 
           if grep -Eq '^accounts/.*\.py$' <<<"$changed"; then
             scoped_accounts=false
+            if grep -Eq '^accounts/(tests_health_profile|tests_historical_health_admin)[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_health_profile.HealthRecordSubmissionTests" "accounts.tests_historical_health_admin")
+              scoped_accounts=true
+            fi
+
             if grep -q "^accounts/tests_owner_feedback_fixes[.]py$" <<<"$changed"; then
               targets+=("accounts.tests_owner_feedback_fixes")
               scoped_accounts=true
