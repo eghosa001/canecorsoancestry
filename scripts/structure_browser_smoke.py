@@ -4,7 +4,7 @@ Runs against local seeded fixtures: public, member, staff and Super Admin.
 Checks actual WebKit dimensions and navigation interaction, not design scores.
 """
 from urllib.parse import urljoin
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 BASE = "http://127.0.0.1:8000/"
 PUBLIC = (
@@ -56,8 +56,16 @@ def login(page, username, password):
     assert response and response.status == 200
     page.locator("input[name='username']").fill(username)
     page.locator("input[name='password']").fill(password)
-    page.locator(".auth-card form button[type='submit']").click()
-    assert "/accounts/login/" not in page.url, f"Sign-in failed: {username}"
+    page.locator("input[name='username']").locator("xpath=ancestor::form").locator("button[type='submit']").click()
+    try:
+        page.wait_for_url(
+            lambda url: "/accounts/login/" not in str(url),
+            timeout=15_000,
+            wait_until="domcontentloaded",
+        )
+    except PlaywrightTimeoutError as exc:
+        errors = page.locator(".form-error, .errorlist, .flash.error").all_inner_texts()
+        raise AssertionError(f"Member sign-in did not complete: {errors}") from exc
 
 
 def verify_workspace(page, width):
@@ -97,7 +105,7 @@ def run():
                 for path in PUBLIC:
                     visit(page, path, width)
 
-            login(page, "safari-smoke-member", "safari-smoke-password")
+            login(page, "safari-smoke@example.test", "safari-smoke-password")
             for width in WIDTHS:
                 for path in MEMBER:
                     visit(page, path, width)
