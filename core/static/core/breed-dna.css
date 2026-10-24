@@ -65,6 +65,7 @@
 .orthopaedic-health-card{min-width:0;background:var(--surface,#fff);border:1px solid var(--line,#dadada);border-radius:16px;padding:clamp(.95rem,2.5vw,1.3rem)}
 .orthopaedic-health-main{display:flex;gap:.85rem;align-items:flex-start;min-width:0}
 .orthopaedic-health-icon{width:36px;height:36px;min-width:36px;display:grid;place-items:center;border-radius:12px;font-size:1rem;font-weight:850;background:#e5f3e9;color:#126337;border:1px solid #b8d6c2}
+.orthopaedic-health-card--unverified .orthopaedic-health-icon{background:#eef0f0;color:#465453;border-color:#c4cccc}
 .orthopaedic-health-card--borderline .orthopaedic-health-icon{background:#fdf1d7;color:#805800;border-color:#edd4a1}
 .orthopaedic-health-card--caution .orthopaedic-health-icon{background:#fae4df;color:#a42e22;border-color:#edbfb5}
 .orthopaedic-health-content{display:flex;flex-direction:column;gap:.4rem;min-width:0;overflow-wrap:anywhere}
