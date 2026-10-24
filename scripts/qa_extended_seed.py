@@ -33,6 +33,12 @@ for role in ("member2", "editor", "contributor", "reviewer2"):
             user=user, role=ModerationRoleAssignment.Role.REVIEWER, assigned_by=owner,
         )
 
+unclaimed = Kennel.objects.create(
+    name="QA Unclaimed Ownership Kennel",
+    slug="qa-unclaimed-ownership-kennel",
+    country="Nigeria",
+)
+data["unclaimed_kennel_id"] = str(unclaimed.pk)
 data["kennel_id"] = str(kennel.pk)
 data["dog_id"] = str(Dog.objects.get(slug="browser-audit-sire").pk)
 out = Path(os.environ["CCA_QA_FIXTURE_ROOT"])

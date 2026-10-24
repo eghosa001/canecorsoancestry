@@ -130,7 +130,7 @@ jobs:
           mkdir -p artifacts/full-qa
       - name: Install Django and exact browser engine
         run: |
-          python -m pip install -r requirements.txt playwright
+          python -m pip install -r requirements.txt 'playwright==1.64.1'
           python -m playwright install --with-deps "$BROWSER"
       - name: Confirm isolation and provision role, upload and pedigree fixtures
         run: |
@@ -174,7 +174,7 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: |
-          pip install -r requirements.txt playwright
+          pip install -r requirements.txt 'playwright==1.64.1'
           python -m playwright install --with-deps chromium webkit
           python manage.py migrate --noinput
           python -m scripts.seed_browser_audit
