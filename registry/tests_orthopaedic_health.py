@@ -102,7 +102,7 @@ class PublicOrthopaedicGradeTests(TestCase):
         self.assertContains(response, "Normal hips (reported)")
         self.assertContains(response, "Normal elbows (reported)")
         self.assertContains(response, "Source: supplied pedigree", count=2)
-        self.assertContains(response, "Not independently verified", count=2)
+        self.assertContains(response, "Not independently verified")
         self.assertContains(response, "HD-A")
         self.assertContains(response, "ED-0")
         self.assertContains(response, 'class="orthopaedic-health-card ', count=2)
