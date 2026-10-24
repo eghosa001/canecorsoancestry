@@ -83,8 +83,8 @@ class DogModelTests(TestCase):
         )
         response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertContains(response, "genetic-screening-status--clear", count=1)
-        self.assertContains(response, "genetic-screening-status--untested", count=2)
-        self.assertNotContains(response, "Other health screening")
+        self.assertNotContains(response, "genetic-screening-status--untested")
+        self.assertNotContains(response, "Other health results")
         self.assertNotContains(response, "Breed DNA not yet verified")
 
 
