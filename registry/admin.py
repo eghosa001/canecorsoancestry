@@ -117,6 +117,14 @@ class DogAdmin(admin.ModelAdmin):
         "external_keys__key",
     )
     prepopulated_fields = {"slug": ("name",)}
+
+    def get_prepopulated_fields(self, request, obj=None):
+        # A published dog has read-only identity fields. Django Admin must not
+        # bind the slug prepopulation JavaScript to the absent name form field.
+        if obj and obj.is_public:
+            return {}
+        return super().get_prepopulated_fields(request, obj)
+
     autocomplete_fields = ("sire", "dam", "kennel", "litter")
     inlines = (
         DogAliasInline,
