@@ -352,7 +352,7 @@ def edit_reviewed_health_result(request, pk, record_id):
             return HttpResponseBadRequest("Choose Save privately or Publish.")
         with transaction.atomic():
             record = get_object_or_404(
-                HealthRecord.objects.select_for_update().select_related("breed_dna_report"),
+                HealthRecord.objects.select_for_update(of=("self",)).select_related("breed_dna_report"),
                 pk=record_id, dog_id=pk, verification_state=VerificationState.HEALTH_VERIFIED,
             )
             form = ReviewedHealthResultForm(request.POST, record=record)
