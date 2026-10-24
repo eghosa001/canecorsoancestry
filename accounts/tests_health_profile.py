@@ -144,12 +144,10 @@ class HealthRecordSubmissionTests(TestCase):
 
         approve_submission(submission, self.reviewer, "Evidence checked.")
 
-        # Approval is private until a staff reviewer explicitly publishes the card.
+        # Approved result appears automatically; original report remains private.
         public_profile = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
-        self.assertContains(public_profile, "No available records")
         record = HealthRecord.objects.get(dog=self.dog, test_type="Hip score")
-        self.assertFalse(record.is_public)
-        self.publish(record)
+        self.assertTrue(record.is_public)
         public_profile = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
         self.assertContains(public_profile, "HD-A")
         self.assertContains(public_profile, "Normal hips")
@@ -217,8 +215,7 @@ class HealthRecordSubmissionTests(TestCase):
         self.assertFalse(BreedDNAReport.objects.exists())
         approve_submission(submission, self.reviewer)
         report = BreedDNAReport.objects.get(health_record__dog=self.dog)
-        self.assertFalse(report.health_record.is_public)
-        self.publish(report.health_record)
+        self.assertTrue(report.health_record.is_public)
         self.assertFalse(report.consent_full_report)
         self.assertFalse(report.evidence_document.is_public)
         self.client.logout()
@@ -240,8 +237,7 @@ class HealthRecordSubmissionTests(TestCase):
         self.assertEqual(response.status_code, 302)
         approve_submission(Submission.objects.get(kind=Submission.Kind.HEALTH), self.reviewer)
         report = BreedDNAReport.objects.get(health_record__dog=self.dog)
-        self.assertFalse(report.health_record.is_public)
-        self.publish(report.health_record)
+        self.assertTrue(report.health_record.is_public)
         self.assertFalse(report.consent_full_report)
         self.assertFalse(report.evidence_document.is_public)
         self.client.logout()
