@@ -1,0 +1,383 @@
+/* Structured page system — consistent hierarchy without hiding critical actions.
+   Complements Evergreen Heritage and preserves Django visibility/permission logic. */
+:root {
+  --cca-reading-width: 76ch;
+  --cca-section-space: clamp(16px, 2.6vw, 30px);
+  --cca-page-gutter: clamp(16px, 3vw, 34px);
+}
+.page-shell {
+  width: min(100%, var(--max, 1340px));
+  margin-inline: auto;
+  padding-inline: var(--cca-page-gutter);
+}
+.page-shell > .page-heading:first-child,
+.page-shell > header.page-heading:first-child { margin-block: 0 clamp(20px, 2.6vw, 30px); }
+.page-heading { max-width: none; gap: 18px 24px; }
+.page-heading > div:first-child { max-width: 840px; min-width: 0; }
+.page-heading h1 { max-width: 20ch; overflow-wrap: normal; }
+.page-heading p:not(.eyebrow) { max-width: var(--cca-reading-width); }
+.section-heading, .panel-heading {
+  min-width: 0; gap: 12px 18px;
+  align-items: flex-start;
+}
+.section-heading > div, .panel-heading > div { min-width: 0; }
+.section-heading .text-link, .panel-heading .text-link,
+.panel-heading .btn, .section-heading .btn { flex: 0 1 auto; }
+:where(.panel, .analysis-card, .mating-results, .dashboard-panel,
+.dashboard-action-section, .moderation-summary article) {
+  min-width: 0;
+  max-width: 100%;
+}
+:where(.page-shell > .panel, .page-shell > .analysis-grid,
+.page-shell > .profile-section-grid, .page-shell > .moderation-summary,
+.page-shell > .moderation-filters, .moderation-page > section,
+.dashboard-main > section) { margin-block-end: var(--cca-section-space); }
+:where(.panel, .analysis-card, .moderation-page) p:not(.eyebrow) { line-height: 1.6; }
+:where(.panel, .analysis-card, .action-card, .dashboard-action-card)
+  :is(h2,h3,p,span,strong) { min-width: 0; }
+:where(.panel, .analysis-card, .dashboard-action-card) :is(h2,h3) {
+  overflow-wrap: break-word; hyphens: auto;
+}
+:where(.moderation-page, .dashboard-main, .virtual-mating-page,
+.dog-profile, .kennel-profile) > * { min-width: 0; }
+.button-row { display: flex; flex-wrap: wrap; gap: 8px 10px; }
+.button-row .btn { flex: 0 1 auto; max-width: 100%; white-space: normal; }
+.moderation-heading .button-row { justify-content: flex-start; }
+.cca-secondary-actions {
+  position: relative;
+  z-index: 6;
+  min-width: 0;
+  display: inline-block;
+}
+.cca-secondary-actions > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 46px;
+  gap: 8px;
+  padding: 10px 15px;
+  border: 1px solid var(--cca-border-strong);
+  border-radius: 10px;
+  color: var(--cca-ink);
+  background: var(--cca-surface);
+  font-size: .84rem;
+  font-weight: 740;
+  cursor: pointer;
+  list-style: none;
+}
+.cca-secondary-actions > summary::-webkit-details-marker { display: none; }
+.cca-secondary-actions[open] > summary {
+  border-color: var(--cca-green);
+  background: var(--cca-subtle);
+}
+.cca-secondary-actions .cca-secondary-links {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  width: max-content;
+  max-width: min(360px, calc(100vw - 28px));
+  padding: 9px;
+  border: 1px solid var(--cca-border-strong);
+  border-radius: 12px;
+  background: var(--cca-raised);
+  box-shadow: 0 14px 40px rgba(9,30,24,.14);
+  display: grid;
+  gap: 3px;
+}
+.cca-secondary-actions .cca-secondary-links a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--cca-ink);
+  font-size: .85rem;
+  font-weight: 650;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.cca-secondary-actions .cca-secondary-links a:hover,
+.cca-secondary-actions .cca-secondary-links a:focus-visible {
+  background: var(--cca-subtle);
+  color: var(--cca-green);
+}
+.cca-secondary-actions > summary:focus-visible,
+.workspace-nav-disclosure > summary:focus-visible,
+.workspace-more > summary:focus-visible { outline: 3px solid var(--cca-green); outline-offset: 2px; }
+.cca-secondary-actions > summary span[aria-hidden="true"],
+.workspace-nav-summary-action span,
+.workspace-more > summary span { transition: transform .15s ease; }
+.cca-secondary-actions[open] > summary span[aria-hidden="true"],
+.workspace-more[open] > summary span { transform: rotate(180deg); }
+
+/* Workspace nav: one consistent system. Primary routes stay discoverable,
+   secondary / privileged tools are deliberately grouped. */
+.workspace-shortcuts {
+  position: relative;
+  z-index: 31;
+  background: var(--cca-surface);
+  border-bottom: 1px solid var(--cca-border);
+}
+.workspace-shortcuts-inner {
+  width: min(100%, var(--max, 1340px));
+  max-width: var(--max, 1340px);
+  padding: 8px var(--cca-page-gutter);
+  margin: auto;
+  display: block;
+}
+.workspace-nav-disclosure { width: 100%; min-width: 0; }
+.workspace-nav-disclosure > summary { display: none; }
+.workspace-shortcuts-links {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  overflow: visible;
+  flex-wrap: wrap;
+  scroll-snap-type: none;
+}
+.workspace-shortcuts-links > a,
+.workspace-more > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 9px 12px;
+  color: var(--cca-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font-size: .83rem;
+  font-weight: 670;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.workspace-shortcuts-links > a:hover,
+.workspace-more > summary:hover,
+.workspace-more[open] > summary {
+  background: var(--cca-subtle);
+  color: var(--cca-ink);
+}
+.workspace-shortcuts-links [aria-current="page"] {
+  color: var(--cca-green);
+  border-color: var(--cca-border-strong);
+  background: var(--cca-subtle);
+  font-weight: 790;
+}
+.workspace-more {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.workspace-more > summary {
+  list-style: none;
+  cursor: pointer;
+  gap: 8px;
+}
+.workspace-more > summary::-webkit-details-marker { display: none; }
+.workspace-more-links {
+  position: absolute;
+  z-index: 35;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  gap: 2px;
+  width: 238px;
+  max-width: calc(100vw - 32px);
+  padding: 8px;
+  border: 1px solid var(--cca-border-strong);
+  border-radius: 11px;
+  background: var(--cca-raised);
+  box-shadow: 0 16px 38px rgba(9,30,24,.13);
+}
+.workspace-more-links a {
+  display: block;
+  min-height: 43px;
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: var(--cca-ink);
+  font-size: .83rem;
+  font-weight: 630;
+  text-decoration: none;
+  white-space: normal;
+}
+.workspace-more-links a:hover,
+.workspace-more-links a:focus-visible { background: var(--cca-subtle); }
+.workspace-more-links a[aria-current="page"] { color: var(--cca-green); font-weight: 790; }
+
+/* Work surfaces get predictable responsive grids, not squeezed desktop columns. */
+.moderation-page .moderation-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%),1fr));
+  gap: 12px;
+}
+.moderation-page .moderation-summary article {
+  padding: 17px 19px;
+  min-width: 0;
+}
+.moderation-page .moderation-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(188px, 100%), 1fr));
+  align-items: end;
+  gap: 12px;
+}
+.moderation-filters .filter-search { grid-column: span 2; min-width: 0; }
+.moderation-filters :is(input,select,button) { max-width: 100%; min-height: 45px; }
+.moderation-page .panel-heading { display: flex; flex-wrap: wrap; }
+.moderation-page .panel-heading h2 { margin-block: 0 8px; }
+.moderation-page .panel-heading > .btn { margin: 0; }
+.moderation-page .queue-card,
+.moderation-page .moderation-queue-card { min-width: 0; }
+.moderation-page .queue-card .button-row .btn,
+.moderation-page .moderation-queue-card .button-row .btn { min-height: 43px; }
+.table-scroll {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  border-radius: 10px;
+}
+.table-scroll .data-table { width: 100%; border-spacing: 0; }
+.data-table :is(th,td) { vertical-align: top; }
+.data-table td { overflow-wrap: anywhere; }
+.form-grid, .filter-panel, .dashboard-grid,
+.profile-section-grid, .analysis-grid, .pairing-summary {
+  min-width: 0;
+}
+.dashboard-main { min-width: 0; }
+.dashboard-main .dashboard-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 13px;
+}
+.dashboard-main .dashboard-action-card { min-height: 0; padding: clamp(17px, 2vw, 24px); }
+.dashboard-action-card h3 { line-height: 1.25; font-size: clamp(1.12rem, 1.8vw, 1.4rem); }
+.dashboard-action-card p { line-height: 1.55; }
+.dashboard-main .dashboard-hero { gap: 20px; }
+.dashboard-main .dashboard-stats { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.dashboard-main .dashboard-stats article { min-width: 0; }
+.virtual-mating-page .mating-results { padding: clamp(16px,2vw,28px); }
+.virtual-mating-page .mating-result-nav {
+  display: flex; flex-wrap: wrap; gap: 7px;
+  max-width: 100%; overflow-x: visible;
+  padding-bottom: 12px;
+}
+.virtual-mating-page .mating-result-nav a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 12px;
+  white-space: normal;
+}
+.virtual-mating-page .analysis-grid { gap: 13px; }
+:where(.mating-results, .dashboard-main, .moderation-page) [id] { scroll-margin-top: 95px; }
+
+/* Non-workspace pages use a restrained reading measure and consistent rhythm. */
+:where(.policy-page, .legal-page, .auth-shell) p { line-height: 1.65; }
+:where(.policy-page, .legal-page) .panel { max-width: 930px; }
+:where(.auth-card, .form-card) { width: min(100%, 580px); }
+:where(.auth-card, .form-card) :is(input,select,textarea) { max-width: 100%; }
+:where(.search-result-card, .kennel-card, .dog-card) { min-width: 0; }
+:where(.search-result-card, .kennel-card, .dog-card) :is(h2,h3,strong,p) {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 761px) and (max-width: 1120px) {
+  .workspace-shortcuts-links { flex-wrap: wrap; }
+  .page-heading h1 { max-width: 24ch; }
+  .moderation-page .moderation-filters .filter-search { grid-column: auto; }
+  .dashboard-main .dashboard-action-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 760px) {
+  .page-shell { padding-inline: 16px; }
+  .page-shell > .page-heading:first-child { margin-bottom: 20px; }
+  .page-heading { display: grid; gap: 13px; }
+  .page-heading h1 { max-width: 100%; font-size: clamp(2rem,8vw,3rem); }
+  .page-heading .button-row { margin: 0; justify-content: flex-start; }
+  .section-heading, .panel-heading { gap: 10px; flex-wrap: wrap; }
+  .panel-heading .btn, .section-heading .btn { min-height: 43px; }
+  .button-row .btn { flex: 0 1 auto; max-width: 100%; }
+  .cca-secondary-actions, .cca-secondary-actions > summary { max-width: 100%; }
+  .cca-secondary-actions .cca-secondary-links {
+    left: 0; right: auto; max-width: min(320px, calc(100vw - 32px));
+  }
+  .workspace-shortcuts { z-index: 27; }
+  .workspace-shortcuts-inner { padding: 0 14px; }
+  .workspace-nav-disclosure > summary {
+    display: flex; min-height: 48px;
+    justify-content: space-between; align-items: center;
+    gap: 12px; padding: 9px 3px;
+    color: var(--cca-ink); cursor: pointer; list-style: none;
+  }
+  .workspace-nav-disclosure > summary::-webkit-details-marker { display: none; }
+  .workspace-shortcuts-label {
+    display: inline; margin: 0; white-space: normal;
+    font-size: .78rem; font-weight: 780;
+  }
+  .workspace-nav-summary-action {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: .78rem;
+    color: var(--cca-secondary);
+  }
+  .workspace-nav-disclosure[open] > summary .workspace-nav-summary-action span { transform: rotate(180deg); }
+  .workspace-nav-disclosure:not([open]) .workspace-shortcuts-links { display: none; }
+  .workspace-shortcuts-links {
+    display: grid; grid-template-columns: repeat(2,minmax(0,1fr));
+    align-items: stretch; gap: 7px;
+    overflow: visible; padding: 0 0 12px;
+  }
+  .workspace-shortcuts-links > a {
+    display: flex; min-height: 46px; justify-content: flex-start;
+    font-size: .82rem; padding: 9px 10px;
+    white-space: normal; line-height: 1.3;
+    background: var(--cca-subtle);
+  }
+  .workspace-more { grid-column: 1 / -1; }
+  .workspace-more > summary {
+    width: 100%; display: flex; justify-content: space-between;
+    min-height: 46px; padding: 11px 12px;
+    border: 1px solid var(--cca-border);
+    background: var(--cca-subtle);
+  }
+  .workspace-more-links {
+    position: static; display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    width: 100%; max-width: 100%;
+    margin-top: 6px; gap: 6px; padding: 8px;
+    box-shadow: none; background: var(--cca-surface);
+  }
+  .workspace-more-links a { min-height: 44px; padding: 11px 10px; }
+  .moderation-page .moderation-filters {
+    grid-template-columns: minmax(0,1fr); gap: 11px;
+  }
+  .moderation-page .moderation-filters .filter-search { grid-column: auto; }
+  .moderation-page .moderation-filters button { justify-self: stretch; }
+  .moderation-page .moderation-summary {
+    grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px;
+  }
+  .moderation-page .moderation-summary article { padding: 15px 13px; }
+  .moderation-page .moderation-summary article strong { font-size: 1.45rem; }
+  .moderation-page .moderation-summary article span { overflow-wrap: break-word; }
+  .dashboard-main .dashboard-action-grid { grid-template-columns: minmax(0,1fr); gap: 10px; }
+  .dashboard-main .dashboard-action-card { min-height: 0; padding: 18px; }
+  .dashboard-main .dashboard-stats { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+  .dashboard-main .dashboard-stats article { padding: 13px 8px; }
+  .virtual-mating-page .mating-results { padding: 15px; }
+  .virtual-mating-page .mating-result-nav {
+    display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px;
+  }
+  .virtual-mating-page .mating-result-nav a { justify-content: center; text-align: center; font-size: .8rem; }
+  .table-scroll { border: 1px solid var(--cca-border); }
+  .data-table :is(th,td) { padding: 10px 12px; }
+}
+@media (max-width: 380px) {
+  .workspace-shortcuts-links { grid-template-columns: minmax(0,1fr); }
+  .workspace-more-links { grid-template-columns: minmax(0,1fr); }
+  .moderation-page .moderation-summary { grid-template-columns: minmax(0,1fr); }
+  .virtual-mating-page .mating-result-nav { grid-template-columns: minmax(0,1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cca-secondary-actions > summary span,
+  .workspace-more > summary span { transition: none; }
+}
