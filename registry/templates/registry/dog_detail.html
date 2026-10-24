@@ -305,7 +305,7 @@
             <article class="orthopaedic-health-card orthopaedic-health-card--{{ assessment.tone }}">
               <div class="orthopaedic-health-main">
                 <span class="orthopaedic-health-icon" aria-hidden="true">
-                  {% if assessment.tone == "normal" %}✓{% elif assessment.tone == "borderline" %}i{% else %}!{% endif %}
+                  {% if assessment.tone == "normal" %}✓{% elif assessment.tone == "unverified" or assessment.tone == "borderline" %}i{% else %}!{% endif %}
                 </span>
                 <div class="orthopaedic-health-content">
                   <h4>{{ assessment.test }}</h4>
