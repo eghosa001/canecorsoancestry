@@ -126,7 +126,7 @@ class PublicOrthopaedicGradeTests(TestCase):
             verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
         )
         response = self.client.get(self.url)
-        self.assertContains(response, "Other health screening")
+        self.assertContains(response, "Other health results")
         self.assertContains(response, "HD unknown")
         self.assertContains(response, "ED pending")
         self.assertNotContains(response, "orthopaedic-compact-row")
