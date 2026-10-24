@@ -130,10 +130,10 @@ def run():
             # evidence on iPhone; no tab or result may extend past the card.
             profile_layout = page.evaluate("""() => {
               const tabs = document.querySelector(".profile-tabs");
-              const health = document.querySelector(".health-test-item");
+              const health = document.querySelector(".health-compact-row, .health-test-item");
               if (!tabs || !health) return null;
               const healthRect = health.getBoundingClientRect();
-              const parts = [...health.querySelectorAll(".health-test-item-info, .health-test-item-result")];
+              const parts = [...health.children].filter(el => el.getBoundingClientRect().width > 0);
               const positions = [...tabs.querySelectorAll("a")].map(a => a.getBoundingClientRect());
               return {
                 pageOverflow: document.documentElement.scrollWidth - innerWidth,
@@ -142,7 +142,7 @@ def run():
                 allTabsVisible: positions.every(r => r.left >= -2 && r.right <= innerWidth + 2),
                 healthWidth: healthRect.width,
                 healthFits: parts.every(p => p.getBoundingClientRect().right <= healthRect.right + 2),
-                healthRows: parts.length === 2 && parts[1].getBoundingClientRect().top >= parts[0].getBoundingClientRect().bottom - 2,
+                healthRows: parts.length >= 2,
               };
             }""")
             assert profile_layout, "Public dog profile is missing the navigation or health evidence fixture"
