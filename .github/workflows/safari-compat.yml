@@ -11,6 +11,9 @@ on:
       - "registry/templates/registry/dog_detail.html"
       - "registry/tests.py"
       - "core/static/core/premium-polish.css"
+      - "core/static/core/evergreen-heritage.css"
+      - "registry/admin.py"
+      - "registry/tests_coi_depth.py"
       - "templates/base.html"
       - "accounts/templates/accounts/submission_form.html"
       - "scripts/safari_local_smoke.py"
@@ -45,7 +48,7 @@ jobs:
           python manage.py shell <<'PY'
           import os
           from django.contrib.auth import get_user_model
-          from registry.models import Dog, Kennel, KennelMembership
+          from registry.models import Dog, Kennel, KennelMembership, HealthRecord, VerificationState
           user = get_user_model().objects.create_user(
               username="safari-smoke-member",
               password="safari-smoke-password",
@@ -61,6 +64,13 @@ jobs:
               name="Safari Dog",
               slug="safari-dog",
               kennel=kennel,
+              is_public=True,
+          )
+          HealthRecord.objects.create(
+              dog=dog,
+              test_type="Hip and elbow screening with extended clinical observations",
+              result="Bilateral joint evaluation clear with longitudinal follow-up advised.",
+              verification_state=VerificationState.HEALTH_VERIFIED,
               is_public=True,
           )
           # Known half-sibling pairing, projected offspring COI = 12.5%.

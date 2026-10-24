@@ -14,11 +14,10 @@ import re
 from core.seo import json_ld
 
 from pedigrees.services import (
-    PedigreeCycleError,
     COI_GENERATION_CHOICES,
     requested_coi_generations,
     direct_relative_health,
-    inbreeding_coefficient,
+    public_profile_coi,
     mate_relationships,
     offspring_for,
     profile_direct_relations,
@@ -441,26 +440,12 @@ def dog_detail(request, slug):
             for depth in COI_GENERATION_CHOICES
         ],
     ]
-    public_parent_count = sum(
-        bool(parent and parent.is_effectively_public) for parent in (dog.sire, dog.dam)
-    )
-    public_parentage_complete = public_parent_count == 2
-    coi_display_state = "insufficient" if not public_parentage_complete else "estimated"
-    if not public_parentage_complete:
-        coi_percent = None
-        coi_error = "Both sire and dam must be linked and published to estimate COI."
-    else:
-        try:
-            coi_percent = inbreeding_coefficient(
-                dog, public_only=True, generations=coi_generations,
-            ) * 100
-            coi_error = ""
-        except PedigreeCycleError:
-            coi_percent = None
-            coi_display_state = "error"
-            coi_error = "Parentage contains a cycle; the records need correction before COI can be calculated."
-    # A small but positive COI must not be rounded and displayed as 0.00%.
-    coi_below_display_precision = coi_percent is not None and 0 < coi_percent < 0.005
+    public_coi = public_profile_coi(dog, generations=coi_generations)
+    public_parentage_complete = public_coi["public_parentage_complete"]
+    coi_display_state = public_coi["coi_display_state"]
+    coi_percent = public_coi["coi_percent"]
+    coi_error = public_coi["coi_error"]
+    coi_below_display_precision = public_coi["coi_below_display_precision"]
 
     if request.GET.get("source") == "search":
         _record_search_hit_without_wait(dog.pk)

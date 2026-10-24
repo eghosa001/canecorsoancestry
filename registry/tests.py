@@ -1108,7 +1108,7 @@ class DogModelTests(TestCase):
         dam = Dog.objects.create(name="Tiny Mother", slug="tiny-coi-mother", is_public=True)
         child = Dog.objects.create(name="Tiny COI Child", slug="tiny-coi-child",
                                    sire=sire, dam=dam, is_public=True)
-        with patch("registry.views.inbreeding_coefficient", return_value=0.00002):
+        with patch("pedigrees.services.inbreeding_coefficient", return_value=0.00002):
             response = self.client.get(reverse("registry:dog-detail", args=[child.slug]))
         self.assertContains(response, "<strong>&lt;0.01%</strong>")
         self.assertNotContains(response, "<strong>0.00%</strong>")

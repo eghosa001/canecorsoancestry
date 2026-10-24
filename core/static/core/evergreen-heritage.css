@@ -506,3 +506,249 @@ html[data-theme="dark"] .dashboard-sidebar { background: var(--cca-surface); }
 @media (max-width: 380px) {
   .home-actions .action-grid { grid-template-columns: minmax(0,1fr) !important; }
 }
+
+
+/* Mobile containment corrections — 24 Oct 2026.
+   Two nested two-column grids made dog names physically unreadable at 360–430px.
+   Every card and document label must fit without horizontal page overflow. */
+.dog-card-body, .dog-card-body h3, .dog-card-body p,
+.health-test-item-info, .health-test-item-result, .health-test-item strong,
+.profile-section-grid > *, .profile-tabs a, .relationship-list > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.dog-card-body h3, .dog-card-body p,
+.health-test-item strong, .health-test-item small,
+.relationship-list strong, .relationship-list span {
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: normal;
+}
+.featured-dog-grid .dog-card-body h3 {
+  font-family: var(--sans);
+  font-weight: 740;
+  letter-spacing: -.018em;
+  line-height: 1.3;
+}
+.featured-dog-grid .dog-card-body p { line-height: 1.5; margin: 6px 0 0; }
+.featured-dog-grid .dog-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+.dog-profile .profile-tabs {
+  border: 1px solid var(--cca-border);
+  background: var(--cca-surface);
+  border-radius: 12px;
+}
+.dog-profile .profile-tabs a {
+  color: var(--cca-secondary);
+  font-family: var(--sans);
+  font-weight: 650;
+  text-decoration: none;
+  padding-inline: 12px;
+  text-align: center;
+}
+.dog-profile .profile-tabs a:hover,
+.dog-profile .profile-tabs a:focus-visible { color: var(--cca-green); }
+.dog-profile .panel { min-width: 0; }
+.dog-profile .panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 18px;
+  min-height: 0;
+  margin: 0 0 18px;
+}
+.dog-profile .panel-heading > div { min-width: 0; }
+.dog-profile .panel-heading h2 { margin: 0; }
+.dog-profile .profile-review-chip {
+  flex: 0 1 auto;
+  margin-left: auto;
+  max-width: 100%;
+  text-align: right;
+  line-height: 1.4;
+}
+.dog-profile .relationship-list { gap: 0; min-width: 0; }
+.dog-profile .relationship-list > a,
+.dog-profile .relationship-list > div {
+  min-height: 50px;
+  align-items: center;
+  gap: 12px;
+}
+.dog-profile .relationship-list strong { min-width: 0; }
+.dog-profile .relationship-list span { flex: 0 0 auto; }
+.health-profile-panel .other-health { margin: 16px 0 4px; }
+.health-profile-panel .other-health-heading { margin-bottom: 12px; gap: 3px 12px; }
+.health-profile-panel .other-health-heading h3 { font-size: clamp(1.25rem, 2.6vw, 1.65rem); }
+.health-profile-panel .health-test-grid { grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
+.health-profile-panel .health-test-item { min-width: 0; }
+.health-profile-panel .health-test-item-result strong { max-width: 100%; }
+@media (min-width: 761px) and (max-width: 1050px) {
+  .featured-dog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .featured-dog-grid .dog-card { min-width: 0; }
+}
+@media (max-width: 760px) {
+  .dog-profile .profile-tabs {
+    position: sticky;
+    top: 63px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+    padding: 5px;
+    margin: 0 0 20px;
+    box-shadow: 0 7px 18px rgba(15, 38, 28, .08);
+  }
+  .dog-profile .profile-tabs a {
+    min-height: 43px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 8px 4px;
+    font-size: .75rem;
+    line-height: 1.2;
+    border: 0;
+    border-radius: 7px;
+    white-space: normal;
+  }
+  .dog-profile .profile-tabs a:hover,
+  .dog-profile .profile-tabs a:focus-visible {
+    background: var(--cca-subtle);
+  }
+  .dog-profile [id],
+  .dog-profile #health {
+    scroll-margin-top: 178px !important;
+  }
+  .dog-profile .profile-section-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .dog-profile .panel {
+    min-height: 0;
+    height: auto;
+    padding: 18px 16px;
+  }
+  .dog-profile .panel-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 7px 14px;
+    margin-bottom: 14px;
+  }
+  .dog-profile .panel-heading h2 {
+    font-size: clamp(1.6rem, 6.5vw, 2.05rem);
+    line-height: 1.2;
+  }
+  .dog-profile .profile-review-chip {
+    font-size: .81rem;
+    margin: 0 0 0 auto;
+  }
+  .dog-profile .relationship-list > a,
+  .dog-profile .relationship-list > div {
+    min-height: 55px;
+    align-items: flex-start;
+    padding: 12px 0;
+    gap: 8px;
+  }
+  .dog-profile .relationship-list strong {
+    flex: 1 1 auto;
+    font-size: .91rem;
+    line-height: 1.4;
+  }
+  .dog-profile .relationship-list span {
+    flex: 0 1 32%;
+    font-size: .78rem;
+    text-align: right;
+    line-height: 1.4;
+  }
+  .dog-profile .health-profile-panel .other-health { margin-top: 20px; }
+  .dog-profile .health-profile-panel .other-health-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .dog-profile .health-profile-panel .health-test-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+  .dog-profile .health-profile-panel .health-test-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 15px;
+    border-radius: 12px;
+  }
+  .dog-profile .health-profile-panel .health-test-item-info,
+  .dog-profile .health-profile-panel .health-test-item-result {
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+    align-items: flex-start;
+  }
+  .dog-profile .health-profile-panel .health-test-item-result {
+    border-top: 1px solid var(--cca-border);
+    padding-top: 10px;
+  }
+  .dog-profile .health-profile-panel .health-test-item strong {
+    font-size: .96rem;
+    line-height: 1.45;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .dog-profile .health-profile-panel .health-test-item-result strong {
+    font-size: 1.02rem;
+  }
+  .featured-dog-grid .dog-card-body h3 { font-size: 1rem; }
+  .featured-dog-grid .dog-card-body p { font-size: .79rem; }
+}
+@media (max-width: 560px) {
+  .dog-card-grid.featured-dog-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 13px;
+  }
+  .dog-card-grid.featured-dog-grid .dog-card {
+    display: grid;
+    grid-template-columns: minmax(112px, 39%) minmax(0, 1fr) !important;
+    align-items: stretch;
+    min-height: 158px;
+    border-radius: 14px !important;
+  }
+  .dog-card-grid.featured-dog-grid .dog-card-media {
+    width: 100%;
+    height: 100%;
+    min-height: 158px;
+    aspect-ratio: auto;
+  }
+  .dog-card-grid.featured-dog-grid .dog-card-body {
+    align-self: center;
+    width: 100%;
+    min-width: 0;
+    padding: 14px 15px;
+  }
+  .dog-card-grid.featured-dog-grid .dog-card-body h3 {
+    font-size: clamp(.94rem, 3.8vw, 1.12rem);
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .dog-card-grid.featured-dog-grid .dog-card-body p {
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+  }
+  .dog-profile .profile-tabs a {
+    font-size: clamp(.68rem, 2.65vw, .76rem);
+    padding-inline: 2px;
+  }
+}
+@media (max-width: 350px) {
+  .dog-card-grid.featured-dog-grid .dog-card {
+    grid-template-columns: minmax(100px, 36%) minmax(0, 1fr) !important;
+  }
+  .dog-card-grid.featured-dog-grid .dog-card-body { padding: 11px; }
+}

@@ -4,6 +4,9 @@ from django.urls import reverse
 from django.utils.html import format_html
 from urllib.parse import urlencode
 
+from django.template.defaultfilters import floatformat
+from pedigrees.services import public_profile_coi
+
 from .permissions import has_member_identity
 
 def _super_admin_has_permission(request):
@@ -131,9 +134,29 @@ class DogAdmin(admin.ModelAdmin):
             reverse("accounts:dog-direct-edit", args=[obj.pk]),
         )
 
+    @admin.display(description="Public website COI (all available ancestors)")
+    def public_coi_display(self, obj):
+        """Read-only parity with the default public dog profile.
+
+        Do not place this in list_display: each graph calculation is deliberate
+        and belongs on the individual dog record, not every result-row.
+        """
+        result = public_profile_coi(obj, generations=None)
+        percent = result["coi_percent"]
+        if percent is None:
+            return result["coi_error"] or "Not available"
+        label = "<0.01%" if result["coi_below_display_precision"] else f"{floatformat(percent, 2)}%"
+        return format_html(
+            "<strong>{}</strong> · Published direct ancestors, all available generations. "
+            "<small>Depth-limited comparisons on the public site may differ; "
+            "missing or unpublished ancestors can lower the estimate.</small>",
+            label,
+        )
+
     def get_readonly_fields(self, request, obj=None):
         protected = (
             "publication_workflow",
+            "public_coi_display",
             "is_public",
             "is_record_locked",
             "record_locked_at",
