@@ -381,3 +381,29 @@
   .cca-secondary-actions > summary span,
   .workspace-more > summary span { transition: none; }
 }
+
+/* The legacy home actions use !important two-column rules at 375px.
+   Give each primary task a proper single-column card rather than a narrow tile. */
+@media (max-width: 560px) {
+  .home-actions { padding-top: 30px !important; }
+  .home-actions .section-heading { margin-bottom: 15px !important; }
+  .home-actions .action-grid {
+    grid-template-columns: minmax(0,1fr) !important;
+    gap: 10px !important;
+  }
+  .home-actions .action-card {
+    min-height: 118px !important;
+    padding: 18px 19px !important;
+    border-radius: 13px !important;
+    border-color: var(--cca-border) !important;
+    box-shadow: var(--cca-shadow) !important;
+  }
+  .home-actions .action-icon { margin-bottom: 10px !important; }
+  .section-heading { flex-wrap: wrap; align-items: flex-start; }
+  .section-heading > .text-link {
+    flex: 0 1 auto !important;
+    white-space: normal !important;
+    text-align: left;
+    line-height: 1.45;
+  }
+}
