@@ -570,6 +570,7 @@ def dog_detail(request, slug):
             for assessment in interpreted:
                 details = dict(assessment)
                 if not verified:
+                    details["tone"] = "unverified"
                     details["headline"] = assessment["headline"] + " (reported)"
                     details["explanation"] = (
                         "The supplied pedigree lists " + assessment["grade"] + ". "
