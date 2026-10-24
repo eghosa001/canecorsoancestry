@@ -72,3 +72,18 @@
 [data-theme="dark"] .orthopaedic-compact-grade,[data-theme="dark"] .orthopaedic-compact-result{color:#f2f5f1}
 [data-theme="dark"] .orthopaedic-compact-status{color:#a4b2ae}
 @media(max-width:390px){.orthopaedic-compact-row{gap:.35rem}.orthopaedic-compact-grade{min-width:2.8rem;font-size:.85rem}.orthopaedic-compact-result{font-size:.84rem}.orthopaedic-compact-status{font-size:.63rem}}
+
+/* All published laboratory conditions: one compact name — status row. */
+.genetic-screening-row{padding:.65rem 0}
+.genetic-screening-identity{flex:1}
+.genetic-screening-status--other{color:#e1e5e8;background:#292e32;border-color:#4f5c61}
+.other-health{margin:1rem 0 1.2rem}
+.other-health>h3{font-size:1.12rem;margin:0 0 .55rem}
+.health-compact-list{display:grid;gap:0}
+.health-compact-row{display:flex;align-items:center;gap:.6rem;min-width:0;padding:.66rem .1rem;border-bottom:1px solid var(--line,#d7ded9)}
+.health-compact-row:last-child{border-bottom:0}
+.health-compact-row>strong{min-width:0;flex:1;font-size:.91rem;line-height:1.35;overflow-wrap:anywhere}
+.health-compact-row>span{font-size:.91rem;font-weight:700;max-width:55%;overflow-wrap:anywhere;text-align:right}
+.health-compact-row>small{font-size:.68rem;color:var(--muted,#84908b);white-space:nowrap}
+[data-theme="dark"] .health-compact-row{border-color:#34413d}
+@media(max-width:410px){.health-compact-row{gap:.35rem}.health-compact-row>strong,.health-compact-row>span{font-size:.85rem}.health-compact-row>small{font-size:.61rem}}
