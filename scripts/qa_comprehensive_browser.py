@@ -55,7 +55,7 @@ def sign_in(page, role):
     page.locator("#id_username").fill(user["email"])
     page.locator("#id_password").fill(user["password"])
     submit_form_containing(page, "#id_username")
-    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_url(lambda url: "/accounts/login/" not in str(url), wait_until="domcontentloaded", timeout=10000)
     assert "/accounts/login/" not in page.url, f"Login failed for {role}: {page.url}"
 
 
@@ -123,7 +123,7 @@ def test_member_draft_with_photo(page):
     page.locator("#id_colour").fill("Brindle")
     page.locator("#id_primary_photo").set_input_files(CREDS["fixtures"]["dog-landscape.jpg"])
     page.get_by_role("button", name="Save dog privately").click()
-    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_url("**/member/submissions/", wait_until="domcontentloaded", timeout=10000)
     assert "/member/submissions/" in page.url, "Draft was not saved to member submissions"
     record = db_call(lambda: Submission.objects.get(submitted_by_id=CREDS["roles"]["member"]["id"],
                                     kind=Submission.Kind.DOG, payload__name=name))
@@ -157,7 +157,7 @@ def test_member_photo_review_and_corrupt_image(page):
     page.locator("#id_attachment").set_input_files(CREDS["fixtures"]["dog-portrait.png"])
     page.locator("#id_caption").fill(caption)
     submit_form_containing(page, "#id_attachment")
-    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_url("**/member/submissions/", wait_until="domcontentloaded", timeout=10000)
     assert "/member/submissions/" in page.url, "Photo did not enter review queue"
     evidence = db_call(lambda: Submission.objects.filter(
         dog_id=dog_id, kind=Submission.Kind.IMAGE,
@@ -175,7 +175,7 @@ def test_document_evidence_upload(page):
     page.locator("#id_title").fill(title)
     page.locator("#id_attachment").set_input_files(CREDS["fixtures"]["evidence.pdf"])
     submit_form_containing(page, "#id_attachment")
-    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_url("**/member/submissions/", wait_until="domcontentloaded", timeout=10000)
     assert "/member/submissions/" in page.url, "Certificate not added to review"
     record = db_call(lambda: Submission.objects.filter(
         submitted_by_id=CREDS["roles"]["member"]["id"],
@@ -194,7 +194,7 @@ def test_member_correction_review(page):
     page.locator("#id_colour").fill(proposed)
     page.locator("#id_notes").fill("Test-only colour proposal to verify pending review.")
     submit_form_containing(page, "#id_colour")
-    page.wait_for_load_state("domcontentloaded")
+    page.wait_for_url("**/member/submissions/", wait_until="domcontentloaded", timeout=10000)
     assert "/member/submissions/" in page.url, "Correction not queued"
     record = db_call(lambda: Submission.objects.filter(
         submitted_by_id=CREDS["roles"]["member"]["id"], dog_id=dog_id,
