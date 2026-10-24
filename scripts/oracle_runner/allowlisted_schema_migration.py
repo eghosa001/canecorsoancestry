@@ -6,6 +6,7 @@ An approved migration may run only with its exact model, field and operation sha
 from django.db import models
 from django.db.migrations.operations.fields import AddField
 from django.db.migrations.operations.models import AddConstraint, CreateModel
+from django.db.migrations.operations.special import RunPython
 
 SAVED_PAIRING = ("accounts", "0005_saved_pairing")
 KENNEL_PUBLICATION = ("registry", "0015_kennel_publication_controls")
@@ -14,6 +15,7 @@ STAFF_DEREGISTRATION = ("registry", "0017_moderation_staff_deregistration")
 BREED_DNA_REPORT = ("registry", "0018_breed_dna_report")
 HISTORICAL_HEALTH_PRIVACY = ("registry", "0019_staff_health_evidence_privacy")
 HEALTH_RESULT_VISIBILITY = ("registry", "0020_health_record_public_visibility")
+APPROVED_HEALTH_BACKFILL = ("registry", "0021_auto_publish_approved_health")
 ALLOWED_MIGRATION = SAVED_PAIRING  # Backward compatibility for old tests/runbooks.
 
 # Model, field, constant default, and whether the field creates a DB index.
@@ -240,6 +242,20 @@ def _health_result_visibility_is_exact(migration):
     )
 
 
+def _approved_health_backfill_is_exact(migration):
+    """Only the reviewed, reversible-data-safe visibility backfill is allowed."""
+    if migration.dependencies != [HEALTH_RESULT_VISIBILITY] or len(migration.operations) != 1:
+        return False
+    operation = migration.operations[0]
+    return (
+        type(operation) is RunPython
+        and operation.code.__module__ == "registry.migrations.0021_auto_publish_approved_health"
+        and operation.code.__name__ == "publish_approved_health_summaries"
+        and operation.reverse_code is RunPython.noop
+        and operation.atomic is None
+    )
+
+
 def validate_pending_schema_changes(plan):
     """Reject other pending versions, combined plans, reversals, and drift."""
     if not plan:
@@ -263,6 +279,8 @@ def validate_pending_schema_changes(plan):
     if identity == HISTORICAL_HEALTH_PRIVACY and _historical_health_privacy_is_exact(migration):
         return True
     if identity == HEALTH_RESULT_VISIBILITY and _health_result_visibility_is_exact(migration):
+        return True
+    if identity == APPROVED_HEALTH_BACKFILL and _approved_health_backfill_is_exact(migration):
         return True
     raise ValueError("Unapproved production migration or unexpected operations.")
 
