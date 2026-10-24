@@ -8,7 +8,18 @@
       <h1>Fact-check & review queue</h1>
       <p>Check submitted facts and evidence before approval, compare proposed changes against canonical data, investigate disputes, and merge duplicates deliberately.</p>
     </div>
-    <div class="button-row"><a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">Health uploads</a><a class="btn btn-gold" href="{% url 'accounts:dog-edit-list' %}">Manage dogs</a>{% if can_manage_verification %}<a class="btn btn-gold" href="{% url 'accounts:verification-dashboard' %}">Verification control</a>{% endif %}<a class="btn btn-outline" href="{% url 'accounts:data-health' %}">Data health</a><a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}">Audit history</a></div>
+    <div class="button-row">
+      <a class="btn btn-gold" href="{% url 'accounts:dog-edit-list' %}">Manage dogs</a>
+      <details class="cca-secondary-actions">
+        <summary>Other review tools <span aria-hidden="true">⌄</span></summary>
+        <div class="cca-secondary-links">
+          <a href="{% url 'accounts:moderation' %}?kind=health">Health uploads</a>
+          {% if can_manage_verification %}<a href="{% url 'accounts:verification-dashboard' %}">Verification control</a>{% endif %}
+          <a href="{% url 'accounts:data-health' %}">Data health</a>
+          <a href="{% url 'accounts:moderation-audit' %}">Audit history</a>
+        </div>
+      </details>
+    </div>
   </header>
 
   <form class="moderation-filters" method="get">
