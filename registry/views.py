@@ -562,10 +562,13 @@ def dog_detail(request, slug):
         label = (record.test_type or "").strip().lower()
         if (label.upper() in MARKER_CODES and record.verification_state == VerificationState.HEALTH_VERIFIED) or record.pk in confirmed_extra_ids:
             continue  # A reviewed genetic marker is already displayed in the DNA card.
-        legacy_rows = legacy_mixed_health_rows(record.test_type, record.result)
+        legacy_rows = legacy_mixed_health_rows(
+            record.test_type, record.result,
+            record_verified=record.verification_state == VerificationState.HEALTH_VERIFIED,
+        )
         if legacy_rows is not None:
-            # The archived raw record remains unchanged. Split its public text,
-            # but do not grant unrelated DNA breed or marker verification.
+            # Original evidence stays unchanged: reviewed health markers do not
+            # imply that the breed percentage has independent DNA verification.
             other_health_rows.extend(legacy_rows)
             other_health_records.append(record)
             continue
