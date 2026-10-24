@@ -21,7 +21,7 @@
         var savedTheme = localStorage.getItem("cca-theme");
         var theme = savedTheme === "dark" ? "dark" : "light";
         document.documentElement.dataset.theme = theme;
-        document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "light" ? "#f2f1ea" : "#0c1514");
+        document.querySelector('meta[name="theme-color"]').setAttribute("content", theme === "light" ? "#f2f1ea" : "#090a09");
       } catch (error) {
         document.documentElement.dataset.theme = "light";
       }
@@ -35,6 +35,20 @@
   <link rel="stylesheet" href="{% static 'core/typeface-restore.css' %}?v=20261010-original-georgia-v2">
   {% block extra_head %}{% endblock %}
   <link rel="stylesheet" href="{% static 'core/evergreen-heritage.css' %}?v=20261024-heritage-v1">
+  {# Original pre-Figma styles, reapplied ONLY when dark mode is selected. #}
+  <link rel="stylesheet" data-legacy-dark-stylesheet href="{% static 'core/site.css' %}?v=20261017-pairing-dashboard-v90" media="not all">
+  <link rel="stylesheet" data-legacy-dark-stylesheet href="{% static 'core/workspace-navigation.css' %}?v=20261009-workspaces-v1" media="not all">
+  <link rel="stylesheet" data-legacy-dark-stylesheet href="{% static 'core/typeface-restore.css' %}?v=20261010-original-georgia-v2" media="not all">
+  <link rel="stylesheet" href="{% static 'core/pre-figma-dark.css' %}?v=20261024-original-dark-v1">
+  <script>
+    // Reapply the exact pre-redesign style cascade before first paint.
+    (function () {
+      var media = document.documentElement.dataset.theme === "dark" ? "all" : "not all";
+      document.querySelectorAll("[data-legacy-dark-stylesheet]").forEach(function (link) {
+        link.media = media;
+      });
+    })();
+  </script>
   <link rel="stylesheet" href="{% static 'core/structured-pages.css' %}?v=20261024-structure-v1">
 </head>
 <body>
