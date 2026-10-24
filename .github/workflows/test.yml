@@ -100,7 +100,9 @@ jobs:
           if grep -q "tests_legacy_health" <<<"$changed"; then
             targets+=("registry.tests_legacy_health")
           fi
-          if grep -Eq '^registry/(tests_automatic_health_publication|services|legacy_health|migrations/0021_auto_publish_approved_health)[.]py
+          if grep -q "tests_automatic_health_publication" <<<"$changed"; then
+            targets+=("registry.tests_automatic_health_publication")
+          fi
           if grep -Eq '^registry/(genetic_health|views)[.]py$' <<<"$changed"; then
             targets+=("accounts.tests_genetic_panel")
           fi
