@@ -151,7 +151,7 @@ class HealthRecordSubmissionTests(TestCase):
         self.assertFalse(record.is_public)
         self.publish(record)
         public_profile = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
-        self.assertContains(public_profile, "Hip dysplasia screening")
+        self.assertContains(public_profile, "HD-A")
         self.assertContains(public_profile, "Normal hips")
         self.assertContains(public_profile, "Health &amp; DNA")
         self.assertEqual(record.result, "A")

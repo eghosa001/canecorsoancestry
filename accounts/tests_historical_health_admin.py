@@ -51,7 +51,7 @@ class HistoricalHealthAdminTests(TestCase):
         self.assertTrue(ModerationAudit.objects.filter(dog=self.dog, summary__kind="historical_health_evidence").exists())
         self.client.logout()
         page = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
-        self.assertContains(page, "Hip dysplasia screening")
+        self.assertContains(page, "HD-A")
         self.assertContains(page, "Normal hips")
         media = reverse("media-file", kwargs={"path": record.evidence_document.file.name})
         self.assertEqual(self.client.get(media).status_code, 404)

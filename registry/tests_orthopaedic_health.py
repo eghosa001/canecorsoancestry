@@ -58,23 +58,21 @@ class PublicOrthopaedicGradeTests(TestCase):
         )
         self.url = reverse("registry:dog-detail", args=[self.dog.slug])
 
-    def test_one_combined_record_becomes_two_full_plain_language_cards(self):
+    def test_one_combined_record_becomes_two_short_rows(self):
         record = HealthRecord.objects.create(
             dog=self.dog, test_type="HDA ED0", result="Certified",
             verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
         )
         response = self.client.get(self.url)
-        self.assertContains(response, "Hip dysplasia screening")
-        self.assertContains(response, "Elbow dysplasia screening")
+        self.assertContains(response, "Hip &amp; elbow health")
         self.assertContains(response, "Normal hips")
         self.assertContains(response, "Normal elbows")
-        self.assertContains(response, "X-ray screening found no signs of hip dysplasia")
-        self.assertContains(response, "X-ray screening found no signs of elbow dysplasia")
-        self.assertContains(response, "Veterinary grade:")
         self.assertContains(response, "HD-A")
         self.assertContains(response, "ED-0")
-        self.assertContains(response, 'class="orthopaedic-health-card ', count=2)
-        self.assertContains(response, "Health/DNA verified")
+        self.assertContains(response, 'class="orthopaedic-compact-row"', count=2)
+        self.assertNotContains(response, "Not verified")
+        self.assertNotContains(response, "X-ray screening found no signs")
+        self.assertNotContains(response, "orthopaedic-health-card")
         record.refresh_from_db()
         self.assertEqual((record.test_type, record.result), ("HDA ED0", "Certified"))
 
@@ -85,7 +83,7 @@ class PublicOrthopaedicGradeTests(TestCase):
         )
         response = self.client.get(self.url)
         self.assertContains(response, "Normal elbows")
-        self.assertContains(response, "Not independently verified")
+        self.assertContains(response, "Not verified")
         self.assertNotContains(response, "Health/DNA verified")
 
     def test_actual_legacy_pedigree_health_summary_is_easy_to_read_and_not_falsely_verified(self):
@@ -98,15 +96,16 @@ class PublicOrthopaedicGradeTests(TestCase):
             is_public=True,
         )
         response = self.client.get(self.url)
-        self.assertContains(response, "Hip &amp; Elbow Joint Screening")
-        self.assertContains(response, "Normal hips (reported)")
-        self.assertContains(response, "Normal elbows (reported)")
-        self.assertContains(response, "Source: supplied pedigree", count=2)
-        self.assertContains(response, "Not independently verified")
+        self.assertContains(response, "Hip &amp; elbow health")
+        self.assertContains(response, "Normal hips")
+        self.assertContains(response, "Normal elbows")
+        self.assertContains(response, "Not verified", count=2)
         self.assertContains(response, "HD-A")
         self.assertContains(response, "ED-0")
-        self.assertContains(response, 'class="orthopaedic-health-card ', count=2)
+        self.assertContains(response, 'class="orthopaedic-compact-row"', count=2)
         self.assertNotContains(response, "The X-ray screening found no signs")
+        self.assertNotContains(response, "Source: supplied pedigree")
+        self.assertNotContains(response, "orthopaedic-health-card")
         self.assertNotContains(response, "Legacy health summary")
         source.refresh_from_db()
         self.assertEqual(source.result, "HD A · ED 0 (as shown on supplied pedigree)")
@@ -130,4 +129,4 @@ class PublicOrthopaedicGradeTests(TestCase):
         self.assertContains(response, "Other health screening")
         self.assertContains(response, "HD unknown")
         self.assertContains(response, "ED pending")
-        self.assertNotContains(response, "orthopaedic-health-card")
+        self.assertNotContains(response, "orthopaedic-compact-row")

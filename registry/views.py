@@ -571,7 +571,7 @@ def dog_detail(request, slug):
                 details = dict(assessment)
                 if not verified:
                     details["tone"] = "unverified"
-                    details["headline"] = assessment["headline"] + " (reported)"
+                    # The public row uses a short result and a separate Not verified label.
                     details["explanation"] = (
                         "The supplied pedigree lists " + assessment["grade"] + ". "
                         if pedigree_source else
