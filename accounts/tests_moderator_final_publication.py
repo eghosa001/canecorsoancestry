@@ -173,4 +173,8 @@ class ModeratorFinalPublicationTests(TestCase):
             reverse("accounts:toggle-health-result", args=[self.dog.pk, new.pk]),
             {"visibility": "show"},
         )
-        self.assertContains(self.client.get(self.public_url), "Novel hereditary condition")
+        public = self.client.get(self.public_url)
+        self.assertContains(public, "Novel hereditary condition")
+        self.assertContains(public, "Additional laboratory screening")
+        self.assertContains(public, "genetic-screening-status--carrier")
+        self.assertNotContains(public, "private-source.pdf")
