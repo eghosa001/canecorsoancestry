@@ -49,5 +49,21 @@
     {% endfor %}
     <p class="health-private-caption">Approval does not have to mean publication. The moderator controls each public summary independently. Editing creates an audited correction; confidential images and PDFs never appear in public.</p>
   </section>
+  <section class="panel">
+    <div class="health-section-heading"><div><p class="health-review-overline">Correct missed extraction</p><h2>Add a condition from an approved report</h2></div></div>
+    <p class="health-review-help">If an uploaded laboratory report includes another genetic condition that was not extracted, transcribe it here. The new result stays private until you review and publish it.</p>
+    <form method="post" action="{% url 'accounts:add-reviewed-health-condition' dog.pk %}" class="member-form health-final-form">
+      {% csrf_token %}
+      <div class="health-review-fields">
+        <div class="health-review-field health-review-field--wide"><label for="{{ add_condition_form.source_submission.id_for_label }}">{{ add_condition_form.source_submission.label }}</label>{{ add_condition_form.source_submission }}</div>
+        <div class="health-review-field"><label for="{{ add_condition_form.test_type.id_for_label }}">{{ add_condition_form.test_type.label }}</label>{{ add_condition_form.test_type }}</div>
+        <div class="health-review-field"><label for="{{ add_condition_form.result.id_for_label }}">{{ add_condition_form.result.label }}</label>{{ add_condition_form.result }}</div>
+        <div class="health-review-field"><label for="{{ add_condition_form.tested_on.id_for_label }}">{{ add_condition_form.tested_on.label }}</label>{{ add_condition_form.tested_on }}</div>
+      </div>
+      <div class="health-review-confirm"><label>{{ add_condition_form.reviewed }} <strong>{{ add_condition_form.reviewed.label }}</strong></label></div>
+      <button type="submit" class="btn btn-gold">Save additional result privately →</button>
+    </form>
+    <p class="health-private-caption">The result is linked in the moderation audit to the approved source submission. Breed percentages require the dedicated owner-consented DNA record instead.</p>
+  </section>
 </section>
 {% endblock %}
