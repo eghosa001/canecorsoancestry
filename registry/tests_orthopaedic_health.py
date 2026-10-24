@@ -73,7 +73,7 @@ class PublicOrthopaedicGradeTests(TestCase):
         self.assertContains(response, "Veterinary grade:")
         self.assertContains(response, "HD-A")
         self.assertContains(response, "ED-0")
-        self.assertContains(response, "orthopaedic-health-card", count=2)
+        self.assertContains(response, 'class="orthopaedic-health-card ', count=2)
         self.assertContains(response, "Health/DNA verified")
         record.refresh_from_db()
         self.assertEqual((record.test_type, record.result), ("HDA ED0", "Certified"))
