@@ -85,3 +85,34 @@ class AutomaticHealthPublicationTests(TestCase):
         self.assertContains(page, "Clear")
         self.assertNotContains(page, "Not verified")
         self.assertNotContains(page, "Reviewed results")  # No false lab-verified banner.
+
+
+class ProductionBackfillApprovalTests(TestCase):
+    def test_only_exact_approved_data_backfill_passes_production_migration_gate(self):
+        from copy import copy
+        from django.db.migrations.loader import MigrationLoader
+        from django.db.migrations.operations.special import RunPython
+        from scripts.oracle_runner.allowlisted_schema_migration import validate_pending_schema_changes
+
+        migration = MigrationLoader(None).disk_migrations[
+            ("registry", "0021_auto_publish_approved_health")
+        ]
+        self.assertTrue(validate_pending_schema_changes([(migration, False)]))
+        altered = copy(migration)
+        altered.operations = [RunPython(lambda apps, editor: None, RunPython.noop)]
+        with self.assertRaisesRegex(ValueError, "Unapproved production migration"):
+            validate_pending_schema_changes([(altered, False)])
+        with self.assertRaisesRegex(ValueError, "Reverse production migrations"):
+            validate_pending_schema_changes([(migration, True)])
+        with self.assertRaisesRegex(ValueError, "Unexpected pending migration count"):
+            validate_pending_schema_changes([(migration, False), (migration, False)])
+
+    def test_approved_oracle_sql_does_not_publish_private_lab_evidence(self):
+        from pathlib import Path
+
+        sql = Path("scripts/oracle_runner/approved_registry_0021.sql").read_text()
+        self.assertIn("registry_healthrecord", sql)
+        self.assertIn("consent_public_summary = FALSE", sql)
+        self.assertIn("publication_choice = 'false'", sql)
+        self.assertIn("0021_auto_publish_approved_health", sql)
+        self.assertNotIn("UPDATE django_app.registry_dogdocument", sql)
