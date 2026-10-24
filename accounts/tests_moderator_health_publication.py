@@ -87,7 +87,7 @@ class ModeratorLabResultTests(TestCase):
         public = self.client.get(self.public_url)
         self.assertContains(public, "genetic-screening-status--clear")
         self.assertContains(public, "genetic-screening-status--carrier")
-        self.assertContains(public, "genetic-screening-status--untested")
+        self.assertNotContains(public, "genetic-screening-status--untested")
         self.assertNotContains(public, "health-scan.jpg")
 
     def test_staff_can_hide_and_restore_only_reviewed_summary(self):
