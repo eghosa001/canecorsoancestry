@@ -10,7 +10,7 @@
           <a href="{% url 'accounts:dog-edit-list' %}" {% if workspace_section == "dogs" %}aria-current="page"{% endif %}>Manage dogs</a>
           <a href="{% url 'accounts:dog-direct-create' %}" {% if workspace_section == "dog_new" %}aria-current="page"{% endif %}>Add dog</a>
           <a href="{% url 'accounts:kennel-publication-list' %}" {% if workspace_section == "kennels" %}aria-current="page"{% endif %}>Kennels</a>
-          <details class="workspace-more" {% if workspace_section == "health_dna" or workspace_section == "merge" or workspace_section == "audit" or workspace_section == "health" %}open{% endif %}>
+          <details class="workspace-more">
             <summary {% if workspace_section == "health_dna" or workspace_section == "merge" or workspace_section == "audit" or workspace_section == "health" %}aria-current="page"{% endif %}>More tools <span aria-hidden="true">⌄</span></summary>
             <div class="workspace-more-links">
               {% if staff_role == "owner" %}<a href="{% url 'accounts:health-genetic-list' %}" {% if workspace_section == "health_dna" %}aria-current="page"{% endif %}>Health &amp; DNA records</a>{% endif %}
@@ -28,7 +28,7 @@
           <a href="{% url 'accounts:saved-pairings' %}" {% if workspace_section == "research" %}aria-current="page"{% endif %}>Saved pairings</a>
           <a href="{% url 'accounts:my-litters' %}" {% if workspace_section == "litters" %}aria-current="page"{% endif %}>Litters</a>
           <a href="{% url 'accounts:submissions' %}" {% if workspace_section == "submissions" or workspace_section == "payments" %}aria-current="page"{% endif %}>Submissions</a>
-          <details class="workspace-more" {% if workspace_section == "documents" or workspace_section == "disputes" or workspace_section == "notifications" or workspace_section == "profile" or workspace_section == "settings" %}open{% endif %}>
+          <details class="workspace-more">
             <summary {% if workspace_section == "documents" or workspace_section == "disputes" or workspace_section == "notifications" or workspace_section == "profile" or workspace_section == "settings" %}aria-current="page"{% endif %}>More tools <span aria-hidden="true">⌄</span></summary>
             <div class="workspace-more-links">
               <a href="{% url 'accounts:documents' %}" {% if workspace_section == "documents" %}aria-current="page"{% endif %}>Documents</a>
