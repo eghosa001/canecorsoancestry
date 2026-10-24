@@ -317,7 +317,7 @@
             <div class="health-compact-row">
               <strong>{{ result.test }}</strong>
               <span>{{ result.result }}</span>
-              {% if not result.verified %}<small>Not verified</small>{% endif %}
+              {% if not result.verified and result.result != "Not verified" %}<small>Not verified</small>{% endif %}
             </div>
           {% endfor %}
         </div>

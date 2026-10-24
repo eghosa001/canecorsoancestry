@@ -44,6 +44,7 @@ from .models import (
 from .permissions import can_access_public_pedigree_analysis, can_contribute_to_dog
 from .genetic_health import MARKER_CODES, SCREENING_RESULTS, marker_status_rows, readable_health_result, unstructured_breed_claim
 from .orthopaedic_health import describe_orthopaedic_result
+from .legacy_health import legacy_mixed_health_rows
 from .dna import percentage_text
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
@@ -561,6 +562,13 @@ def dog_detail(request, slug):
         label = (record.test_type or "").strip().lower()
         if (label.upper() in MARKER_CODES and record.verification_state == VerificationState.HEALTH_VERIFIED) or record.pk in confirmed_extra_ids:
             continue  # A reviewed genetic marker is already displayed in the DNA card.
+        legacy_rows = legacy_mixed_health_rows(record.test_type, record.result)
+        if legacy_rows is not None:
+            # The archived raw record remains unchanged. Split its public text,
+            # but do not grant unrelated DNA breed or marker verification.
+            other_health_rows.extend(legacy_rows)
+            other_health_records.append(record)
+            continue
         if unstructured_breed_claim(record.test_type):
             continue  # Only BreedDNAReport + owner consent enables public breed percent.
         interpreted = describe_orthopaedic_result(record.test_type, record.result)
