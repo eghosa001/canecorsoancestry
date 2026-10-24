@@ -48,6 +48,18 @@ def run():
             assert dark["active"] == "dark" and dark["stylesEnabled"], f"Original dark styles not active: {dark}"
             assert dark["background"] == "rgb(16, 17, 16)", f"Dark background differs from the original: {dark}"
             assert dark["gold"] == "#c7a25d", f"Original warm-gold palette was not restored: {dark}"
+            dark_fonts = page.evaluate("""() => ({
+              heading: getComputedStyle(document.querySelector('.hero h1')).fontFamily,
+              headingWeight: getComputedStyle(document.querySelector('.hero h1')).fontWeight,
+              body: getComputedStyle(document.body).fontFamily,
+              brand: getComputedStyle(document.querySelector('.brand')).fontFamily,
+            })""")
+            assert "Georgia" in dark_fonts["heading"] and dark_fonts["headingWeight"] == "600", (
+                f"Dark homepage hero no longer uses its original Georgia weight: {dark_fonts}"
+            )
+            assert "Georgia" in dark_fonts["brand"] and "Inter" in dark_fonts["body"], (
+                f"Dark typeface mix differs from pre-Figma: {dark_fonts}"
+            )
             assert "Georgia" in dark["font"], f"Original serif identity not restored: {dark}"
             theme_button.tap()
             light = page.evaluate("""() => ({
@@ -58,6 +70,18 @@ def run():
             })""")
             assert light["active"] == "light" and light["stylesDisabled"], f"Light mode was altered: {light}"
             assert light["canvas"] == "#f2f1ea", f"Light theme colors changed: {light}"
+            light_fonts = page.evaluate("""() => ({
+              heading: getComputedStyle(document.querySelector('.hero h1')).fontFamily,
+              headingWeight: getComputedStyle(document.querySelector('.hero h1')).fontWeight,
+              body: getComputedStyle(document.body).fontFamily,
+              brand: getComputedStyle(document.querySelector('.brand')).fontFamily,
+            })""")
+            assert "Georgia" in light_fonts["heading"] and light_fonts["headingWeight"] == "600", (
+                f"Light homepage hero no longer uses its original Georgia weight: {light_fonts}"
+            )
+            assert "Georgia" in light_fonts["brand"] and "Inter" in light_fonts["body"], (
+                f"Light typeface mix differs from pre-Figma: {light_fonts}"
+            )
             featured_cards = page.locator(".featured-dog-grid .dog-card")
             assert featured_cards.count(), "Mobile fixture has no popular dog cards to inspect"
             featured_shape = page.evaluate("""() => {

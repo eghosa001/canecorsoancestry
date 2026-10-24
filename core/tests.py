@@ -345,3 +345,19 @@ class OriginalDarkThemeReversionTests(TestCase):
         self.assertIn('--bg: #101110;', old)
         self.assertIn('--gold: #c7a25d;', old)
 
+
+
+class OriginalPreFigmaTypographyTests(TestCase):
+    def test_font_stylesheet_loaded_after_figma_and_layout_styles(self):
+        html = self.client.get(reverse("home")).content.decode("utf-8")
+        self.assertIn("original-typography.css?v=20261024-original-fonts-v1", html)
+        self.assertLess(html.index("evergreen-heritage.css"), html.index("original-typography.css"))
+        self.assertLess(html.index("structured-pages.css"), html.index("original-typography.css"))
+
+    def test_original_body_and_heading_font_families_apply_in_both_themes(self):
+        content = Path(finders.find("core/original-typography.css")).read_text(encoding="utf-8")
+        self.assertIn('html[data-theme="light"]', content)
+        self.assertIn('html[data-theme="dark"]', content)
+        self.assertIn('--serif: Georgia, "Times New Roman", serif;', content)
+        self.assertIn('--sans: Inter, ui-sans-serif, system-ui', content)
+        self.assertIn('font-weight: 500;', content)
