@@ -60,6 +60,7 @@ urlpatterns = [
     path("moderation/dogs/", direct_dog_edit.dog_edit_list, name="dog-edit-list"),
     path("moderation/health-dna/", health_admin.health_genetic_list, name="health-genetic-list"),
     path("moderation/health-results/<uuid:pk>/", health_review.reviewed_dog_health, name="reviewed-dog-health"),
+    path("moderation/health-results/<uuid:pk>/add-condition/", health_review.add_reviewed_health_condition, name="add-reviewed-health-condition"),
     path("moderation/health-results/<uuid:pk>/edit/<int:record_id>/", health_review.edit_reviewed_health_result, name="edit-reviewed-health-result"),
     path("moderation/health-results/<uuid:pk>/toggle/<int:record_id>/", health_review.toggle_health_result, name="toggle-health-result"),
     path("moderation/health-submissions/<uuid:pk>/transcribe/", health_review.transcribe_health_submission, name="transcribe-health-submission"),
