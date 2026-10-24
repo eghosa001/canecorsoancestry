@@ -33,5 +33,12 @@ body .dashboard-hero h1 {
 
 .brand { letter-spacing: .13em; }
 
+/* The old homepage hero specifically used Georgia at weight 600. */
+html[data-theme="light"] .hero h1,
+html[data-theme="dark"] .hero h1 {
+  font-family: var(--serif);
+  font-weight: 600;
+}
+
 /* Preserve the original sans-serif distinction for pedigree column labels. */
 .pedigree-column h2 { font-family: var(--sans); }
