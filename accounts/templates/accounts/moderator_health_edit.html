@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Finish Health &amp; DNA publication · Cane Corso Ancestry{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261024-1">
+<section class="page-shell moderation-page health-review-workspace health-final-editor">
+  <header class="page-heading">
+    <p class="eyebrow">Moderator · Final publication review</p>
+    <h1>Finish {{ dog.name }}'s health card</h1>
+    <p>The document is approved. Check the public wording against the evidence, save it privately, or explicitly publish the reviewed result. The original report remains confidential.</p>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'accounts:reviewed-dog-health' dog.pk %}">← All reviewed results</a>
+      {% if dog.is_effectively_public %}
+        <a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}#health" target="_blank" rel="noopener noreferrer">Open public dog profile ↗</a>
+      {% endif %}
+    </div>
+  </header>
+  <section class="panel">
+    <div class="health-review-step"><span>01 · Verified evidence</span><strong>Original laboratory result</strong></div>
+    <div class="health-evidence-card">
+      <div class="health-evidence-icon" aria-hidden="true">▤</div>
+      <div>
+        <strong>{{ record.test_type }} · {{ record.result }}</strong>
+        <small>Approved health/DNA result{% if record.tested_on %} · tested {{ record.tested_on|date:"j M Y" }}{% endif %}</small>
+      </div>
+      {% if record.evidence_document %}
+        <a class="btn btn-outline" href="{{ record.evidence_document.file.url }}" target="_blank" rel="noopener noreferrer">Open confidential evidence ↗</a>
+      {% elif breed_report %}
+        <a class="btn btn-outline" href="{{ breed_report.evidence_document.file.url }}" target="_blank" rel="noopener noreferrer">Open confidential evidence ↗</a>
+      {% else %}
+        <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">Find approved source report ↗</a>
+      {% endif %}
+    </div>
+    <div class="health-review-step"><span>02 · Public preview</span><strong>What visitors will see after you publish</strong></div>
+    <div class="health-final-preview" aria-label="Preview of public health card, not yet published">
+      <div class="health-final-preview-heading"><span aria-hidden="true">⌁</span> {% if breed_report %}Breed Purity Verification{% else %}Genetic Health Screening{% endif %}</div>
+      <strong id="health-card-preview-result">{% if breed_report %}{{ record.result }}{% else %}{{ record.test_type }} · {{ record.result }}{% endif %}</strong>
+      <p>{% if breed_report %}DNA-tested · <span id="health-card-preview-lab">{{ breed_report.provider }}</span> · Report reviewed{% else %}Laboratory result · Report reviewed{% endif %}</p>
+    </div>
+    {% if not can_publish %}
+      <p class="health-private-caption"><strong>Publication blocked:</strong> Owner authorization for displaying this breed-composition summary has not been recorded. You may correct and save the draft, but not publish it.</p>
+    {% endif %}
+    <div class="health-review-step"><span>03 · Final human decision</span><strong>Edit the summary and choose visibility</strong></div>
+    <form method="post" class="member-form health-final-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="health-review-fields">
+        <div class="health-review-field"><label for="{{ form.test_type.id_for_label }}">{{ form.test_type.label }}</label>{{ form.test_type }}{{ form.test_type.errors }}</div>
+        <div class="health-review-field"><label for="{{ form.result.id_for_label }}">{{ form.result.label }}</label>{{ form.result }}{{ form.result.errors }}</div>
+        <div class="health-review-field"><label for="{{ form.tested_on.id_for_label }}">{{ form.tested_on.label }}</label>{{ form.tested_on }}{{ form.tested_on.errors }}</div>
+        {% if breed_report %}
+          <div class="health-review-field"><label for="{{ form.laboratory.id_for_label }}">{{ form.laboratory.label }}</label>{{ form.laboratory }}{{ form.laboratory.errors }}</div>
+          <div class="health-review-field"><label for="{{ form.breed_percentage.id_for_label }}">{{ form.breed_percentage.label }}</label>{{ form.breed_percentage }}{{ form.breed_percentage.errors }}</div>
+          <div class="health-review-field health-review-field--wide"><label for="{{ form.other_breeds.id_for_label }}">{{ form.other_breeds.label }}</label>{{ form.other_breeds }}<small>{{ form.other_breeds.help_text }}</small>{{ form.other_breeds.errors }}</div>
+        {% endif %}
+      </div>
+      <div class="health-review-confirm"><label>{{ form.reviewed }} <strong>{{ form.reviewed.label }}</strong></label>{{ form.reviewed.errors }}</div>
+      <div class="button-row health-final-actions">
+        <button type="submit" name="intent" value="save" class="btn btn-outline">Save privately</button>
+        {% if can_publish %}<button type="submit" name="intent" value="publish" class="btn btn-gold">Save &amp; publish on dog profile</button>{% endif %}
+      </div>
+    </form>
+    <p class="health-private-caption">Publishing changes only the public text summary. No source photo or PDF is exposed. All moderator edits and visibility decisions are audited.</p>
+  </section>
+</section>
+<script>
+(function () {
+  var result = document.getElementById("health-card-preview-result");
+  var name = document.getElementById("id_test_type");
+  var status = document.getElementById("id_result");
+  var percent = document.getElementById("id_breed_percentage");
+  var lab = document.getElementById("id_laboratory");
+  var labPreview = document.getElementById("health-card-preview-lab");
+  function update() {
+    if (percent) {
+      var value = percent.value.trim();
+      result.textContent = value ? value + "% Cane Corso" : "Breed composition not entered";
+      if (labPreview && lab) labPreview.textContent = lab.value.trim() || "Laboratory not entered";
+    } else if (name && status) {
+      result.textContent = (name.value.trim() || "Condition not entered") + " · " + (status.value.trim() || "Result not entered");
+    }
+  }
+  [name, status, percent, lab].forEach(function (field) {
+    if (field) field.addEventListener("input", update);
+  });
+  update();
+}());
+</script>
+{% endblock %}

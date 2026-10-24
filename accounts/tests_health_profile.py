@@ -85,6 +85,16 @@ class HealthRecordSubmissionTests(TestCase):
             is_public=True,
         )
 
+    def publish(self, record):
+        self.client.force_login(self.reviewer)
+        response = self.client.post(
+            reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk]),
+            {"visibility": "show"},
+        )
+        self.assertEqual(response.status_code, 302)
+        record.refresh_from_db()
+        self.assertTrue(record.is_public)
+
     @staticmethod
     def evidence():
         return SimpleUploadedFile(
@@ -134,14 +144,15 @@ class HealthRecordSubmissionTests(TestCase):
 
         approve_submission(submission, self.reviewer, "Evidence checked.")
 
-        # The approval must also be visible on the public profile, not just
-        # persisted in HealthRecord.
-        public_profile = self.client.get(
-            reverse("registry:dog-detail", args=[self.dog.slug])
-        )
+        # Approval is private until a staff reviewer explicitly publishes the card.
+        public_profile = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
+        self.assertContains(public_profile, "No available records")
+        record = HealthRecord.objects.get(dog=self.dog, test_type="Hip score")
+        self.assertFalse(record.is_public)
+        self.publish(record)
+        public_profile = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
         self.assertContains(public_profile, "Hip score")
         self.assertContains(public_profile, "Health &amp; DNA")
-        record = HealthRecord.objects.get(dog=self.dog, test_type="Hip score")
         self.assertEqual(record.result, "A")
         self.assertEqual(record.verification_state, VerificationState.HEALTH_VERIFIED)
         document = DogDocument.objects.get(source_submission=submission)
@@ -205,6 +216,8 @@ class HealthRecordSubmissionTests(TestCase):
         self.assertFalse(BreedDNAReport.objects.exists())
         approve_submission(submission, self.reviewer)
         report = BreedDNAReport.objects.get(health_record__dog=self.dog)
+        self.assertFalse(report.health_record.is_public)
+        self.publish(report.health_record)
         self.assertFalse(report.consent_full_report)
         self.assertFalse(report.evidence_document.is_public)
         self.client.logout()
@@ -226,6 +239,8 @@ class HealthRecordSubmissionTests(TestCase):
         self.assertEqual(response.status_code, 302)
         approve_submission(Submission.objects.get(kind=Submission.Kind.HEALTH), self.reviewer)
         report = BreedDNAReport.objects.get(health_record__dog=self.dog)
+        self.assertFalse(report.health_record.is_public)
+        self.publish(report.health_record)
         self.assertFalse(report.consent_full_report)
         self.assertFalse(report.evidence_document.is_public)
         self.client.logout()

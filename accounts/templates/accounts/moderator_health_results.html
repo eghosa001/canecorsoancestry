@@ -7,7 +7,7 @@
   <header class="page-heading">
     <p class="eyebrow">Moderator · Private health workspace</p>
     <h1>{{ dog.name }}</h1>
-    <p>Review source certificates privately, then decide which approved summaries appear on the dog's public health profile.</p>
+    <p>After approving a laboratory document, finish the public-facing result yourself: edit its wording, check the preview, then publish or hide it. The certificate stays private.</p>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">← Health review queue</a>
       {% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}#health">View public profile ↗</a>{% endif %}
@@ -23,16 +23,18 @@
     {% empty %}<p class="muted">No pending laboratory submissions.</p>{% endfor %}
   </section>
   <section class="panel">
-    <div class="health-section-heading"><div><p class="health-review-overline">Public display controls</p><h2>Reviewed health results</h2></div><span class="health-count-badge">{{ records|length }}</span></div>
+    <div class="health-section-heading"><div><p class="health-review-overline">Final moderator publication step</p><h2>Approved results · Edit, then publish</h2></div><span class="health-count-badge">{{ records|length }}</span></div>
     {% for item in records %}
       <div class="health-result-editor-row">
         <div class="health-result-editor-copy">
           <strong>{{ item.test_type }}</strong>
           <span>{{ item.result }}</span>
           <small>{{ item.tested_on|date:"j M Y"|default:"Date not provided" }} · {{ item.public_verification_label }}</small>
-          {% if item.breed_dna_report and not item.breed_dna_report.consent_public_summary %}<small>Breed percentages require owner publication consent.</small>{% endif %}
+          {% if item.breed_dna_report %}<small>Laboratory: {{ item.breed_dna_report.provider }}</small>{% endif %}
+          {% if item.breed_dna_report and not item.breed_dna_report.consent_public_summary %}<small>Owner consent is required before publishing breed composition.</small>{% endif %}
         </div>
         <div class="health-result-editor-action">
+          {% if item.verification_state == "health" %}<a class="btn btn-outline" href="{% url 'accounts:edit-reviewed-health-result' dog.pk item.pk %}">Edit &amp; preview →</a>{% endif %}
           {% if item.is_public and item.verification_state == "health" and not item.breed_dna_report or item.is_public and item.verification_state == "health" and item.breed_dna_report.consent_public_summary %}
             <span class="health-workflow-pill health-workflow-pill--approved">Public</span>
             <form method="post" action="{% url 'accounts:toggle-health-result' dog.pk item.pk %}">{% csrf_token %}<input type="hidden" name="visibility" value="hide"><button type="submit" class="btn btn-outline">Hide result</button></form>
@@ -45,7 +47,23 @@
     {% empty %}
       <div class="health-empty-editor">No available records</div>
     {% endfor %}
-    <p class="health-private-caption">These controls publish reviewed text results only. Uploaded images and PDF certificates remain private.</p>
+    <p class="health-private-caption">Approval does not have to mean publication. The moderator controls each public summary independently. Editing creates an audited correction; confidential images and PDFs never appear in public.</p>
+  </section>
+  <section class="panel">
+    <div class="health-section-heading"><div><p class="health-review-overline">Correct missed extraction</p><h2>Add a condition from an approved report</h2></div></div>
+    <p class="health-review-help">If an uploaded laboratory report includes another genetic condition that was not extracted, transcribe it here. The new result stays private until you review and publish it.</p>
+    <form method="post" action="{% url 'accounts:add-reviewed-health-condition' dog.pk %}" class="member-form health-final-form">
+      {% csrf_token %}
+      <div class="health-review-fields">
+        <div class="health-review-field health-review-field--wide"><label for="{{ add_condition_form.source_submission.id_for_label }}">{{ add_condition_form.source_submission.label }}</label>{{ add_condition_form.source_submission }}</div>
+        <div class="health-review-field"><label for="{{ add_condition_form.test_type.id_for_label }}">{{ add_condition_form.test_type.label }}</label>{{ add_condition_form.test_type }}</div>
+        <div class="health-review-field"><label for="{{ add_condition_form.result.id_for_label }}">{{ add_condition_form.result.label }}</label>{{ add_condition_form.result }}</div>
+        <div class="health-review-field"><label for="{{ add_condition_form.tested_on.id_for_label }}">{{ add_condition_form.tested_on.label }}</label>{{ add_condition_form.tested_on }}</div>
+      </div>
+      <div class="health-review-confirm"><label>{{ add_condition_form.reviewed }} <strong>{{ add_condition_form.reviewed.label }}</strong></label></div>
+      <button type="submit" class="btn btn-gold">Save additional result privately →</button>
+    </form>
+    <p class="health-private-caption">The result is linked in the moderation audit to the approved source submission. Breed percentages require the dedicated owner-consented DNA record instead.</p>
   </section>
 </section>
 {% endblock %}

@@ -5,13 +5,15 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.http import HttpResponseBadRequest
+from django.utils import timezone
+from django.views.decorators.cache import never_cache
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from registry.dna import parse_breed_composition, percentage_text
-from registry.genetic_health import SCREENING_MARKERS
+from registry.genetic_health import MARKER_CODES, SCREENING_MARKERS, SCREENING_RESULTS, unstructured_breed_claim
 from registry.models import (
-    BreedDNAReport, Dog, HealthRecord, ModerationAudit, Submission,
+    BreedDNAReport, Dog, HealthRecord, ModerationAudit, Submission, VerificationState, VerificationEvent,
 )
 from registry.permissions import can_review_submissions
 from registry.public_freshness import invalidate_public_content
@@ -22,7 +24,7 @@ from registry.verification import verify_submission
 class HealthTranscriptionForm(forms.Form):
     publish_primary = forms.BooleanField(
         required=False, initial=True,
-        label="Show the main reviewed result on the public dog profile",
+        label="Flag the main result for the final public-card review",
     )
     laboratory = forms.CharField(required=False, max_length=100, label="Laboratory named in the image")
     breed_percentage = forms.DecimalField(
@@ -47,7 +49,7 @@ class HealthTranscriptionForm(forms.Form):
                 label=code + " — " + label,
             )
             self.fields["publish_" + code] = forms.BooleanField(
-                required=False, label="Display approved " + code + " result publicly",
+                required=False, label="Flag " + code + " for the final public-card review",
             )
 
     def clean(self):
@@ -139,7 +141,7 @@ def transcribe_health_submission(request, pk):
             note="Reviewer transcribed structured results from original private laboratory evidence.",
         )
         verify_submission(submission)
-    messages.success(request, "Laboratory results saved for review. Approve the submission separately to publish enabled summaries.")
+    messages.success(request, "Laboratory transcription saved. Approve the evidence, then open the dog\'s results workspace to explicitly publish each public summary.")
     return redirect("accounts:moderation-submission", pk=pk)
 
 
@@ -158,6 +160,258 @@ def reviewed_dog_health(request, pk):
     ).order_by("-created_at")[:30])
     return render(request, "accounts/moderator_health_results.html", {
         "dog": dog, "records": records, "pending": pending,
+        "add_condition_form": AdditionalHealthConditionForm(dog=dog),
+    })
+
+
+
+class ReviewedHealthResultForm(forms.Form):
+    """Edit the public-facing transcription; never rewrite the private report."""
+    test_type = forms.CharField(max_length=100, label="Test or condition on the report")
+    result = forms.CharField(max_length=160, label="Reported result")
+    tested_on = forms.DateField(
+        required=False, label="Test date",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    laboratory = forms.CharField(required=False, max_length=100, label="Testing laboratory")
+    breed_percentage = forms.DecimalField(
+        required=False, max_digits=5, decimal_places=2,
+        min_value=0, max_value=100, label="Cane Corso percentage",
+    )
+    other_breeds = forms.CharField(
+        required=False, max_length=2000,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        label="Other breeds and percentages",
+        help_text="One breed per line, e.g. Boxer: 12.5. All percentages must total 100.",
+    )
+    reviewed = forms.BooleanField(
+        label="I checked the edited public summary against the original laboratory evidence.",
+    )
+
+    def __init__(self, *args, record, **kwargs):
+        self.breed_report = getattr(record, "breed_dna_report", None)
+        initial = {
+            "test_type": record.test_type,
+            "result": record.result,
+            "tested_on": record.tested_on,
+        }
+        if self.breed_report:
+            initial.update({
+                "laboratory": self.breed_report.provider,
+                "breed_percentage": self.breed_report.cane_corso_percentage,
+                "other_breeds": "\n".join(
+                    f'{entry["breed"]}: {entry["percentage"]}'
+                    for entry in self.breed_report.composition
+                    if entry.get("breed", "").lower() != "cane corso"
+                ),
+            })
+        kwargs.setdefault("initial", initial)
+        super().__init__(*args, **kwargs)
+        if self.breed_report:
+            # Breed claims have dedicated validated structured data.
+            self.fields["test_type"].disabled = True
+            self.fields["result"].disabled = True
+        else:
+            for name in ("laboratory", "breed_percentage", "other_breeds"):
+                self.fields.pop(name)
+
+    def clean(self):
+        data = super().clean()
+        if data.get("tested_on") and data["tested_on"] > timezone.localdate():
+            self.add_error("tested_on", "A test date cannot be in the future.")
+        if self.breed_report:
+            if not (data.get("laboratory") or "").strip():
+                self.add_error("laboratory", "Name the laboratory shown on the report.")
+            if data.get("breed_percentage") is None:
+                self.add_error("breed_percentage", "Enter the exact reported percentage.")
+            else:
+                try:
+                    data["composition"] = parse_breed_composition(
+                        data["breed_percentage"], data.get("other_breeds") or "",
+                    )
+                except ValidationError as exc:
+                    self.add_error("other_breeds", exc)
+        else:
+            code = (data.get("test_type") or "").strip().upper()
+            result = (data.get("result") or "").strip()
+            if code in MARKER_CODES and result.lower() not in SCREENING_RESULTS:
+                self.add_error("result", "Use Clear, Carrier or Affected for a featured genetic marker.")
+            if unstructured_breed_claim(code):
+                self.add_error("test_type", "Breed composition must use the dedicated owner-consented DNA report.")
+        return data
+
+
+
+class AdditionalHealthConditionForm(forms.Form):
+    """Transcribe a condition missed by the initial extraction from an approved report."""
+    source_submission = forms.ModelChoiceField(
+        queryset=Submission.objects.none(),
+        label="Previously approved laboratory document",
+        empty_label="Choose approved report…",
+    )
+    test_type = forms.CharField(max_length=100, label="Exact genetic condition / test name")
+    result = forms.CharField(max_length=160, label="Result exactly as reported")
+    tested_on = forms.DateField(
+        required=False, widget=forms.DateInput(attrs={"type": "date"}), label="Test date",
+    )
+    reviewed = forms.BooleanField(
+        label="I have checked this additional condition and its result in the approved report.",
+    )
+
+    def __init__(self, *args, dog, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["source_submission"].queryset = Submission.objects.filter(
+            dog=dog, kind=Submission.Kind.HEALTH, status=Submission.Status.APPROVED
+        ).exclude(attachment="").order_by("-created_at")
+
+    def clean(self):
+        data = super().clean()
+        test_type = (data.get("test_type") or "").strip()
+        result = (data.get("result") or "").strip()
+        if unstructured_breed_claim(test_type):
+            self.add_error("test_type", "Breed percentages require a separately verified, owner-consented DNA record.")
+        if test_type.upper() in MARKER_CODES and result.lower() not in SCREENING_RESULTS:
+            self.add_error("result", "Use Clear, Carrier or Affected for a featured genetic marker.")
+        if data.get("tested_on") and data["tested_on"] > timezone.localdate():
+            self.add_error("tested_on", "The test date cannot be in the future.")
+        return data
+
+
+@login_required
+@require_POST
+def add_reviewed_health_condition(request, pk):
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
+    dog = get_object_or_404(Dog, pk=pk)
+    form = AdditionalHealthConditionForm(request.POST, dog=dog)
+    if not form.is_valid():
+        messages.error(request, "Check the additional condition and select its approved source document: " + form.errors.as_text())
+        return redirect("accounts:reviewed-dog-health", pk=pk)
+    data = form.cleaned_data
+    source = data["source_submission"]
+    with transaction.atomic():
+        # Never link a public result to an unapproved document or another dog.
+        source = get_object_or_404(
+            Submission.objects.select_for_update(),
+            pk=source.pk, dog=dog, kind=Submission.Kind.HEALTH,
+            status=Submission.Status.APPROVED,
+        )
+        source_marker = "Moderator condition transcribed from approved submission " + str(source.pk)
+        if HealthRecord.objects.filter(
+            dog=dog, test_type__iexact=data["test_type"].strip(),
+            tested_on=data.get("tested_on"), notes=source_marker,
+        ).exists():
+            messages.error(request, "This condition and date have already been transcribed from that document.")
+            return redirect("accounts:reviewed-dog-health", pk=pk)
+        record = HealthRecord.objects.create(
+            dog=dog, test_type=data["test_type"].strip(), result=data["result"].strip(),
+            tested_on=data.get("tested_on"), verification_state=VerificationState.HEALTH_VERIFIED,
+            is_public=False, notes=source_marker,
+        )
+        VerificationEvent.objects.create(
+            dog=dog, health_record=record, state=VerificationState.HEALTH_VERIFIED,
+            reviewer=request.user,
+            note="Additional condition manually checked against approved private laboratory report " + str(source.pk),
+        )
+        record_audit(
+            action=ModerationAudit.Action.VERIFICATION, actor=request.user,
+            dog=dog, submission=source,
+            summary={
+                "kind": "additional_health_condition",
+                "health_record_id": record.pk,
+                "source_submission_id": str(source.pk),
+                "test_type": record.test_type, "result": record.result,
+                "public": False,
+            },
+            note="Moderator added an omitted laboratory condition; the report remains private.",
+        )
+    messages.success(request, "Additional condition saved privately. Review its public card, then publish it if appropriate.")
+    return redirect("accounts:edit-reviewed-health-result", pk=pk, record_id=record.pk)
+
+
+@login_required
+@never_cache
+def edit_reviewed_health_result(request, pk, record_id):
+    """Post-approval final editorial step, with an explicit publication choice."""
+    if not can_review_submissions(request.user):
+        raise PermissionDenied
+    if request.method not in ("GET", "POST"):
+        return HttpResponseBadRequest("Use the review form.")
+    record = get_object_or_404(
+        HealthRecord.objects.select_related(
+            "dog", "breed_dna_report", "breed_dna_report__evidence_document",
+            "evidence_document",
+        ),
+        pk=record_id, dog_id=pk,
+    )
+    if record.verification_state != VerificationState.HEALTH_VERIFIED:
+        raise PermissionDenied("An approved evidence-reviewed result is required.")
+    if request.method == "POST":
+        intent = request.POST.get("intent")
+        if intent not in ("save", "publish"):
+            return HttpResponseBadRequest("Choose Save privately or Publish.")
+        with transaction.atomic():
+            record = get_object_or_404(
+                HealthRecord.objects.select_for_update(of=("self",)).select_related("breed_dna_report"),
+                pk=record_id, dog_id=pk, verification_state=VerificationState.HEALTH_VERIFIED,
+            )
+            form = ReviewedHealthResultForm(request.POST, record=record)
+            if form.is_valid():
+                data = form.cleaned_data
+                report = getattr(record, "breed_dna_report", None)
+                if intent == "publish" and report and not report.consent_public_summary:
+                    form.add_error(None, "The owner has not authorized publication of this DNA breed summary.")
+                else:
+                    before = {
+                        "test_type": record.test_type, "result": record.result,
+                        "tested_on": record.tested_on.isoformat() if record.tested_on else None,
+                        "public": record.is_public,
+                    }
+                    record.tested_on = data.get("tested_on")
+                    if report:
+                        report.provider = data["laboratory"].strip()
+                        report.cane_corso_percentage = data["breed_percentage"]
+                        report.composition = data["composition"]
+                        report.save(update_fields=["provider", "cane_corso_percentage", "composition"])
+                        record.test_type = "DNA breed composition"
+                        record.result = percentage_text(data["breed_percentage"]) + "% Cane Corso"
+                    else:
+                        record.test_type = data["test_type"].strip()
+                        record.result = data["result"].strip()
+                    record.is_public = intent == "publish"
+                    record.save(update_fields=["test_type", "result", "tested_on", "is_public"])
+                    record_audit(
+                        action=ModerationAudit.Action.VERIFICATION,
+                        actor=request.user, dog=record.dog,
+                        summary={
+                            "kind": "moderator_post_approval_health_editor",
+                            "health_record_id": record.pk,
+                            "before": before,
+                            "after": {
+                                "test_type": record.test_type, "result": record.result,
+                                "tested_on": record.tested_on.isoformat() if record.tested_on else None,
+                                "public": record.is_public,
+                                "provider": report.provider if report else None,
+                                "composition": report.composition if report else None,
+                            },
+                        },
+                        note="Moderator confirmed edited public summary against original private evidence.",
+                    )
+                    invalidate_public_content()
+                    messages.success(
+                        request,
+                        "Reviewed summary published on the dog's profile."
+                        if record.is_public else
+                        "Reviewed summary saved privately. Publish it when the public card is ready.",
+                    )
+                    return redirect("accounts:reviewed-dog-health", pk=pk)
+    else:
+        form = ReviewedHealthResultForm(record=record)
+    report = getattr(record, "breed_dna_report", None)
+    return render(request, "accounts/moderator_health_edit.html", {
+        "dog": record.dog, "record": record, "form": form,
+        "breed_report": report,
+        "can_publish": not report or report.consent_public_summary,
     })
 
 
