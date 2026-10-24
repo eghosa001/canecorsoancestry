@@ -290,8 +290,9 @@ class PublicThemeRegressionTests(TestCase):
 
         self.assertNotContains(response, 'class="hero-mark"')
         self.assertNotContains(response, "CANECORSOANCESTRY.COM")
-        self.assertContains(response, "Trace the")
-        self.assertContains(response, "Cane Corso</em> bloodline.")
+        self.assertContains(response, "hero-mobile-break")
+        self.assertContains(response, "Pedigree · Bloodline · Heritage")
+        self.assertContains(response, "Discover the ancestry behind the breed.")
         self.assertContains(response, "evergreen-heritage.css?v=20261024-heritage-v1")
         self.assertContains(response, '<button class="theme-toggle', count=3)
         self.assertContains(response, "Countries")

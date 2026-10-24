@@ -628,8 +628,19 @@ def main():
                       };
                     }"""
                 )
-                if not heading or "Trace the" not in heading["text"] or "bloodline." not in heading["text"]:
-                    raise AssertionError(f"Missing redesigned mobile hero heading: {heading}")
+                original_copy = heading and all(
+                    word in heading["text"] for word in ("CANE", "CORSO", "ITALIANO")
+                )
+                # Pull requests run the smoke against the *currently deployed*
+                # site, before this copy-only change is published. Accept the
+                # prior live headline only during that pre-deployment phase.
+                old_live_copy = (
+                    heading and os.getenv("GITHUB_EVENT_NAME") == "pull_request"
+                    and "Trace the" in heading["text"]
+                    and "bloodline." in heading["text"]
+                )
+                if not (original_copy or old_live_copy):
+                    raise AssertionError(f"Original homepage wording missing from deployed release: {heading}")
                 if heading["fontSize"] < 40 or heading["height"] <= 0:
                     raise AssertionError(f"Mobile headline is too small or missing: {heading}")
                 if heading["searchTop"] < heading["titleBottom"]:
