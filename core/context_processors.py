@@ -45,30 +45,56 @@ def site_metadata(request):
         and (staff_role or not staff_identity)
     )
     if staff_role:
-        if view_name == "accounts:verification-dashboard":
-            workspace_section = "verification"
-        elif view_name in {"accounts:dog-edit-list", "accounts:dog-direct-edit", "accounts:dog-review-edit", "accounts:dog-direct-create"}:
-            workspace_section = "dogs"
-        elif view_name in {"accounts:kennel-publication-list", "accounts:kennel-publication-detail", "accounts:kennel-publication-change", "accounts:kennel-dogs-visibility-change"}:
-            workspace_section = "kennels"
-        elif view_name == "accounts:moderation-audit":
-            workspace_section = "audit"
-        elif view_name == "accounts:data-health":
-            workspace_section = "health"
-        else:
-            workspace_section = "queue"
+        staff_sections = {
+            "accounts:verification-dashboard": "verification",
+            "accounts:moderation": "queue",
+            "accounts:moderation-submission": "queue",
+            "accounts:dog-edit-list": "dogs",
+            "accounts:dog-direct-edit": "dogs",
+            "accounts:dog-review-edit": "dogs",
+            "accounts:dog-direct-create": "dog_new",
+            "accounts:kennel-publication-list": "kennels",
+            "accounts:kennel-publication-detail": "kennels",
+            "accounts:kennel-publication-change": "kennels",
+            "accounts:kennel-dogs-visibility-change": "kennels",
+            "accounts:kennel-reconciliation-review": "kennels",
+            "accounts:moderation-audit": "audit",
+            "accounts:data-health": "health",
+            "accounts:data-health-evidence": "health",
+            "accounts:health-genetic-list": "health_dna",
+            "accounts:health-genetic-dog": "health_dna",
+            "accounts:reviewed-dog-health": "health_dna",
+            "accounts:merge-dogs": "merge",
+        }
+        workspace_section = staff_sections.get(view_name, "queue")
     else:
-        workspace_section = {
+        member_sections = {
             "accounts:my-pedigrees": "dogs",
             "accounts:member-pedigree": "dogs",
+            "accounts:member-pedigree-export": "dogs",
+            "accounts:saved-pairings": "research",
+            "accounts:compare-saved-pairings": "research",
             "accounts:my-litters": "litters",
             "accounts:edit-litter": "litters",
+            "accounts:submit-litter": "litters",
             "accounts:submissions": "submissions",
+            "accounts:draft-checkout": "submissions",
+            "accounts:submit-dog": "submissions",
+            "accounts:submit-image": "submissions",
+            "accounts:submit-correction": "submissions",
+            "accounts:submit-health-record": "submissions",
+            "accounts:submit-document": "submissions",
+            "accounts:submission-evidence-upload": "submissions",
+            "accounts:documents": "documents",
+            "accounts:document-visibility": "documents",
+            "accounts:my-disputes": "disputes",
+            "accounts:open-dispute": "disputes",
             "accounts:profile": "profile",
             "accounts:notifications": "notifications",
             "accounts:new-payment": "payments",
             "accounts:payment-detail": "payments",
-        }.get(view_name, "overview")
+        }
+        workspace_section = member_sections.get(view_name, "overview")
 
     # A canonical URL must not depend on a visitor's Host header or the
     # temporary workers.dev hostname once SITE_URL moves to a custom domain.
