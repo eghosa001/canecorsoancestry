@@ -1,0 +1,66 @@
+/* Evergreen Heritage: Django Admin staff UI. */
+:root, html[data-theme="light"] {
+  --primary: #244f42;
+  --secondary: #244f42;
+  --accent: #965a39;
+  --primary-fg: #ffffff;
+  --body-fg: #1a2824;
+  --body-bg: #f2f1ea;
+  --body-quiet-color: #52675e;
+  --body-medium-color: #52675e;
+  --header-bg: #132b24;
+  --header-color: #f4f2e9;
+  --breadcrumbs-bg: #244f42;
+  --breadcrumbs-fg: #ffffff;
+  --link-fg: #245747;
+  --link-hover-color: #184537;
+  --hairline-color: #d6ded5;
+  --border-color: #d6ded5;
+  --darkened-bg: #ebeee7;
+  --selected-bg: #e0e9df;
+  --selected-row: #ebeee7;
+}
+html[data-theme="dark"] {
+  --primary: #9cc8af;
+  --secondary: #9cc8af;
+  --accent: #d7a47c;
+  --primary-fg: #092017;
+  --body-fg: #f4f2e9;
+  --body-bg: #0c1514;
+  --body-quiet-color: #b1c0b5;
+  --body-medium-color: #b1c0b5;
+  --header-bg: #0c1514;
+  --header-color: #f4f2e9;
+  --breadcrumbs-bg: #22342f;
+  --breadcrumbs-fg: #f4f2e9;
+  --link-fg: #9cc8af;
+  --link-hover-color: #c7e8cf;
+  --hairline-color: #34443e;
+  --border-color: #34443e;
+  --darkened-bg: #13201e;
+  --selected-bg: #22342f;
+  --selected-row: #22342f;
+}
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.55; }
+#header, #nav-sidebar, #content, .module { min-width: 0; }
+#content h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.9rem,2.7vw,2.9rem); letter-spacing: -.03em; }
+.module, fieldset, #changelist-filter, .submit-row {
+  border: 1px solid var(--border-color); border-radius: 11px; overflow: hidden;
+}
+.module h2, .module caption, .inline-group h2 {
+  padding: 11px 14px; background: var(--darkened-bg); color: var(--body-fg);
+}
+.button, input[type=submit], input[type=button], .submit-row input {
+  min-height: 40px; padding: 10px 14px; border-radius: 8px;
+}
+input, select, textarea { min-width: 0; max-width: 100%; }
+input:focus-visible, button:focus-visible, a:focus-visible, select:focus-visible {
+  outline: 3px solid var(--primary); outline-offset: 2px;
+}
+#changelist table { width: 100%; }
+#changelist th, #changelist td { padding-block: 10px; }
+@media(max-width:800px) {
+  #content { padding-inline: 15px; }
+  #changelist .results { overflow-x: auto; overscroll-behavior-x: contain; }
+  input, select, textarea { font-size: 16px; }
+}
