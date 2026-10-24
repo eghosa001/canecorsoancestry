@@ -323,3 +323,25 @@ class FormControlContrastTests(TestCase):
         self.assertIn("padding-top: 108px !important;", css)
         self.assertNotIn("iPhone-safe mobile brand position v84", css)
         self.assertNotIn("transform: translateY(7px);", css)
+
+
+class OriginalDarkThemeReversionTests(TestCase):
+    def test_legacy_dark_assets_are_theme_scoped_and_current_light_remains(self):
+        page = self.client.get(reverse("home"))
+        self.assertContains(page, "evergreen-heritage.css?v=20261024-heritage-v1")
+        self.assertContains(page, "pre-figma-dark.css?v=20261024-original-dark-v1")
+        self.assertContains(page, "data-legacy-dark-stylesheet", count=5)
+        self.assertContains(page, 'media="not all"', count=3)
+        self.assertContains(page, 'core/structured-pages.css')
+        self.assertContains(page, 'data-theme="light"')
+
+    def test_original_dark_colors_and_headings_are_explicit(self):
+        css = Path(finders.find("core/pre-figma-dark.css")).read_text(encoding="utf-8")
+        self.assertIn('--cca-canvas: #101110;', css)
+        self.assertIn('--cca-green: #c7a25d;', css)
+        self.assertIn('--gold: #c7a25d;', css)
+        self.assertIn('--serif: Georgia, "Times New Roman", serif;', css)
+        old = Path(finders.find("core/site.css")).read_text(encoding="utf-8")
+        self.assertIn('--bg: #101110;', old)
+        self.assertIn('--gold: #c7a25d;', old)
+
