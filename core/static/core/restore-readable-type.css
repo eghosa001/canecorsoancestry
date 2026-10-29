@@ -1,0 +1,113 @@
+/* Restore the client's pre-redesign readable type scale (17 October design).
+   Fonts, color, spacing, controls and navigation remain in the existing systems.
+   This loads LAST, after Evergreen, pre-Figma dark and structured layout rules,
+   so both light and dark mode use the same legible text size.
+   Do not reduce these sizes without an explicit client request. */
+
+:root {
+  --cca-body-type: 1.0625rem;  /* 17px at default browser zoom */
+  --cca-button-type: .95rem;
+  --cca-navigation-type: .92rem;
+  --cca-label-type: .95rem;
+  --cca-support-type: .875rem;
+}
+
+/* Original headings were more prominent; the redesign kept the typeface
+   but quietly reduced the h1 and h2 scales. */
+body { font-size: var(--cca-body-type); }
+html[data-theme] .hero h1 {
+  font-size: clamp(3.6rem, 8.5vw, 7.5rem);
+  line-height: .93;
+}
+html[data-theme] .page-heading h1 {
+  font-size: clamp(2.5rem, 5vw, 4.8rem);
+  line-height: 1.08;
+}
+html[data-theme] :is(.section-heading h2, .panel-heading h2) {
+  font-size: clamp(1.75rem, 2.7vw, 2.15rem);
+  line-height: 1.2;
+}
+html[data-theme] .hero-copy > p:not(.eyebrow) {
+  font-size: clamp(1.0625rem, 1.7vw, 1.25rem);
+  line-height: 1.55;
+}
+html[data-theme] :is(.eyebrow, .panel-heading .eyebrow, .section-heading .eyebrow) {
+  font-size: .79rem;
+}
+html[data-theme] .action-card strong { font-size: 1.25rem; }
+html[data-theme] .dog-card-body h3 { font-size: 1.15rem; }
+html[data-theme] .search-result-main h2 { font-size: 1.3rem; }
+html[data-theme] .kennel-card h2 { font-size: 1.7rem; }
+
+/* Keep navigation, action text and metadata readable rather than 11–13px. */
+html[data-theme] .main-nav { font-size: var(--cca-navigation-type); }
+html[data-theme] :is(.account-link, .theme-toggle, .mobile-nav > summary) {
+  font-size: var(--cca-navigation-type);
+}
+html[data-theme] .workspace-shortcuts-label { font-size: .91rem; }
+html[data-theme] .workspace-shortcuts-links a { font-size: .93rem; }
+html[data-theme] .workspace-more > summary,
+html[data-theme] .workspace-more-links a { font-size: .93rem; }
+html[data-theme] :is(.btn, .cca-secondary-actions > summary,
+  .cca-secondary-actions .cca-secondary-links a, .staff-center-index a,
+  .staff-center-quicklinks a, .staff-edit-jump a) {
+  font-size: var(--cca-button-type);
+}
+html[data-theme] .staff-center-action h3 { font-size: 1.18rem; }
+html[data-theme] :is(.staff-center-authority, .staff-center-steps span,
+  .staff-center-action small) { font-size: var(--cca-support-type); }
+html[data-theme] :where(.filter-panel, .moderation-filters, .member-form,
+  .mating-form, .verification-form, .staff-access-form) label {
+  font-size: var(--cca-label-type);
+}
+html[data-theme] :is(.page-shell, .dashboard-main) :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]), select, textarea) {
+  font-size: 1rem;
+}
+html[data-theme] .data-table td { font-size: .94rem; }
+html[data-theme] .data-table th { font-size: .84rem; }
+html[data-theme] .moderation-summary span { font-size: .9rem; }
+html[data-theme] :is(.dog-card-body p, .search-result-main p, .moderation-card p) {
+  font-size: .92rem;
+  line-height: 1.5;
+}
+html[data-theme] :is(.dog-profile .relationship-list span,
+  .dog-profile .relationship-list strong) { font-size: .96rem; }
+html[data-theme] .dog-profile .profile-tabs a { font-size: .88rem; }
+html[data-theme] :is(.pedigree-node small, .pedigree-node span) { font-size: .82rem; }
+html[data-theme] .site-footer { font-size: .94rem; }
+
+/* Restore the original mobile hero hierarchy while allowing labels and
+   navigation tiles to wrap naturally rather than overflow small screens. */
+@media (max-width: 760px) {
+  html[data-theme] .hero h1 { font-size: clamp(3.25rem, 12vw, 5rem); }
+  html[data-theme] .page-heading h1 { font-size: clamp(2.3rem, 8.5vw, 3.35rem); }
+  html[data-theme] :is(.section-heading h2, .panel-heading h2) {
+    font-size: clamp(1.65rem, 6vw, 2rem);
+  }
+  html[data-theme] .workspace-shortcuts-label,
+  html[data-theme] .workspace-nav-summary-action { font-size: .91rem; }
+  html[data-theme] .workspace-shortcuts-links > a { font-size: .94rem; }
+  html[data-theme] .dog-profile .profile-tabs a {
+    font-size: .84rem;
+    line-height: 1.3;
+    overflow-wrap: break-word;
+    min-width: 0;
+  }
+  html[data-theme] .dog-card-grid.featured-dog-grid .dog-card-body h3 {
+    font-size: clamp(1.05rem, 4.2vw, 1.18rem);
+  }
+  html[data-theme] .dog-card-grid.featured-dog-grid .dog-card-body p {
+    font-size: .9rem;
+  }
+  html[data-theme] .dog-profile .relationship-list span {
+    font-size: .86rem;
+  }
+  html[data-theme] .staff-edit-jump a { font-size: .92rem; }
+  html[data-theme] .page-shell :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]), select, textarea) {
+    font-size: 16px;
+  }
+}
+@media (max-width: 380px) {
+  html[data-theme] .hero h1 { font-size: clamp(2.85rem, 12vw, 3.4rem); }
+  html[data-theme] .dog-profile .profile-tabs a { font-size: .8rem; }
+}
