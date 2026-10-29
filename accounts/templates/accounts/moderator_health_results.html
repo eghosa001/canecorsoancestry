@@ -7,7 +7,7 @@
   <header class="page-heading">
     <p class="eyebrow">Moderator · Private health workspace</p>
     <h1>{{ dog.name }}</h1>
-    <p>Approve the submitted report once. The health summary appears automatically; you can correct it here. Source reports stay private.</p>
+    <p>Once a health submission is approved, its reviewed findings are verified. To enter additional scores after approving a Health/DNA document, select that document below and transcribe its exact values.</p>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">← Health review queue</a>
       {% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}#health">View public profile ↗</a>{% endif %}
@@ -29,7 +29,7 @@
         <div class="health-result-editor-copy">
           <strong>{{ item.test_type }}</strong>
           <span>{{ item.result }}</span>
-          <small>{{ item.tested_on|date:"j M Y"|default:"Date not provided" }} · {{ item.public_verification_label }}</small>
+          <small>{{ item.tested_on|date:"j M Y"|default:"Date not provided" }} · {{ item.public_verification_label }}{% if not item.is_public %} · Hidden from visitors{% endif %}</small>
           {% if item.breed_dna_report %}<small>Laboratory: {{ item.breed_dna_report.provider }}</small>{% endif %}
           {% if item.breed_dna_report and not item.breed_dna_report.consent_public_summary %}<small>Owner consent is required before publishing breed composition.</small>{% endif %}
         </div>
@@ -50,7 +50,7 @@
   </section>
   <section class="panel">
     <div class="health-section-heading"><div><p class="health-review-overline">Correct missed extraction</p><h2>Add a condition from an approved report</h2></div></div>
-    <p class="health-review-help">Choose an approved laboratory report and enter any condition and its exact result. The reviewed health result appears automatically after saving, unless owner consent is required for DNA breed composition.</p>
+    <p class="health-review-help">After the member's Health/DNA submission or Health/DNA document has been approved: select its approved source, enter the exact test name, score or numerical measurement, and confirm it against the certificate. Saving creates a verified health result. It appears on public dog profiles automatically; source documents remain confidential. Never enter an assumed value.</p>
     <form method="post" action="{% url 'accounts:add-reviewed-health-condition' dog.pk %}" class="member-form health-final-form">
       <datalist id="health-reported-status-options"><option value="Clear"><option value="Carrier"><option value="Affected"><option value="Inconclusive"><option value="Not tested"></datalist>
       {% csrf_token %}
@@ -58,13 +58,15 @@
         <div class="health-review-field health-review-field--wide"><label for="{{ add_condition_form.source_submission.id_for_label }}">{{ add_condition_form.source_submission.label }}</label>{{ add_condition_form.source_submission }}</div>
         <div class="health-review-field health-review-field--wide"><label for="{{ add_condition_form.source_document.id_for_label }}">{{ add_condition_form.source_document.label }}</label>{{ add_condition_form.source_document }}</div>
         <div class="health-review-field"><label for="{{ add_condition_form.test_type.id_for_label }}">{{ add_condition_form.test_type.label }}</label>{{ add_condition_form.test_type }}</div>
-        <div class="health-review-field"><label for="{{ add_condition_form.result.id_for_label }}">{{ add_condition_form.result.label }}</label>{{ add_condition_form.result }}</div>
+        <div class="health-review-field"><label for="{{ add_condition_form.result.id_for_label }}">{{ add_condition_form.result.label }}</label>{{ add_condition_form.result }}<small>{{ add_condition_form.result.help_text }}</small></div>
+        <div class="health-review-field"><label for="{{ add_condition_form.numeric_value.id_for_label }}">{{ add_condition_form.numeric_value.label }}</label>{{ add_condition_form.numeric_value }}<small>{{ add_condition_form.numeric_value.help_text }}</small></div>
+        <div class="health-review-field"><label for="{{ add_condition_form.result_unit.id_for_label }}">{{ add_condition_form.result_unit.label }}</label>{{ add_condition_form.result_unit }}</div>
         <div class="health-review-field"><label for="{{ add_condition_form.tested_on.id_for_label }}">{{ add_condition_form.tested_on.label }}</label>{{ add_condition_form.tested_on }}</div>
       </div>
       <div class="health-review-confirm"><label>{{ add_condition_form.reviewed }} <strong>{{ add_condition_form.reviewed.label }}</strong></label></div>
       <button type="submit" class="btn btn-gold">Save reviewed result →</button>
     </form>
-    <p class="health-private-caption">The result is linked in the moderation audit to the approved source submission. Breed percentages require the dedicated owner-consented DNA record instead.</p>
+    <p class="health-private-caption">For examples, enter HD-A, ED-0 or 12/24 in the result field; for a decimal measurement, leave that field empty and enter 12.5 plus its unit in the numeric fields. Every change is audited against the approved source. Breed percentages still require the dedicated owner-consented DNA record.</p>
   </section>
 </section>
 {% endblock %}
