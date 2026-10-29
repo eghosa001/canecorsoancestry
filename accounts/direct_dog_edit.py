@@ -579,10 +579,12 @@ def dog_edit_list(request):
                         DogAlias.objects.filter(name__icontains=q)
                         .values_list("dog_id", flat=True)[:100]
                     )
-                    related_ids.update(
-                        DogIdentityNumber.objects.filter(value__icontains=q)
-                        .values_list("dog_id", flat=True)[:30]
-                    )
+                    normalized_chip = "".join(ch for ch in q if ch.isalnum()).upper()
+                    if normalized_chip:
+                        related_ids.update(
+                            DogIdentityNumber.objects.filter(normalized_value=normalized_chip)
+                            .values_list("dog_id", flat=True)[:30]
+                        )
                 if related_ids:
                     condition |= Q(pk__in=related_ids)
                 matching = Dog.objects.filter(condition)
@@ -605,12 +607,12 @@ def dog_edit_list(request):
             matching = Dog.objects.order_by("name", "pk")
         result_page = Paginator(
             matching.select_related("kennel", "sire", "dam")
-            .prefetch_related("registrations"), 25
+            .prefetch_related("registrations__authority"), 25
         ).get_page(request.GET.get("page"))
         dogs = list(result_page.object_list)
     # Dog lookup should not synchronously load the full revision history on
     # every query. Staff may request it explicitly after finding the dog.
-    show_history = not q or request.GET.get("history") == "1"
+    show_history = (not q and not browse) or request.GET.get("history") == "1"
     revisions = list(_revision_events()[:25]) if show_history else []
     if revisions:
         _review_states(revisions)
@@ -618,7 +620,7 @@ def dog_edit_list(request):
         "dogs": dogs, "query": q, "revisions": revisions,
         "is_owner": can_manage_verification(request.user),
         "can_add_dog": can_add_canonical_dog(request.user),
-        "history_deferred": bool(q and not show_history),
+        "history_deferred": bool((q or browse) and not show_history),
         "health_mode": health_mode,
         "browse": browse,
         "result_page": result_page,
