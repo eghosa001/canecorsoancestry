@@ -39,7 +39,7 @@ rights. A disabled, deregistered or role-revoked account cannot edit.
    safely**, use the three steps: **1. Find the record**, **2. Review and
    save**, and **3. Verify the result**.
 3. For the most common actions, use **Find a dog**, **Find a kennel** or
-   **Pending approvals**. **Staff permissions** and the header
+   **Review submissions**. **Staff permissions** and the header
    **Manage staff access** shortcut appear only for the Super Admin.
 4. Otherwise, use **Find a setting or editable record**. The result count
    updates while typing; **Clear search** restores all available actions.
@@ -65,7 +65,7 @@ Category links cover the following **actual** workflows:
   The queue also supports bulk assignments, priorities, supported bulk rejections
   and individual dispute/photo corrections.
 - **Dogs:** **Manage dogs** → search by name, slug, UUID or external
-  registration → **Search records** → **Manage record**. The new editor has
+  registration → **Search all dogs** → **Manage record**. The new editor has
   a **Current edit** saved/unsaved indicator and four quick links:
   **Identity & ancestry** (opens **Identity & pedigree**),
   **Photos & related records** (opens **Related information**),
@@ -87,11 +87,11 @@ Category links cover the following **actual** workflows:
   listings must go through the paid submission workflow instead.
 - **Health:** **Manage dogs** → search → **Health values**, or
   **Manage record** → **Review health results & values**.
-  In **Add a condition from an approved report**, select one accepted
+  In **Add a missing health result**, select one accepted
   source, enter the exact grade/result *or* numerical value and unit, tick
   the evidence attestation, then **Save reviewed result**. Under
-  **Approved health results · Edit as needed**, select **Edit & preview**
-  and **Save corrections**, or **Hide incorrect result** as appropriate.
+  **Approved health results · Edit as needed**, select **Edit health record**
+  and **Save changes**, or **Hide incorrect result** as appropriate.
   A breed-composition result without owner consent may show
   **Save privately (owner consent required)** rather than publication.
   See `docs/HEALTH_RECORD_MODERATOR_WORKFLOW.md`.
