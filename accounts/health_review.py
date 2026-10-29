@@ -347,6 +347,7 @@ def add_reviewed_health_condition(request, pk):
                 status=Submission.Status.APPROVED,
             )
             source_marker = "Moderator condition transcribed from approved submission " + str(source.pk)
+            source_category = str((source.payload or {}).get("evidence_type") or "health")
             source_id = str(source.pk)
         else:
             # An approved Health/DNA document or Super Admin archival laboratory report.
@@ -361,10 +362,12 @@ def add_reviewed_health_condition(request, pk):
                 document_type__in=(DogDocument.DocumentType.HEALTH, DogDocument.DocumentType.DNA),
             )
             source_marker = "Moderator condition transcribed from approved document " + str(document.pk)
+            source_category = document.document_type
             source_id = str(document.pk)
+        source_note = source_marker + "; evidence_category=" + source_category
         if HealthRecord.objects.filter(
             dog=dog, test_type__iexact=data["test_type"].strip(),
-            tested_on=data.get("tested_on"), notes=source_marker,
+            tested_on=data.get("tested_on"), notes__in=(source_note, source_marker),
         ).exists():
             messages.error(request, "This condition and date have already been transcribed from that document.")
             return redirect("accounts:reviewed-dog-health", pk=pk)
@@ -386,7 +389,7 @@ def add_reviewed_health_condition(request, pk):
             dog=dog, test_type=data["test_type"].strip(),
             result=readable_health_result(data["resolved_result"]),
             tested_on=data.get("tested_on"), verification_state=VerificationState.HEALTH_VERIFIED,
-            is_public=True, notes=source_marker, evidence_document=direct_evidence,
+            is_public=True, notes=source_note, evidence_document=direct_evidence,
         )
         VerificationEvent.objects.create(
             dog=dog, health_record=record, state=VerificationState.HEALTH_VERIFIED,
