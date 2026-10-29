@@ -5,15 +5,28 @@ with active staff assignments. Member accounts cannot use the staff editor.
 
 ## Open a dog's health workspace
 
-1. Sign in as staff and open **Moderation → Manage dog records**.
-2. Search for the dog's name or ID. Use **Health values** next to the result,
-   or open **Manage record → Review health results & values**.
-3. Alternatively, go to `/moderation/health-results/<dog UUID>/` while
-   authenticated. Always confirm the exact dog first.
+1. Sign in with an active dedicated staff account and use the
+   **Change center** link in the staff workspace.
+2. Under **How to make a change safely**, choose **Find a dog**, or search
+   for **Enter or change verified health numbers** under
+   **Find a setting or editable record**, then click **Open this editor**.
+   Alternatively use the **Manage dogs** link in the staff navigation.
+3. On **Manage dog records**, enter a name, registration, slug or UUID and
+   click **Search records**. For the exact dog choose **Health values**.
+   Alternatively, choose **Manage record**, then
+   **Review health results & values** near the top of the dog editor.
+4. The canonical dog editor now has quick links for
+   **Identity & ancestry**, **Photos & related records**, **Save or submit**
+   and **Revision history**. The health-result editor is a **separate
+   page**, not a tab under **Identity & ancestry**.
+5. The exact authenticated health-results route is
+   `/member/moderation/health-results/<dog UUID>/` (replace the placeholder
+   with the dog's UUID). Always confirm the dog's name before modifying data.
 
 ## When a Health/DNA submission is approved
 
-1. Open **Moderation → Health uploads → Review certificate**.
+1. Open **Review queue** → choose **Health uploads** (or filter **Type**
+   for health) → open the relevant submission using **Review certificate**.
 2. Read the original private PDF/image and, when relevant, transcribe supported
    genetic markers before approval. Use the existing risk-based approval flow
    (high-risk submissions can require a second reviewer).
@@ -29,21 +42,24 @@ with active staff assignments. Member accounts cannot use the staff editor.
 Acceptance of a generic document verifies the **source was accepted**, not
 unknown measurements that have not been transcribed yet. To enter the findings:
 
-1. Open the dog's **Review health results & values** workspace.
+1. Open the dog's **Health values** workspace from **Manage dog records**
+   or use **Review health results & values** from **Manage record**.
 2. Under **Add a condition from an approved report**, choose **Or approved
    Health/DNA document** and select the accepted PDF/image. Do not select two
    sources at once.
-3. Enter the exact **test/condition name**, **result or grade**, and **test
-   date** if the report gives one.
-4. For plain decimal measurements, leave **Result / grade** empty and enter
-   **Exact numeric value** and, if appropriate, **Measurement unit**.
+3. Enter **Exact genetic condition / test name**,
+   **Result / grade exactly as reported**, and **Test date** if supplied.
+4. For plain decimal measurements, leave **Result / grade exactly as reported**
+   empty and enter **Exact numeric value (optional)** and, if appropriate,
+   **Measurement unit (optional)**.
    The application saves these together as the reported result; for example
    `12.50` and `mm` are stored as `12.50 mm`. Zero is valid.
-5. For grades, labels and compound scores, use the **Result / grade** field
+5. For grades, labels and compound scores, use the
+   **Result / grade exactly as reported** field
    directly: `HD-A`, `ED-0`, `12/24`, `Clear`, `Carrier`, etc. Do not
    simultaneously fill the numeric field.
-6. Tick the attestation confirming the exact value was checked against the
-   approved certificate, then **Save reviewed result**.
+6. Tick **I have checked this additional condition and its result in the
+   approved report**, then select **Save reviewed result**.
 7. The new result is immediately marked **Health/DNA verified**, is audited,
    and its textual summary appears on the dog's profile if that dog is
    published. The certificate is not publicly exposed.
@@ -54,17 +70,25 @@ reference ranges, numbers or units absent from the report.
 
 ## Correcting or hiding a saved value
 
-1. Open the dog's **Review health results & values**.
-2. Find the verified record and choose **Edit & preview**.
-3. Open the confidential evidence link and compare the recorded result.
-4. Change the **Result / grade** field directly, or clear its existing text
-   and use **Exact numeric measurement** plus **Measurement unit**.
-5. Tick the review attestation. Choose **Save corrections**. The corrected
-   result stays verified, and the audit retains the before/after values.
-6. To suppress an incorrect result, choose **Hide incorrect result** on the
-   list; this hides the public summary without deleting evidence or
-   verification history. Staff can restore publication once the value is
-   corrected, subject to the DNA consent requirements.
+1. Open the dog's **Health values** workspace or
+   **Review health results & values** from **Manage record**.
+2. Under **Approved health results · Edit as needed**, find the verified
+   record and choose **Edit & preview**.
+3. On the edit page, compare **01 · Verified evidence** with the confidential
+   original source, then examine **02 · Public preview**.
+4. Under **03 · Correction**, change **Reported result / grade** directly,
+   or clear the existing grade and use **Exact numeric measurement (optional)**
+   plus **Measurement unit (optional)**.
+5. Tick **I checked the edited public summary against the original laboratory
+   evidence**, then select **Save corrections** when publication is permitted.
+   Where owner consent for breed composition is missing, the screen instead
+   offers **Save privately (owner consent required)**; it does *not* authorize
+   publishing a DNA breed-composition summary. The audit retains the edit.
+6. To suppress a published incorrect result, return to
+   **Approved health results · Edit as needed** and choose
+   **Hide incorrect result**. This hides the public summary without deleting
+   its evidence or audit history. Restoring visibility remains subject to
+   publication restrictions and owner DNA consent.
 
 ## Important boundaries
 
