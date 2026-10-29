@@ -13,7 +13,7 @@ for independently reviewed historical health evidence also offer
 **Edit this verified result**, which opens the exact evidence-verified result.
 No new member request is required for an authorized staff correction.
 
-Use **Edit & preview** to check the original evidence and save the corrected
+Use **Edit health record** to check the original evidence and save the corrected
 health values. The original audit entry and certificate remain unchanged.
 The shortcut is absent if the dog itself has been removed; old audit
 entries remain readable.
@@ -27,7 +27,7 @@ entries remain readable.
    **Find a setting or editable record**, then click **Open this editor**.
    Alternatively use the **Manage dogs** link in the staff navigation.
 3. On **Manage dog records**, enter a name, registration, slug or UUID and
-   click **Search records**. For the exact dog choose **Health values**.
+   click **Search all dogs**. For the exact dog choose **Health values**.
    Alternatively, choose **Manage record**, then
    **Review health results & values** near the top of the dog editor.
 4. The canonical dog editor now has quick links for
@@ -61,7 +61,7 @@ unknown measurements that have not been transcribed yet. To enter the findings:
 
 1. Open the dog's **Health values** workspace from **Manage dog records**
    or use **Review health results & values** from **Manage record**.
-2. Under **Add a condition from an approved report**, choose **Or approved
+2. Under **Add a missing health result**, choose **Or approved
    Health/DNA document** and select the accepted PDF/image. Do not select two
    sources at once.
 3. Enter **Exact genetic condition / test name**,
@@ -96,14 +96,14 @@ The **HealthRecord** (the verified text shown to visitors) is corrected separate
   Edit as needed** for that dog.
 - From the public dog profile while signed in as staff, select
   **Edit verified health values** in **Health & DNA**.
-- Or go through **Manage dogs → Search records → Health values**.
-  Select the relevant **Edit & preview** control, review the original
+- Or go through **Manage dogs → Search all dogs → Health values**.
+  Select the relevant **Edit health record** control, review the original
   evidence, change the exact value, check the attestation, and
-  choose **Save corrections**.
+  choose **Save changes**.
 - An approved **Health/DNA document** is accepted source evidence; it
   does not invent measurements. Open **Enter or correct values from this
   approved report** and transcribe each actual finding under
-  **Add a condition from an approved report** before it can be edited
+  **Add a missing health result** before it can be edited
   as a verified value.
 - Older records marked **Community submitted** or similar are *not*
   evidence-verified and do not have an approved-result correction button.
@@ -121,14 +121,14 @@ are permitted, with independent audit entries.
 1. Open the dog's **Health values** workspace or
    **Review health results & values** from **Manage record**.
 2. Under **Approved health results · Edit as needed**, find the verified
-   record and choose **Edit & preview**.
+   record and choose **Edit health record**.
 3. On the edit page, compare **01 · Verified evidence** with the confidential
    original source, then examine **02 · Public preview**.
 4. Under **03 · Correction**, change **Reported result / grade** directly,
    or clear the existing grade and use **Exact numeric measurement (optional)**
    plus **Measurement unit (optional)**.
 5. Tick **I checked the edited public summary against the original laboratory
-   evidence**, then select **Save corrections** when publication is permitted.
+   evidence**, then select **Save changes** when publication is permitted.
    Where owner consent for breed composition is missing, the screen instead
    offers **Save privately (owner consent required)**; it does *not* authorize
    publishing a DNA breed-composition summary. The audit retains the edit.
