@@ -36,9 +36,9 @@
       <li><strong>3. Verify the result</strong><span>Reopen the record or public page and confirm the saved state and audit trail. Protected proposals remain private until approved.</span></li>
     </ol>
     <nav class="staff-center-quicklinks" aria-label="Most-used editing destinations">
-      <a href="{% url 'accounts:dog-edit-list' %}">Edit dog details</a>
+      <a href="{% url 'accounts:dog-edit-list' %}">Find a dog</a>
       <a href="{% url 'accounts:dog-edit-list' %}?mode=health">Edit verified health results</a>
-      <a href="{% url 'accounts:kennel-publication-list' %}">Manage kennels</a>
+      <a href="{% url 'accounts:kennel-publication-list' %}">Find a kennel</a>
       <a href="{% url 'accounts:moderation' %}#pending-review">Review submissions</a>
       <a href="{% url 'accounts:moderation-audit' %}">View change history</a>
       {% if is_super_admin %}<a href="{% url 'accounts:verification-dashboard' %}#staff-accounts">Staff permissions</a>{% endif %}
