@@ -59,6 +59,10 @@ class ModerationTemplateRegressionTests(TestCase):
             response, reverse("accounts:edit-reviewed-health-result", args=[dog.pk, health.pk]),
         )
         self.assertContains(response, "without a member request")
+        self.assertEqual(
+            self.client.get(reverse("accounts:edit-reviewed-health-result", args=[dog.pk, health.pk])).status_code,
+            200,
+        )
 
         # Staff-only editing is enforced at the destination, not by hiding links alone.
         member = get_user_model().objects.create_user(
