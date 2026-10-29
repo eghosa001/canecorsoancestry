@@ -42,7 +42,7 @@ class ModeratorFinalPublicationTests(TestCase):
         page = self.client.get(self.edit_url)
         self.assertContains(page, "Save changes")
         self.assertNotContains(page, "Save &amp; publish on dog profile")
-        self.assertContains(page, "Published summary preview")
+        self.assertContains(page, "Live preview of your edited result")
 
     def test_post_approval_edit_and_explicit_publish_change_the_frontend(self):
         self.assertNotContains(self.client.get(self.public_url), 'genetic-screening-status--clear')
