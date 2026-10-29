@@ -2,7 +2,7 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from django.core.cache import caches
 from django.test import TestCase
 from django.urls import reverse
 
@@ -12,7 +12,7 @@ from registry.services import approve_submission
 
 class ApprovedChangesAppearImmediatelyTests(TestCase):
     def setUp(self):
-        cache.clear()
+        caches["public"].clear()
         User = get_user_model()
         self.reviewer = User.objects.create_user(username="fresh-reviewer")
         ModerationRoleAssignment.objects.create(
@@ -42,11 +42,11 @@ class ApprovedChangesAppearImmediatelyTests(TestCase):
             "cca:dog-search:kennels:v3",
         )
         for key in keys:
-            cache.set(key, "old", 900)
+            caches["public"].set(key, "old", 900)
         with self.captureOnCommitCallbacks(execute=True):
             approve_submission(submission, self.reviewer, "Identity confirmed.")
         for key in keys:
-            self.assertIsNone(cache.get(key), f"Stale Django metadata: {key}")
+            self.assertIsNone(caches["public"].get(key), f"Stale Django metadata: {key}")
         self.dog.refresh_from_db()
         self.assertEqual(self.dog.name, "Updated Display Name")
         response = self.client.get(
@@ -80,10 +80,10 @@ class ApprovedChangesAppearImmediatelyTests(TestCase):
             is_public=True, kennel=self.kennel,
         )
         key = "cca:home:public-stats:v4"
-        cache.set(key, {"dog_count": 999}, 300)
+        caches["public"].set(key, {"dog_count": 999}, 300)
         with self.captureOnCommitCallbacks(execute=True):
             merge_dogs(self.dog, duplicate, performed_by=self.reviewer)
-        self.assertIsNone(cache.get(key))
+        self.assertIsNone(caches["public"].get(key))
         self.assertFalse(Dog.objects.filter(pk=duplicate.pk).exists())
 
     def test_merge_immediately_updates_public_profile_search_and_old_url(self):
