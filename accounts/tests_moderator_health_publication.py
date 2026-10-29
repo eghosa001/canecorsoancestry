@@ -146,3 +146,106 @@ class ModeratorLabResultTests(TestCase):
         self.client.post(url, {"status_CMR1": "", "publish_CMR1": "on", "reviewed": "on"})
         submission.refresh_from_db()
         self.assertNotIn("reviewed_markers", submission.payload)
+
+    def test_approved_health_document_allows_moderator_numeric_entry_and_is_private(self):
+        accepted = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+            payload={"document_type": DogDocument.DocumentType.HEALTH},
+        )
+        evidence = DogDocument.objects.create(
+            dog=self.dog, title="Accepted health laboratory report",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file="documents/accepted-elbow-evidence.pdf", is_public=True,
+            source_submission=accepted, submitted_by=self.owner,
+        )
+        self.client.force_login(self.moderator)
+        self.assertContains(self.client.get(self.health_url), "Accepted health laboratory report")
+        url = reverse("accounts:add-reviewed-health-condition", args=[self.dog.pk])
+        response = self.client.post(url, {
+            "source_document": str(evidence.pk), "test_type": "Elbow measurement",
+            "result": "", "numeric_value": "12.50", "result_unit": "mm",
+            "reviewed": "on",
+        })
+        self.assertEqual(response.status_code, 302)
+        record = HealthRecord.objects.get(dog=self.dog, test_type="Elbow measurement")
+        self.assertEqual(record.result, "12.50 mm")
+        self.assertEqual(record.verification_state, VerificationState.HEALTH_VERIFIED)
+        self.assertTrue(record.is_public)
+        self.assertEqual(record.evidence_document, evidence)
+        evidence.refresh_from_db()
+        self.assertFalse(evidence.is_public)
+        from core.media_views import _can_read_media
+        self.assertEqual(_can_read_media(self.unauthorized, evidence.file.name), (False, False))
+        self.client.logout()
+        self.assertContains(self.client.get(self.public_url), "12.50 mm")
+
+    def test_moderator_can_correct_accepted_health_value_and_non_staff_cannot(self):
+        submission = self.upload()
+        self.client.force_login(self.moderator)
+        approve_submission(submission, self.moderator)
+        record = HealthRecord.objects.get(dog=self.dog)
+        url = reverse("accounts:edit-reviewed-health-result", args=[self.dog.pk, record.pk])
+        response = self.client.post(url, {
+            "intent": "publish", "test_type": "Elbow measurement",
+            "result": "", "numeric_value": "0", "result_unit": "mm",
+            "reviewed": "on",
+        })
+        self.assertEqual(response.status_code, 302)
+        record.refresh_from_db()
+        self.assertEqual(record.result, "0 mm")
+        self.assertEqual(record.verification_state, VerificationState.HEALTH_VERIFIED)
+        self.assertTrue(record.is_public)
+        self.client.force_login(self.unauthorized)
+        self.assertEqual(self.client.post(url, {
+            "intent": "publish", "test_type": "Elbow measurement",
+            "result": "5", "reviewed": "on",
+        }).status_code, 403)
+        record.refresh_from_db()
+        self.assertEqual(record.result, "0 mm")
+
+    def test_numeric_result_does_not_bypass_genetic_marker_validation(self):
+        accepted = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+            payload={"document_type": DogDocument.DocumentType.DNA},
+        )
+        evidence = DogDocument.objects.create(
+            dog=self.dog, title="Accepted DNA report",
+            document_type=DogDocument.DocumentType.DNA,
+            file="documents/accepted-dna-evidence.pdf", source_submission=accepted,
+            submitted_by=self.owner,
+        )
+        self.client.force_login(self.moderator)
+        url = reverse("accounts:add-reviewed-health-condition", args=[self.dog.pk])
+        self.assertEqual(self.client.post(url, {
+            "source_document": str(evidence.pk), "test_type": "DSRA",
+            "result": "", "numeric_value": "1", "reviewed": "on",
+        }).status_code, 302)
+        self.assertFalse(HealthRecord.objects.filter(dog=self.dog, test_type="DSRA").exists())
+
+    def test_super_admin_can_enter_scored_result_from_accepted_document(self):
+        User = get_user_model()
+        admin = User.objects.create_superuser(
+            username="health-owner-admin", email="admin@example.test", password="abc123xyz",
+        )
+        accepted = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+            payload={"document_type": DogDocument.DocumentType.HEALTH},
+        )
+        evidence = DogDocument.objects.create(
+            dog=self.dog, title="Accepted hip report",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file="documents/accepted-hip-evidence.pdf", source_submission=accepted,
+            submitted_by=self.owner,
+        )
+        self.client.force_login(admin)
+        url = reverse("accounts:add-reviewed-health-condition", args=[self.dog.pk])
+        self.assertEqual(self.client.post(url, {
+            "source_document": str(evidence.pk), "test_type": "HD",
+            "result": "A", "reviewed": "on",
+        }).status_code, 302)
+        rec = HealthRecord.objects.get(dog=self.dog, test_type="HD")
+        self.assertEqual(rec.result, "A")
+        self.assertEqual(rec.verification_state, VerificationState.HEALTH_VERIFIED)
