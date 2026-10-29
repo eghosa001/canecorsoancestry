@@ -490,9 +490,29 @@ def edit_reviewed_health_result(request, pk, record_id):
     else:
         form = ReviewedHealthResultForm(record=record)
     report = getattr(record, "breed_dna_report", None)
+    source_document = record.evidence_document or (report.evidence_document if report else None)
+    if not source_document:
+        # A source can back several conditions, while the model's direct
+        # evidence link is one-to-one. Recover the approved source via audit.
+        provenance = ModerationAudit.objects.filter(
+            dog=record.dog, action=ModerationAudit.Action.VERIFICATION,
+            summary__kind="additional_health_condition",
+            summary__health_record_id=record.pk,
+        ).order_by("-pk").first()
+        if provenance:
+            details = provenance.summary or {}
+            if details.get("source_document_id"):
+                source_document = DogDocument.objects.filter(
+                    dog=record.dog, pk=details["source_document_id"],
+                ).first()
+            elif details.get("source_submission_id"):
+                source_document = DogDocument.objects.filter(
+                    dog=record.dog,
+                    source_submission_id=details["source_submission_id"],
+                ).first()
     return render(request, "accounts/moderator_health_edit.html", {
         "dog": record.dog, "record": record, "form": form,
-        "breed_report": report,
+        "breed_report": report, "source_document": source_document,
         "can_publish": not report or report.consent_public_summary,
     })
 
