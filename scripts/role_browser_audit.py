@@ -47,6 +47,37 @@ def no_overflow(page, label):
     assert over <= 4, f"{label}: {over}px horizontal overflow"
 
 
+def assert_original_readable_type(page, label):
+    """Catch tiny text regressions in both light and dark and on WebKit."""
+    metrics = page.evaluate("""() => {
+      const size = (selector) => {
+        const node = document.querySelector(selector);
+        return node ? parseFloat(getComputedStyle(node).fontSize) : null;
+      };
+      return {
+        body: size('body'),
+        hero: size('.hero h1'),
+        lead: size('.hero-copy > p:not(.eyebrow)'),
+        section: size('.home-actions .section-heading h2'),
+        card: size('.home-actions .action-card strong'),
+      };
+    }""")
+    expected = {
+        "body": 17, "hero": 44, "lead": 17,
+        "section": 26, "card": 20,
+    }
+    if page.viewport_size["width"] > 760:
+        expected["hero"] = 56
+        expected["section"] = 28
+    for key, threshold in expected.items():
+        value = metrics[key]
+        assert value is not None and value >= threshold - 0.2, (
+            f"{label}: {key} text {value}px smaller than agreed "
+            f"{threshold}px restoration"
+        )
+    no_overflow(page, label + " restored typography")
+
+
 def login(page, role):
     visit(page, "/accounts/login/")
     credentials = DATA["roles"][role]
@@ -85,6 +116,7 @@ def public_routes(page, label):
     response = visit(page, "/dogs/suggestions/?q=" + quote("Browser Audit Sire"))
     assert "Browser Audit Sire" in response.text(), "Published dog missing from autocomplete"
     visit(page, "/")
+    assert_original_readable_type(page, label + "-light")
     if page.viewport_size["width"] <= 760:
         page.locator(".mobile-nav > summary").click()
         theme = page.locator(".mobile-nav-panel [data-theme-toggle]").first
@@ -94,6 +126,7 @@ def public_routes(page, label):
     theme.click()
     after = page.locator("html").get_attribute("data-theme")
     assert before != after, f"Theme toggle inactive: {before} to {after}"
+    assert_original_readable_type(page, label + "-dark")
     page.screenshot(path=OUT / f"{label}-home.png", full_page=True)
 
 

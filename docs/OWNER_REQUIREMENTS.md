@@ -10,6 +10,26 @@ This file records the requirements that must survive future implementation and r
 - No custom domain has been purchased or configured; use the current Cloudflare `workers.dev` public endpoint unless the owner explicitly changes this.
 - The two supplied design mockups in `docs/design-reference/` are the owner-approved visual baseline and must remain in the repository.
 
+## Client-approved typography scale (29 October 2026)
+
+The client prefers the **larger text from the original pre-redesign
+website**. The public redesign preserved the original Georgia heading
+typeface but introduced noticeably smaller heading, navigation, card and
+secondary text sizes. Restore the original prominent type hierarchy while
+retaining the newer responsive page layout, usability and permissions.
+
+- Keep the original generous homepage hero and section heading sizes.
+- Body copy must be comfortably readable (17px at the standard browser
+  font setting), with navigation, controls, cards and staff instructions
+  clearly legible in both light and dark themes.
+- Preserve mobile Safari usability without horizontal clipping, hidden
+  navigation or inaccessible controls; test both desktop and mobile.
+- The **last-loaded** `core/static/core/restore-readable-type.css` is the
+  shared typography contract. Do not shrink these sizes or replace it with
+  small-text design-system defaults without explicit client authorization.
+- Keep browser zoom, system font scaling and user accessibility controls
+  functional; do not disable viewport zoom.
+
 ## Terminology rules
 
 The product must not imply that Cane Corso Ancestry is an official registration authority.

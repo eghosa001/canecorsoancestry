@@ -38,6 +38,45 @@ class StructuredNavigationTests(TestCase):
                 self.assertContains(response, "structured-nav.js")
                 self.assertContains(response, 'id="main-content"')
 
+    def test_original_large_typography_is_loaded_last_for_every_role(self):
+        """Theme refactors must not silently re-shrink public or staff text."""
+        from django.conf import settings
+
+        css = (settings.BASE_DIR / "core/static/core/restore-readable-type.css").read_text(
+            encoding="utf-8"
+        )
+        for rule in (
+            "--cca-body-type: 1.0625rem",
+            ".hero h1",
+            ".page-heading h1",
+            ".workspace-shortcuts-links a",
+            ".dog-profile .profile-tabs a",
+            ".data-table td",
+            "@media (max-width: 760px)",
+            "@media (max-width: 380px)",
+        ):
+            with self.subTest(rule=rule):
+                self.assertIn(rule, css)
+
+        for user in (None, self.member, self.moderator, self.owner):
+            with self.subTest(role=user.username if user else "visitor"):
+                if user:
+                    self.client.force_login(user)
+                else:
+                    self.client.logout()
+                page = self.client.get(reverse("home"))
+                self.assertEqual(page.status_code, 200)
+                html = page.content.decode("utf-8")
+                self.assertIn("restore-readable-type.css", html)
+                self.assertLess(
+                    html.index("original-typography.css"),
+                    html.index("restore-readable-type.css"),
+                )
+                self.assertLess(
+                    html.index("interface-consistency.css"),
+                    html.index("restore-readable-type.css"),
+                )
+
     def test_member_nav_prioritizes_routes_and_groups_secondary_tools(self):
         self.client.force_login(self.member)
         for name, section in (
