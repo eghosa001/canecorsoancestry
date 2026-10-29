@@ -23,8 +23,8 @@
     {% empty %}<p class="muted">No pending laboratory submissions.</p>{% endfor %}
   </section>
   <section class="panel">
-    <div class="health-section-heading"><div><p class="health-review-overline">Staff health results</p><h2 id="approved-health-results">Approved health results · Edit as needed</h2></div><span class="health-count-badge">{{ records|length }}</span></div>
-    <p class="health-review-help">Approved values remain editable. Select <strong>Edit &amp; preview</strong> beside an evidence-verified result, compare the original report, correct the value and save. The original approval record stays unchanged.</p>
+    <div class="health-section-heading"><div><p class="health-review-overline">Staff health results</p><h2 id="approved-health-results">Approved health records</h2></div><span class="health-count-badge">{{ records|length }}</span></div>
+    <p class="health-review-help">To change a verified result, select <strong>Edit health record</strong>. The same editor shows a live preview of your changes before you save. Compare the accepted certificate and keep the original evidence private; the audit history stays intact.</p>
     {% for item in records %}
       <div class="health-result-editor-row">
         <div class="health-result-editor-copy">
@@ -36,7 +36,7 @@
         </div>
         <div class="health-result-editor-action">
           {% if item.verification_state == "health" %}
-            <a class="btn btn-gold" href="{% url 'accounts:edit-reviewed-health-result' dog.pk item.pk %}">Edit &amp; preview →</a>
+            <a class="btn btn-gold" href="{% url 'accounts:edit-reviewed-health-result' dog.pk item.pk %}">Edit health record</a>
           {% else %}
             <small class="muted">This record is not evidence-verified. Review an accepted report before changing its verified status.</small>
           {% endif %}
@@ -54,7 +54,7 @@
     <p class="health-private-caption">Approval does not have to mean publication. The moderator controls each public summary independently. Editing creates an audited correction; confidential images and PDFs never appear in public.</p>
   </section>
   <section class="panel">
-    <div class="health-section-heading"><div><p class="health-review-overline">Correct missed extraction</p><h2 id="add-approved-condition">Add a condition from an approved report</h2></div></div>
+    <div class="health-section-heading"><div><p class="health-review-overline">Correct missed extraction</p><h2 id="add-approved-condition">Add a missing health result</h2></div></div>
     <p class="health-review-help">After the member's Health/DNA submission or Health/DNA document has been approved: select its approved source, enter the exact test name, score or numerical measurement, and confirm it against the certificate. Saving creates a verified health result. It appears on public dog profiles automatically; source documents remain confidential. Never enter an assumed value.</p>
     <form method="post" action="{% url 'accounts:add-reviewed-health-condition' dog.pk %}" class="member-form health-final-form">
       <datalist id="health-reported-status-options"><option value="Clear"><option value="Carrier"><option value="Affected"><option value="Inconclusive"><option value="Not tested"></datalist>
