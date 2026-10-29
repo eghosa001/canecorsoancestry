@@ -274,6 +274,21 @@ class ModeratorLabResultTests(TestCase):
         self.assertNotContains(self.client.get(self.public_url), "Edit verified health values")
         self.assertEqual(self.client.get(self.health_url).status_code, 403)
 
+    def test_approved_health_record_has_one_edit_flow_and_live_preview(self):
+        submission = self.upload()
+        self.client.force_login(self.moderator)
+        approve_submission(submission, self.moderator)
+        record = HealthRecord.objects.get(dog=self.dog)
+        list_page = self.client.get(self.health_url)
+        self.assertContains(list_page, "Edit health record")
+        self.assertNotContains(list_page, "Edit &amp; preview")
+        url = reverse("accounts:edit-reviewed-health-result", args=[self.dog.pk, record.pk])
+        edit_page = self.client.get(url)
+        self.assertEqual(edit_page.status_code, 200)
+        self.assertContains(edit_page, "Live preview of your edited result")
+        self.assertContains(edit_page, "Save changes")
+        self.assertContains(edit_page, "Original laboratory result")
+
     def test_unverified_legacy_records_remain_separate_from_approved_editor(self):
         record = HealthRecord.objects.create(
             dog=self.dog, test_type="Legacy hip claim", result="A",
