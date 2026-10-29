@@ -84,6 +84,19 @@
             <a href="{% url 'pedigrees:virtual-mating' %}">Virtual mating</a>
             <a href="{% url 'registry:statistics' %}">Statistics</a>
           </nav>
+          {% if user.is_authenticated and staff_identity %}
+          <nav class="mobile-staff-edit-links" aria-label="Staff editing shortcuts">
+            <strong>Staff editing</strong>
+            <a href="{% url 'accounts:staff-change-center' %}">All editing tools</a>
+            <a href="{% url 'accounts:dog-edit-list' %}">Edit dog details or health records</a>
+            <a href="{% url 'accounts:kennel-publication-list' %}">Manage kennels and associated dogs</a>
+            <a href="{% url 'accounts:moderation' %}">Review submissions and disputes</a>
+            <a href="{% url 'accounts:moderation-audit' %}">See change history</a>
+            {% if user.is_superuser %}
+            <a href="{% url 'accounts:verification-dashboard' %}#staff-accounts">Manage moderator permissions</a>
+            {% endif %}
+          </nav>
+          {% endif %}
           <button class="theme-toggle mobile-theme-toggle" type="button" data-theme-toggle aria-label="Switch to light mode">Light mode</button>
           <div class="mobile-account-actions">
             {% if user.is_authenticated %}
