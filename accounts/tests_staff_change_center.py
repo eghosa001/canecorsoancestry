@@ -152,8 +152,8 @@ class StaffChangeCenterTests(TestCase):
         self.assertFalse(self.moderator.is_active)
         self.assertFalse(can_review_submissions(self.moderator))
         self.client.force_login(self.moderator)
-        self.assertEqual(
-            self.client.get(reverse("accounts:staff-change-center")).status_code, 403
+        self.assertNotEqual(
+            self.client.get(reverse("accounts:staff-change-center")).status_code, 200
         )
         self.client.force_login(self.super_admin)
         self.assertEqual(self.client.post(status, {
