@@ -127,7 +127,7 @@ class StaffChangeCenterTests(TestCase):
             "Clear search", "Find a dog", "Staff permissions",
             "Identity & ancestry", "Photos & related records",
             "Save or submit", "Revision history",
-            "Save corrections", "Moderator access",
+            "Save changes", "Moderator access",
             "Apply to selected moderator", "Deregister & remove access",
         ):
             with self.subTest(staff_guide=phrase):
@@ -136,7 +136,7 @@ class StaffChangeCenterTests(TestCase):
             "Change center", "Manage dogs", "Search records",
             "Review health results & values", "Review certificate",
             "Open review", "Review warnings", "Save reviewed result",
-            "Edit & preview", "Exact numeric value (optional)",
+            "Edit health record", "Exact numeric value (optional)",
             "Reported result / grade", "Hide incorrect result",
             "Save privately (owner consent required)",
         ):
@@ -154,7 +154,7 @@ class StaffChangeCenterTests(TestCase):
         health = self.client.get(
             reverse("accounts:reviewed-dog-health", args=[self.dog.pk])
         )
-        self.assertContains(health, "Add a condition from an approved report")
+        self.assertContains(health, "Add a missing health result")
         self.assertContains(health, "Save reviewed result")
 
         self.client.force_login(self.super_admin)
