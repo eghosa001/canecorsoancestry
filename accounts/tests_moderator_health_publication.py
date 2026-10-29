@@ -208,6 +208,82 @@ class ModeratorLabResultTests(TestCase):
         record.refresh_from_db()
         self.assertEqual(record.result, "0 mm")
 
+
+    def test_approved_submission_links_to_edit_and_repeated_corrections_preserve_source(self):
+        submission = self.upload()
+        self.client.force_login(self.moderator)
+        approve_submission(submission, self.moderator)
+        record = HealthRecord.objects.get(dog=self.dog)
+        original_attachment = submission.attachment.name
+        original_payload = dict(submission.payload)
+        evidence = DogDocument.objects.get(source_submission=submission)
+
+        detail = self.client.get(
+            reverse("accounts:moderation-submission", args=[submission.pk])
+        )
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "Correct this dog's approved health results")
+        self.assertContains(detail, "Edit approved health values")
+        self.assertContains(detail, self.health_url + "#approved-health-results")
+        health = self.client.get(self.health_url)
+        self.assertContains(health, 'id="approved-health-results"')
+        edit = reverse(
+            "accounts:edit-reviewed-health-result", args=[self.dog.pk, record.pk]
+        )
+        self.assertContains(health, edit)
+
+        for result in ("B", "A"):
+            response = self.client.post(edit, {
+                "intent": "publish", "test_type": "Hip scores",
+                "result": result, "reviewed": "on",
+            })
+            self.assertRedirects(response, self.health_url)
+            record.refresh_from_db()
+            self.assertEqual(record.result, result)
+        self.assertEqual(record.verification_state, VerificationState.HEALTH_VERIFIED)
+        self.assertContains(self.client.get(self.public_url), "HD-A")
+        submission.refresh_from_db()
+        evidence.refresh_from_db()
+        self.assertEqual(submission.status, Submission.Status.APPROVED)
+        self.assertEqual(submission.attachment.name, original_attachment)
+        self.assertEqual(submission.payload, original_payload)
+        self.assertFalse(evidence.is_public)
+
+    def test_approved_document_links_to_health_transcription_not_raw_document_edit(self):
+        submission = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+            payload={"document_type": DogDocument.DocumentType.HEALTH},
+        )
+        self.client.force_login(self.moderator)
+        detail = self.client.get(
+            reverse("accounts:moderation-submission", args=[submission.pk])
+        )
+        self.assertContains(detail, "Enter or correct values from this approved report")
+        self.assertContains(detail, self.health_url + "#add-approved-condition")
+
+    def test_public_profile_staff_correction_link_is_not_available_to_member(self):
+        submission = self.upload()
+        self.client.force_login(self.moderator)
+        approve_submission(submission, self.moderator)
+        self.assertContains(self.client.get(self.public_url), "Edit verified health values")
+        self.assertContains(self.client.get(self.public_url), self.health_url + "#approved-health-results")
+        self.client.force_login(self.unauthorized)
+        self.assertNotContains(self.client.get(self.public_url), "Edit verified health values")
+        self.assertEqual(self.client.get(self.health_url).status_code, 403)
+
+    def test_unverified_legacy_records_remain_separate_from_approved_editor(self):
+        record = HealthRecord.objects.create(
+            dog=self.dog, test_type="Legacy hip claim", result="A",
+            verification_state=VerificationState.COMMUNITY, is_public=True,
+        )
+        self.client.force_login(self.moderator)
+        edit = reverse("accounts:edit-reviewed-health-result", args=[self.dog.pk, record.pk])
+        health = self.client.get(self.health_url)
+        self.assertNotContains(health, edit)
+        self.assertContains(health, "not evidence-verified")
+        self.assertEqual(self.client.get(edit).status_code, 403)
+
     def test_numeric_result_does_not_bypass_genetic_marker_validation(self):
         accepted = Submission.objects.create(
             kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
