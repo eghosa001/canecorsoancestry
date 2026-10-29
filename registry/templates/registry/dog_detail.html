@@ -137,7 +137,12 @@
         {% endif %}
       </dl>
 
-      {% if staff_identity and staff_role %}<div class="button-row"><a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Edit canonical record</a></div>{% endif %}
+      {% if staff_identity and staff_role %}
+      <div class="button-row" aria-label="Staff record editing">
+        <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Edit dog details</a>
+        <a class="btn btn-outline" href="{% url 'accounts:reviewed-dog-health' dog.pk %}">Edit health records</a>
+      </div>
+      {% endif %}
       {% if user.is_authenticated and not staff_identity and dog.display_images or user.is_authenticated and not staff_identity and dog.source_image_url %}
       <div class="profile-report-actions">
         <a class="text-link" href="{% url 'accounts:open-dispute' dog.pk %}?reason=photo&amp;field=photo">Report an incorrect dog photograph →</a>
