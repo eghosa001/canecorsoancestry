@@ -40,7 +40,7 @@ class ModeratorFinalPublicationTests(TestCase):
         self.assertEqual(self.client.post(self.edit_url, {"intent": "publish"}).status_code, 403)
         self.client.force_login(self.moderator)
         page = self.client.get(self.edit_url)
-        self.assertContains(page, "Save corrections")
+        self.assertContains(page, "Save changes")
         self.assertNotContains(page, "Save &amp; publish on dog profile")
         self.assertContains(page, "Published summary preview")
 
