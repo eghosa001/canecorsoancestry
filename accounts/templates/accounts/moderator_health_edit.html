@@ -7,7 +7,7 @@
   <header class="page-heading">
     <p class="eyebrow">Moderator · Health record editor</p>
     <h1>Edit {{ dog.name }}'s health result</h1>
-    <p>Approved health results appear automatically on public dog profiles. Correct the wording here; the original report stays private.</p>
+    <p>Approved results are verified. You can manually correct a grade, enter a numerical measurement and save the reviewed value; the original laboratory report stays unchanged and private.</p>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:reviewed-dog-health' dog.pk %}">← All reviewed results</a>
       {% if dog.is_effectively_public %}
@@ -23,10 +23,8 @@
         <strong>{{ record.test_type }} · {{ record.result }}</strong>
         <small>Approved health/DNA result{% if record.tested_on %} · tested {{ record.tested_on|date:"j M Y" }}{% endif %}</small>
       </div>
-      {% if record.evidence_document %}
-        <a class="btn btn-outline" href="{{ record.evidence_document.file.url }}" target="_blank" rel="noopener noreferrer">Open confidential evidence ↗</a>
-      {% elif breed_report %}
-        <a class="btn btn-outline" href="{{ breed_report.evidence_document.file.url }}" target="_blank" rel="noopener noreferrer">Open confidential evidence ↗</a>
+      {% if source_document %}
+        <a class="btn btn-outline" href="{{ source_document.file.url }}" target="_blank" rel="noopener noreferrer">Open confidential evidence ↗</a>
       {% else %}
         <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">Find approved source report ↗</a>
       {% endif %}
@@ -47,7 +45,11 @@
       {{ form.non_field_errors }}
       <div class="health-review-fields">
         <div class="health-review-field"><label for="{{ form.test_type.id_for_label }}">{{ form.test_type.label }}</label>{{ form.test_type }}{{ form.test_type.errors }}</div>
-        <div class="health-review-field"><label for="{{ form.result.id_for_label }}">{{ form.result.label }}</label>{{ form.result }}{{ form.result.errors }}</div>
+        <div class="health-review-field"><label for="{{ form.result.id_for_label }}">{{ form.result.label }}</label>{{ form.result }}<small>{{ form.result.help_text }}</small>{{ form.result.errors }}</div>
+        {% if not breed_report %}
+          <div class="health-review-field"><label for="{{ form.numeric_value.id_for_label }}">{{ form.numeric_value.label }}</label>{{ form.numeric_value }}<small>{{ form.numeric_value.help_text }}</small>{{ form.numeric_value.errors }}</div>
+          <div class="health-review-field"><label for="{{ form.result_unit.id_for_label }}">{{ form.result_unit.label }}</label>{{ form.result_unit }}<small>{{ form.result_unit.help_text }}</small>{{ form.result_unit.errors }}</div>
+        {% endif %}
         <div class="health-review-field"><label for="{{ form.tested_on.id_for_label }}">{{ form.tested_on.label }}</label>{{ form.tested_on }}{{ form.tested_on.errors }}</div>
         {% if breed_report %}
           <div class="health-review-field"><label for="{{ form.laboratory.id_for_label }}">{{ form.laboratory.label }}</label>{{ form.laboratory }}{{ form.laboratory.errors }}</div>
@@ -72,6 +74,8 @@
   var result = document.getElementById("health-card-preview-result");
   var name = document.getElementById("id_test_type");
   var status = document.getElementById("id_result");
+  var numericValue = document.getElementById("id_numeric_value");
+  var valueUnit = document.getElementById("id_result_unit");
   var percent = document.getElementById("id_breed_percentage");
   var lab = document.getElementById("id_laboratory");
   var labPreview = document.getElementById("health-card-preview-lab");
@@ -81,10 +85,12 @@
       result.textContent = value ? value + "% Cane Corso" : "Breed composition not entered";
       if (labPreview && lab) labPreview.textContent = lab.value.trim() || "Laboratory not entered";
     } else if (name && status) {
-      result.textContent = (name.value.trim() || "Condition not entered") + " · " + (status.value.trim() || "Result not entered");
+      var measured = numericValue && numericValue.value.trim();
+      var shown = measured ? measured + (valueUnit && valueUnit.value.trim() ? " " + valueUnit.value.trim() : "") : (status.value.trim() || "Result not entered");
+      result.textContent = (name.value.trim() || "Condition not entered") + " · " + shown;
     }
   }
-  [name, status, percent, lab].forEach(function (field) {
+  [name, status, numericValue, valueUnit, percent, lab].forEach(function (field) {
     if (field) field.addEventListener("input", update);
   });
   update();

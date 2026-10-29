@@ -7,7 +7,7 @@ from django.db.models import Q
 
 from core.cloudflare_media import signed_media_url
 from registry.permissions import can_review_submissions
-from registry.models import DisputeCase, DogDocument, DogImage, DogSource, Submission, SubmissionEvidence
+from registry.models import DisputeCase, DogDocument, DogImage, DogSource, Submission, SubmissionEvidence, VerificationState
 
 
 def _member_kennel_ids(user):
@@ -20,8 +20,9 @@ def _can_read_media(user, path):
     # Archival staff uploads must not inherit kennel-member document access.
     if DogDocument.objects.filter(file=path, staff_review_only=True).exists():
         return can_review_submissions(user), False
-    if DogDocument.objects.filter(
-        file=path, source_submission__kind=Submission.Kind.HEALTH
+    if DogDocument.objects.filter(file=path).filter(
+        Q(source_submission__kind=Submission.Kind.HEALTH)
+        | Q(staff_health_record__verification_state=VerificationState.HEALTH_VERIFIED)
     ).exists():
         if can_review_submissions(user):
             return True, False

@@ -274,7 +274,7 @@
                 <span class="breed-dna-eyebrow">Inherited conditions</span>
                 <h3>Genetic health screening</h3>
               </div>
-              <span class="genetic-screening-verified">Reviewed results</span>
+              <span class="genetic-screening-verified">Verified results</span>
             </div>
             <div class="genetic-screening-list">
               {% for marker in genetic_screenings %}
@@ -300,7 +300,7 @@
           {% for assessment in orthopaedic_screenings %}
             <div class="orthopaedic-compact-row">
               <strong class="orthopaedic-compact-grade">{{ assessment.grade }}</strong>
-              <span class="orthopaedic-compact-result">{{ assessment.headline }}</span>
+              <span class="orthopaedic-compact-result">{{ assessment.headline }}{% if assessment.verification_label == "Health/DNA verified" %} <small class="muted">· Verified</small>{% endif %}</span>
 
             </div>
           {% endfor %}
@@ -314,7 +314,7 @@
           {% for result in other_health_rows %}
             <div class="health-compact-row">
               <strong>{{ result.test }}</strong>
-              <span>{{ result.result }}</span>
+              <span>{{ result.result }}{% if result.verified %} <small class="muted">· Verified</small>{% endif %}</span>
 
             </div>
           {% endfor %}

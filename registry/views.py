@@ -536,10 +536,17 @@ def dog_detail(request, slug):
             note__startswith="Additional condition manually checked against approved private laboratory report ",
         ).values_list("health_record_id", flat=True)
     ) if possible_extra_ids else set()
+    verified_clinical_extras = {
+        record.pk for record in dog.display_health_records
+        if record.pk in confirmed_extra_ids
+        and (record.notes or "").endswith("; evidence_category=health")
+        and (record.result or "").strip().lower() not in SCREENING_RESULTS
+    }
     seen_additional = set()
     for record in sorted(dog.display_health_records, key=lambda item: (item.created_at, item.pk), reverse=True):
         label = (record.test_type or "").strip()
-        if record.pk not in confirmed_extra_ids or not label or label.upper() in MARKER_CODES:
+        if (record.pk not in confirmed_extra_ids or record.pk in verified_clinical_extras
+                or not label or label.upper() in MARKER_CODES):
             continue
         if label.casefold() in seen_additional:
             continue
@@ -560,8 +567,10 @@ def dog_detail(request, slug):
     orthopaedic_screenings = []
     for record in dog.display_health_records:
         label = (record.test_type or "").strip().lower()
-        if (label.upper() in MARKER_CODES and record.verification_state == VerificationState.HEALTH_VERIFIED) or record.pk in confirmed_extra_ids:
-            continue  # A reviewed genetic marker is already displayed in the DNA card.
+        if (label.upper() in MARKER_CODES and record.verification_state == VerificationState.HEALTH_VERIFIED) or (
+            record.pk in confirmed_extra_ids and record.pk not in verified_clinical_extras
+        ):
+            continue  # Reviewed genetic markers are already displayed in the DNA card.
         legacy_rows = legacy_mixed_health_rows(
             record.test_type, record.result,
             record_verified=record.verification_state == VerificationState.HEALTH_VERIFIED,
