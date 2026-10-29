@@ -70,6 +70,37 @@ Every additional value from the same source must be entered as a separate
 condition, using the same approved document. Don't guess grades, test dates,
 reference ranges, numbers or units absent from the report.
 
+## Why the approved submission is read-only, and how to correct the saved result
+
+**Approval does not lock the health result forever.** The original submission,
+certificate, evidence and review decision are immutable to preserve an audit trail.
+The **HealthRecord** (the verified text shown to visitors) is corrected separately.
+
+- From an approved **Health/DNA submission**, open the case and select
+  **Edit approved health values**. This opens **Approved health results ·
+  Edit as needed** for that dog.
+- From the public dog profile while signed in as staff, select
+  **Edit verified health values** in **Health & DNA**.
+- Or go through **Manage dogs → Search records → Health values**.
+  Select the relevant **Edit & preview** control, review the original
+  evidence, change the exact value, check the attestation, and
+  choose **Save corrections**.
+- An approved **Health/DNA document** is accepted source evidence; it
+  does not invent measurements. Open **Enter or correct values from this
+  approved report** and transcribe each actual finding under
+  **Add a condition from an approved report** before it can be edited
+  as a verified value.
+- Older records marked **Community submitted** or similar are *not*
+  evidence-verified and do not have an approved-result correction button.
+  Review and accept the appropriate source first. Never silently upgrade a
+  legacy claim to a verified test result.
+
+After each correction, refresh the staff results and the dog's public
+profile. The new value is persisted, the result remains evidence-verified
+unless a different review action was taken, and the original submission
+and private source documents remain unchanged. Multiple corrections
+are permitted, with independent audit entries.
+
 ## Correcting or hiding a saved value
 
 1. Open the dog's **Health values** workspace or
