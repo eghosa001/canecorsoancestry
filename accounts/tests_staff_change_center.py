@@ -5,6 +5,8 @@ the website rather than testing only that a navigation link was rendered.
 """
 from urllib.parse import urlsplit
 
+from django.conf import settings
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import resolve, reverse
@@ -110,6 +112,55 @@ class StaffChangeCenterTests(TestCase):
         self.assertContains(response, "staff-edit-revisions")
         self.assertContains(response, "Unsaved changes")
         self.assertContains(response, "Revision history and Super Admin review")
+
+    def test_written_instructions_follow_the_current_editing_layout(self):
+        """Prevent future staff instructions from pointing to obsolete controls."""
+        staff_guide = (
+            settings.BASE_DIR / "docs" / "STAFF_CHANGE_CONTROL_MATRIX.md"
+        ).read_text(encoding="utf-8")
+        health_guide = (
+            settings.BASE_DIR / "docs" / "HEALTH_RECORD_MODERATOR_WORKFLOW.md"
+        ).read_text(encoding="utf-8")
+
+        for phrase in (
+            "How to make a change", "Find a setting or editable record",
+            "Clear search", "Find a dog", "Staff permissions",
+            "Identity & ancestry", "Photos & related records",
+            "Save or submit", "Revision history",
+            "Save corrections", "Moderator access",
+            "Apply to selected moderator", "Deregister & remove access",
+        ):
+            with self.subTest(staff_guide=phrase):
+                self.assertIn(phrase, staff_guide)
+        for phrase in (
+            "Change center", "Manage dogs", "Search records",
+            "Review health results & values", "Review certificate",
+            "Open review", "Review warnings", "Save reviewed result",
+            "Edit & preview", "Exact numeric value (optional)",
+            "Reported result / grade", "Hide incorrect result",
+            "Save privately (owner consent required)",
+        ):
+            with self.subTest(health_guide=phrase):
+                self.assertIn(phrase, health_guide)
+        self.assertIn("/member/moderation/health-results/", health_guide)
+        self.assertNotIn("`/moderation/health-results/", health_guide)
+
+        self.client.force_login(self.moderator)
+        change_center = self.client.get(reverse("accounts:staff-change-center"))
+        self.assertContains(change_center, "Save or submit")
+        self.assertContains(change_center, "Health values")
+        dog_list = self.client.get(reverse("accounts:dog-edit-list"))
+        self.assertContains(dog_list, "Search records")
+        health = self.client.get(
+            reverse("accounts:reviewed-dog-health", args=[self.dog.pk])
+        )
+        self.assertContains(health, "Add a condition from an approved report")
+        self.assertContains(health, "Save reviewed result")
+
+        self.client.force_login(self.super_admin)
+        owner = self.client.get(reverse("accounts:verification-dashboard"))
+        self.assertContains(owner, "Staff accounts")
+        self.assertContains(owner, "Moderator access")
 
     def test_moderator_sees_real_edits_but_no_staff_control_or_admin_links(self):
         self.client.force_login(self.moderator)
