@@ -23,9 +23,21 @@
     </div>
   </header>
 
+  <section class="panel" aria-labelledby="global-dog-search-heading">
+    <h2 id="global-dog-search-heading">Find any dog — full database</h2>
+    <p class="muted">Search every existing dog, including published, unpublished and historical records. This is separate from the pending review queue and does not require a member submission.</p>
+    <form method="get" action="{% url 'accounts:dog-edit-list' %}" class="button-row" role="search">
+      <label class="sr-only" for="global-dog-search">Search all dog records</label>
+      <input id="global-dog-search" name="q" type="search" value="{{ filters.q }}" placeholder="Dog name, registration, microchip or UUID" maxlength="160" autocomplete="off" style="flex:1;min-width:14rem">
+      <button class="btn btn-gold" type="submit">Search all dogs</button>
+      <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}?browse=1">Browse database</a>
+    </form>
+  </section>
+  <p class="muted">The filters below search only <strong>pending member submissions</strong>, not the entire dog database.</p>
+
   <form class="moderation-filters" method="get">
     <div class="filter-search">
-      <label for="moderation-q">Search queue</label>
+      <label for="moderation-q">Search pending queue only</label>
       <input id="moderation-q" name="q" value="{{ filters.q }}" placeholder="Dog, kennel, litter, member or note">
     </div>
     <div>
