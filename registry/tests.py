@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -508,7 +508,7 @@ class DogModelTests(TestCase):
             "cca:dog-search:kennels:v3",
         )
         for key in cache_keys:
-            cache.set(key, "old", timeout=900)
+            caches["public"].set(key, "old", timeout=900)
         with self.captureOnCommitCallbacks(execute=True):
             approve_submission(submission, reviewer)
         submission.refresh_from_db()
@@ -518,7 +518,7 @@ class DogModelTests(TestCase):
             submission.attachment.name,
         )
         for key in cache_keys:
-            self.assertIsNone(cache.get(key))
+            self.assertIsNone(caches["public"].get(key))
         profile = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertContains(profile, "new-official-photo.jpg")
         self.assertContains(profile, "old-photo.jpg")
