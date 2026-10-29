@@ -47,6 +47,7 @@ def site_metadata(request):
     if staff_role:
         staff_sections = {
             "accounts:verification-dashboard": "verification",
+            "accounts:staff-change-center": "change_center",
             "accounts:moderation": "queue",
             "accounts:moderation-submission": "queue",
             "accounts:dog-edit-list": "dogs",
