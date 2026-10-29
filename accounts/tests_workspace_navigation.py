@@ -78,7 +78,7 @@ class WorkspaceNavigationTests(TestCase):
         self.assertEqual(opening.status_code, 200)
         self.assertContains(opening, 'name="mode" value="health"')
         self.assertContains(opening, "Edit verified health records")
-        self.assertContains(opening, "without a member request")
+        self.assertContains(opening, "You do not need a member request")
 
         searched = self.client.get(finder, {"mode": "health", "q": "Health Navigator"})
         self.assertEqual(searched.status_code, 200)
