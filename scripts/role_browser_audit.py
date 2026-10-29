@@ -140,6 +140,12 @@ def moderator_routes(page, role):
     assert page.get_by_text("Enter or change verified health numbers").is_visible()
     search.fill("impossible-unmatched-admin-setting-abcdefgh")
     assert page.locator("#staff-center-empty").is_visible(), "No-result state is not functional"
+    assert page.locator("#staff-center-result-count").inner_text() == "0 matching actions"
+    assert page.locator(".staff-center-index a:visible").count() == 0
+    page.locator("#staff-center-clear").click()
+    assert search.input_value() == "", "Clear search did not reset the editing directory"
+    assert page.locator("[data-change-action]:visible").count() > 5
+    assert "editing actions available" in page.locator("#staff-center-result-count").inner_text()
     search.fill("health")
     page.locator("[data-change-action]").filter(
         has_text="Enter or change verified health numbers"
@@ -185,6 +191,18 @@ def super_admin_routes(page, do_merge=False):
     assert page.locator("#staff-accounts").get_attribute("open") is not None, (
         "Deep-linked staff account form is not expanded"
     )
+    visit(page, f"/member/moderation/dogs/{DATA['merge_canonical']}/edit/#revision-history")
+    assert page.locator("#revision-history").get_attribute("open") is not None, (
+        "Deep-linked dog revision history must expand on demand"
+    )
+    assert page.locator("[data-edit-clean]").is_visible(), "Saved-state feedback is hidden"
+    bio = page.locator('[data-edit-form] [name="bio"]')
+    bio.fill("Browser audit draft — not submitted")
+    assert page.locator("[data-edit-dirty]").is_visible(), (
+        "Staff cannot distinguish unsaved edits from the saved database state"
+    )
+    assert not page.locator("[data-edit-clean]").is_visible()
+    page.screenshot(path=OUT / "super-admin-edit-draft.png", full_page=True)
     for path in (
         "/member/moderation/", "/member/moderation/dogs/",
         "/member/moderation/verification/",
