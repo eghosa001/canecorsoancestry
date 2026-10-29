@@ -74,6 +74,43 @@ class StaffChangeCenterTests(TestCase):
                     self.assertLessEqual(action["level"], 3)
                     self.assertTrue(action["steps"].strip())
 
+    def test_change_center_has_direct_workflow_steps_and_accessible_search_feedback(self):
+        self.client.force_login(self.moderator)
+        response = self.client.get(reverse("accounts:staff-change-center"))
+        self.assertEqual(response.status_code, 200)
+        for label in (
+            "1. Find the record", "2. Review and save", "3. Verify the result",
+            "Find a dog", "Find a kennel", "Pending approvals",
+        ):
+            self.assertContains(response, label)
+        self.assertContains(response, 'id="staff-center-result-count"')
+        self.assertContains(response, 'id="staff-center-clear"')
+        self.assertContains(response, 'aria-live="polite"')
+        self.assertContains(response, "staff-center-search-row")
+        self.assertNotContains(response, "Staff permissions</a>")
+        self.assertNotContains(response, 'href="/admin/"')
+
+    def test_super_admin_has_direct_staff_permissions_shortcut(self):
+        self.client.force_login(self.super_admin)
+        response = self.client.get(reverse("accounts:staff-change-center"))
+        self.assertContains(response, ">Staff permissions</a>")
+        self.assertContains(response, reverse("accounts:verification-dashboard") + "#staff-accounts")
+
+    def test_canonical_editor_shows_edit_progress_and_collapsible_history(self):
+        self.client.force_login(self.super_admin)
+        response = self.client.get(reverse("accounts:dog-direct-edit", args=[self.dog.pk]))
+        self.assertEqual(response.status_code, 200)
+        for target in ("dog-identity", "dog-related", "dog-save", "revision-history"):
+            self.assertContains(response, 'id="' + target + '"')
+            self.assertContains(response, 'href="#' + target + '"')
+        self.assertContains(response, "staff-edit-flow.js")
+        self.assertContains(response, "data-edit-form")
+        self.assertContains(response, "data-edit-status")
+        self.assertContains(response, "data-edit-dirty")
+        self.assertContains(response, "staff-edit-revisions")
+        self.assertContains(response, "Unsaved changes")
+        self.assertContains(response, "Revision history and Super Admin review")
+
     def test_moderator_sees_real_edits_but_no_staff_control_or_admin_links(self):
         self.client.force_login(self.moderator)
         page = self.client.get(reverse("accounts:staff-change-center"))
