@@ -69,3 +69,26 @@
 .parent-identity-selection[data-selected="true"] { color: var(--text); font-weight: 600; }
 .parent-identity-selection[data-error="true"] { color: var(--error, #bc5151); }
 @media (max-width: 760px) { .parent-identity-results { max-height: min(260px, 36dvh); } input[data-parent-search-visible] { font-size: 16px !important; } }
+
+
+/* Staff edit destinations remain discoverable from the mobile Menu, not only
+   the horizontally scrolling workspace shortcuts. */
+.mobile-nav-panel .mobile-staff-edit-links {
+  display: grid;
+  gap: 2px;
+  margin-block: 12px;
+  padding-block: 12px;
+  border-block: 1px solid var(--line-soft);
+}
+.mobile-nav-panel .mobile-staff-edit-links > strong {
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+.mobile-nav-panel .mobile-staff-edit-links > a {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 9px 12px;
+}
