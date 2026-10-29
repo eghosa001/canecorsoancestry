@@ -94,3 +94,7 @@ class ModerationTemplateRegressionTests(TestCase):
         self.assertContains(
             response, reverse("accounts:edit-reviewed-health-result", args=[dog.pk, health.pk]),
         )
+        self.assertEqual(
+            self.client.get(reverse("accounts:edit-reviewed-health-result", args=[dog.pk, health.pk])).status_code,
+            200,
+        )
