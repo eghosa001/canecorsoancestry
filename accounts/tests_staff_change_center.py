@@ -82,7 +82,7 @@ class StaffChangeCenterTests(TestCase):
         self.assertEqual(response.status_code, 200)
         for label in (
             "1. Find the record", "2. Review and save", "3. Verify the result",
-            "Find a dog", "Find a kennel", "Pending approvals",
+            "Find a dog", "Find a kennel", "Review submissions",
         ):
             self.assertContains(response, label)
         self.assertContains(response, 'id="staff-center-result-count"')
@@ -150,7 +150,7 @@ class StaffChangeCenterTests(TestCase):
         self.assertContains(change_center, "Save or submit")
         self.assertContains(change_center, "Health values")
         dog_list = self.client.get(reverse("accounts:dog-edit-list"))
-        self.assertContains(dog_list, "Search records")
+        self.assertContains(dog_list, "Search all dogs")
         health = self.client.get(
             reverse("accounts:reviewed-dog-health", args=[self.dog.pk])
         )
