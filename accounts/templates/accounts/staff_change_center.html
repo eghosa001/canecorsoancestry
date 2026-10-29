@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Staff change center · Cane Corso Ancestry{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'core/staff-change-center.css' %}?v=20261029-1">
+{% endblock %}
+{% block content %}
+<section class="page-shell staff-change-center">
+  <header class="page-heading">
+    <p class="eyebrow">Staff workspace · {{ staff_role_label }}</p>
+    <h1>Change &amp; administration center</h1>
+    <p>Every supported staff editing workflow has a destination and instructions here. The system enforces your permissions when you open a tool or submit a change; a visible link does not bypass an approval or evidence requirement.</p>
+    <div class="button-row">
+      <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Review queue</a>
+      <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">Find dog</a>
+      {% if is_super_admin %}<a class="btn btn-gold" href="{% url 'accounts:verification-dashboard' %}#staff-accounts">Manage staff access</a>{% endif %}
+    </div>
+  </header>
+  <section class="panel staff-center-permissions" aria-labelledby="staff-center-permissions-title">
+    <h2 id="staff-center-permissions-title">Your editing authority</h2>
+    {% if is_super_admin %}
+    <p><strong>Super Admin:</strong> All ordinary moderation actions, high-risk overrides, protected records, staff permissions, deactivation and permanent deregistration, plus restricted Django administration.</p>
+    {% elif staff_level == 2 %}
+    <p><strong>Senior Moderator:</strong> Routine moderation and high-risk/second reviews. Staff roles, permanent removal, protected locks, merges and advanced admin remain Super Admin-only.</p>
+    {% else %}
+    <p><strong>Moderator:</strong> Routine, evidence-backed changes and unlocked publication. Protected pedigree proposals need Super Admin approval; high-risk overrides and staff management are unavailable.</p>
+    {% endif %}
+    <p class="muted">Never change a reported medical result without checking the accepted certificate. Audit history and payment confirmations are preserved; owner-only DNA consent cannot be created by staff.</p>
+  </section>
+  <section class="panel" aria-labelledby="staff-center-find-title">
+    <label for="staff-center-search" id="staff-center-find-title"><strong>Find a setting or editable record</strong></label>
+    <input id="staff-center-search" type="search" placeholder="Try health values, kennel visibility, litter, photos, moderator role…" autocomplete="off" aria-controls="staff-center-categories">
+    <p class="muted">Choose a category or search by the action you need. Every card takes you to the corresponding working editor.</p>
+    <nav class="staff-center-index" aria-label="Change categories">
+      {% for category in categories %}<a href="#{{ category.id }}">{{ category.title }}</a>{% endfor %}
+    </nav>
+  </section>
+  <div id="staff-center-categories">
+    {% for category in categories %}
+    <section class="panel staff-center-category" id="{{ category.id }}" data-change-category>
+      <div class="panel-heading">
+        <div><h2>{{ category.title }}</h2><p class="muted">{{ category.description }}</p></div>
+      </div>
+      <div class="staff-center-grid">
+        {% for action in category.actions %}
+        <article class="staff-center-action" data-change-action>
+          <h3>{{ action.title }}</h3>
+          <p>{{ action.steps }}</p>
+          {% if action.note %}<p class="staff-center-note">{{ action.note }}</p>{% endif %}
+          <small class="staff-center-authority">Allowed: {{ action.authority }}</small>
+          <a class="btn btn-outline" href="{{ action.url }}">Open this editor →</a>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+  <p id="staff-center-empty" class="panel" hidden role="status">No editing workflows match that search. Try another record or action name.</p>
+  <section class="panel staff-center-boundaries">
+    <h2>Changes intentionally restricted</h2>
+    <p>Payment ledger events, historical approval logs and audit evidence cannot be silently overwritten. Staff cannot create owner consent for a DNA breed-composition summary, bypass second review, or publish undocumented ancestry. Site code, styling, integrations and other deployment configuration are changed through the repository's tested release pipeline, not through a database field.</p>
+  </section>
+</section>
+<script>
+(function () {
+  "use strict";
+  const input = document.getElementById("staff-center-search");
+  const categories = Array.from(document.querySelectorAll("[data-change-category]"));
+  const empty = document.getElementById("staff-center-empty");
+  if (!input) return;
+  function filter() {
+    const query = input.value.trim().toLocaleLowerCase();
+    let count = 0;
+    categories.forEach(function (category) {
+      let shown = 0;
+      category.querySelectorAll("[data-change-action]").forEach(function (card) {
+        const matches = !query || card.textContent.toLocaleLowerCase().includes(query);
+        card.hidden = !matches;
+        if (matches) { shown++; count++; }
+      });
+      category.hidden = !shown;
+    });
+    empty.hidden = count !== 0;
+  }
+  input.addEventListener("input", filter);
+}());
+</script>
+{% endblock %}
