@@ -1713,7 +1713,27 @@ def duplicate_candidates(limit=30):
         for index, left in enumerate(bucket):
             for right in bucket[index + 1 :]:
                 row = _score_duplicate_pair(left, right)
-                if row["score"] >= 60:
+                # A shared name (e.g. ZEUS) is never enough to label two
+                # animals as duplicates. Require independent identity clues
+                # and exclude known contradictions, even for review suggestions.
+                reasons = set(row["reasons"])
+                conflicts = (
+                    (left.date_of_birth and right.date_of_birth and
+                     left.date_of_birth != right.date_of_birth)
+                    or (left.sire_id and right.sire_id and
+                        left.sire_id != right.sire_id)
+                    or (left.dam_id and right.dam_id and
+                        left.dam_id != right.dam_id)
+                    or (left.sex != Dog.Sex.UNKNOWN and
+                        right.sex != Dog.Sex.UNKNOWN and left.sex != right.sex)
+                )
+                evidence = (
+                    "Same external registration" in reasons
+                    or ("Same sire" in reasons and "Same dam" in reasons)
+                    or ("Same date of birth" in reasons and
+                        ("Same sire" in reasons or "Same dam" in reasons))
+                )
+                if evidence and not conflicts and row["score"] >= 75:
                     rows.append(row)
 
     rows.sort(key=lambda item: (-item["score"], item["reference"].name.lower()))
