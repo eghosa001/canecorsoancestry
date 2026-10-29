@@ -277,7 +277,7 @@ class AdditionalHealthConditionForm(forms.Form):
     )
     source_document = forms.ModelChoiceField(
         queryset=DogDocument.objects.none(), required=False,
-        label="Or approved staff laboratory report", empty_label="Choose staff-reviewed report…",
+        label="Or approved Health/DNA document", empty_label="Choose accepted certificate…" ,
     )
     test_type = forms.CharField(max_length=100, label="Exact genetic condition / test name")
     result = forms.CharField(max_length=160, required=False, label="Result / grade exactly as reported",
@@ -349,7 +349,7 @@ def add_reviewed_health_condition(request, pk):
             source_marker = "Moderator condition transcribed from approved submission " + str(source.pk)
             source_id = str(source.pk)
         else:
-            # A historical source previously checked and uploaded by Super Admin.
+            # An approved Health/DNA document or Super Admin archival laboratory report.
             document = get_object_or_404(
                 DogDocument.objects.select_for_update().filter(
                     Q(staff_review_only=True,
@@ -360,7 +360,7 @@ def add_reviewed_health_condition(request, pk):
                 pk=data["source_document"].pk, dog=dog,
                 document_type__in=(DogDocument.DocumentType.HEALTH, DogDocument.DocumentType.DNA),
             )
-            source_marker = "Moderator condition transcribed from reviewed staff document " + str(document.pk)
+            source_marker = "Moderator condition transcribed from approved document " + str(document.pk)
             source_id = str(document.pk)
         if HealthRecord.objects.filter(
             dog=dog, test_type__iexact=data["test_type"].strip(),
@@ -371,6 +371,11 @@ def add_reviewed_health_condition(request, pk):
         supporting_document = document or DogDocument.objects.filter(
             dog=dog, source_submission=source,
         ).first()
+        # A document used as laboratory evidence is confidential even if it
+        # was initially uploaded as a general document with public visibility.
+        if supporting_document and supporting_document.is_public:
+            supporting_document.is_public = False
+            supporting_document.save(update_fields=["is_public"])
         direct_evidence = (
             supporting_document
             if supporting_document and not HealthRecord.objects.filter(
@@ -397,7 +402,7 @@ def add_reviewed_health_condition(request, pk):
                 "source_submission_id": str(source.pk) if source else None,
                 "source_document_id": document.pk if document else None,
                 "test_type": record.test_type, "result": record.result,
-                "public": False,
+                "public": True,
             },
             note="Staff reviewer added a laboratory condition; original evidence remains private.",
         )
