@@ -204,3 +204,70 @@ class DirectDogEditTests(TestCase):
             summary__kind="direct_dog_revert",
             summary__original_audit_id=str(first.pk),
         ).exists())
+
+    def test_full_dog_search_ignores_queue_and_finds_middle_name_and_private_dogs(self):
+        from registry.models import DogRegistration
+        exact = Dog.objects.create(name="ZEUS", slug="search-zeus-exact", is_public=True)
+        internal = Dog.objects.create(
+            name="B-ZEUS CLARISSIMA STELLA", slug="search-b-zeus",
+            is_public=False, sex=Dog.Sex.FEMALE,
+        )
+        DogRegistration.objects.create(dog=internal, number="REG-ZEUS-8831")
+        self.client.force_login(self.moderator)
+        queue = self.client.get(reverse("accounts:moderation"), {"q": "Zeus"})
+        self.assertEqual(queue.status_code, 200)
+        self.assertContains(queue, "Find any dog")
+        self.assertContains(queue, "Search pending queue only")
+        self.assertContains(queue, reverse("accounts:dog-edit-list"))
+        # No member submission exists for either dog.
+        finder = self.client.get(reverse("accounts:dog-edit-list"), {"q": "Zeus"})
+        self.assertEqual(finder.status_code, 200)
+        self.assertContains(finder, "B-ZEUS CLARISSIMA STELLA")
+        self.assertContains(finder, str(internal.pk))
+        self.assertContains(finder, "REG-ZEUS-8831")
+        self.assertContains(finder, reverse("accounts:dog-direct-edit", args=[internal.pk]))
+        self.assertContains(finder, reverse("accounts:reviewed-dog-health", args=[internal.pk]))
+        self.assertIn(exact.pk, [item.pk for item in finder.context["dogs"]])
+        self.assertIn(internal.pk, [item.pk for item in finder.context["dogs"]])
+
+    def test_full_dog_search_supports_alias_registration_uuid_and_pagination(self):
+        from registry.models import DogAlias, DogIdentityNumber, DogRegistration
+        target = Dog.objects.create(name="Archive Corso", slug="archive-corso", is_public=False)
+        DogAlias.objects.create(dog=target, name="Old Bloodline Name")
+        DogRegistration.objects.create(dog=target, number="CANECORSO-712345")
+        DogIdentityNumber.objects.create(dog=target, value="985 141 000 712345")
+        self.client.force_login(self.moderator)
+        url = reverse("accounts:dog-edit-list")
+        for search_term in ("Old Bloodline", "CANECORSO-712345", str(target.pk), "985 141 000 712345"):
+            with self.subTest(term=search_term):
+                response = self.client.get(url, {"q": search_term})
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(target.pk, [item.pk for item in response.context["dogs"]])
+
+        Dog.objects.bulk_create([
+            Dog(name=f"Pagination puppy {i:02d}", slug=f"pagination-puppy-{i:02d}")
+            for i in range(31)
+        ])
+        page1 = self.client.get(url, {"q": "Pagination puppy"})
+        page2 = self.client.get(url, {"q": "Pagination puppy", "page": "2"})
+        self.assertEqual(page1.status_code, 200)
+        self.assertEqual(page2.status_code, 200)
+        self.assertEqual(len(page1.context["dogs"]), 25)
+        self.assertEqual(len(page2.context["dogs"]), 6)
+        self.assertContains(page1, "Next dogs")
+        self.assertContains(page2, "Previous dogs")
+        self.assertNotEqual(page1.context["dogs"][0].pk, page2.context["dogs"][0].pk)
+
+        browse = self.client.get(url, {"browse": "1"})
+        self.assertEqual(browse.status_code, 200)
+        self.assertContains(browse, "All canonical dogs")
+        self.assertTrue(browse.context["result_page"].paginator.count >= 33)
+        self.assertEqual(self.client.get(url, {"q": "unlikely-query-xyz-9876"}).status_code, 200)
+        self.assertContains(
+            self.client.get(url, {"q": "unlikely-query-xyz-9876"}),
+            "No matching canonical dogs",
+        )
+
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(url, {"q": "Corso"}).status_code, 403)
+        self.assertEqual(self.client.get(url, {"browse": "1"}).status_code, 403)
