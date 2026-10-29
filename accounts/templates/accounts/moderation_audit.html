@@ -8,8 +8,14 @@
       <h1>Audit history</h1>
       <p>Search moderation decisions, verification events, merges, dispute activity and safe bulk updates.</p>
     </div>
-    <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Back to queue</a>
+    <div class="button-row">
+      <a class="btn btn-gold" href="{% url 'accounts:dog-edit-list' %}">Find &amp; edit a dog</a>
+      <a class="btn btn-outline" href="{% url 'accounts:staff-change-center' %}">Change center</a>
+      <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Back to queue</a>
+    </div>
   </header>
+
+  <p class="muted">This page preserves the history of changes. Staff can correct dog details and evidence-verified health results directly without a member request. Use the editing links on the matching dog below; the original audit event cannot be changed.</p>
 
   <form class="moderation-filters audit-filters" method="get">
     <div class="filter-search">
@@ -58,6 +64,15 @@
           </p>
           {% if event.summary %}
             <pre class="audit-summary">{{ event.summary }}</pre>
+          {% endif %}
+          {% if event.dog %}
+            <div class="button-row" aria-label="Edit {{ event.dog.name }} directly">
+              <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' event.dog.pk %}">Edit dog details</a>
+              <a class="btn btn-outline" href="{% url 'accounts:reviewed-dog-health' event.dog.pk %}">Edit health records</a>
+              {% if event.summary.health_record_id and event.summary.kind == "historical_health_evidence" %}
+                <a class="btn btn-gold" href="{% url 'accounts:edit-reviewed-health-result' event.dog.pk event.summary.health_record_id %}">Edit this verified result</a>
+              {% endif %}
+            </div>
           {% endif %}
         </div>
       </article>
