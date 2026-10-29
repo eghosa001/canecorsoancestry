@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
 from django.db import DatabaseError, connection, transaction
@@ -238,12 +238,12 @@ def dog_search(request):
     dogs = dogs.order_by("name") if query else dogs.order_by("-search_count", "-updated_at", "name")
     paginator = Paginator(dogs.values_list("pk", flat=True), 18)
     if not query and not sex and not country and not kennel_slug:
-        cached_count = cache.get("cca:dog-search:default-count:v1")
+        cached_count = caches["public"].get("cca:dog-search:default-count:v1")
         # Corrupt/legacy cache values must never turn public browsing into
         # a 500. Only a nonnegative integer is a valid cached paginator count.
         if type(cached_count) is not int or cached_count < 0:
             cached_count = paginator.count
-            cache.set("cca:dog-search:default-count:v1", cached_count, 900)
+            caches["public"].set("cca:dog-search:default-count:v1", cached_count, 900)
         paginator.__dict__["count"] = cached_count
     page_obj = paginator.get_page(request.GET.get("page"))
     page_ids = list(page_obj.object_list)
@@ -266,7 +266,7 @@ def dog_search(request):
     query_params = request.GET.copy()
     query_params.pop("page", None)
 
-    countries = cache.get("cca:dog-search:countries:v3")
+    countries = caches["public"].get("cca:dog-search:countries:v3")
     if countries is None:
         countries = list(
             with_displayable_images(published_dogs())
@@ -275,9 +275,9 @@ def dog_search(request):
             .distinct()
             .order_by("country")
         )
-        cache.set("cca:dog-search:countries:v3", countries, 900)
+        caches["public"].set("cca:dog-search:countries:v3", countries, 900)
 
-    kennels = cache.get("cca:dog-search:kennels:v3")
+    kennels = caches["public"].get("cca:dog-search:kennels:v3")
     if kennels is None:
         displayable_kennel_ids = (
             with_displayable_images(
@@ -292,7 +292,7 @@ def dog_search(request):
             .order_by("name")
             .values("name", "slug")
         )
-        cache.set("cca:dog-search:kennels:v3", kennels, 900)
+        caches["public"].set("cca:dog-search:kennels:v3", kennels, 900)
 
     return render(
         request,
