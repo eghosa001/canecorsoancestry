@@ -26,7 +26,9 @@ with active staff assignments. Member accounts cannot use the staff editor.
 ## When a Health/DNA submission is approved
 
 1. Open **Review queue** → choose **Health uploads** (or filter **Type**
-   for health) → open the relevant submission using **Review certificate**.
+   for health), then select **Open review** or **Review warnings** on the
+   matching submission. Alternatively, **Health values** for the dog shows
+   **New laboratory evidence** with a **Review certificate** link.
 2. Read the original private PDF/image and, when relevant, transcribe supported
    genetic markers before approval. Use the existing risk-based approval flow
    (high-risk submissions can require a second reviewer).
