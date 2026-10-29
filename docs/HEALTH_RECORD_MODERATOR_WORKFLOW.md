@@ -3,6 +3,21 @@
 This workflow is for authenticated Super Admins, Senior Moderators and Moderators
 with active staff assignments. Member accounts cannot use the staff editor.
 
+## Starting from Audit history (including older verified records)
+
+Audit history shows immutable evidence of the original decision; it is not the editor.
+After signing in as Super Admin, Senior Moderator or Moderator, open **Audit history**
+and find the entry for the dog. Use **Edit dog details** for the canonical dog
+record or **Edit health records** to see every available health result. Entries
+for independently reviewed historical health evidence also offer
+**Edit this verified result**, which opens the exact evidence-verified result.
+No new member request is required for an authorized staff correction.
+
+Use **Edit & preview** to check the original evidence and save the corrected
+health values. The original audit entry and certificate remain unchanged.
+The shortcut is absent if the dog itself has been removed; old audit
+entries remain readable.
+
 ## Open a dog's health workspace
 
 1. Sign in with an active dedicated staff account and use the
