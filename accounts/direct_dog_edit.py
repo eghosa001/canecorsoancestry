@@ -14,7 +14,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.uploadedfile import UploadedFile
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.forms import inlineformset_factory
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponseNotAllowed, JsonResponse
@@ -551,14 +551,63 @@ def dog_edit_list(request):
         kennel_target = get_object_or_404(Kennel, pk=kennel_uuid)
     q = request.GET.get("q", "").strip()[:160]
     health_mode = request.GET.get("mode") == "health"
-    ids = moderation_dog_ids(q, limit=30) if q else []
-    # One narrow query after bounded ID discovery. Preserve relevance order;
-    # never run DISTINCT across all dogs and registration joins.
-    found = {
-        dog.pk: dog for dog in Dog.objects.filter(pk__in=ids)
-        .select_related("kennel")
-    }
-    dogs = [found[pk] for pk in ids if pk in found]
+    browse = request.GET.get("browse") == "1"
+    result_page = None
+    dogs = []
+
+    if q or browse:
+        if q:
+            try:
+                dog_uuid = uuid.UUID(q)
+            except (ValueError, AttributeError):
+                dog_uuid = None
+            if dog_uuid:
+                matching = Dog.objects.filter(pk=dog_uuid)
+            else:
+                # Search the complete canonical dog catalogue, including
+                # approved, unpublished and unsubmitted historical dogs. In
+                # particular, name__icontains finds B-ZEUS when searching Zeus;
+                # the queue and prefix-first autocomplete cannot do that.
+                condition = Q(name__icontains=q) | Q(slug__icontains=q)
+                related_ids = set()
+                if len(q) >= 2:
+                    related_ids.update(
+                        DogRegistration.objects.filter(number__icontains=q)
+                        .values_list("dog_id", flat=True)[:100]
+                    )
+                    related_ids.update(
+                        DogAlias.objects.filter(name__icontains=q)
+                        .values_list("dog_id", flat=True)[:100]
+                    )
+                    related_ids.update(
+                        DogIdentityNumber.objects.filter(value__icontains=q)
+                        .values_list("dog_id", flat=True)[:30]
+                    )
+                if related_ids:
+                    condition |= Q(pk__in=related_ids)
+                matching = Dog.objects.filter(condition)
+                if not matching.exists():
+                    # Preserve the established typo-tolerant fallback, but
+                    # never replace a complete substring search with a capped
+                    # prefix-only result set.
+                    matching = Dog.objects.filter(
+                        pk__in=moderation_dog_ids(q, limit=30)
+                    )
+            matching = matching.annotate(
+                search_rank=Case(
+                    When(name__iexact=q, then=Value(0)),
+                    When(name__istartswith=q, then=Value(1)),
+                    default=Value(2),
+                    output_field=IntegerField(),
+                )
+            ).order_by("search_rank", "name", "pk")
+        else:
+            matching = Dog.objects.order_by("name", "pk")
+        result_page = Paginator(
+            matching.select_related("kennel", "sire", "dam")
+            .prefetch_related("registrations"), 25
+        ).get_page(request.GET.get("page"))
+        dogs = list(result_page.object_list)
     # Dog lookup should not synchronously load the full revision history on
     # every query. Staff may request it explicitly after finding the dog.
     show_history = not q or request.GET.get("history") == "1"
@@ -571,6 +620,8 @@ def dog_edit_list(request):
         "can_add_dog": can_add_canonical_dog(request.user),
         "history_deferred": bool(q and not show_history),
         "health_mode": health_mode,
+        "browse": browse,
+        "result_page": result_page,
         "kennel_target": kennel_target,
     })
 
