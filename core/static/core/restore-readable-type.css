@@ -34,7 +34,15 @@ html[data-theme] .hero-copy > p:not(.eyebrow) {
 html[data-theme] :is(.eyebrow, .panel-heading .eyebrow, .section-heading .eyebrow) {
   font-size: .79rem;
 }
+/* The original 17 Oct stylesheet has older mobile !important rules that
+   reduce homepage card headings to 1.12rem; override those explicitly. */
 html[data-theme] .action-card strong { font-size: 1.25rem; }
+html[data-theme] .home-actions .action-card strong {
+  font-size: 1.25rem !important;
+}
+html[data-theme] .home-actions .action-card small {
+  font-size: .92rem !important;
+}
 html[data-theme] .dog-card-body h3 { font-size: 1.15rem; }
 html[data-theme] .search-result-main h2 { font-size: 1.3rem; }
 html[data-theme] .kennel-card h2 { font-size: 1.7rem; }
