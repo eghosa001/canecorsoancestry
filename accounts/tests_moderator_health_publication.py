@@ -178,7 +178,11 @@ class ModeratorLabResultTests(TestCase):
         from core.media_views import _can_read_media
         self.assertEqual(_can_read_media(self.unauthorized, evidence.file.name), (False, False))
         self.client.logout()
-        self.assertContains(self.client.get(self.public_url), "12.50 mm")
+        public = self.client.get(self.public_url)
+        self.assertContains(public, "12.50 mm")
+        self.assertContains(public, "Other health results")
+        self.assertContains(public, "Verified")
+        self.assertNotContains(public, "Additional laboratory screening")
 
     def test_moderator_can_correct_accepted_health_value_and_non_staff_cannot(self):
         submission = self.upload()
