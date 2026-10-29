@@ -133,7 +133,7 @@ class StaffChangeCenterTests(TestCase):
             with self.subTest(staff_guide=phrase):
                 self.assertIn(phrase, staff_guide)
         for phrase in (
-            "Change center", "Manage dogs", "Search records",
+            "Change center", "Manage dogs", "Search all dogs",
             "Review health results & values", "Review certificate",
             "Open review", "Review warnings", "Save reviewed result",
             "Edit health record", "Exact numeric value (optional)",
