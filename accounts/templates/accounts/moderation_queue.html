@@ -84,12 +84,12 @@
     </article>
   </div>
 
-  <details class="panel moderation-details ux-disclosure moderation-toolbox" id="advanced-data-tools">
+  <details class="panel moderation-details ux-disclosure moderation-toolbox" id="advanced-data-tools"{% if duplicate_reference %} open{% endif %}>
     <summary><span><strong>Advanced data tools</strong><small>Duplicate detection, safe merges and manual record verification.</small></span></summary>
     <div class="ux-disclosure-body">
   <section class="panel duplicate-search-panel">
     <div class="panel-heading">
-      <div><h2>Duplicate intelligence</h2><span>Search a specific dog instantly. The heavier database-wide scan runs only when requested.</span></div>
+      <div><h2>Compare possible duplicate dogs</h2><span>A shared name alone does not make two dogs duplicates. Review their registration, dates, ancestry and documents before considering a merge. Only the Super Admin can merge a confirmed identity.</span></div>
       {% if not duplicate_scan_loaded %}
         <a class="btn btn-outline" href="?duplicate_scan=1&q={{ filters.q|urlencode }}&kind={{ filters.kind|urlencode }}&priority={{ filters.priority|urlencode }}&assignment={{ filters.assignment|urlencode }}&risk={{ filters.risk|urlencode }}">Run duplicate scan</a>
       {% endif %}
