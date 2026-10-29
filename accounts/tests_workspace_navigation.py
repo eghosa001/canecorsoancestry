@@ -49,6 +49,47 @@ class WorkspaceNavigationTests(TestCase):
         self.assertNotContains(response, 'href="/member/moderation/dogs/"')
         self.assertNotContains(response, 'href="/admin/"')
 
+    def test_mobile_menu_shows_role_appropriate_staff_edit_destinations(self):
+        self.client.force_login(self.member)
+        member_page = self.client.get(reverse("accounts:submissions"))
+        self.assertNotContains(member_page, 'aria-label="Staff editing shortcuts"')
+        self.assertNotContains(member_page, "Manage moderator permissions")
+
+        self.client.force_login(self.moderator)
+        moderator_page = self.client.get(reverse("accounts:moderation-audit"))
+        self.assertContains(moderator_page, 'aria-label="Staff editing shortcuts"')
+        self.assertContains(moderator_page, "Edit dog details or health records")
+        self.assertContains(moderator_page, reverse("accounts:staff-change-center"))
+        self.assertContains(moderator_page, reverse("accounts:moderation-audit"))
+        self.assertContains(moderator_page, 'href="/member/moderation/dogs/?mode=health"')
+        self.assertNotContains(moderator_page, "Manage moderator permissions")
+
+        self.client.force_login(self.owner)
+        owner_page = self.client.get(reverse("accounts:moderation-audit"))
+        self.assertContains(owner_page, "Manage moderator permissions")
+        self.assertContains(owner_page, reverse("accounts:verification-dashboard") + "#staff-accounts")
+
+    def test_staff_health_search_mode_is_explicit_and_survives_a_search(self):
+        from registry.models import Dog
+        dog = Dog.objects.create(name="Health Navigator", slug="health-navigator")
+        self.client.force_login(self.moderator)
+        finder = reverse("accounts:dog-edit-list")
+        opening = self.client.get(finder, {"mode": "health"})
+        self.assertEqual(opening.status_code, 200)
+        self.assertContains(opening, 'name="mode" value="health"')
+        self.assertContains(opening, "Edit verified health records")
+        self.assertContains(opening, "without a member request")
+
+        searched = self.client.get(finder, {"mode": "health", "q": "Health Navigator"})
+        self.assertEqual(searched.status_code, 200)
+        self.assertContains(searched, dog.name)
+        self.assertContains(searched, "Health values · Edit record")
+        self.assertContains(searched, reverse("accounts:reviewed-dog-health", args=[dog.pk]))
+        self.assertContains(searched, 'name="mode" value="health"')
+
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(finder, {"mode": "health"}).status_code, 403)
+
     def test_member_overview_keeps_its_single_dashboard_sidebar(self):
         self.client.force_login(self.member)
         response = self.client.get(reverse("dashboard"))
