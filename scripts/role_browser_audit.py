@@ -102,6 +102,8 @@ def guest_permissions(page):
     assert "/accounts/login/" in page.url, "Anonymous profile did not require login"
     visit(page, "/member/moderation/")
     assert "/accounts/login/" in page.url, "Anonymous moderation did not require login"
+    visit(page, "/member/moderation/change-center/")
+    assert "/accounts/login/" in page.url, "Anonymous change center did not require login"
     visit(page, "/admin/")
     assert "/admin/login/" in page.url, "Anonymous Django admin did not require login"
 
@@ -117,6 +119,7 @@ def member_routes(page):
     ):
         visit(page, path)
     visit(page, "/member/moderation/", expected=403)
+    visit(page, "/member/moderation/change-center/", expected=403)
     visit(page, "/member/moderation/merge-dogs/", expected=403)
     visit(page, "/admin/")
     assert "/admin/login/" in page.url, "Member accessed Django admin"
@@ -126,6 +129,24 @@ def member_routes(page):
 
 def moderator_routes(page, role):
     login(page, role)
+    visit(page, "/member/moderation/change-center/")
+    assert page.get_by_role("heading", name="Change & administration center").is_visible()
+    assert not page.get_by_text("Permanently deregister a moderator").count(), (
+        "Non-owner account can see permanent moderator removal"
+    )
+    search = page.locator("#staff-center-search")
+    search.fill("health")
+    assert page.locator("[data-change-action]:visible").count() > 0, "Health editor search returned no results"
+    assert page.get_by_text("Enter or change verified health numbers").is_visible()
+    search.fill("impossible-unmatched-admin-setting-abcdefgh")
+    assert page.locator("#staff-center-empty").is_visible(), "No-result state is not functional"
+    search.fill("health")
+    page.locator("[data-change-action]").filter(
+        has_text="Enter or change verified health numbers"
+    ).get_by_role("link", name="Open this editor").click()
+    page.wait_for_load_state("domcontentloaded")
+    assert "/member/moderation/dogs/" in page.url, "Health editing destination is broken"
+    no_overflow(page, role + "-change-center")
     for path in (
         "/member/moderation/", "/member/moderation/dogs/",
         "/member/moderation/audit/", "/member/moderation/data-health/",
@@ -154,6 +175,16 @@ def moderator_routes(page, role):
 
 def super_admin_routes(page, do_merge=False):
     login(page, "owner")
+    visit(page, "/member/moderation/change-center/")
+    assert page.get_by_text("Permanently deregister a moderator").is_visible()
+    page.locator("#staff-center-search").fill("deregister")
+    assert page.locator("[data-change-action]:visible").count() == 1, "Staff search did not filter results"
+    page.locator("[data-change-action]:visible").get_by_role("link", name="Open this editor").click()
+    page.wait_for_load_state("domcontentloaded")
+    assert page.url.endswith("#staff-accounts"), "Moderator deletion link misses the account section"
+    assert page.locator("#staff-accounts").get_attribute("open") is not None, (
+        "Deep-linked staff account form is not expanded"
+    )
     for path in (
         "/member/moderation/", "/member/moderation/dogs/",
         "/member/moderation/verification/",

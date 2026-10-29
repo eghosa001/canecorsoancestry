@@ -127,7 +127,321 @@ jobs:
 
           if grep -Eq '^accounts/.*\.py$' <<<"$changed"; then
             scoped_accounts=false
-            if grep -Eq '^accounts/(health_review|health_admin|tests_moderator_final_publication|tests_moderator_health_publication|tests_genetic_panel)[.]py$' <<<"$changed"; then
+            if grep -Eq '^accounts/(staff_change_center|tests_staff_change_center)[.]py$|^accounts/urls[.]py$|^core/context_processors[.]py
+              targets+=(
+                "accounts.tests_moderator_final_publication"
+                "accounts.tests_moderator_health_publication"
+                "accounts.tests_genetic_panel"
+                "accounts.tests_historical_health_admin"
+              )
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(tests_health_profile|tests_historical_health_admin)[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_health_profile.HealthRecordSubmissionTests" "accounts.tests_historical_health_admin")
+              scoped_accounts=true
+            fi
+
+            if grep -q "^accounts/tests_owner_feedback_fixes[.]py$" <<<"$changed"; then
+              targets+=("accounts.tests_owner_feedback_fixes")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(breeding_kennel_review|tests_breeding_kennel_review)[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_breeding_kennel_review" "registry.tests_breeding_kennel_reconciliation")
+              scoped_accounts=true
+            fi
+
+            if grep -q '^accounts/tests_structure_navigation[.]py$' <<<"$changed"; then
+            targets+=("accounts.tests_structure_navigation")
+            scoped_accounts=true
+          fi
+
+          if grep -q '^core/context_processors[.]py$' <<<"$changed"; then
+            targets+=("accounts.tests_structure_navigation" "accounts.tests_workspace_navigation")
+            scoped_accounts=true
+          fi
+
+          if grep -q '^accounts/tests_workspace_navigation[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_workspace_navigation")
+              scoped_accounts=true
+            fi
+
+            if grep -q '^accounts/tests_direct_edit_visibility[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_direct_edit_visibility")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(kennel_publication|tests_kennel_publication)[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_kennel_publication")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(direct_dog_edit|tests_direct_dog_edit|tests_staff_dog_creation|urls)[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_direct_dog_edit" "accounts.tests_role_separation" "accounts.tests_staff_dog_creation")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(admin\.py|tests_admin_surfaces\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_admin_surfaces")
+              scoped_accounts=true
+            fi
+
+            if grep -q '^accounts/views\.py$' <<<"$changed"; then
+              if [ "${{ github.event_name }}" = "pull_request" ]; then
+                view_diff="$(git diff -U0 "origin/${{ github.base_ref }}...HEAD" -- accounts/views.py)"
+              else
+                view_diff="$(git diff -U0 HEAD^ HEAD -- accounts/views.py)"
+              fi
+
+              if grep -Eq 'moderation_|verification_|review_submission|review_dispute|merge_dogs|verify_dog|duplicate_' <<<"$view_diff"; then
+                targets+=(
+                  "accounts.tests_admin_surfaces"
+                  "accounts.tests_moderation_intelligence.ModerationQueueTests"
+                  "accounts.tests_verification.VerificationGovernanceTests"
+                )
+              fi
+
+              if grep -Eq 'signup|submit_kennel|claim_kennel|edit_kennel|submit_document|request_document_visibility' <<<"$view_diff"; then
+                targets+=(
+                  "accounts.tests_member_access.MemberAccessFlowTests"
+                  "accounts.tests_member_phase.KennelClaimTests"
+                  "accounts.tests_member_phase.DocumentVisibilityTests"
+                  "accounts.tests_member_phase.KennelIdentityProtectionTests"
+                )
+              fi
+
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(forms\.py|tests_account_recovery\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_account_recovery")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/tests_production_readiness\.py$' <<<"$changed"; then
+              targets+=("accounts.tests_production_readiness")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(forms\.py|tests_upload_security\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_upload_security")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_payments")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(forms\.py|views\.py|tests_member_access\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_member_access.MemberAccessFlowTests")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
+              targets+=("accounts.tests_moderation_intelligence")
+              scoped_accounts=true
+            fi
+            if grep -q '^accounts/tests_moderator_fast_review[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_moderator_fast_review")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
+              targets+=("accounts.tests_verification")
+              scoped_accounts=true
+            fi
+
+            if [ "$scoped_accounts" != "true" ]; then
+              echo "::error::Accounts Python changes require an explicit change-scoped test mapping. Do not fall back to the full accounts suite."
+              exit 1
+            fi
+          fi
+
+          if grep -Eq '^core/.*\.py$' <<<"$changed"; then
+            targets+=("core")
+          fi
+
+          if [ ${#targets[@]} -eq 0 ]; then
+            echo "No changed Python app requires tests."
+            exit 0
+          fi
+
+          unique_targets=()
+          declare -A seen_targets=()
+          for target in "${targets[@]}"; do
+            if [ -z "${seen_targets[$target]+x}" ]; then
+              unique_targets+=("$target")
+              seen_targets["$target"]=1
+            fi
+          done
+          targets=("${unique_targets[@]}")
+
+          printf 'Running scoped tests: %s\n' "${targets[*]}"
+          python manage.py test "${targets[@]}" --verbosity 1
+ <<<"$changed"; then
+              targets+=(
+                "accounts.tests_staff_change_center"
+                "accounts.tests_workspace_navigation"
+                "accounts.tests_role_separation"
+              )
+              scoped_accounts=true
+            fi
+            if grep -Eq '^accounts/(health_review|health_admin|tests_moderator_final_publication|tests_moderator_health_publication|tests_genetic_panel)[.]py
+              targets+=(
+                "accounts.tests_moderator_final_publication"
+                "accounts.tests_moderator_health_publication"
+                "accounts.tests_genetic_panel"
+                "accounts.tests_historical_health_admin"
+              )
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(tests_health_profile|tests_historical_health_admin)[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_health_profile.HealthRecordSubmissionTests" "accounts.tests_historical_health_admin")
+              scoped_accounts=true
+            fi
+
+            if grep -q "^accounts/tests_owner_feedback_fixes[.]py$" <<<"$changed"; then
+              targets+=("accounts.tests_owner_feedback_fixes")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(breeding_kennel_review|tests_breeding_kennel_review)[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_breeding_kennel_review" "registry.tests_breeding_kennel_reconciliation")
+              scoped_accounts=true
+            fi
+
+            if grep -q '^accounts/tests_structure_navigation[.]py$' <<<"$changed"; then
+            targets+=("accounts.tests_structure_navigation")
+            scoped_accounts=true
+          fi
+
+          if grep -q '^core/context_processors[.]py$' <<<"$changed"; then
+            targets+=("accounts.tests_structure_navigation" "accounts.tests_workspace_navigation")
+            scoped_accounts=true
+          fi
+
+          if grep -q '^accounts/tests_workspace_navigation[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_workspace_navigation")
+              scoped_accounts=true
+            fi
+
+            if grep -q '^accounts/tests_direct_edit_visibility[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_direct_edit_visibility")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(kennel_publication|tests_kennel_publication)[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_kennel_publication")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(direct_dog_edit|tests_direct_dog_edit|tests_staff_dog_creation|urls)[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_direct_dog_edit" "accounts.tests_role_separation" "accounts.tests_staff_dog_creation")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(admin\.py|tests_admin_surfaces\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_admin_surfaces")
+              scoped_accounts=true
+            fi
+
+            if grep -q '^accounts/views\.py$' <<<"$changed"; then
+              if [ "${{ github.event_name }}" = "pull_request" ]; then
+                view_diff="$(git diff -U0 "origin/${{ github.base_ref }}...HEAD" -- accounts/views.py)"
+              else
+                view_diff="$(git diff -U0 HEAD^ HEAD -- accounts/views.py)"
+              fi
+
+              if grep -Eq 'moderation_|verification_|review_submission|review_dispute|merge_dogs|verify_dog|duplicate_' <<<"$view_diff"; then
+                targets+=(
+                  "accounts.tests_admin_surfaces"
+                  "accounts.tests_moderation_intelligence.ModerationQueueTests"
+                  "accounts.tests_verification.VerificationGovernanceTests"
+                )
+              fi
+
+              if grep -Eq 'signup|submit_kennel|claim_kennel|edit_kennel|submit_document|request_document_visibility' <<<"$view_diff"; then
+                targets+=(
+                  "accounts.tests_member_access.MemberAccessFlowTests"
+                  "accounts.tests_member_phase.KennelClaimTests"
+                  "accounts.tests_member_phase.DocumentVisibilityTests"
+                  "accounts.tests_member_phase.KennelIdentityProtectionTests"
+                )
+              fi
+
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(forms\.py|tests_account_recovery\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_account_recovery")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/tests_production_readiness\.py$' <<<"$changed"; then
+              targets+=("accounts.tests_production_readiness")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(forms\.py|tests_upload_security\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_upload_security")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(models\.py|payments\.py|tests_payments\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_payments")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/(forms\.py|views\.py|tests_member_access\.py)$' <<<"$changed"; then
+              targets+=("accounts.tests_member_access.MemberAccessFlowTests")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/tests_moderation_intelligence\.py$' <<<"$changed"; then
+              targets+=("accounts.tests_moderation_intelligence")
+              scoped_accounts=true
+            fi
+            if grep -q '^accounts/tests_moderator_fast_review[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_moderator_fast_review")
+              scoped_accounts=true
+            fi
+
+            if grep -Eq '^accounts/tests_verification\.py$' <<<"$changed"; then
+              targets+=("accounts.tests_verification")
+              scoped_accounts=true
+            fi
+
+            if [ "$scoped_accounts" != "true" ]; then
+              echo "::error::Accounts Python changes require an explicit change-scoped test mapping. Do not fall back to the full accounts suite."
+              exit 1
+            fi
+          fi
+
+          if grep -Eq '^core/.*\.py$' <<<"$changed"; then
+            targets+=("core")
+          fi
+
+          if [ ${#targets[@]} -eq 0 ]; then
+            echo "No changed Python app requires tests."
+            exit 0
+          fi
+
+          unique_targets=()
+          declare -A seen_targets=()
+          for target in "${targets[@]}"; do
+            if [ -z "${seen_targets[$target]+x}" ]; then
+              unique_targets+=("$target")
+              seen_targets["$target"]=1
+            fi
+          done
+          targets=("${unique_targets[@]}")
+
+          printf 'Running scoped tests: %s\n' "${targets[*]}"
+          python manage.py test "${targets[@]}" --verbosity 1
+ <<<"$changed"; then
               targets+=(
                 "accounts.tests_moderator_final_publication"
                 "accounts.tests_moderator_health_publication"

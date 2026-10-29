@@ -9,7 +9,8 @@
       <p>Check submitted facts and evidence before approval, compare proposed changes against canonical data, investigate disputes, and merge duplicates deliberately.</p>
     </div>
     <div class="button-row">
-      <a class="btn btn-gold" href="{% url 'accounts:dog-edit-list' %}">Manage dogs</a>
+      <a class="btn btn-gold" href="{% url 'accounts:staff-change-center' %}">Change center · All editing tools</a>
+      <a class="btn btn-outline" href="{% url 'accounts:dog-edit-list' %}">Manage dogs</a>
       <details class="cca-secondary-actions">
         <summary>Other review tools <span aria-hidden="true">⌄</span></summary>
         <div class="cca-secondary-links">
@@ -71,7 +72,7 @@
     </article>
   </div>
 
-  <details class="panel moderation-details ux-disclosure moderation-toolbox">
+  <details class="panel moderation-details ux-disclosure moderation-toolbox" id="advanced-data-tools">
     <summary><span><strong>Advanced data tools</strong><small>Duplicate detection, safe merges and manual record verification.</small></span></summary>
     <div class="ux-disclosure-body">
   <section class="panel duplicate-search-panel">
@@ -167,7 +168,7 @@
   {% endif %}
 
   <section class="panel moderation-verify">
-    <div class="panel-heading"><h2>Record verification</h2><span>Use an exact dog name or UUID. Optional source IDs are shown to staff on the dog profile.</span></div>
+    <div class="panel-heading" id="record-verification"><h2>Record verification</h2><span>Use an exact dog name or UUID. Optional source IDs are shown to staff on the dog profile.</span></div>
     <form class="verification-form" method="post" action="{% url 'accounts:verify-dog' %}">
       {% csrf_token %}
       {% for field in verification_form %}
@@ -179,7 +180,7 @@
     </div>
   </details>
 
-  <section class="panel dispute-queue">
+  <section class="panel dispute-queue" id="open-disputes">
     <div class="panel-heading"><h2>Open dispute cases</h2><span>Cases flag contested facts but never alter canonical pedigree data automatically.</span></div>
     <div class="dispute-list">
       {% for dispute in disputes %}
@@ -232,7 +233,7 @@
   <div class="section-heading section-spacer">
     <div>
       <p class="eyebrow">Contributions</p>
-      <h2>Pending review</h2>
+      <h2 id="pending-review">Pending review</h2>
     </div>
     <span>{{ pending_total }} matching item{{ pending_total|pluralize }}</span>
   </div>
@@ -320,4 +321,20 @@
     </nav>
   {% endif %}
 </section>
+
+<script>
+(function () {
+  function showAnchor() {
+    var hash = window.location.hash;
+    if (!hash) return;
+    var element = document.getElementById(hash.slice(1));
+    if (!element) return;
+    for (var parent = element; parent; parent = parent.parentElement) {
+      if (parent.tagName === "DETAILS") parent.open = true;
+    }
+  }
+  window.addEventListener("hashchange", showAnchor);
+  showAnchor();
+}());
+</script>
 {% endblock %}

@@ -11,7 +11,8 @@
       <p>Admins review the evidence; admins do not erase the evidence.</p>
     </div>
     <div class="button-row">
-      <a class="btn btn-gold" href="{% url 'accounts:moderation' %}">Review queue</a>
+      <a class="btn btn-gold" href="{% url 'accounts:staff-change-center' %}">Change center · All editing tools</a>
+      <a class="btn btn-outline" href="{% url 'accounts:moderation' %}">Review queue</a>
       <details class="cca-secondary-actions">
         <summary>Administration tools <span aria-hidden="true">⌄</span></summary>
         <div class="cca-secondary-links">
@@ -307,7 +308,7 @@
     </div>
   </details>
 
-  <details class="panel moderation-details ux-disclosure">
+  <details class="panel moderation-details ux-disclosure" id="verification-rules">
     <summary><span><strong>Verification rules</strong><small>Low-frequency system rules for risk and second approval.</small></span></summary>
     <div class="ux-disclosure-body">
 
@@ -330,7 +331,7 @@
     </div>
   </details>
 
-  <details class="panel moderation-details ux-disclosure">
+  <details class="panel moderation-details ux-disclosure" id="record-locks">
     <summary><span><strong>Protected records</strong><small>Lock or unlock important dog and litter records with an audit reason.</small></span></summary>
     <div class="ux-disclosure-body">
 
@@ -396,4 +397,19 @@
   </details>
 </section>
 <script src="{% static 'accounts/staff-access.js' %}?v=20261012-staff-selector-v1" defer></script>
+<script>
+(function () {
+  function openTarget() {
+    var hash = window.location.hash;
+    if (!hash) return;
+    var target = document.getElementById(hash.slice(1));
+    if (!target) return;
+    for (var element = target; element; element = element.parentElement) {
+      if (element.tagName === "DETAILS") element.open = true;
+    }
+  }
+  window.addEventListener("hashchange", openTarget);
+  openTarget();
+}());
+</script>
 {% endblock %}
