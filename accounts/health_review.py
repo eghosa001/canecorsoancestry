@@ -352,7 +352,7 @@ def add_reviewed_health_condition(request, pk):
         else:
             # An approved Health/DNA document or Super Admin archival laboratory report.
             document = get_object_or_404(
-                DogDocument.objects.select_for_update().filter(
+                DogDocument.objects.select_for_update(of=("self",)).filter(
                     Q(staff_review_only=True,
                       staff_health_record__verification_state=VerificationState.HEALTH_VERIFIED)
                     | Q(source_submission__kind=Submission.Kind.DOCUMENT,
