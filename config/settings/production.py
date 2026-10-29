@@ -33,6 +33,18 @@ SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 
+# All Gunicorn workers in the Oracle Django container share this directory.
+# A LocMem cache is per-process, so approving a dog could leave another worker
+# serving stale homepage statistics or country/kennel filters for 5–15 minutes.
+# Keep login/rate-limit caches separate; public metadata needs cross-worker
+# visibility and immediate post-commit invalidation, with no Redis dependency.
+CACHES["public"] = {
+    "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+    "LOCATION": os.getenv("DJANGO_PUBLIC_CACHE_DIR", "/tmp/cca-public-metadata-cache"),
+    "TIMEOUT": 300,
+    "OPTIONS": {"MAX_ENTRIES": 100},
+}
+
 # The deployment layer overrides the default storage backend with the R2 media gateway.
 # Keeping production.py storage-neutral avoids stale provider-specific branches.
 STORAGES = {
