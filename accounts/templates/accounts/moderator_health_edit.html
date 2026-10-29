@@ -23,10 +23,8 @@
         <strong>{{ record.test_type }} · {{ record.result }}</strong>
         <small>Approved health/DNA result{% if record.tested_on %} · tested {{ record.tested_on|date:"j M Y" }}{% endif %}</small>
       </div>
-      {% if record.evidence_document %}
-        <a class="btn btn-outline" href="{{ record.evidence_document.file.url }}" target="_blank" rel="noopener noreferrer">Open confidential evidence ↗</a>
-      {% elif breed_report %}
-        <a class="btn btn-outline" href="{{ breed_report.evidence_document.file.url }}" target="_blank" rel="noopener noreferrer">Open confidential evidence ↗</a>
+      {% if source_document %}
+        <a class="btn btn-outline" href="{{ source_document.file.url }}" target="_blank" rel="noopener noreferrer">Open confidential evidence ↗</a>
       {% else %}
         <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">Find approved source report ↗</a>
       {% endif %}
