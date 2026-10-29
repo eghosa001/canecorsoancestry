@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.core.cache import cache
+from django.core.cache import caches
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db import connection
@@ -224,7 +224,7 @@ def robots_txt(request):
 def _load_featured_dogs():
     """Return four popular imaged dogs without a whole-table window sort."""
     cache_key = "cca:home:featured-dog-ids:v1"
-    featured_ids = cache.get(cache_key)
+    featured_ids = caches["public"].get(cache_key)
 
     def load(ids):
         if not ids:
@@ -277,13 +277,13 @@ def _load_featured_dogs():
             .values_list("pk", flat=True)[:4]
         )
 
-    cache.set(cache_key, featured_ids, 300)
+    caches["public"].set(cache_key, featured_ids, 300)
     return load(featured_ids)
 
 
 def home(request):
     featured_dogs = _load_featured_dogs()
-    public_stats = cache.get("cca:home:public-stats:v4")
+    public_stats = caches["public"].get("cca:home:public-stats:v4")
     if public_stats is None:
         public_stats = {
             "dog_count": published_dogs().count(),
@@ -295,7 +295,7 @@ def home(request):
             .distinct()
             .count(),
         }
-        cache.set("cca:home:public-stats:v4", public_stats, 300)
+        caches["public"].set("cca:home:public-stats:v4", public_stats, 300)
 
     public_root = request.build_absolute_uri("/").rstrip("/")
     context = {
