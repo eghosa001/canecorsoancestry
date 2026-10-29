@@ -134,6 +134,15 @@
     </section>
   {% endif %}
 
+  {% if submission.kind == "document" and submission.status == "approved" and submission.dog %}
+    {% if submission.payload.document_type == "health" or submission.payload.document_type == "dna" %}
+      <section class="panel">
+        <div class="panel-heading"><h2>Enter verified health values</h2></div>
+        <p>The document is approved as evidence. A moderator or admin must now check the reported test name and numbers, then manually enter each finding. Saving the reviewed transcription marks that health result verified; approving the document alone does not invent a health measurement.</p>
+        <a class="btn btn-gold" href="{% url 'accounts:reviewed-dog-health' submission.dog.pk %}">Enter results from this accepted report →</a>
+      </section>
+    {% endif %}
+  {% endif %}
   {% if submission.kind == "health" and submission.dog %}
   <link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261017-1">
   <section class="panel health-review-panel">
@@ -146,7 +155,7 @@
       </div>
     {% endif %}
     <div class="health-review-step"><span>02 · Transcribe verified findings</span><strong>Prepare results for the final publication step</strong></div>
-    <p class="health-review-help">Enter only results confirmed by the private report. Once the document is approved, its findings remain private until the moderator edits/previews and explicitly publishes them.</p>
+    <p class="health-review-help">Enter only results confirmed by the private report. After approval, reviewed health results become verified and their summaries appear automatically on public dog profiles. You can edit numerical values afterward; the source file remains private.</p>
     {% if submission.status == "pending" %}
       <form method="post" action="{% url 'accounts:transcribe-health-submission' submission.pk %}" class="member-form">
         {% csrf_token %}
