@@ -43,7 +43,7 @@
     {% endif %}
     <div class="staff-edit-status" role="status" aria-live="polite" data-edit-status>
       <strong>Current edit:</strong>
-      <span data-edit-clean>Review the saved details below. Nothing changes publicly until you save{% if not owner and dog.is_public %} or a Super Admin approves a protected proposal{% endif %}.</span>
+      <span data-edit-clean>These are the saved details. Your edits do not take effect until you submit this form.{% if not owner and dog.is_public %} Protected ancestry proposals still require Super Admin approval before publication.{% endif %}</span>
       <span data-edit-dirty hidden>Unsaved changes. Review the fields and use the save button below.</span>
     </div>
     <h2 id="dog-identity" class="staff-edit-stage">Identity &amp; pedigree</h2>
