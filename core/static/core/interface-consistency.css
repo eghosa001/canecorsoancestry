@@ -1,0 +1,81 @@
+/* Shared interaction primitives layered last over the preserved Cane Corso
+   light/dark visual systems. Keep this file focused on consistency rather than
+   rewriting the established brand palette. */
+:where(.page-shell, .moderation-page, .dashboard-main) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  select, textarea
+) { min-width: 0; max-width: 100%; }
+:where(.page-shell, .moderation-page, .dashboard-main) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  select, textarea
+):focus-visible {
+  outline: 2px solid var(--cca-gold, var(--accent, #a98643));
+  outline-offset: 2px;
+}
+:where(.page-shell, .moderation-page, .dashboard-main) :is(
+  a, button, summary, input, select, textarea
+):focus-visible { outline-offset: 3px; }
+:where(.page-shell, .moderation-page, .dashboard-main) .button-row {
+  align-items: center; flex-wrap: wrap; gap: 10px;
+}
+:where(.page-shell, .moderation-page, .dashboard-main) :is(.panel-heading, .page-heading) {
+  min-width: 0;
+}
+:where(.page-shell, .moderation-page, .dashboard-main) :is(.panel-heading, .page-heading) :is(h1, h2, h3) {
+  overflow-wrap: break-word;
+}
+:where(.page-shell, .moderation-page, .dashboard-main) .ux-disclosure > summary {
+  cursor: pointer;
+}
+:where(.page-shell, .moderation-page, .dashboard-main) :is(.notice, .flash, [role="alert"]) {
+  overflow-wrap: anywhere;
+}
+
+/* The same small, readable jump navigation works in all staff editors. */
+.staff-edit-jump {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 8px; margin: 16px 0 20px;
+}
+.staff-edit-jump a {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; max-width: 100%; padding: 9px 14px;
+  border: 1px solid var(--cca-border, var(--border-color, #8885));
+  border-radius: 999px; color: var(--cca-ink, inherit);
+  text-decoration: none; overflow-wrap: anywhere;
+  background: var(--cca-surface, transparent);
+}
+.staff-edit-jump a:hover { background: var(--cca-subtle, transparent); }
+.staff-edit-jump a:focus-visible {
+  outline: 3px solid var(--cca-gold, currentColor); outline-offset: 2px;
+}
+.staff-edit-stage { scroll-margin-top: 80px; }
+.staff-edit-status {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  min-height: 44px; padding: 12px 14px; margin: 0 0 16px;
+  border-radius: 10px; border: 1px solid var(--cca-border, var(--border-color, #8885));
+  background: var(--cca-subtle, transparent);
+}
+.staff-edit-status strong { font-size: .92rem; }
+.staff-edit-status [data-edit-dirty] { color: var(--cca-ink, inherit); }
+.staff-edit-status [data-edit-dirty][hidden] { display: none !important; }
+.staff-edit-related .ux-disclosure { scroll-margin-top: 80px; }
+.staff-edit-revisions { scroll-margin-top: 80px; }
+.staff-edit-revisions > summary { padding: 4px 2px; }
+.staff-edit-revisions > summary strong { display: block; }
+.staff-edit-revisions > summary small { display: block; margin-top: 4px; }
+.staff-edit-revisions .staff-edit-revisions-content { margin-top: 18px; }
+@media (max-width: 760px) {
+  :where(.page-shell, .moderation-page, .dashboard-main) :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+    select, textarea
+  ) { font-size: max(16px, 1rem); }
+  .staff-edit-jump { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .staff-edit-jump a { padding-inline: 8px; text-align: center; font-size: .9rem; }
+  .staff-edit-status { align-items: flex-start; }
+}
+@media (max-width: 365px) {
+  .staff-edit-jump { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .staff-edit-jump a { transition: none; }
+}
