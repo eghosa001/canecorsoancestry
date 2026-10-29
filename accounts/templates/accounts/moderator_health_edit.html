@@ -7,7 +7,7 @@
   <header class="page-heading">
     <p class="eyebrow">Moderator · Health record editor</p>
     <h1>Edit {{ dog.name }}'s health result</h1>
-    <p>Approved results are verified. You can manually correct a grade, enter a numerical measurement and save the reviewed value; the original laboratory report stays unchanged and private.</p>
+    <p>Edit the result below, check its live preview, then save the reviewed value. This is one editing process, not two separate approvals. The original evidence remains unchanged and private.</p>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:reviewed-dog-health' dog.pk %}">← All reviewed results</a>
       {% if dog.is_effectively_public %}
@@ -29,16 +29,8 @@
         <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">Find approved source report ↗</a>
       {% endif %}
     </div>
-    <div class="health-review-step"><span>02 · Public preview</span><strong>Published summary preview</strong></div>
-    <div class="health-final-preview" aria-label="Preview of the health summary">
-      <div class="health-final-preview-heading"><span aria-hidden="true">⌁</span> {% if breed_report %}Breed Purity Verification{% else %}Genetic Health Screening{% endif %}</div>
-      <strong id="health-card-preview-result">{% if breed_report %}{{ record.result }}{% else %}{{ record.test_type }} · {{ record.result }}{% endif %}</strong>
-      <p>{% if breed_report %}DNA-tested · <span id="health-card-preview-lab">{{ breed_report.provider }}</span> · Report reviewed{% else %}Laboratory result · Report reviewed{% endif %}</p>
-    </div>
-    {% if not can_publish %}
-      <p class="health-private-caption"><strong>Publication blocked:</strong> Owner authorization for displaying this breed-composition summary has not been recorded. You may correct and save the draft, but not publish it.</p>
-    {% endif %}
-    <div class="health-review-step"><span>03 · Correction</span><strong>Edit the reviewed summary</strong></div>
+    <div class="health-review-step"><span>02 · Edit</span><strong>Edit health record</strong></div>
+
     <form method="post" class="member-form health-final-form">
       <datalist id="health-reported-status-options"><option value="Clear"><option value="Carrier"><option value="Affected"><option value="Inconclusive"><option value="Not tested"></datalist>
       {% csrf_token %}
@@ -57,10 +49,20 @@
           <div class="health-review-field health-review-field--wide"><label for="{{ form.other_breeds.id_for_label }}">{{ form.other_breeds.label }}</label>{{ form.other_breeds }}<small>{{ form.other_breeds.help_text }}</small>{{ form.other_breeds.errors }}</div>
         {% endif %}
       </div>
+      <p class="health-private-caption">This preview updates as you type. It is not saved or published until you select Save changes below.</p>
+      <div class="health-review-step"><span>03 · Review</span><strong>Live preview of your edited result</strong></div>
+    <div class="health-final-preview" aria-label="Preview of the health summary">
+      <div class="health-final-preview-heading"><span aria-hidden="true">⌁</span> {% if breed_report %}Breed Purity Verification{% else %}Genetic Health Screening{% endif %}</div>
+      <strong id="health-card-preview-result">{% if breed_report %}{{ record.result }}{% else %}{{ record.test_type }} · {{ record.result }}{% endif %}</strong>
+      <p>{% if breed_report %}DNA-tested · <span id="health-card-preview-lab">{{ breed_report.provider }}</span> · Report reviewed{% else %}Laboratory result · Report reviewed{% endif %}</p>
+    </div>
+    {% if not can_publish %}
+      <p class="health-private-caption"><strong>Publication blocked:</strong> Owner authorization for displaying this breed-composition summary has not been recorded. You may correct and save the draft, but not publish it.</p>
+    {% endif %}
       <div class="health-review-confirm"><label>{{ form.reviewed }} <strong>{{ form.reviewed.label }}</strong></label>{{ form.reviewed.errors }}</div>
       <div class="button-row health-final-actions">
         {% if can_publish %}
-          <button type="submit" name="intent" value="publish" class="btn btn-gold">Save corrections</button>
+          <button type="submit" name="intent" value="publish" class="btn btn-gold">Save changes</button>
         {% else %}
           <button type="submit" name="intent" value="save" class="btn btn-outline">Save privately (owner consent required)</button>
         {% endif %}
