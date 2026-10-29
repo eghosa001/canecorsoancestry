@@ -41,7 +41,10 @@
     {% for dog in dogs %}
     <div class="button-row" style="justify-content:space-between;border-bottom:1px solid var(--border-color, #aaa);padding:.8rem 0">
       <div><strong>{{ dog.name }}</strong><p class="canonical-list-publication"><span class="canonical-publication-badge {% if dog.is_public %}canonical-publication-badge--published{% else %}canonical-publication-badge--unpublished{% endif %}">{% if dog.is_public %}Published{% else %}Unpublished{% endif %}</span> <span class="muted">{{ dog.kennel.name|default:"No kennel" }}{% if dog.is_record_locked %} · Locked{% endif %}</span></p></div>
-      <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}{% if kennel_target %}?kennel={{ kennel_target.pk }}{% endif %}">{% if kennel_target %}Review kennel association{% else %}Manage record{% endif %}</a>
+      <div class="button-row">
+        <a class="btn btn-outline" href="{% url 'accounts:reviewed-dog-health' dog.pk %}">Health values</a>
+        <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}{% if kennel_target %}?kennel={{ kennel_target.pk }}{% endif %}">{% if kennel_target %}Review kennel association{% else %}Manage record{% endif %}</a>
+      </div>
     </div>
     {% empty %}<p>No matching canonical dogs were found.</p>{% endfor %}
   </section>
