@@ -1,6 +1,6 @@
 """Focused tests for the live editor's public visibility and image selection."""
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from django.core.cache import caches
 from django.test import TestCase
 from django.urls import reverse
 
@@ -60,13 +60,13 @@ class StaffChangeVisibilityTests(TestCase):
 
     def test_live_edit_clears_cached_public_metadata(self):
         url, data = self.payload(name="After")
-        cache.set("cca:home:featured-dog-ids:v1", [self.dog.pk], 300)
-        cache.set("cca:home:public-stats:v4", {"dog_count": 1}, 300)
+        caches['public'].set("cca:home:featured-dog-ids:v1", [self.dog.pk], 300)
+        caches['public'].set("cca:home:public-stats:v4", {"dog_count": 1}, 300)
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
-        self.assertIsNone(cache.get("cca:home:featured-dog-ids:v1"))
-        self.assertIsNone(cache.get("cca:home:public-stats:v4"))
+        self.assertIsNone(caches['public'].get("cca:home:featured-dog-ids:v1"))
+        self.assertIsNone(caches['public'].get("cca:home:public-stats:v4"))
         self.assertContains(
             self.client.get(reverse("registry:dog-detail", args=[self.dog.slug])),
             "After",

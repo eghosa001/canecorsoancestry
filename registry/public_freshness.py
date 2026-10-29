@@ -1,9 +1,10 @@
 """Invalidate Django public-page metadata after committed content changes.
 
-Cloudflare never caches database-backed pages; these LocMem entries still need
-to be refreshed after an approval, moderator edit, or super-admin reversal.
+Cloudflare never caches database-backed pages. In production the dedicated
+public metadata cache is shared across Gunicorn workers and is invalidated
+after the database transaction commits (never before a rollback).
 """
-from django.core.cache import cache
+from django.core.cache import caches
 from django.db import transaction
 
 _PUBLIC_KEYS = (
@@ -18,4 +19,4 @@ _PUBLIC_KEYS = (
 def invalidate_public_content():
     # The transaction may still roll back. Invalidate only when the approved
     # public mutation is durable to avoid showing inconsistent information.
-    transaction.on_commit(lambda: cache.delete_many(_PUBLIC_KEYS))
+    transaction.on_commit(lambda: caches["public"].delete_many(_PUBLIC_KEYS))

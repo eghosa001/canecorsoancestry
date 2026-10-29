@@ -2,7 +2,7 @@
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.db import connection
-from django.core.cache import cache
+from django.core.cache import caches
 
 from registry.models import Dog, DogImage, DogRegistration, RegistrationAuthority
 from registry.querysets import with_card_image, with_card_registration
@@ -54,7 +54,7 @@ class FastPublicDogCardTests(TestCase):
         self.assertEqual(rows[0].card_registration_number, "CARD-001")
         self.assertEqual(rows[0].card_image_name, "dogs/2026/10/primary-picture.jpg")
 
-        cache.clear()
+        caches['public'].clear()
         page = self.client.get("/dogs/?q=Card%20Performance")
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, "/media/dogs/2026/10/primary-picture.jpg")
@@ -81,7 +81,7 @@ class FastPublicDogCardTests(TestCase):
         DogImage.objects.create(
             dog=other, image="dogs/2026/10/second-browse-photo.jpg", is_primary=True,
         )
-        cache.clear()
+        caches['public'].clear()
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get("/dogs/?q=")
         self.assertEqual(response.status_code, 200)
@@ -101,7 +101,7 @@ class FastPublicDogCardTests(TestCase):
             )
 
     def test_public_search_still_renders_registration_and_dog(self):
-        cache.clear()
+        caches['public'].clear()
         response = self.client.get("/dogs/?q=Card%20Performance")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "CARD-001")
@@ -109,7 +109,7 @@ class FastPublicDogCardTests(TestCase):
         self.assertContains(response, self.dog.name)
 
     def test_public_home_still_renders_featured_registration(self):
-        cache.clear()
+        caches['public'].clear()
         # Home uses the most-searched imaged dogs; this un-imaged record should
         # not appear merely because it has a registration.
         response = self.client.get("/")

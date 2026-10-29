@@ -2,9 +2,19 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from django.core.cache import caches
 from django.test import TestCase
 from django.urls import reverse
+
+from tempfile import TemporaryDirectory
+
+from django.conf import settings
+from django.contrib import admin
+from django.core.cache.backends.filebased import FileBasedCache
+from django.test import RequestFactory
+
+from .admin import DogAdmin
+from .public_freshness import invalidate_public_content
 
 from registry.models import Dog, Kennel, ModerationRoleAssignment, Submission
 from registry.services import approve_submission
@@ -12,7 +22,7 @@ from registry.services import approve_submission
 
 class ApprovedChangesAppearImmediatelyTests(TestCase):
     def setUp(self):
-        cache.clear()
+        caches["public"].clear()
         User = get_user_model()
         self.reviewer = User.objects.create_user(username="fresh-reviewer")
         ModerationRoleAssignment.objects.create(
@@ -42,11 +52,11 @@ class ApprovedChangesAppearImmediatelyTests(TestCase):
             "cca:dog-search:kennels:v3",
         )
         for key in keys:
-            cache.set(key, "old", 900)
+            caches["public"].set(key, "old", 900)
         with self.captureOnCommitCallbacks(execute=True):
             approve_submission(submission, self.reviewer, "Identity confirmed.")
         for key in keys:
-            self.assertIsNone(cache.get(key), f"Stale Django metadata: {key}")
+            self.assertIsNone(caches["public"].get(key), f"Stale Django metadata: {key}")
         self.dog.refresh_from_db()
         self.assertEqual(self.dog.name, "Updated Display Name")
         response = self.client.get(
@@ -80,10 +90,10 @@ class ApprovedChangesAppearImmediatelyTests(TestCase):
             is_public=True, kennel=self.kennel,
         )
         key = "cca:home:public-stats:v4"
-        cache.set(key, {"dog_count": 999}, 300)
+        caches["public"].set(key, {"dog_count": 999}, 300)
         with self.captureOnCommitCallbacks(execute=True):
             merge_dogs(self.dog, duplicate, performed_by=self.reviewer)
-        self.assertIsNone(cache.get(key))
+        self.assertIsNone(caches["public"].get(key))
         self.assertFalse(Dog.objects.filter(pk=duplicate.pk).exists())
 
     def test_merge_immediately_updates_public_profile_search_and_old_url(self):
@@ -109,3 +119,78 @@ class ApprovedChangesAppearImmediatelyTests(TestCase):
         results = self.client.get(reverse("registry:dog-search"), {"q": duplicate.name})
         self.assertEqual(results.status_code, 200)
         self.assertContains(results, self.dog.name)
+
+
+class SharedPublicCacheFreshnessTests(TestCase):
+    """Independent Django workers sharing a filesystem-backed metadata cache."""
+
+    def setUp(self):
+        self.tempdir = TemporaryDirectory(prefix="cca-public-freshness-")
+        self.addCleanup(self.tempdir.cleanup)
+        new_caches = {
+            **settings.CACHES,
+            "public": {
+                "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+                "LOCATION": self.tempdir.name,
+                "TIMEOUT": 900,
+                "OPTIONS": {"MAX_ENTRIES": 100},
+            },
+        }
+        self.settings_context = self.settings(CACHES=new_caches)
+        self.settings_context.enable()
+        self.addCleanup(self.settings_context.disable)
+        caches["public"].clear()
+        self.worker_two = FileBasedCache(
+            self.tempdir.name,
+            {"TIMEOUT": 900, "OPTIONS": {"MAX_ENTRIES": 100}},
+        )
+
+    def test_metadata_is_shared_and_invalidated_across_workers(self):
+        key = "cca:dog-search:countries:v3"
+        caches["public"].set(key, ["Nigeria"], timeout=900)
+        self.assertEqual(self.worker_two.get(key), ["Nigeria"])
+        with self.captureOnCommitCallbacks(execute=True):
+            invalidate_public_content()
+        self.assertIsNone(self.worker_two.get(key))
+        self.assertIsNone(caches["public"].get(key))
+
+    def test_rolled_back_mutation_keeps_current_cached_data(self):
+        from django.db import transaction
+        key = "cca:home:public-stats:v4"
+        caches["public"].set(key, {"dog_count": 5}, timeout=900)
+        with transaction.atomic():
+            try:
+                with transaction.atomic():
+                    invalidate_public_content()
+                    raise ValueError("intentional rollback")
+            except ValueError:
+                pass
+        self.assertEqual(self.worker_two.get(key), {"dog_count": 5})
+
+    def test_super_admin_dog_edit_invalidates_other_workers(self):
+        owner = get_user_model().objects.create_superuser(
+            username="cache-owner", email="cache-owner@example.test",
+            password="Private-test-password-123",
+        )
+        dog = Dog.objects.create(
+            name="Cached Dog", slug="cached-dog", is_public=True,
+            country="Nigeria",
+        )
+        key = "cca:dog-search:countries:v3"
+        caches["public"].set(key, ["Nigeria"], timeout=900)
+        request = RequestFactory().post("/admin/registry/dog/")
+        request.user = owner
+        dog.country = "Ghana"
+        with self.captureOnCommitCallbacks(execute=True):
+            DogAdmin(Dog, admin.site).save_model(request, dog, None, True)
+        self.assertIsNone(self.worker_two.get(key))
+        dog.refresh_from_db()
+        self.assertEqual(dog.country, "Ghana")
+
+    def test_public_invalidation_preserves_separate_auth_cache(self):
+        caches["default"].set("cca-session-cache-sentinel", "survives", 60)
+        caches["public"].set("cca:home:public-stats:v4", {"dog_count": 1}, 900)
+        with self.captureOnCommitCallbacks(execute=True):
+            invalidate_public_content()
+        self.assertIsNone(self.worker_two.get("cca:home:public-stats:v4"))
+        self.assertEqual(caches["default"].get("cca-session-cache-sentinel"), "survives")

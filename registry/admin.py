@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 
 from django.template.defaultfilters import floatformat
 from pedigrees.services import public_profile_coi
+from .public_freshness import invalidate_public_content
 
 from .permissions import has_member_identity
 
@@ -90,8 +91,28 @@ class DogTitleInline(admin.TabularInline):
     extra = 0
 
 
+class PublicMetadataFreshnessAdmin(admin.ModelAdmin):
+    """Keep public filters/stats accurate after supported Super Admin edits.
+
+    Bulk imports and service-layer changes have their own invalidation; these
+    hooks cover changes made through the Django Admin form or bulk delete.
+    """
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        invalidate_public_content()
+
+    def delete_model(self, request, obj):
+        super().delete_model(request, obj)
+        invalidate_public_content()
+
+    def delete_queryset(self, request, queryset):
+        super().delete_queryset(request, queryset)
+        invalidate_public_content()
+
+
 @admin.register(Dog)
-class DogAdmin(admin.ModelAdmin):
+class DogAdmin(PublicMetadataFreshnessAdmin):
     change_list_template = "admin/registry/dog/change_list.html"
     actions = ("compare_selected_for_merge",)
 
@@ -189,7 +210,7 @@ class DogAdmin(admin.ModelAdmin):
 
 
 @admin.register(Kennel)
-class KennelAdmin(admin.ModelAdmin):
+class KennelAdmin(PublicMetadataFreshnessAdmin):
     list_display = ("name", "country", "city", "verified_at", "is_public", "hide_dogs", "publication_locked_by_superadmin")
     search_fields = ("name", "country", "city")
     prepopulated_fields = {"slug": ("name",)}
@@ -206,7 +227,7 @@ class KennelAdmin(admin.ModelAdmin):
 
 
 @admin.register(Litter)
-class LitterAdmin(admin.ModelAdmin):
+class LitterAdmin(PublicMetadataFreshnessAdmin):
     list_display = ("code", "kennel", "date_of_birth", "declared_puppy_count", "is_public", "is_record_locked")
     search_fields = ("code",)
 

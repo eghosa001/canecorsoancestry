@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from django.core.cache import caches
 from django.contrib.staticfiles import finders
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -192,15 +192,15 @@ class AuthenticatedNavigationTests(TestCase):
 
 class PublicThemeRegressionTests(TestCase):
     def test_home_caches_public_statistics_under_the_read_key(self):
-        cache.delete("cca:home:public-stats:v4")
+        caches['public'].delete("cca:home:public-stats:v4")
 
         response = self.client.get(reverse("home"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertIsNotNone(cache.get("cca:home:public-stats:v4"))
+        self.assertIsNotNone(caches['public'].get("cca:home:public-stats:v4"))
 
     def test_home_caches_diverse_featured_dogs(self):
-        cache.delete("cca:home:featured-dog-ids:v1")
+        caches['public'].delete("cca:home:featured-dog-ids:v1")
         kennel = Kennel.objects.create(name="Featured Kennel", slug="featured-kennel")
         first = Dog.objects.create(
             name="Featured First",
@@ -236,12 +236,12 @@ class PublicThemeRegressionTests(TestCase):
         self.assertIn(other.name, names)
         self.assertNotIn(second.name, names)
         self.assertEqual(
-            cache.get("cca:home:featured-dog-ids:v1"),
+            caches['public'].get("cca:home:featured-dog-ids:v1"),
             [first.pk, other.pk],
         )
 
     def test_home_falls_back_when_one_kennel_dominates_fast_candidates(self):
-        cache.delete("cca:home:featured-dog-ids:v1")
+        caches['public'].delete("cca:home:featured-dog-ids:v1")
         dominant = Kennel.objects.create(name="Dominant Kennel", slug="dominant-kennel")
         for index in range(96):
             dog = Dog.objects.create(

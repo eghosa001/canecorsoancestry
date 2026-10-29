@@ -153,7 +153,15 @@ CACHES = {
         "LOCATION": os.getenv("DJANGO_CACHE_LOCATION", "canecorsoancestry"),
         "TIMEOUT": 300,
         "OPTIONS": {"MAX_ENTRIES": 10000},
-    }
+    },
+    # Local/dev use their own public alias; production overrides this with
+    # a shared cache so every Gunicorn worker sees the same metadata keys.
+    "public": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "cca-public-metadata",
+        "TIMEOUT": 300,
+        "OPTIONS": {"MAX_ENTRIES": 100},
+    },
 }
 
 SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
