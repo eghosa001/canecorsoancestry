@@ -6,7 +6,7 @@
 <section class="page-shell">
   <header class="page-heading moderation-heading">
     <div><p class="eyebrow">Internal moderation</p><h1>{% if show_proposals %}Protected pedigree proposals{% else %}Manage dog records{% endif %}</h1>
-      <p>Routine authorized edits are live; sensitive ancestry changes from moderators require Super Admin approval before publication. Member submissions continue through the normal review queue.</p>
+      <p>Search <strong>all canonical dogs</strong> here, including unpublished and historical records that have no pending member submission. Routine authorized edits can be made directly; protected ancestry changes from moderators require Super Admin approval.</p>
     </div>
     <div class="button-row">
       {% if can_add_dog %}<a class="btn btn-gold" href="{% url 'accounts:dog-direct-create' %}">+ Add Dog</a>{% endif %}
@@ -37,23 +37,41 @@
   <form class="panel" method="get">
     {% if health_mode %}<input type="hidden" name="mode" value="health">{% endif %}
     {% if kennel_target %}<input type="hidden" name="kennel" value="{{ kennel_target.pk }}">{% endif %}
-    <label for="dog-record-q">Find an existing dog by name, registration, slug or UUID</label>
-    <div class="button-row"><input id="dog-record-q" name="q" value="{{ query }}" maxlength="160" placeholder="Search canonical dog records" autocomplete="off" style="flex:1;min-width:14rem">
-      <button class="btn btn-gold" type="submit">Search records</button>
+    <h2>Search all dog records</h2>
+    <p class="muted">This searches the complete dog database, not the moderation queue. Use a full name, part of a name (including middle words), registration, microchip, alias, slug or UUID.</p>
+    <label for="dog-record-q">Dog name or record identifier</label>
+    <div class="button-row"><input id="dog-record-q" name="q" type="search" value="{{ query }}" maxlength="160" placeholder="e.g. B-ZEUS, Zeus, registration number" autocomplete="off" style="flex:1;min-width:14rem">
+      <button class="btn btn-gold" type="submit">Search all dogs</button>
+      <a class="btn btn-outline" href="?browse=1{% if health_mode %}&amp;mode=health{% endif %}{% if kennel_target %}&amp;kennel={{ kennel_target.pk }}{% endif %}">Browse all dogs</a>
     </div>
   </form>
-  {% if query %}
-  <section class="panel">
-    <h2>Matching dogs</h2>
+  {% if result_page %}
+  <section class="panel" id="all-dog-results">
+    <h2>{% if query %}Matching dogs{% else %}All canonical dogs{% endif %}</h2>
+    <p class="muted">{{ result_page.paginator.count }} matching record{{ result_page.paginator.count|pluralize }} across the full database · Page {{ result_page.number }} of {{ result_page.paginator.num_pages }}. Dogs with identical names are separate records; compare the registration, parents and UUID before editing.</p>
     {% for dog in dogs %}
     <div class="button-row" style="justify-content:space-between;border-bottom:1px solid var(--border-color, #aaa);padding:.8rem 0">
-      <div><strong>{{ dog.name }}</strong><p class="canonical-list-publication"><span class="canonical-publication-badge {% if dog.is_public %}canonical-publication-badge--published{% else %}canonical-publication-badge--unpublished{% endif %}">{% if dog.is_public %}Published{% else %}Unpublished{% endif %}</span> <span class="muted">{{ dog.kennel.name|default:"No kennel" }}{% if dog.is_record_locked %} · Locked{% endif %}</span></p></div>
+      <div style="min-width:0">
+        <strong>{{ dog.name }}</strong>
+        <p class="canonical-list-publication"><span class="canonical-publication-badge {% if dog.is_public %}canonical-publication-badge--published{% else %}canonical-publication-badge--unpublished{% endif %}">{% if dog.is_public %}Published{% else %}Unpublished{% endif %}</span> <span class="muted">{{ dog.kennel.name|default:"Kennel not recorded" }}{% if dog.is_record_locked %} · Locked{% endif %}</span></p>
+        <p class="muted">{{ dog.get_sex_display }} · Born {{ dog.date_of_birth|date:"j M Y"|default:"date unknown" }}{% if dog.country %} · {{ dog.country }}{% endif %}</p>
+        <p class="muted">Sire: {{ dog.sire.name|default:"Unknown" }} · Dam: {{ dog.dam.name|default:"Unknown" }}</p>
+        {% for reg in dog.registrations.all|slice:":2" %}<p class="muted">Registration: {{ reg.number }}{% if reg.authority %} · {{ reg.authority.code }}{% endif %}</p>{% endfor %}
+        <small class="muted" style="overflow-wrap:anywhere">Record ID: {{ dog.pk }} · {{ dog.slug }}</small>
+      </div>
       <div class="button-row">
         <a class="btn {% if health_mode %}btn-gold{% else %}btn-outline{% endif %}" href="{% url 'accounts:reviewed-dog-health' dog.pk %}">{% if health_mode %}Health values · Edit record{% else %}Health values{% endif %}</a>
         <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}{% if kennel_target %}?kennel={{ kennel_target.pk }}{% endif %}">{% if kennel_target %}Review kennel association{% else %}Manage record{% endif %}</a>
       </div>
     </div>
-    {% empty %}<p>No matching canonical dogs were found.</p>{% endfor %}
+    {% empty %}<p>No matching canonical dogs were found. Check the spelling or try a different part of the name, alias or registration.</p>{% endfor %}
+    {% if result_page.has_other_pages %}
+    <nav class="button-row" aria-label="All dog results pages">
+      {% if result_page.has_previous %}<a class="btn btn-outline" href="?{% if query %}q={{ query|urlencode }}&amp;{% else %}browse=1&amp;{% endif %}{% if health_mode %}mode=health&amp;{% endif %}{% if kennel_target %}kennel={{ kennel_target.pk }}&amp;{% endif %}page={{ result_page.previous_page_number }}#all-dog-results">Previous dogs</a>{% endif %}
+      <span class="muted">Page {{ result_page.number }} of {{ result_page.paginator.num_pages }}</span>
+      {% if result_page.has_next %}<a class="btn btn-outline" href="?{% if query %}q={{ query|urlencode }}&amp;{% else %}browse=1&amp;{% endif %}{% if health_mode %}mode=health&amp;{% endif %}{% if kennel_target %}kennel={{ kennel_target.pk }}&amp;{% endif %}page={{ result_page.next_page_number }}#all-dog-results">Next dogs</a>{% endif %}
+    </nav>
+    {% endif %}
   </section>
   {% endif %}
   {% endif %}
