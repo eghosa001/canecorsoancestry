@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Staff change center · Cane Corso Ancestry{% endblock %}
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'core/staff-change-center.css' %}?v=20261029-1">
+<link rel="stylesheet" href="{% static 'core/staff-change-center.css' %}?v=20261029-2">
 {% endblock %}
 {% block content %}
 <section class="page-shell staff-change-center">
@@ -27,11 +27,29 @@
     {% endif %}
     <p class="muted">Never change a reported medical result without checking the accepted certificate. Audit history and payment confirmations are preserved; owner-only DNA consent cannot be created by staff.</p>
   </section>
+  <section class="panel staff-center-journey" aria-labelledby="staff-center-journey-title">
+    <h2 id="staff-center-journey-title">How to make a change safely</h2>
+    <ol class="staff-center-steps">
+      <li><strong>1. Find the record</strong><span>Use a dedicated editor below to search dogs, kennels, submissions or staff.</span></li>
+      <li><strong>2. Review and save</strong><span>Check the current value, evidence and your role. Add the reason, then save or submit for approval.</span></li>
+      <li><strong>3. Verify the result</strong><span>Reopen the record or public page and confirm the saved state and audit trail. Protected proposals remain private until approved.</span></li>
+    </ol>
+    <nav class="staff-center-quicklinks" aria-label="Most-used editing destinations">
+      <a href="{% url 'accounts:dog-edit-list' %}">Find a dog</a>
+      <a href="{% url 'accounts:kennel-publication-list' %}">Find a kennel</a>
+      <a href="{% url 'accounts:moderation' %}#pending-review">Pending approvals</a>
+      {% if is_super_admin %}<a href="{% url 'accounts:verification-dashboard' %}#staff-accounts">Staff permissions</a>{% endif %}
+    </nav>
+  </section>
   <section class="panel" aria-labelledby="staff-center-find-title">
     <label for="staff-center-search" id="staff-center-find-title"><strong>Find a setting or editable record</strong></label>
-    <input id="staff-center-search" type="search" placeholder="Try health values, kennel visibility, litter, photos, moderator role…" autocomplete="off" aria-controls="staff-center-categories">
+    <div class="staff-center-search-row">
+      <input id="staff-center-search" type="search" placeholder="Try health values, kennel visibility, litter, photos, moderator role…" autocomplete="off" aria-controls="staff-center-categories" aria-describedby="staff-center-result-count">
+      <button id="staff-center-clear" type="button" class="btn btn-outline" hidden>Clear search</button>
+    </div>
+    <p id="staff-center-result-count" class="muted" role="status" aria-live="polite"></p>
     <p class="muted">Choose a category or search by the action you need. Every card takes you to the corresponding working editor.</p>
-    <nav class="staff-center-index" aria-label="Change categories">
+    <nav class="staff-center-index" aria-label="Jump to editing category">
       {% for category in categories %}<a href="#{{ category.id }}">{{ category.title }}</a>{% endfor %}
     </nav>
   </section>
@@ -67,6 +85,9 @@
   const input = document.getElementById("staff-center-search");
   const categories = Array.from(document.querySelectorAll("[data-change-category]"));
   const empty = document.getElementById("staff-center-empty");
+  const countText = document.getElementById("staff-center-result-count");
+  const clearButton = document.getElementById("staff-center-clear");
+  const categoryLinks = Array.from(document.querySelectorAll(".staff-center-index a"));
   if (!input) return;
   function filter() {
     const query = input.value.trim().toLocaleLowerCase();
@@ -81,8 +102,22 @@
       category.hidden = !shown;
     });
     empty.hidden = count !== 0;
+    if (clearButton) clearButton.hidden = !query;
+    if (countText) countText.textContent = query
+      ? count + (count === 1 ? " matching action" : " matching actions")
+      : count + " editing actions available to your role";
+    categoryLinks.forEach(function (link) {
+      const target = document.getElementById(link.getAttribute("href").slice(1));
+      link.hidden = !target || target.hidden;
+    });
   }
   input.addEventListener("input", filter);
+  if (clearButton) clearButton.addEventListener("click", function () {
+    input.value = "";
+    filter();
+    input.focus();
+  });
+  filter();
 }());
 </script>
 {% endblock %}

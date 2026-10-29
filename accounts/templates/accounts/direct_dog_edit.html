@@ -21,10 +21,16 @@
       {% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">Public profile</a>{% endif %}
     </div>
   </header>
+  <nav class="staff-edit-jump" aria-label="Jump to dog editing section">
+    <a href="#dog-identity">Identity &amp; ancestry</a>
+    <a href="#dog-related">Photos &amp; related records</a>
+    <a href="#dog-save">Save or submit</a>
+    <a href="#revision-history">Revision history</a>
+  </nav>
   {% if dog.visibility_locked_by_superadmin and not owner %}
     <p class="panel muted">This dog's publication status is locked by the Super Admin. You can propose allowed corrections, but only a Super Admin can change its visibility.</p>
   {% endif %}
-  <form method="post" enctype="multipart/form-data" class="panel" autocomplete="off">
+  <form method="post" enctype="multipart/form-data" class="panel" autocomplete="off" data-edit-form>
     {% csrf_token %}
     <input type="hidden" name="version" value="{{ version }}">
     {{ form.non_field_errors }}
@@ -35,7 +41,12 @@
       <a class="text-link" href="{% url 'accounts:kennel-publication-detail' suggested_kennel.pk %}">Return to kennel management</a>
     </div>
     {% endif %}
-    <h2>Identity & pedigree</h2>
+    <div class="staff-edit-status" role="status" aria-live="polite" data-edit-status>
+      <strong>Current edit:</strong>
+      <span data-edit-clean>Review the saved details below. Nothing changes publicly until you save{% if not owner and dog.is_public %} or a Super Admin approves a protected proposal{% endif %}.</span>
+      <span data-edit-dirty hidden>Unsaved changes. Review the fields and use the save button below.</span>
+    </div>
+    <h2 id="dog-identity" class="staff-edit-stage">Identity &amp; pedigree</h2>
     {% if not owner and dog.is_public %}<p class="muted"><strong>Protected ancestry:</strong> Change sex, birth date, sire, dam, kennel, litter or verification state in a separate save. The proposal will wait for Super Admin approval; other edits should be saved separately. Registration, microchip and protected source changes require Super Admin approval. For approved Health/DNA reports, use “Review health results &amp; values” above to correct scores and verified results directly.</p>{% endif %}
     <p class="muted">For sire/dam, type at least two letters and choose the exact record using its kennel, registration and birth date. The selected name stays visible; its unique ID is saved securely with the form. Clearing a parent unlinks it, subject to approval. {% if can_add_dog %}If the ancestor is missing, <a class="text-link" href="{% url 'accounts:dog-direct-create' %}">add the missing ancestor</a> as a private canonical record before linking; never invent ancestry.{% else %}If the ancestor is missing, ask a Senior Moderator or Super Admin to add it before linking.{% endif %}</p>
     <div class="profile-section-grid">
@@ -70,8 +81,9 @@
         {% endif %}
       {% endfor %}
     </div>
-    <h2>Related information</h2>
+    <h2 id="dog-related" class="staff-edit-stage">Related information</h2>
     <p class="muted">Expand only the sections you need. Use “Delete” to remove a row; a removed file reference remains in the audit snapshot so a super admin can reverse the edit.</p>
+    <div class="staff-edit-related">
     {% for name, formset in formsets.items %}
     <details class="panel ux-disclosure" style="margin:1rem 0">
       <summary><strong>{{ name|title }}</strong> <small class="muted">Edit existing items, add a row, or mark a row for deletion</small></summary>
@@ -107,6 +119,7 @@
       </div>
     </details>
     {% endfor %}
+    </div>
     {% if staff_research_publication_required and not dog.is_public %}
     <div class="notice" role="note">
       <strong>Historical/research publication — not a paid customer submission</strong>
@@ -116,14 +129,16 @@
       </label>
     </div>
     {% endif %}
-    <div class="button-row">
+    <div class="button-row staff-edit-stage" id="dog-save">
       <button class="btn btn-gold" type="submit" {% if can_publish_dog %}data-canonical-submit{% endif %}>{% if can_publish_dog %}Save dog details and visibility{% else %}Save changes or request protected review{% endif %}</button>
       <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Discard edits</a>
     </div>
     <p class="muted">{% if can_publish_dog %}The visibility toggle is saved with canonical details and recorded in the moderation audit. For non-Super Admins, protected ancestry and evidence changes must be saved separately from publication.{% else %}Visibility is protected by the Super Admin or unavailable to this account.{% endif %}</p>
   </form>
-  <section class="panel">
-    <h2>Revision history and super-admin review</h2>
+  <details class="panel ux-disclosure staff-edit-revisions" id="revision-history">
+    <summary><span><strong>Revision history and Super Admin review ({{ revisions|length }})</strong>
+      <small class="muted">Open to compare changes, review pending proposals or inspect recorded decisions.</small></span></summary>
+    <div class="staff-edit-revisions-content">
     <p class="muted">A reversal is allowed only while the entire dog record still matches the change being reversed. This protects later edits from being silently overwritten.</p>
     {% for event in revisions %}
       <article style="border-bottom:1px solid var(--border-color, #aaa);padding:1rem 0">
@@ -159,8 +174,10 @@
         {% endif %}
       </article>
     {% empty %}<p>No direct editing revisions have been recorded for this dog.</p>{% endfor %}
-  </section>
+    </div>
+  </details>
 </section>
 <script>window.CCA_PARENT_LOOKUP_URL = "{% url 'accounts:dog-parent-suggestions' %}";</script>
 <script src="{% static 'accounts/direct-dog-edit.js' %}?v=20261011-publication-labels-v3" defer></script>
+<script src="{% static 'accounts/staff-edit-flow.js' %}?v=20261029-editor-v1" defer></script>
 {% endblock %}

@@ -15,3 +15,39 @@
 #staff-center-search { display:block; width:100%; max-width:690px; min-height:44px; margin-top:.6rem; }
 .staff-center-permissions p:last-child { margin-bottom:0; }
 @media (max-width:600px) { .staff-center-action { padding:.9rem; } .staff-center-index a { font-size:.9rem; } }
+
+/* A visible find → review → confirm path, without adding another admin page. */
+.staff-center-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  margin: 12px 0 18px;
+  list-style: none;
+}
+.staff-center-steps li {
+  min-width: 0; border: 1px solid var(--cca-border, var(--border-color, #8885));
+  border-radius: 12px; padding: 16px; background: var(--cca-subtle, transparent);
+}
+.staff-center-steps strong { display: block; margin-bottom: 7px; }
+.staff-center-steps span { font-size: .9rem; line-height: 1.55; }
+.staff-center-quicklinks { display: flex; flex-wrap: wrap; gap: 8px; }
+.staff-center-quicklinks a {
+  display: inline-flex; align-items: center; min-height: 44px;
+  padding: 9px 13px; border-radius: 8px;
+  border: 1px solid var(--cca-border, var(--border-color, #8885));
+  text-decoration: none; color: var(--cca-ink, inherit);
+  background: var(--cca-surface, transparent);
+}
+.staff-center-quicklinks a:hover { background: var(--cca-subtle, transparent); }
+.staff-center-search-row { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+.staff-center-search-row #staff-center-search { flex: 1 1 260px; }
+.staff-center-search-row button { min-height: 44px; margin: 0; }
+.staff-center-index a[hidden], #staff-center-clear[hidden] { display: none !important; }
+.staff-center-index a:hover { background: var(--cca-subtle, transparent); }
+#staff-center-result-count { min-height: 1.5em; margin: 8px 0; }
+.staff-center-action { background: var(--cca-surface, transparent); }
+@media (max-width: 860px) { .staff-center-steps { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .staff-center-search-row { align-items: stretch; }
+  .staff-center-search-row #staff-center-search, .staff-center-search-row button { width: 100%; max-width: none; }
+}
