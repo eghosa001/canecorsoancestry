@@ -15,6 +15,7 @@ from registry.models import (
 from registry.services import (
     approve_submission,
     duplicate_matches,
+    duplicate_candidates,
     moderation_dog_search,
     submission_diff,
 )
@@ -68,6 +69,30 @@ class DuplicateIntelligenceTests(TestCase):
         self.assertGreaterEqual(matches[0]["score"], 60)
         self.assertIn("Same sire", matches[0]["reasons"])
         self.assertIn("Same dam", matches[0]["reasons"])
+
+    def test_same_name_without_identity_evidence_is_not_automatically_a_duplicate(self):
+        left = Dog.objects.create(name="ZEUS", slug="zeus-identity-a")
+        right = Dog.objects.create(name="ZEUS", slug="zeus-identity-b")
+        self.assertEqual(duplicate_candidates(), [])
+
+        sire = Dog.objects.create(name="Verified Sire", slug="verified-sire")
+        dam = Dog.objects.create(name="Verified Dam", slug="verified-dam")
+        left.sire, left.dam = sire, dam
+        right.sire, right.dam = sire, dam
+        left.save(update_fields=["sire", "dam"])
+        right.save(update_fields=["sire", "dam"])
+        pairs = duplicate_candidates()
+        self.assertEqual(len(pairs), 1)
+        self.assertEqual({pairs[0]["reference"].pk, pairs[0]["candidate"].pk}, {left.pk, right.pk})
+
+        # Known contradictory birth dates rule a pair out even when both
+        # parent links happen to match.
+        from datetime import date
+        left.date_of_birth = date(2023, 1, 1)
+        right.date_of_birth = date(2024, 1, 1)
+        left.save(update_fields=["date_of_birth"])
+        right.save(update_fields=["date_of_birth"])
+        self.assertEqual(duplicate_candidates(), [])
 
     def test_moderator_dog_search_falls_back_to_fuzzy_matching(self):
         dog = Dog.objects.create(name="Karma Custodi Nos", slug="fuzzy-karma")
