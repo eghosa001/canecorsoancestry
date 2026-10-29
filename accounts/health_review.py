@@ -148,6 +148,7 @@ def transcribe_health_submission(request, pk):
 
 
 @login_required
+@never_cache
 def reviewed_dog_health(request, pk):
     if not can_review_submissions(request.user):
         raise PermissionDenied
