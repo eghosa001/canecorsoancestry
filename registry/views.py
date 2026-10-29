@@ -540,6 +540,7 @@ def dog_detail(request, slug):
         record.pk for record in dog.display_health_records
         if record.pk in confirmed_extra_ids
         and (record.notes or "").endswith("; evidence_category=health")
+        and (record.result or "").strip().lower() not in SCREENING_RESULTS
     }
     seen_additional = set()
     for record in sorted(dog.display_health_records, key=lambda item: (item.created_at, item.pk), reverse=True):
