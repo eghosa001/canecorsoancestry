@@ -39,7 +39,7 @@
             <a class="btn btn-gold" href="{% url 'accounts:edit-reviewed-health-result' dog.pk item.pk %}">Edit &amp; preview →</a>
           {% else %}
             <small class="muted">This record is not evidence-verified. Review an accepted report before changing its verified status.</small>
-          {% endif %>
+          {% endif %}
           {% if item.is_public and item.verification_state == "health" and not item.breed_dna_report or item.is_public and item.verification_state == "health" and item.breed_dna_report.consent_public_summary %}
             <span class="health-workflow-pill health-workflow-pill--approved">Public</span>
             <form method="post" action="{% url 'accounts:toggle-health-result' dog.pk item.pk %}">{% csrf_token %}<input type="hidden" name="visibility" value="hide"><button type="submit" class="btn btn-outline">Hide incorrect result</button></form>
