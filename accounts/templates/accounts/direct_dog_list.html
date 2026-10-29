@@ -48,7 +48,7 @@
   {% if query or browse %}
   <section class="panel" id="all-dog-results">
     <h2>{% if query %}Matching dogs{% else %}All canonical dogs{% endif %}</h2>
-    <p class="muted">{{ result_page.paginator.count }} matching record{{ result_page.paginator.count|pluralize }} across the full database · Page {{ result_page.number }} of {{ result_page.paginator.num_pages }}. Dogs with identical names are separate records; compare the registration, parents and UUID before editing.</p>
+    <p class="muted">{{ result_page.paginator.count }} matching record{{ result_page.paginator.count|pluralize }} across the full database · Page {{ result_page.number }} of {{ result_page.paginator.num_pages }}. Repeated names do not prove duplication. Compare the registration, birth date, parents and unique record ID. Use <strong>Compare possible duplicates</strong> to review evidence; only the Super Admin can merge confirmed identities.</p>
     {% for dog in dogs %}
     <div class="button-row" style="justify-content:space-between;border-bottom:1px solid var(--border-color, #aaa);padding:.8rem 0">
       <div style="min-width:0">
@@ -62,6 +62,7 @@
       <div class="button-row">
         <a class="btn {% if health_mode %}btn-gold{% else %}btn-outline{% endif %}" href="{% url 'accounts:reviewed-dog-health' dog.pk %}">{% if health_mode %}Health values · Edit record{% else %}Health values{% endif %}</a>
         <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}{% if kennel_target %}?kennel={{ kennel_target.pk }}{% endif %}">{% if kennel_target %}Review kennel association{% else %}Manage record{% endif %}</a>
+        <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?reference={{ dog.pk }}#advanced-data-tools">Compare possible duplicates</a>
       </div>
     </div>
     {% empty %}<p>No matching canonical dogs were found. Check the spelling or try a different part of the name, alias or registration.</p>{% endfor %}
