@@ -550,6 +550,7 @@ def dog_edit_list(request):
             raise Http404("Invalid target kennel identifier.")
         kennel_target = get_object_or_404(Kennel, pk=kennel_uuid)
     q = request.GET.get("q", "").strip()[:160]
+    health_mode = request.GET.get("mode") == "health"
     ids = moderation_dog_ids(q, limit=30) if q else []
     # One narrow query after bounded ID discovery. Preserve relevance order;
     # never run DISTINCT across all dogs and registration joins.
@@ -569,6 +570,7 @@ def dog_edit_list(request):
         "is_owner": can_manage_verification(request.user),
         "can_add_dog": can_add_canonical_dog(request.user),
         "history_deferred": bool(q and not show_history),
+        "health_mode": health_mode,
         "kennel_target": kennel_target,
     })
 
