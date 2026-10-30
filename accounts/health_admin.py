@@ -26,6 +26,7 @@ from registry.models import (
 from registry.permissions import can_manage_verification
 from registry.public_freshness import invalidate_public_content
 from registry.health_publication import publication_status
+from registry.legacy_health import legacy_mixed_health_rows
 from registry.services import record_audit
 
 from .forms import validate_document_upload, DOCUMENT_ACCEPT
@@ -107,6 +108,13 @@ class HistoricalHealthEvidenceForm(forms.Form):
                 (data.get("result") or "").strip().lower() not in SCREENING_RESULTS
             ):
                 self.add_error("result", "Use the actual recorded status: Clear, Carrier, Affected, Inconclusive or Not tested.")
+            if legacy_mixed_health_rows(data.get("test_type"), data.get("result")) is not None:
+                self.add_error(
+                    "test_type",
+                    "Use a specific health or genetic test name and one actual reported result. "
+                    "Do not combine a breed-purity claim with health findings; enter "
+                    "each independently verified result separately.",
+                )
             if unstructured_breed_claim(data.get("test_type")):
                 self.add_error(
                     "test_type",
