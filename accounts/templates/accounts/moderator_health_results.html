@@ -7,10 +7,11 @@
   <header class="page-heading">
     <p class="eyebrow">Moderator · Private health workspace</p>
     <h1>{{ dog.name }}</h1>
-    <p>Once a health submission is approved, its reviewed findings are verified. To enter additional scores after approving a Health/DNA document, select that document below and transcribe its exact values.</p>
+    <p>Check each result's <strong>actual public visibility</strong> below. A saved Public flag is not sufficient if the dog profile is hidden or the result requires owner DNA consent or restructuring. To enter missing scores from accepted evidence, add a reviewed result below.</p>
+    <p class="muted">Exact dog record: {{ dog.pk }} · {{ dog.slug }}</p>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">← Health review queue</a>
-      {% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}#health">View public profile ↗</a>{% endif %}
+      {% if dog.is_effectively_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}#health">View this exact dog's public health profile ↗</a>{% else %}<span class="muted">The dog profile is not currently visible to visitors.</span>{% endif %}
     </div>
   </header>
   <section class="panel">
@@ -30,7 +31,13 @@
         <div class="health-result-editor-copy">
           <strong>{{ item.test_type }}</strong>
           <span>{{ item.result }}</span>
-          <small>{{ item.tested_on|date:"j M Y"|default:"Date not provided" }} · {{ item.public_verification_label }}{% if not item.is_public %} · Hidden from visitors{% endif %}</small>
+          <small>{{ item.tested_on|date:"j M Y"|default:"Date not provided" }} · {{ item.public_verification_label }}</small>
+          {% if item.staff_public_status_code == "published" %}
+            <small class="health-workflow-pill health-workflow-pill--approved">Visible on public profile</small>
+          {% else %}
+            <small class="health-workflow-pill health-workflow-pill--pending">{{ item.staff_public_status_label }}</small>
+            <small class="muted">{{ item.staff_public_status_reason }}</small>
+          {% endif %}
           {% if item.breed_dna_report %}<small>Laboratory: {{ item.breed_dna_report.provider }}</small>{% endif %}
           {% if item.breed_dna_report and not item.breed_dna_report.consent_public_summary %}<small>Owner consent is required before publishing breed composition.</small>{% endif %}
         </div>
@@ -40,18 +47,16 @@
           {% else %}
             <small class="muted">This record is not evidence-verified. Review an accepted report before changing its verified status.</small>
           {% endif %}
-          {% if item.is_public and item.verification_state == "health" and not item.breed_dna_report or item.is_public and item.verification_state == "health" and item.breed_dna_report.consent_public_summary %}
-            <span class="health-workflow-pill health-workflow-pill--approved">Public</span>
+          {% if item.staff_public_status_code == "published" %}
             <form method="post" action="{% url 'accounts:toggle-health-result' dog.pk item.pk %}">{% csrf_token %}<input type="hidden" name="visibility" value="hide"><button type="submit" class="btn btn-outline">Hide incorrect result</button></form>
           {% else %}
-            <span class="health-workflow-pill health-workflow-pill--pending">{% if item.breed_dna_report and not item.breed_dna_report.consent_public_summary %}Owner consent required{% else %}Held privately{% endif %}</span>
           {% endif %}
         </div>
       </div>
     {% empty %}
       <div class="health-empty-editor">No available records</div>
     {% endfor %}
-    <p class="health-private-caption">Approval does not have to mean publication. The moderator controls each public summary independently. Editing creates an audited correction; confidential images and PDFs never appear in public.</p>
+    <p class="health-private-caption">Approval does not automatically make every result publicly displayable. The status above reflects the actual profile, not just the database publication flag. Editing creates an audited correction; confidential images and PDFs never appear in public.</p>
   </section>
   <section class="panel">
     <div class="health-section-heading"><div><p class="health-review-overline">Correct missed extraction</p><h2 id="add-approved-condition">Add a missing health result</h2></div></div>
