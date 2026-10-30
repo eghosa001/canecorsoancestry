@@ -193,7 +193,10 @@ def save_structured_health(request, pk):
             if not result:
                 continue
             previous = existing.get(code)
-            if previous and previous.result.strip().lower() == result.lower() and previous.is_public:
+            if (
+                previous and previous.result.strip().lower() == result.lower()
+                and (not when or previous.tested_on == when)
+            ):
                 continue
             # Preserve the original approved row and its immutable evidence.
             # Only one current public version of this structured test exists.
@@ -208,7 +211,7 @@ def save_structured_health(request, pk):
             record = HealthRecord.objects.create(
                 dog=dog, test_type=code, result=result, tested_on=when,
                 verification_state=VerificationState.HEALTH_VERIFIED,
-                is_public=True,
+                is_public=previous.is_public if previous else True,
                 evidence_document=direct_document,
                 notes=f"Structured staff health transcription from accepted {source_key}",
             )
