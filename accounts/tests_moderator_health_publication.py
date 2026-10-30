@@ -289,6 +289,72 @@ class ModeratorLabResultTests(TestCase):
         self.assertContains(edit_page, "Save changes")
         self.assertContains(edit_page, "Original laboratory result")
 
+    def test_visible_health_result_matches_public_profile_and_exact_dog_identity(self):
+        dog = Dog.objects.create(
+            name="B-ZEUS CLARISSIMA STELLA",
+            slug="b-zeus-publication-consistency",
+            is_public=True,
+        )
+        record = HealthRecord.objects.create(
+            dog=dog, test_type="Hip screening",
+            result="HD-A", is_public=True,
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        self.client.force_login(self.moderator)
+        health = self.client.get(reverse("accounts:reviewed-dog-health", args=[dog.pk]))
+        self.assertContains(health, "Visible on public profile")
+        self.assertContains(health, str(dog.pk))
+        self.assertContains(health, reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertContains(health, reverse("accounts:edit-reviewed-health-result", args=[dog.pk, record.pk]))
+        public = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertContains(public, "Hip screening")
+        self.assertContains(public, "HD-A")
+
+    def test_misleading_public_flag_reports_why_result_is_not_on_site(self):
+        from registry.health_publication import publication_status
+        dog = Dog.objects.create(
+            name="Unavailable health dog", slug="unavailable-health-dog",
+            is_public=True,
+        )
+        legacy = HealthRecord.objects.create(
+            dog=dog, test_type="Breed DNA purity",
+            result="100% Cane Corso", is_public=True,
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        self.assertEqual(publication_status(legacy)[0], "needs_structuring")
+        self.client.force_login(self.moderator)
+        health = self.client.get(reverse("accounts:reviewed-dog-health", args=[dog.pk]))
+        self.assertContains(health, "Not visible — correct the result")
+        self.assertContains(health, "owner-authorized")
+        public = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertNotContains(public, "100% Cane Corso")
+
+        dog.is_public = False
+        dog.save(update_fields=["is_public"])
+        self.assertEqual(publication_status(legacy)[0], "dog_hidden")
+        health = self.client.get(reverse("accounts:reviewed-dog-health", args=[dog.pk]))
+        self.assertContains(health, "This dog's public profile is not visible")
+
+        # No private health report ever becomes a public media attachment.
+        self.assertEqual(legacy.evidence_document_id, None)
+
+    def test_data_health_inventory_finds_public_flags_hidden_by_profile_rules(self):
+        dog = Dog.objects.create(
+            name="Staff visibility mismatch", slug="staff-visibility-mismatch",
+            is_public=True,
+        )
+        HealthRecord.objects.create(
+            dog=dog, test_type="Breed DNA purity",
+            result="Unstructured", is_public=True,
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        self.client.force_login(self.moderator)
+        response = self.client.get(reverse("accounts:data-health"), {"health_visibility": "1"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Staff visibility mismatch")
+        self.assertContains(response, "Not visible — correct the result")
+        self.assertGreaterEqual(response.context["health_visibility_totals"]["mismatch"], 1)
+
     def test_unverified_legacy_records_remain_separate_from_approved_editor(self):
         record = HealthRecord.objects.create(
             dog=self.dog, test_type="Legacy hip claim", result="A",
