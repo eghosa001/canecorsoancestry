@@ -73,7 +73,12 @@ for each test and a separate numeric percentage field for breed composition.
    percentage in **Reported percentage (%)** — for example `100` for a
    laboratory estimate of `100% Cane Corso`. Also enter the issuing DNA
    laboratory and, when the report contains other breeds, list their reported
-   percentages. Use a source that is explicitly an approved DNA report.
+   percentages. Use an approved DNA report. For an accepted older Health/DNA
+   certificate classified as Health even though it contains actual laboratory
+   breed-composition data, tick **I verified that the accepted legacy Health/DNA
+   certificate contains a laboratory breed-composition percentage** after
+   checking its original evidence. Do not tick this for a general clinical
+   certificate or an unverified purity claim.
    Values must add up to 100%. Do not infer breed percentages from pedigree
    records, historical claims or photographs.
 5. Optionally enter the laboratory report date, tick the evidence-review
@@ -113,16 +118,19 @@ The **HealthRecord** (the verified text shown to visitors) is corrected separate
   **Edit approved health values**. This opens **Approved health results ·
   Edit as needed** for that dog.
 - From the public dog profile while signed in as staff, select
-  **Edit verified health values** in **Health & DNA**.
+  **Edit verified health values** in **Health & DNA**. This opens
+  **Edit Health & DNA** directly at the structured test rows, not the old
+  one-line editor.
 - Or go through **Manage dogs → Search all dogs → Health values**.
   Select the relevant **Edit health record** control, review the original
   evidence, change the exact value, check the attestation, and
   choose **Save changes**.
-- An approved **Health/DNA document** is accepted source evidence; it
-  does not invent measurements. Open **Enter or correct values from this
-  approved report** and transcribe each actual finding under
-  **Add a missing health result** before it can be edited
-  as a verified value.
+- An accepted historical **Purity Verification/Health Test** record is
+  preserved, not rewritten as a new marker. Choose **Edit individual results**;
+  the system opens the structured editor and selects that record's accepted
+  certificate when available. Enter each supported finding under its own
+  CMR1, DSRA, NCL1, hip, elbow or breed-percentage control.
+- For unusual tests, open **Add an uncommon test**.
 - Older records marked **Community submitted** or similar are *not*
   evidence-verified and do not have an approved-result correction button.
   Review and accept the appropriate source first. Never silently upgrade a
