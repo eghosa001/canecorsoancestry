@@ -83,6 +83,128 @@ class ModeratorLabResultTests(TestCase):
         self.assertNotContains(public, "genetic-screening-status--untested")
         self.assertNotContains(public, "health-scan.jpg")
 
+    def test_structured_editor_shows_separate_labels_and_current_values(self):
+        record = HealthRecord.objects.create(
+            dog=self.dog, test_type="DSRA", result="Carrier",
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        self.client.force_login(self.moderator)
+        view = self.client.get(self.health_url)
+        self.assertEqual(view.status_code, 200)
+        for label in ("Genetic health screening", "CMR1", "DSRA", "NCL1",
+                      "Hip &amp; elbow screening", "Breed DNA composition",
+                      "Reported percentage (%)", "Current:"):
+            self.assertContains(view, label)
+        self.assertContains(view, "Carrier")
+        self.assertContains(view, reverse("accounts:save-structured-health", args=[self.dog.pk]))
+        self.assertContains(view, reverse("accounts:edit-reviewed-health-result", args=[self.dog.pk, record.pk]))
+
+    def test_structured_editor_saves_individual_marker_results_with_one_evidence_source(self):
+        accepted = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+            payload={"document_type": DogDocument.DocumentType.DNA},
+        )
+        doc = DogDocument.objects.create(
+            dog=self.dog, title="Accepted DNA marker report",
+            document_type=DogDocument.DocumentType.DNA,
+            file="documents/accepted-structured-health.pdf",
+            is_public=True, source_submission=accepted, submitted_by=self.owner,
+        )
+        url = reverse("accounts:save-structured-health", args=[self.dog.pk])
+        self.client.force_login(self.moderator)
+        response = self.client.post(url, {
+            "source_document": doc.pk, "cmr1": "Clear",
+            "dsra": "Carrier", "reviewed": "on",
+        })
+        self.assertRedirects(response, self.health_url)
+        records = HealthRecord.objects.filter(dog=self.dog)
+        self.assertEqual(records.count(), 2)
+        self.assertEqual(records.get(test_type="CMR1").result, "Clear")
+        self.assertEqual(records.get(test_type="DSRA").result, "Carrier")
+        self.assertTrue(all(item.is_public for item in records))
+        doc.refresh_from_db()
+        self.assertFalse(doc.is_public)
+        self.client.logout()
+        public = self.client.get(self.public_url)
+        self.assertContains(public, "CMR1")
+        self.assertContains(public, "DSRA")
+        self.assertContains(public, "Clear")
+        self.assertContains(public, "Carrier")
+        self.assertNotContains(public, "accepted-structured-health.pdf")
+        self.client.force_login(self.moderator)
+        self.client.post(url, {
+            "source_document": doc.pk, "dsra": "Affected", "reviewed": "on",
+        })
+        self.assertEqual(HealthRecord.objects.filter(dog=self.dog, test_type="DSRA").count(), 2)
+        self.assertEqual(
+            HealthRecord.objects.filter(dog=self.dog, test_type="DSRA", is_public=True).count(), 1
+        )
+        self.client.force_login(self.unauthorized)
+        self.assertEqual(self.client.post(url, {
+            "source_document": doc.pk, "cmr1": "Affected", "reviewed": "on",
+        }).status_code, 403)
+
+    def test_structured_breed_percentage_records_privately_without_granting_consent(self):
+        accepted = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+            payload={"document_type": DogDocument.DocumentType.DNA},
+        )
+        doc = DogDocument.objects.create(
+            dog=self.dog, title="Approved breed composition certificate",
+            document_type=DogDocument.DocumentType.DNA,
+            file="documents/accepted-structured-breed.pdf",
+            is_public=False, source_submission=accepted, submitted_by=self.owner,
+        )
+        self.client.force_login(self.moderator)
+        url = reverse("accounts:save-structured-health", args=[self.dog.pk])
+        response = self.client.post(url, {
+            "source_document": doc.pk, "cane_corso_percentage": "100",
+            "laboratory": "Embark", "reviewed": "on",
+        })
+        self.assertRedirects(response, self.health_url)
+        report = BreedDNAReport.objects.get(health_record__dog=self.dog)
+        self.assertEqual(report.cane_corso_percentage, 100)
+        self.assertFalse(report.consent_public_summary)
+        self.assertFalse(report.health_record.is_public)
+        self.client.logout()
+        self.assertNotContains(self.client.get(self.public_url), "100% Cane Corso")
+        self.client.force_login(self.moderator)
+        response = self.client.post(url, {
+            "source_document": doc.pk, "cane_corso_percentage": "92.5",
+            "other_breeds": "Boxer: 7.5",
+            "laboratory": "Embark", "reviewed": "on",
+        })
+        self.assertEqual(response.status_code, 302)
+        report.refresh_from_db()
+        self.assertEqual(str(report.cane_corso_percentage), "92.50")
+        self.assertEqual(BreedDNAReport.objects.count(), 1)
+        self.assertFalse(report.consent_public_summary)
+        self.assertEqual(report.composition[1]["breed"], "Boxer")
+
+    def test_structured_editor_rejects_missing_evidence_and_non_dna_purity(self):
+        self.client.force_login(self.moderator)
+        url = reverse("accounts:save-structured-health", args=[self.dog.pk])
+        self.client.post(url, {"cmr1": "Clear", "reviewed": "on"})
+        self.assertFalse(HealthRecord.objects.filter(dog=self.dog).exists())
+        accepted = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+        )
+        doc = DogDocument.objects.create(
+            dog=self.dog, title="Clinical certificate",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file="documents/accepted-clinical.pdf",
+            source_submission=accepted,
+        )
+        self.client.post(url, {
+            "source_document": doc.pk, "cane_corso_percentage": "100",
+            "laboratory": "Embark", "reviewed": "on",
+        })
+        self.assertFalse(BreedDNAReport.objects.exists())
+        self.assertFalse(HealthRecord.objects.filter(dog=self.dog).exists())
+
     def test_staff_can_hide_and_restore_only_reviewed_summary(self):
         submission = self.upload()
         self.client.force_login(self.moderator)
