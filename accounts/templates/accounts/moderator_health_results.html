@@ -133,7 +133,8 @@
     {% endfor %}
     <p class="health-private-caption">Approval does not automatically make every result publicly displayable. The status above reflects the actual profile, not just the database publication flag. Editing creates an audited correction; confidential images and PDFs never appear in public.</p>
   </section>
-  <section class="panel">
+  <details class="panel health-secondary-editor">
+    <summary><strong>Add an uncommon test</strong> <small>For findings not listed above</small></summary>
     <div class="health-section-heading"><div><p class="health-review-overline">Other laboratory tests</p><h2 id="add-approved-condition">Add an uncommon test</h2></div></div>
     <p class="health-review-help">Only use this for tests not covered by the clearly labelled fields above. Enter the exact laboratory wording and value; never invent or infer a result.</p>
     <form method="post" action="{% url 'accounts:add-reviewed-health-condition' dog.pk %}" class="member-form health-final-form">
@@ -151,7 +152,7 @@
       <div class="health-review-confirm"><label>{{ add_condition_form.reviewed }} <strong>{{ add_condition_form.reviewed.label }}</strong></label></div>
       <button type="submit" class="btn btn-gold">Save reviewed result →</button>
     </form>
-    <p class="health-private-caption">For examples, enter HD-A, ED-0 or 12/24 in the result field; for a decimal measurement, leave that field empty and enter 12.5 plus its unit in the numeric fields. Every change is audited against the approved source. Breed percentages still require the dedicated owner-consented DNA record.</p>
-  </section>
+    <p class="health-private-caption">For an uncommon health test, copy its name and value exactly as reported. Each change is audited against the accepted source; use the structured breed composition field above for percentages.</p>
+  </details>
 </section>
 {% endblock %}
