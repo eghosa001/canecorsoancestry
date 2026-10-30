@@ -154,7 +154,9 @@ class StaffChangeCenterTests(TestCase):
         health = self.client.get(
             reverse("accounts:reviewed-dog-health", args=[self.dog.pk])
         )
-        self.assertContains(health, "Add a missing health result")
+        self.assertContains(health, "Edit Health &amp; DNA")
+        self.assertContains(health, "Save reviewed health values")
+        self.assertContains(health, "Add an uncommon test")
         self.assertContains(health, "Save reviewed result")
 
         self.client.force_login(self.super_admin)
