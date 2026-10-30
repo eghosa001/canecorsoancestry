@@ -104,8 +104,17 @@ class DuplicateCandidateTests(TestCase):
         first = Dog.objects.create(name="Custodi-Nos Karma", slug="candidate-a")
         second = Dog.objects.create(name="Custodi Nos Karma", slug="candidate-b")
 
+        # Shared names alone must not cause destructive merge suggestions.
+        self.assertEqual(duplicate_candidates(), [])
+        sire = Dog.objects.create(name="Proof Sire", slug="candidate-sire")
+        dam = Dog.objects.create(name="Proof Dam", slug="candidate-dam")
+        for dog in (first, second):
+            dog.sire = sire
+            dog.dam = dam
+            dog.save(update_fields=["sire", "dam"])
         candidates = duplicate_candidates()
-
-        self.assertEqual(candidates[0]["left"].pk in {first.pk, second.pk}, True)
+        self.assertEqual(len(candidates), 1)
         self.assertIn("Same normalized name", candidates[0]["reasons"])
-        self.assertEqual(Dog.objects.count(), 2)
+        self.assertIn("Same sire", candidates[0]["reasons"])
+        self.assertIn("Same dam", candidates[0]["reasons"])
+        self.assertEqual(Dog.objects.count(), 4)
