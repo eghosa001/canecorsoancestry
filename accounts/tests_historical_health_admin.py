@@ -95,6 +95,19 @@ class HistoricalHealthAdminTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(HealthRecord.objects.exists())
 
+    def test_breed_dna_claim_cannot_be_disguised_as_public_health_test(self):
+        self.client.force_login(self.owner)
+        result = self.client.post(self.url, {
+            "record_type": "health", "test_type": "Breed DNA purity",
+            "result": "100% Cane Corso",
+            "source_reference": "Independent certificate",
+            "attachment": self.report(),
+            "review_attestation": "on",
+        })
+        self.assertEqual(result.status_code, 200)
+        self.assertContains(result, "dedicated DNA breed composition category")
+        self.assertFalse(HealthRecord.objects.filter(dog=self.dog).exists())
+
     def test_withdraw_revokes_every_breed_summary_and_report_without_erasing_evidence(self):
         self.client.force_login(self.owner)
         for pct in ("100.00", "98.00"):
