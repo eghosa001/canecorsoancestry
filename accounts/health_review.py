@@ -19,6 +19,7 @@ from registry.models import (
 from registry.permissions import can_review_submissions
 from registry.public_freshness import invalidate_public_content
 from registry.health_publication import publication_status
+from registry.legacy_health import legacy_mixed_health_rows
 from registry.services import record_audit
 from registry.verification import verify_submission
 
@@ -272,6 +273,12 @@ class ReviewedHealthResultForm(forms.Form):
             data["resolved_result"] = result
             if code in MARKER_CODES and result.lower() not in SCREENING_RESULTS:
                 self.add_error("result", "Choose Clear, Carrier, Affected, Inconclusive or Not tested as stated in the report.")
+            if legacy_mixed_health_rows(code, result) is not None:
+                self.add_error(
+                    "test_type",
+                    "This legacy purity/health summary must be replaced with a specific "
+                    "test name and the exact result supported by the accepted report.",
+                )
             if unstructured_breed_claim(code):
                 self.add_error("test_type", "Breed composition must use the dedicated owner-consented DNA report.")
         return data
