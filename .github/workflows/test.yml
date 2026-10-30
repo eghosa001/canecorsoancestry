@@ -136,7 +136,7 @@ jobs:
               scoped_accounts=true
             fi
 
-            if grep -Eq '^accounts/(health_review|health_admin|tests_moderator_final_publication|tests_moderator_health_publication|tests_genetic_panel)[.]py$' <<<"$changed"; then
+            if grep -Eq '^accounts/(health_review|health_admin|structured_health|tests_moderator_final_publication|tests_moderator_health_publication|tests_genetic_panel)[.]py$' <<<"$changed"; then
               targets+=(
                 "accounts.tests_moderator_final_publication"
                 "accounts.tests_moderator_health_publication"
