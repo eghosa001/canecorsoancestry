@@ -5,6 +5,7 @@ also enforces dog visibility, breed-DNA owner consent, and safe structured
 test labels. Keep staff badges consistent with those actual display rules.
 """
 from .genetic_health import unstructured_breed_claim
+from .legacy_health import legacy_mixed_health_rows
 from .models import VerificationState
 
 
@@ -43,6 +44,27 @@ def publication_status(record, *, dog=None):
         return (
             "published", "Visible on public profile",
             "The authorized breed-DNA summary appears in the Health & DNA section.",
+        )
+
+    legacy_rows = legacy_mixed_health_rows(
+        record.test_type, record.result,
+        record_verified=record.verification_state == VerificationState.HEALTH_VERIFIED,
+    )
+    if legacy_rows is not None and not legacy_rows:
+        if (
+            record.verification_state == VerificationState.HEALTH_VERIFIED
+            and record.evidence_document_id
+        ):
+            return (
+                "summary_only", "Only evidence notice visible",
+                "The source certificate was reviewed, but no separate clinical "
+                "or genetic test result has been transcribed. Use Add a missing "
+                "health result to enter supported values from that report.",
+            )
+        return (
+            "needs_structuring", "Not visible — enter health test results",
+            "This legacy mixed breed/health record has no shareable test-specific "
+            "results. Do not publish a breed-purity percentage without owner consent.",
         )
 
     if unstructured_breed_claim(record.test_type):
