@@ -307,7 +307,7 @@ class ModeratorLabResultTests(TestCase):
         self.assertContains(health, reverse("registry:dog-detail", args=[dog.slug]))
         self.assertContains(health, reverse("accounts:edit-reviewed-health-result", args=[dog.pk, record.pk]))
         public = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
-        self.assertContains(public, "Hip screening")
+        self.assertContains(public, "Hip &amp; elbow health")
         self.assertContains(public, "HD-A")
 
     def test_misleading_public_flag_reports_why_result_is_not_on_site(self):
