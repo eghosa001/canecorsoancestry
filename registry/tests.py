@@ -146,8 +146,10 @@ class DogModelTests(TestCase):
         for index in range(9):
             Dog.objects.create(name="Atlas", slug=f"atlas-{index}")
 
-        Dog.objects.create(name="Rare Twin", slug="rare-twin-a")
-        Dog.objects.create(name="Rare Twin", slug="rare-twin-b")
+        sire = Dog.objects.create(name="Rare Twin Sire", slug="rare-twin-sire")
+        dam = Dog.objects.create(name="Rare Twin Dam", slug="rare-twin-dam")
+        Dog.objects.create(name="Rare Twin", slug="rare-twin-a", sire=sire, dam=dam)
+        Dog.objects.create(name="Rare Twin", slug="rare-twin-b", sire=sire, dam=dam)
 
         rows = duplicate_candidates(limit=10)
 
