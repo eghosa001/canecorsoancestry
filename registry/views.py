@@ -576,10 +576,24 @@ def dog_detail(request, slug):
             record_verified=record.verification_state == VerificationState.HEALTH_VERIFIED,
         )
         if legacy_rows is not None:
-            # Original evidence stays unchanged: reviewed health markers do not
-            # imply that the breed percentage has independent DNA verification.
-            other_health_rows.extend(legacy_rows)
-            other_health_records.append(record)
+            # A combined historical purity/health text does not establish a
+            # DNA breed percentage. Display individually extracted health
+            # findings only. If the staff-reviewed certificate was accepted
+            # but no usable health score was recorded, disclose the existence
+            # of reviewed evidence without inventing a medical result.
+            if legacy_rows:
+                other_health_rows.extend(legacy_rows)
+                other_health_records.append(record)
+            elif (
+                record.verification_state == VerificationState.HEALTH_VERIFIED
+                and record.evidence_document_id
+            ):
+                other_health_rows.append({
+                    "test": "Evidence review",
+                    "result": "Laboratory evidence reviewed; individual health test results have not been transcribed.",
+                    "verified": False,
+                })
+                other_health_records.append(record)
             continue
         if unstructured_breed_claim(record.test_type):
             continue  # Only BreedDNAReport + owner consent enables public breed percent.
