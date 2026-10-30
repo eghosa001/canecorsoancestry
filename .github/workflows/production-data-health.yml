@@ -113,6 +113,13 @@ jobs:
         # Only after the new command has been deployed to the Oracle container.
         if: github.event_name != 'push' && (github.event_name != 'workflow_run' || github.event.workflow_run.name == 'Oracle Django production release (CI-gated)')
         run: sudo -n podman exec cca-oracle-staging python manage.py reconcile_verified_coi_candidates
+      - name: Audit all live health results marked public and B-ZEUS (read-only)
+        # Only the newly staged Oracle container is guaranteed to have this
+        # command; never audit frozen/historical or external databases.
+        if: github.event_name != 'push' && (github.event_name != 'workflow_run' || github.event.workflow_run.name == 'Oracle Django production release (CI-gated)')
+        run: |
+          sudo -n podman exec cca-oracle-staging python manage.py audit_public_health_visibility --limit 25
+          sudo -n podman exec cca-oracle-staging python manage.py audit_public_health_visibility --dog B-ZEUS --limit 25
       - name: Check published live COI
         run: |
           sudo -n podman exec cca-oracle-staging python manage.py shell -c "
