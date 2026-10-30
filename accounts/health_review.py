@@ -9,6 +9,7 @@ from django.http import HttpResponseBadRequest
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from registry.dna import parse_breed_composition, percentage_text
@@ -165,6 +166,10 @@ def reviewed_dog_health(request, pk):
     # The public page also enforces dog/kennel visibility, DNA consent and
     # filtering of unsafe unstructured breed-composition claims.
     for record in records:
+        record.is_legacy_mixed = legacy_mixed_health_rows(
+            record.test_type, record.result,
+            record_verified=record.verification_state == VerificationState.HEALTH_VERIFIED,
+        ) is not None
         (record.staff_public_status_code,
          record.staff_public_status_label,
          record.staff_public_status_reason) = publication_status(record, dog=dog)
@@ -175,7 +180,28 @@ def reviewed_dog_health(request, pk):
          hasattr(row, "breed_dna_report") and row.breed_dna_report is not None),
         None,
     )
-    structured_form = StructuredHealthForm(dog=dog)
+    # A link from a historical mixed record may preselect that very same
+    # accepted source. Never choose evidence from another dog or auto-fill
+    # unverified disease scores/percentages.
+    selected_legacy_record = None
+    selected_source_document = None
+    selected_id = request.GET.get("source_record", "")
+    if selected_id.isdecimal() and len(selected_id) <= 20:
+        selected_legacy_record = next(
+            (record for record in records
+             if record.pk == int(selected_id) and record.is_legacy_mixed
+             and record.verification_state == VerificationState.HEALTH_VERIFIED),
+            None,
+        )
+        if selected_legacy_record and selected_legacy_record.evidence_document_id:
+            candidate = selected_legacy_record.evidence_document
+            allowed = StructuredHealthForm(dog=dog).fields["source_document"].queryset
+            if allowed.filter(pk=candidate.pk).exists():
+                selected_source_document = candidate
+    structured_form = StructuredHealthForm(
+        dog=dog,
+        initial={"source_document": selected_source_document.pk} if selected_source_document else {},
+    )
     # Imported all-in-one "purity / health" prose was historically rendered
     # as separate marker names on the public profile. Staff must be able to
     # recognize those older values without mistaking them for independently
@@ -217,6 +243,8 @@ def reviewed_dog_health(request, pk):
         "quick_results": quick_results,
         "orthopedic_results": orthopedic_results,
         "latest_breed": latest_breed,
+        "selected_legacy_record": selected_legacy_record,
+        "selected_source_document": selected_source_document,
     })
 
 
@@ -491,6 +519,20 @@ def edit_reviewed_health_result(request, pk, record_id):
     )
     if record.verification_state != VerificationState.HEALTH_VERIFIED:
         raise PermissionDenied("An approved evidence-reviewed result is required.")
+    # Old combined purity/health entries cannot be changed correctly by the
+    # one-test form. Route both bookmarked GETs and stale POSTs to the safe
+    # structured editor; no legacy database values are overwritten.
+    if legacy_mixed_health_rows(record.test_type, record.result) is not None:
+        if request.method == "POST":
+            messages.warning(
+                request,
+                "This older combined record was not overwritten. Edit each "
+                "condition separately using the structured health editor.",
+            )
+        return redirect(
+            reverse("accounts:reviewed-dog-health", args=[pk])
+            + "?source_record=" + str(record.pk) + "#structured-health-editor"
+        )
     if request.method == "POST":
         intent = request.POST.get("intent")
         if intent not in ("save", "publish"):
