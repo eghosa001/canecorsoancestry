@@ -99,6 +99,26 @@ class ModeratorLabResultTests(TestCase):
         self.assertContains(view, reverse("accounts:save-structured-health", args=[self.dog.pk]))
         self.assertContains(view, reverse("accounts:edit-reviewed-health-result", args=[self.dog.pk, record.pk]))
 
+    def test_structured_editor_explains_existing_legacy_markers_and_hip_grades(self):
+        HealthRecord.objects.create(
+            dog=self.dog, test_type="Purity Verification/Health Test",
+            result="100% Cane Corso. CMR1 CLEAR. DSRA CLEAR",
+            verification_state=VerificationState.HEALTH_VERIFIED,
+            is_public=True,
+        )
+        HealthRecord.objects.create(
+            dog=self.dog, test_type="Hip scores", result="HD-A",
+            verification_state=VerificationState.HEALTH_VERIFIED,
+            is_public=True,
+        )
+        self.client.force_login(self.moderator)
+        page = self.client.get(self.health_url)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Older combined report; review and enter separately")
+        self.assertContains(page, "Older approved grade; check the source before changing")
+        self.assertContains(page, "HD-A")
+        self.assertContains(page, "Clear")
+
     def test_structured_editor_saves_individual_marker_results_with_one_evidence_source(self):
         accepted = Submission.objects.create(
             kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
