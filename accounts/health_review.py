@@ -20,6 +20,7 @@ from registry.permissions import can_review_submissions
 from registry.public_freshness import invalidate_public_content
 from registry.health_publication import publication_status
 from registry.legacy_health import legacy_mixed_health_rows
+from registry.orthopaedic_health import describe_orthopaedic_result
 from registry.services import record_audit
 from registry.verification import verify_submission
 
@@ -195,9 +196,16 @@ def reviewed_dog_health(request, pk):
         {"code": "DSRA", "name": "Dental-Skeletal-Retinal Anomaly", "field": structured_form["dsra"], "current": current_rows.get("DSRA"), "legacy": old_markers.get("DSRA")},
         {"code": "NCL1", "name": "Neuronal Ceroid Lipofuscinosis", "field": structured_form["ncl1"], "current": current_rows.get("NCL1"), "legacy": old_markers.get("NCL1")},
     ]
+    old_grades = {}
+    for record in records:
+        if record.verification_state != VerificationState.HEALTH_VERIFIED:
+            continue
+        for assessment in describe_orthopaedic_result(record.test_type, record.result):
+            code = "HD" if assessment["test"] == "Hip dysplasia screening" else "ED"
+            old_grades.setdefault(code, assessment["grade"])
     orthopedic_results = [
-        {"code": "HD", "name": "Hip screening", "field": structured_form["hip"], "current": current_rows.get("HD")},
-        {"code": "ED", "name": "Elbow screening", "field": structured_form["elbow"], "current": current_rows.get("ED")},
+        {"code": "HD", "name": "Hip screening", "field": structured_form["hip"], "current": current_rows.get("HD"), "legacy": old_grades.get("HD")},
+        {"code": "ED", "name": "Elbow screening", "field": structured_form["elbow"], "current": current_rows.get("ED"), "legacy": old_grades.get("ED")},
     ]
     pending = list(Submission.objects.filter(
         dog=dog, kind=Submission.Kind.HEALTH, status=Submission.Status.PENDING
