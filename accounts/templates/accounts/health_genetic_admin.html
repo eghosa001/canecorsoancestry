@@ -20,11 +20,11 @@
     <section class="panel">
       <p class="eyebrow">Exact canonical dog</p>
       <h2>{{ dog.name }}</h2>
-      <p class="muted">{{ dog.pk }} · {{ dog.kennel.name|default:"No recorded kennel" }} · {% if dog.is_public %}Published{% else %}Unpublished{% endif %}</p>
+      <p class="muted">{{ dog.pk }} · {{ dog.kennel.name|default:"No recorded kennel" }} · {% if dog.is_effectively_public %}Visible on site{% else %}Not visible on site{% endif %}</p>
       <div class="button-row">
         <a class="btn btn-outline" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Dog editor</a>
         <a class="btn btn-gold" href="{% url 'accounts:reviewed-dog-health' dog.pk %}">Show / hide approved results</a>
-        {% if dog.is_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}#health">Public Health &amp; DNA view</a>{% endif %}
+        {% if dog.is_effectively_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}#health">View exact public Health &amp; DNA section</a>{% endif %}
       </div>
     </section>
 
@@ -65,13 +65,9 @@
                 <td>{{ record.tested_on|default:"—" }}</td>
                 <td>{{ record.public_verification_label }}</td>
                 <td>
-                  {% if record.breed_dna_report %}
-                    {% if record.breed_dna_report.consent_public_summary %}
-                      Owner-authorized summary{% if record.breed_dna_report.consent_full_report %} + full report{% endif %}
-                    {% else %}Private: no current owner-publication consent{% endif %}
-                  {% else %}
-                    {% if record.evidence_document %}Staff-reviewed test result; file private{% else %}Existing health record{% endif %}
-                  {% endif %}
+                  <strong>{{ record.staff_public_status_label }}</strong>
+                  {% if record.staff_public_status_code != "published" %}<small class="muted">{{ record.staff_public_status_reason }}</small>{% endif %}
+                  {% if record.evidence_document %}<small class="muted">Original evidence file private</small>{% endif %}
                 </td>
                 <td>
                   {% if record.evidence_document %}
