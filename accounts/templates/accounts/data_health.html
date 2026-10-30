@@ -21,6 +21,35 @@
     <article class="analysis-card"><p class="eyebrow">Backlog</p><strong class="analysis-number">{{ counts.pending_submissions }}</strong><span>{{ counts.aging_submissions }} waiting 7+ days</span></article>
   </div>
 
+  <section class="panel section-spacer" id="health-visibility-audit">
+    <div class="panel-heading">
+      <div>
+        <h2>Health results marked public but missing on the site</h2>
+        <span>Read-only check of every stored public health result against actual publication rules.</span>
+      </div>
+    </div>
+    <p>Some results have a Public database flag but are not shown because the dog profile is hidden, owner DNA consent is absent, or an old breed-DNA claim needs proper structured health values. This check never exposes confidential certificates or changes results.</p>
+    <a class="btn btn-outline" href="{% url 'accounts:data-health' %}?health_visibility=1#health-visibility-audit">Check all health visibility mismatches</a>
+    {% if health_visibility_totals %}
+      <p><strong>{{ health_visibility_totals.mismatch }}</strong> results marked public cannot currently appear on the public site. <strong>{{ health_visibility_totals.eligible }}</strong> results are eligible for display.</p>
+      <div class="relationship-list">
+        {% for issue in health_visibility_issues %}
+          <div>
+            <strong>{{ issue.dog.name }}</strong>
+            <span>{{ issue.label }} · {{ issue.explanation }}</span>
+            <span>Record ID: {{ issue.record.pk }}</span>
+            <a href="{% url 'accounts:reviewed-dog-health' issue.dog.pk %}#approved-health-results">Review dog's health results</a>
+          </div>
+        {% empty %}
+          <p class="muted">No publication inconsistencies found.</p>
+        {% endfor %}
+      </div>
+      {% if health_visibility_totals.mismatch > 40 %}
+        <p class="muted">Showing the first 40 affected results; use the read-only production audit for the complete inventory.</p>
+      {% endif %}
+    {% endif %}
+  </section>
+
   <section class="panel section-spacer">
     <div class="panel-heading">
       <div><h2>Independent evidence review</h2><span>A reference is not proof of verification.</span></div>
