@@ -411,10 +411,77 @@ class ModeratorLabResultTests(TestCase):
         self.client.force_login(self.moderator)
         approve_submission(submission, self.moderator)
         self.assertContains(self.client.get(self.public_url), "Edit verified health values")
-        self.assertContains(self.client.get(self.public_url), self.health_url + "#approved-health-results")
+        self.assertContains(self.client.get(self.public_url), self.health_url + "#structured-health-editor")
         self.client.force_login(self.unauthorized)
         self.assertNotContains(self.client.get(self.public_url), "Edit verified health values")
         self.assertEqual(self.client.get(self.health_url).status_code, 403)
+
+    def test_legacy_b_zeus_edit_uses_structured_fields_and_prefills_approved_evidence(self):
+        source = DogDocument.objects.create(
+            dog=self.dog, title="Approved legacy B-ZEUS laboratory evidence",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file="private/legacy/b-zeus-accepted.pdf",
+            staff_review_only=True, is_public=False,
+        )
+        legacy = HealthRecord.objects.create(
+            dog=self.dog, test_type="Purity Verification/Health Test",
+            result="100% Cane Corso",
+            evidence_document=source,
+            verification_state=VerificationState.HEALTH_VERIFIED,
+            is_public=True,
+        )
+        editor = reverse("accounts:reviewed-dog-health", args=[self.dog.pk])
+        legacy_edit = reverse(
+            "accounts:edit-reviewed-health-result", args=[self.dog.pk, legacy.pk],
+        )
+        expected = editor + f"?source_record={legacy.pk}#structured-health-editor"
+        self.client.force_login(self.moderator)
+        response = self.client.get(legacy_edit)
+        self.assertRedirects(response, expected, fetch_redirect_response=False)
+        listing = self.client.get(editor, {"source_record": str(legacy.pk)})
+        self.assertContains(listing, "Converting an older combined record")
+        self.assertContains(listing, "Edit individual results")
+        self.assertContains(listing, "Approved legacy B-ZEUS laboratory evidence")
+        self.assertEqual(
+            listing.context["structured_form"].initial["source_document"], source.pk,
+        )
+        self.assertContains(listing, "CMR1")
+        self.assertContains(listing, "DSRA")
+        self.assertNotContains(
+            listing,
+            'href="' + legacy_edit + '">Edit health record</a>',
+        )
+        response = self.client.post(
+            legacy_edit,
+            {"intent": "publish", "test_type": "CMR1", "result": "Clear", "reviewed": "on"},
+        )
+        self.assertRedirects(response, expected, fetch_redirect_response=False)
+        legacy.refresh_from_db()
+        self.assertEqual(legacy.test_type, "Purity Verification/Health Test")
+        self.assertEqual(legacy.result, "100% Cane Corso")
+        self.assertFalse(HealthRecord.objects.filter(dog=self.dog, test_type="CMR1").exists())
+        self.client.force_login(self.unauthorized)
+        self.assertEqual(self.client.get(legacy_edit).status_code, 403)
+        self.assertEqual(self.client.get(editor).status_code, 403)
+
+    def test_legacy_source_selector_rejects_another_dogs_document(self):
+        other = Dog.objects.create(name="Another dog", slug="other-dog-evidence")
+        source = DogDocument.objects.create(
+            dog=other, title="Other dog's confidential DNA report",
+            document_type=DogDocument.DocumentType.DNA,
+            file="private/dna/other.pdf", staff_review_only=True,
+        )
+        other_record = HealthRecord.objects.create(
+            dog=other, test_type="Purity Verification/Health Test",
+            result="100% Cane Corso", evidence_document=source,
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        self.client.force_login(self.moderator)
+        editor = reverse("accounts:reviewed-dog-health", args=[self.dog.pk])
+        response = self.client.get(editor, {"source_record": str(other_record.pk)})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Other dog's confidential DNA report")
+        self.assertFalse(response.context["structured_form"].initial)
 
     def test_approved_health_record_has_one_edit_flow_and_live_preview(self):
         submission = self.upload()
