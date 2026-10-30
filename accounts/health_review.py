@@ -175,10 +175,25 @@ def reviewed_dog_health(request, pk):
         None,
     )
     structured_form = StructuredHealthForm(dog=dog)
+    # Imported all-in-one "purity / health" prose was historically rendered
+    # as separate marker names on the public profile. Staff must be able to
+    # recognize those older values without mistaking them for independently
+    # transcribed structured records.
+    old_markers = {}
+    for record in records:
+        legacy = legacy_mixed_health_rows(
+            record.test_type, record.result,
+            record_verified=record.verification_state == VerificationState.HEALTH_VERIFIED,
+        )
+        if legacy is not None:
+            for item in legacy:
+                code = item["test"].upper()
+                if code in MARKER_CODES and code not in old_markers:
+                    old_markers[code] = item["result"]
     quick_results = [
-        {"code": "CMR1", "name": "Canine Multifocal Retinopathy", "field": structured_form["cmr1"], "current": current_rows.get("CMR1")},
-        {"code": "DSRA", "name": "Dental-Skeletal-Retinal Anomaly", "field": structured_form["dsra"], "current": current_rows.get("DSRA")},
-        {"code": "NCL1", "name": "Neuronal Ceroid Lipofuscinosis", "field": structured_form["ncl1"], "current": current_rows.get("NCL1")},
+        {"code": "CMR1", "name": "Canine Multifocal Retinopathy", "field": structured_form["cmr1"], "current": current_rows.get("CMR1"), "legacy": old_markers.get("CMR1")},
+        {"code": "DSRA", "name": "Dental-Skeletal-Retinal Anomaly", "field": structured_form["dsra"], "current": current_rows.get("DSRA"), "legacy": old_markers.get("DSRA")},
+        {"code": "NCL1", "name": "Neuronal Ceroid Lipofuscinosis", "field": structured_form["ncl1"], "current": current_rows.get("NCL1"), "legacy": old_markers.get("NCL1")},
     ]
     orthopedic_results = [
         {"code": "HD", "name": "Hip screening", "field": structured_form["hip"], "current": current_rows.get("HD")},
