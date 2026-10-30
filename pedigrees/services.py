@@ -8,6 +8,7 @@ from django.db.models import Case, CharField, Count, F, Q, Value, When, Window
 from django.db.models.functions import RowNumber
 
 from registry.genetic_health import unstructured_breed_claim
+from registry.legacy_health import legacy_mixed_health_rows
 from registry.models import Dog, HealthRecord, Kennel
 from registry.querysets import published_dogs
 
@@ -512,6 +513,13 @@ def direct_relative_health(
         if include_subject_records and record.dog_id == dog.pk:
             subject_records.append(record)
         if record.dog_id in relatives:
+            # The relatives table displays raw test_type/result text. Legacy
+            # combined purity/health rows can contain breed percentages that
+            # are not owner-consented DNA summaries. Never echo those raw
+            # claims in a relative's public profile. Structured individual
+            # health findings have their own safely publishable records.
+            if legacy_mixed_health_rows(record.test_type, record.result) is not None:
+                continue
             relatives[record.dog_id]["records"].append(record)
 
     result = sorted(
