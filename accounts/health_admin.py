@@ -25,6 +25,7 @@ from registry.models import (
 )
 from registry.permissions import can_manage_verification
 from registry.public_freshness import invalidate_public_content
+from registry.health_publication import publication_status
 from registry.services import record_audit
 
 from .forms import validate_document_upload, DOCUMENT_ACCEPT
@@ -238,6 +239,10 @@ def health_genetic_dog(request, pk):
                         "breed_dna_report__evidence_document")
         .order_by("-created_at")[:60]
     )
+    for record in history:
+        (record.staff_public_status_code,
+         record.staff_public_status_label,
+         record.staff_public_status_reason) = publication_status(record, dog=dog)
     visible_dna_count = BreedDNAReport.objects.filter(
         health_record__dog=dog, consent_public_summary=True
     ).count()
