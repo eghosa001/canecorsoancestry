@@ -3430,6 +3430,36 @@ def data_health(request):
             coi_duplicate_report = audit_registration_backed_duplicates(max_display=25)
             cache.set(duplicates_cache_key, coi_duplicate_report, timeout=60)
 
+    # Explicit, read-only database-wide visibility audit. The simple dashboard
+    # remains fast; staff opt into this heavier scan only when investigating
+    # health flags that do not match public profile content.
+    health_visibility_issues = None
+    health_visibility_totals = None
+    if request.GET.get("health_visibility") == "1":
+        from collections import Counter
+        from registry.health_publication import publication_status
+
+        health_visibility_issues = []
+        totals = Counter()
+        rows = (
+            HealthRecord.objects.filter(is_public=True)
+            .select_related("dog", "dog__kennel", "breed_dna_report")
+            .order_by("dog_id", "pk")
+        )
+        for record in rows.iterator(chunk_size=400):
+            code, label, explanation = publication_status(record, dog=record.dog)
+            totals[code] += 1
+            if code != "published" and len(health_visibility_issues) < 40:
+                health_visibility_issues.append({
+                    "dog": record.dog, "record": record,
+                    "code": code, "label": label, "explanation": explanation,
+                })
+        health_visibility_totals = {
+            "eligible": totals["published"],
+            "mismatch": sum(count for code, count in totals.items() if code != "published"),
+            "reasons": dict(totals),
+        }
+
     counts = report["counts"]
     critical_total = sum(
         counts.get(key, 0)
@@ -3452,6 +3482,8 @@ def data_health(request):
             "coi_duplicate_report": coi_duplicate_report,
             "can_review_coi_duplicates": can_review_coi_duplicates,
             "can_manage_sources": can_manage_verification(request.user),
+            "health_visibility_issues": health_visibility_issues,
+            "health_visibility_totals": health_visibility_totals,
         },
     )
 
