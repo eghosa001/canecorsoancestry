@@ -199,7 +199,9 @@ def save_structured_health(request, pk):
             ):
                 continue
             # Preserve the original approved row and its immutable evidence.
-            # Only one current public version of this structured test exists.
+            # Carry forward the previous privacy choice BEFORE marking the old
+            # row superseded; otherwise the replacement would be hidden too.
+            new_visibility = previous.is_public if previous else True
             if previous and previous.is_public:
                 previous.is_public = False
                 previous.save(update_fields=["is_public"])
@@ -211,7 +213,7 @@ def save_structured_health(request, pk):
             record = HealthRecord.objects.create(
                 dog=dog, test_type=code, result=result, tested_on=when,
                 verification_state=VerificationState.HEALTH_VERIFIED,
-                is_public=previous.is_public if previous else True,
+                is_public=new_visibility,
                 evidence_document=direct_document,
                 notes=f"Structured staff health transcription from accepted {source_key}",
             )
