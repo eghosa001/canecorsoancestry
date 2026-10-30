@@ -18,6 +18,7 @@ from registry.models import (
 )
 from registry.permissions import can_review_submissions
 from registry.public_freshness import invalidate_public_content
+from registry.health_publication import publication_status
 from registry.services import record_audit
 from registry.verification import verify_submission
 
@@ -158,6 +159,13 @@ def reviewed_dog_health(request, pk):
         .select_related("breed_dna_report", "evidence_document", "breed_dna_report__evidence_document")
         .order_by("-created_at")[:150]
     )
+    # Do not label a database is_public flag as proof of public visibility.
+    # The public page also enforces dog/kennel visibility, DNA consent and
+    # filtering of unsafe unstructured breed-composition claims.
+    for record in records:
+        (record.staff_public_status_code,
+         record.staff_public_status_label,
+         record.staff_public_status_reason) = publication_status(record, dog=dog)
     pending = list(Submission.objects.filter(
         dog=dog, kind=Submission.Kind.HEALTH, status=Submission.Status.PENDING
     ).order_by("-created_at")[:30])
