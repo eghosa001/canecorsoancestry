@@ -128,6 +128,23 @@ class PublicLegacyMixedHealthTests(TestCase):
         self.assertContains(page, "DSRA")
         self.assertNotContains(page, "Not verified")
 
+    def test_relative_health_does_not_leak_raw_legacy_breed_purity(self):
+        sire = Dog.objects.create(
+            name="Legacy ancestry sire", slug="legacy-ancestry-sire",
+            is_public=True, sex=Dog.Sex.MALE,
+        )
+        self.dog.sire = sire
+        self.dog.save(update_fields=["sire"])
+        HealthRecord.objects.create(
+            dog=sire, test_type="Purity Verification/Health Test",
+            result="100% Cane Corso", is_public=True,
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        page = self.client.get(self.url)
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, "100% Cane Corso")
+        self.assertNotContains(page, "Purity Verification/Health Test")
+
     def test_private_mixed_row_is_not_exposed(self):
         HealthRecord.objects.create(
             dog=self.dog, test_type="Purity Verification/Health Test",
