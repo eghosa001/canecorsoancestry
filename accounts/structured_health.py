@@ -87,6 +87,7 @@ class StructuredHealthForm(forms.Form):
             DogDocument.objects.filter(
                 Q(staff_review_only=True,
                   staff_health_record__verification_state=VerificationState.HEALTH_VERIFIED)
+                | Q(breed_dna_report__health_record__verification_state=VerificationState.HEALTH_VERIFIED)
                 | Q(source_submission__kind=Submission.Kind.DOCUMENT,
                     source_submission__status=Submission.Status.APPROVED),
                 dog=dog,
