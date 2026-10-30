@@ -167,12 +167,33 @@ def reviewed_dog_health(request, pk):
         (record.staff_public_status_code,
          record.staff_public_status_label,
          record.staff_public_status_reason) = publication_status(record, dog=dog)
+    from .structured_health import StructuredHealthForm, structured_rows
+    current_rows = structured_rows(records)
+    latest_breed = next(
+        (row.breed_dna_report for row in records if
+         hasattr(row, "breed_dna_report") and row.breed_dna_report is not None),
+        None,
+    )
+    structured_form = StructuredHealthForm(dog=dog)
+    quick_results = [
+        {"code": "CMR1", "name": "Canine Multifocal Retinopathy", "field": structured_form["cmr1"], "current": current_rows.get("CMR1")},
+        {"code": "DSRA", "name": "Dental-Skeletal-Retinal Anomaly", "field": structured_form["dsra"], "current": current_rows.get("DSRA")},
+        {"code": "NCL1", "name": "Neuronal Ceroid Lipofuscinosis", "field": structured_form["ncl1"], "current": current_rows.get("NCL1")},
+    ]
+    orthopedic_results = [
+        {"code": "HD", "name": "Hip screening", "field": structured_form["hip"], "current": current_rows.get("HD")},
+        {"code": "ED", "name": "Elbow screening", "field": structured_form["elbow"], "current": current_rows.get("ED")},
+    ]
     pending = list(Submission.objects.filter(
         dog=dog, kind=Submission.Kind.HEALTH, status=Submission.Status.PENDING
     ).order_by("-created_at")[:30])
     return render(request, "accounts/moderator_health_results.html", {
         "dog": dog, "records": records, "pending": pending,
         "add_condition_form": AdditionalHealthConditionForm(dog=dog),
+        "structured_form": structured_form,
+        "quick_results": quick_results,
+        "orthopedic_results": orthopedic_results,
+        "latest_breed": latest_breed,
     })
 
 
