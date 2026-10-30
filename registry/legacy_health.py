@@ -38,9 +38,10 @@ def legacy_mixed_health_rows(test_type, result, *, record_verified=False):
         if not entry:
             continue
         if _BREED_CLAIM.fullmatch(entry):
-            if "breed" not in seen:
-                rows.append({"test": "Breed purity", "result": "No DNA report", "verified": False})
-                seen.add("breed")
+            # A free-text breed claim is not a health screening finding.
+            # Never replace it with a misleading "Breed purity / No DNA
+            # report" result. Dedicated owner-consented reports handle
+            # breed composition separately.
             continue
         marker = _MARKER_RESULT.fullmatch(entry)
         if marker:
@@ -58,4 +59,7 @@ def legacy_mixed_health_rows(test_type, result, *, record_verified=False):
             continue
         # Unknown text stays visible, not silently discarded.
         rows.append({"test": "Other reported finding", "result": entry, "verified": False})
-    return rows or [{"test": "Health screening", "result": "Result not provided", "verified": False}]
+    # Empty means this historical combined row has no individually
+    # publishable health results. The caller may show an evidence-only notice
+    # for a documented staff review, but must not invent a clinical finding.
+    return rows
