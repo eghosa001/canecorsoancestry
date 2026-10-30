@@ -37,6 +37,9 @@
           {% else %}
             <small class="health-workflow-pill health-workflow-pill--pending">{{ item.staff_public_status_label }}</small>
             <small class="muted">{{ item.staff_public_status_reason }}</small>
+            {% if item.staff_public_status_code == "needs_structuring" or item.staff_public_status_code == "summary_only" %}
+              <a class="text-link" href="#add-approved-condition">Enter verified health findings from approved evidence</a>
+            {% endif %}
           {% endif %}
           {% if item.breed_dna_report %}<small>Laboratory: {{ item.breed_dna_report.provider }}</small>{% endif %}
           {% if item.breed_dna_report and not item.breed_dna_report.consent_public_summary %}<small>Owner consent is required before publishing breed composition.</small>{% endif %}
