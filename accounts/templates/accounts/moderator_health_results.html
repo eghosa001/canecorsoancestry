@@ -59,7 +59,7 @@
             <div class="structured-health-identity">
               <strong>{{ entry.code }}</strong>
               <small>{{ entry.name }}</small>
-              <small>Current: <strong>{% if entry.current %}{{ entry.current.result }}{% else %}Not recorded{% endif %}</strong></small>
+              <small>Current: <strong>{% if entry.current %}{{ entry.current.result }}{% elif entry.legacy %}{{ entry.legacy }}{% else %}Not recorded{% endif %}</strong>{% if entry.legacy and not entry.current %} · Older approved grade; check the source before changing{% endif %}</small>
             </div>
             <div class="structured-health-control"><label for="{{ entry.field.id_for_label }}">Change grade</label>{{ entry.field }}</div>
           </div>
