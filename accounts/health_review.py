@@ -492,12 +492,16 @@ def edit_reviewed_health_result(request, pk, record_id):
                         note="Moderator confirmed edited public summary against original private evidence.",
                     )
                     invalidate_public_content()
-                    messages.success(
-                        request,
-                        "Reviewed summary published on the dog's profile."
-                        if record.is_public else
-                        "Reviewed summary saved privately. Publish it when the public card is ready.",
-                    )
+                    visible, _, reason = publication_status(record, dog=record.dog)
+                    if record.is_public and visible != "published":
+                        messages.warning(
+                            request,
+                            "Saved, but this result is NOT visible on the public site. " + reason,
+                        )
+                    elif record.is_public:
+                        messages.success(request, "Reviewed health result saved and visible on the public profile.")
+                    else:
+                        messages.success(request, "Reviewed health result saved privately.")
                     return redirect("accounts:reviewed-dog-health", pk=pk)
     else:
         form = ReviewedHealthResultForm(record=record)
@@ -549,6 +553,16 @@ def toggle_health_result(request, pk, record_id):
         ).exists():
             messages.error(request, "DNA breed percentages require the owner's consent before publication.")
             return redirect("accounts:reviewed-dog-health", pk=pk)
+        if show and unstructured_breed_claim(record.test_type) and not BreedDNAReport.objects.filter(
+            health_record=record, consent_public_summary=True
+        ).exists():
+            messages.error(
+                request,
+                "This free-text breed-DNA claim cannot be displayed as a verified test. "
+                "Transcribe each evidence-supported health result separately, or obtain "
+                "owner consent for a structured breed-composition report.",
+            )
+            return redirect("accounts:reviewed-dog-health", pk=pk)
         if record.is_public != show:
             record.is_public = show
             record.save(update_fields=["is_public"])
@@ -559,5 +573,13 @@ def toggle_health_result(request, pk, record_id):
                 note="Moderator updated PUBLIC SUMMARY visibility; original health image remains private.",
             )
             invalidate_public_content()
-    messages.success(request, "Public health-result visibility updated.")
+    state, _, reason = publication_status(record, dog=record.dog)
+    if show and state != "published":
+        messages.warning(request, "Public setting saved, but the result is NOT visible on the public site. " + reason)
+    else:
+        messages.success(
+            request,
+            "Health result now visible on the public profile." if show
+            else "Health result is now private.",
+        )
     return redirect("accounts:reviewed-dog-health", pk=pk)
