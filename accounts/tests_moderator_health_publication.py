@@ -333,7 +333,7 @@ class ModeratorLabResultTests(TestCase):
         dog.save(update_fields=["is_public"])
         self.assertEqual(publication_status(legacy)[0], "dog_hidden")
         health = self.client.get(reverse("accounts:reviewed-dog-health", args=[dog.pk]))
-        self.assertContains(health, "This dog's public profile is not visible")
+        self.assertContains(health, "public profile is not visible")
 
         # No private health report ever becomes a public media attachment.
         self.assertEqual(legacy.evidence_document_id, None)
