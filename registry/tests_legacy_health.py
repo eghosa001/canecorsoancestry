@@ -14,7 +14,7 @@ class LegacyHealthParsingTests(SimpleTestCase):
         )
         self.assertEqual(
             [(r["test"], r["result"]) for r in rows],
-            [("Breed purity", "No DNA report"), ("CMR1", "Clear"), ("DSRA", "Clear")],
+            [("CMR1", "Clear"), ("DSRA", "Clear")],
         )
         self.assertTrue(all(not row["verified"] for row in rows))
 
@@ -25,7 +25,7 @@ class LegacyHealthParsingTests(SimpleTestCase):
             record_verified=True,
         )
         self.assertEqual([(row["test"], row["verified"]) for row in rows], [
-            ("Breed purity", False), ("CMR1", True), ("DSRA", True),
+            ("CMR1", True), ("DSRA", True),
         ])
 
     def test_conflicting_result_is_never_verified_even_if_summary_is_reviewed(self):
@@ -43,7 +43,7 @@ class LegacyHealthParsingTests(SimpleTestCase):
         )
         self.assertEqual(
             [(r["test"], r["result"]) for r in rows],
-            [("Breed purity", "No DNA report"), ("CMR1", "Clear")],
+            [("CMR1", "Clear")],
         )
 
     def test_conflicting_status_is_not_shown_as_clear(self):
@@ -64,7 +64,7 @@ class PublicLegacyMixedHealthTests(TestCase):
         self.dog = Dog.objects.create(name="Screenshot Health Dog", slug="screenshot-health-dog", is_public=True)
         self.url = reverse("registry:dog-detail", args=[self.dog.slug])
 
-    def test_public_section_has_three_short_results_without_raw_mixed_prose(self):
+    def test_public_section_has_two_real_health_results_without_purity_placeholder(self):
         original = HealthRecord.objects.create(
             dog=self.dog, test_type="Purity Verification/Health Test",
             result="100% Cane Corso. CMR1 CLEAR. DSRA CLEAR",
@@ -72,12 +72,12 @@ class PublicLegacyMixedHealthTests(TestCase):
             is_public=True,
         )
         page = self.client.get(self.url)
-        self.assertContains(page, 'class="health-compact-row"', count=3)
-        self.assertContains(page, "Breed purity")
+        self.assertContains(page, 'class="health-compact-row"', count=2)
+        self.assertNotContains(page, "Breed purity")
         self.assertContains(page, "CMR1")
         self.assertContains(page, "DSRA")
         self.assertContains(page, "Clear", count=2)
-        self.assertContains(page, "No DNA report")
+        self.assertNotContains(page, "No DNA report")
         self.assertNotContains(page, "Not verified")
         self.assertNotContains(page, "<small>Not verified</small>")
         self.assertNotContains(page, "Purity Verification/Health Test")
@@ -86,6 +86,35 @@ class PublicLegacyMixedHealthTests(TestCase):
         self.assertNotContains(page, "genetic-screening-status--clear")
         original.refresh_from_db()
         self.assertEqual(original.result, "100% Cane Corso. CMR1 CLEAR. DSRA CLEAR")
+
+    def test_breed_only_legacy_claim_does_not_masquerade_as_health_test(self):
+        from .models import DogDocument
+        from .health_publication import publication_status
+        legacy = HealthRecord.objects.create(
+            dog=self.dog, test_type="Purity Verification/Health Test",
+            result="100% Cane Corso",
+            verification_state=VerificationState.HEALTH_VERIFIED,
+            is_public=True,
+        )
+        self.assertEqual(publication_status(legacy)[0], "needs_structuring")
+        page = self.client.get(self.url)
+        self.assertContains(page, "No available records")
+        self.assertNotContains(page, "Breed purity")
+        self.assertNotContains(page, "100% Cane Corso")
+
+        evidence = DogDocument.objects.create(
+            dog=self.dog, title="Reviewed staff laboratory report",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file="private/legacy-embark-evidence.pdf",
+            is_public=False, staff_review_only=True,
+        )
+        legacy.evidence_document = evidence
+        legacy.save(update_fields=["evidence_document"])
+        self.assertEqual(publication_status(legacy)[0], "summary_only")
+        page = self.client.get(self.url)
+        self.assertContains(page, "Laboratory evidence reviewed")
+        self.assertContains(page, "individual health test results have not been transcribed")
+        self.assertNotContains(page, "100% Cane Corso")
 
     def test_unverified_source_still_labels_clear_as_reported(self):
         HealthRecord.objects.create(
