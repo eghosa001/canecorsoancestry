@@ -54,36 +54,54 @@ entries remain readable.
    reported number. The existing verified record stays verified after an
    audited correction.
 
-## When a general Health/DNA document was already accepted
+## Edit the clearly labelled Health & DNA fields
 
-Acceptance of a generic document verifies the **source was accepted**, not
-unknown measurements that have not been transcribed yet. To enter the findings:
+After opening the exact dog under **Health values**, the first editor is
+**Edit Health & DNA**. It is designed like the public profile: a separate row
+for each test and a separate numeric percentage field for breed composition.
 
-1. Open the dog's **Health values** workspace from **Manage dog records**
-   or use **Review health results & values** from **Manage record**.
-2. Under **Add a missing health result**, choose **Or approved
-   Health/DNA document** and select the accepted PDF/image. Do not select two
-   sources at once.
-3. Enter **Exact genetic condition / test name**,
-   **Result / grade exactly as reported**, and **Test date** if supplied.
-4. For plain decimal measurements, leave **Result / grade exactly as reported**
-   empty and enter **Exact numeric value (optional)** and, if appropriate,
-   **Measurement unit (optional)**.
-   The application saves these together as the reported result; for example
-   `12.50` and `mm` are stored as `12.50 mm`. Zero is valid.
-5. For grades, labels and compound scores, use the
-   **Result / grade exactly as reported** field
-   directly: `HD-A`, `ED-0`, `12/24`, `Clear`, `Carrier`, etc. Do not
-   simultaneously fill the numeric field.
-6. Tick **I have checked this additional condition and its result in the
-   approved report**, then select **Save reviewed result**.
-7. The new result is immediately marked **Health/DNA verified**, is audited,
-   and its textual summary appears on the dog's profile if that dog is
-   published. The certificate is not publicly exposed.
+1. Under **Select the approved evidence**, choose exactly one accepted Health/DNA
+   certificate or approved member health report. Check it belongs to this dog.
+2. Under **Genetic health screening**, use the independent **CMR1**, **DSRA**,
+   and **NCL1** dropdowns to select Clear, Carrier, Affected, Inconclusive, or
+   Not tested **exactly as reported**. The **Current** label shows existing values.
+   **Leave unchanged** means no update. Older mixed reports are labelled as
+   historical and must be checked before converting to structured results.
+3. Under **Hip & elbow screening**, independently choose HD-A through HD-E
+   and/or ED-0 through ED-3 when these grades are on the accepted report.
+4. Under **Breed DNA composition**, enter the actual reported Cane Corso
+   percentage in **Reported percentage (%)** — for example `100` for a
+   laboratory estimate of `100% Cane Corso`. Also enter the issuing DNA
+   laboratory and, when the report contains other breeds, list their reported
+   percentages. Use a source that is explicitly an approved DNA report.
+   Values must add up to 100%. Do not infer breed percentages from pedigree
+   records, historical claims or photographs.
+5. Optionally enter the laboratory report date, tick the evidence-review
+   attestation, and select **Save reviewed health values**. Each selected
+   result is stored separately and audited; original certificates remain
+   private. Changing one marker leaves other markers unchanged.
+6. If the result already exists, the original reviewed record is retained
+   as historical evidence and the newer verified version replaces its
+   public screening status. An intentionally private result stays private
+   until staff explicitly permits publication.
 
-Every additional value from the same source must be entered as a separate
-condition, using the same approved document. Don't guess grades, test dates,
-reference ranges, numbers or units absent from the report.
+**Important:** Super Admin, Senior Moderator and Moderator accounts may record
+and correct independently evidenced DNA breed percentages, but new reports
+remain private until the kennel owner has recorded specific public-summary
+consent. Evidence verification does not substitute for consent. Even a reported
+100% value is a laboratory breed-composition estimate, not a universal proof
+of pedigree purity.
+
+### For a test that is not listed
+
+Open the optional **Add an uncommon test** section. Choose the approved source,
+enter **Exact genetic condition / test name** and **Reported result / grade**
+or **Exact numeric value (optional)** with the unit. For example, a
+`12.50 mm` measurement may be typed as `12.50` with unit `mm`, or a
+compound score may be entered exactly as `12/24`.
+Use **Save reviewed result** only after reading and attesting to the original
+certificate. Enter each uncommon test separately rather than combining multiple
+findings into one text field.
 
 ## Why the approved submission is read-only, and how to correct the saved result
 
