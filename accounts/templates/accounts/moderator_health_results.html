@@ -41,7 +41,7 @@
             <div class="structured-health-identity">
               <strong>{{ entry.code }}</strong>
               <small>{{ entry.name }}</small>
-              <small>Current: <strong>{% if entry.current %}{{ entry.current.result }}{% else %}Not recorded{% endif %}</strong></small>
+              <small>Current: <strong>{% if entry.current %}{{ entry.current.result }}{% elif entry.legacy %}{{ entry.legacy }}{% else %}Not recorded{% endif %}</strong>{% if entry.legacy and not entry.current %} · Older combined report; review and enter separately{% endif %}</small>
             </div>
             <div class="structured-health-control">
               <label for="{{ entry.field.id_for_label }}">Change result</label>
