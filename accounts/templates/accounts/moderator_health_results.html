@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Health result visibility · Cane Corso Ancestry{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261017-1">
+<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261030-structured-v1">
 <section class="page-shell moderation-page health-review-workspace">
   <header class="page-heading">
     <p class="eyebrow">Moderator · Private health workspace</p>
@@ -14,6 +14,78 @@
       {% if dog.is_effectively_public %}<a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}#health">View this exact dog's public health profile ↗</a>{% else %}<span class="muted">The dog profile is not currently visible to visitors.</span>{% endif %}
     </div>
   </header>
+  <section class="panel structured-health-panel" id="structured-health-editor">
+    <div class="health-section-heading">
+      <div>
+        <p class="health-review-overline">Staff editor · evidence-backed</p>
+        <h2>Edit Health &amp; DNA</h2>
+      </div>
+    </div>
+    <p class="health-review-help">Change each test separately, just like the public dog's Health &amp; DNA page. Choose only the results you have checked in an accepted laboratory report. Unchanged rows stay as they are.</p>
+    <form action="{% url 'accounts:save-structured-health' dog.pk %}" method="post" class="structured-health-form">
+      {% csrf_token %}
+      <div class="structured-evidence">
+        <strong>1. Select the approved evidence</strong>
+        <div class="structured-health-source-fields">
+          <div><label for="{{ structured_form.source_submission.id_for_label }}">Approved member health report</label>{{ structured_form.source_submission }}</div>
+          <div><label for="{{ structured_form.source_document.id_for_label }}">Or an accepted health/DNA certificate</label>{{ structured_form.source_document }}</div>
+        </div>
+        <small>Choose one source. Original reports remain private and every corrected value is audited.</small>
+      </div>
+      <div class="structured-health-group">
+        <h3>2. Genetic health screening</h3>
+        <p class="muted">Each condition has its own result. Clear, Carrier, Affected, Inconclusive and Not tested are distinct laboratory findings.</p>
+        <div class="structured-health-rows">
+          {% for entry in quick_results %}
+          <div class="structured-health-row">
+            <div class="structured-health-identity">
+              <strong>{{ entry.code }}</strong>
+              <small>{{ entry.name }}</small>
+              <small>Current: <strong>{% if entry.current %}{{ entry.current.result }}{% else %}Not recorded{% endif %}</strong></small>
+            </div>
+            <div class="structured-health-control">
+              <label for="{{ entry.field.id_for_label }}">Change result</label>
+              {{ entry.field }}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="structured-health-group">
+        <h3>3. Hip &amp; elbow screening</h3>
+        <div class="structured-health-rows">
+          {% for entry in orthopedic_results %}
+          <div class="structured-health-row">
+            <div class="structured-health-identity">
+              <strong>{{ entry.code }}</strong>
+              <small>{{ entry.name }}</small>
+              <small>Current: <strong>{% if entry.current %}{{ entry.current.result }}{% else %}Not recorded{% endif %}</strong></small>
+            </div>
+            <div class="structured-health-control"><label for="{{ entry.field.id_for_label }}">Change grade</label>{{ entry.field }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="structured-health-group structured-breed-panel">
+        <h3>4. Breed DNA composition</h3>
+        <p class="muted">Enter the percentage <strong>reported by the DNA laboratory</strong>, for example 100 for a reported 100% Cane Corso result. This is a laboratory estimate, not a pedigree purity guarantee.</p>
+        <div class="structured-breed-value">
+          <div class="structured-health-identity"><strong>Cane Corso</strong><small>Current recorded estimate: {% if latest_breed %}{{ latest_breed.cane_corso_percentage }}%{% else %}Not recorded{% endif %}</small></div>
+          <div class="structured-health-control"><label for="{{ structured_form.cane_corso_percentage.id_for_label }}">Reported percentage (%)</label>{{ structured_form.cane_corso_percentage }}</div>
+        </div>
+        <div class="structured-health-source-fields">
+          <div><label for="{{ structured_form.laboratory.id_for_label }}">DNA laboratory</label>{{ structured_form.laboratory }}</div>
+          <div><label for="{{ structured_form.other_breeds.id_for_label }}">Other breed percentages (if any)</label>{{ structured_form.other_breeds }}</div>
+        </div>
+        <p class="structured-privacy-note">Staff may record a reviewed breed-DNA percentage, but a <strong>new report stays private until the kennel owner's publication consent is recorded</strong>. No private PDF or image will be published.</p>
+      </div>
+      <div class="structured-health-footer">
+        <div><label for="{{ structured_form.tested_on.id_for_label }}">Date of report (optional)</label>{{ structured_form.tested_on }}</div>
+        <label class="structured-health-attest">{{ structured_form.reviewed }} <span>{{ structured_form.reviewed.label }}</span></label>
+        <button type="submit" class="btn btn-gold">Save reviewed health values</button>
+      </div>
+    </form>
+  </section>
   <section class="panel">
     <div class="health-section-heading"><div><p class="health-review-overline">Awaiting decision</p><h2>New laboratory evidence</h2></div><span class="health-count-badge">{{ pending|length }}</span></div>
     {% for item in pending %}
@@ -62,8 +134,8 @@
     <p class="health-private-caption">Approval does not automatically make every result publicly displayable. The status above reflects the actual profile, not just the database publication flag. Editing creates an audited correction; confidential images and PDFs never appear in public.</p>
   </section>
   <section class="panel">
-    <div class="health-section-heading"><div><p class="health-review-overline">Correct missed extraction</p><h2 id="add-approved-condition">Add a missing health result</h2></div></div>
-    <p class="health-review-help">After the member's Health/DNA submission or Health/DNA document has been approved: select its approved source, enter the exact test name, score or numerical measurement, and confirm it against the certificate. Saving creates a verified health result. It appears on public dog profiles automatically; source documents remain confidential. Never enter an assumed value.</p>
+    <div class="health-section-heading"><div><p class="health-review-overline">Other laboratory tests</p><h2 id="add-approved-condition">Add an uncommon test</h2></div></div>
+    <p class="health-review-help">Only use this for tests not covered by the clearly labelled fields above. Enter the exact laboratory wording and value; never invent or infer a result.</p>
     <form method="post" action="{% url 'accounts:add-reviewed-health-condition' dog.pk %}" class="member-form health-final-form">
       <datalist id="health-reported-status-options"><option value="Clear"><option value="Carrier"><option value="Affected"><option value="Inconclusive"><option value="Not tested"></datalist>
       {% csrf_token %}
