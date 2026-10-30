@@ -203,6 +203,44 @@ class ModeratorLabResultTests(TestCase):
         self.assertFalse(report.consent_public_summary)
         self.assertEqual(report.composition[1]["breed"], "Boxer")
 
+    def test_legacy_health_categorized_dna_certificate_accepts_attested_private_percentage(self):
+        source = DogDocument.objects.create(
+            dog=self.dog, title="Accepted historical Embark Health/DNA certificate",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file="private/legacy/embark-evidence.pdf",
+            staff_review_only=True, is_public=False,
+        )
+        legacy = HealthRecord.objects.create(
+            dog=self.dog, test_type="Purity Verification/Health Test",
+            result="100% Cane Corso", is_public=True,
+            evidence_document=source,
+            verification_state=VerificationState.HEALTH_VERIFIED,
+        )
+        url = reverse("accounts:save-structured-health", args=[self.dog.pk])
+        self.client.force_login(self.moderator)
+        data = {
+            "source_document": source.pk,
+            "cane_corso_percentage": "100",
+            "laboratory": "Embark",
+            "reviewed": "on",
+        }
+        self.client.post(url, data)
+        self.assertFalse(BreedDNAReport.objects.exists())
+        data["dna_evidence_confirmed"] = "on"
+        response = self.client.post(url, data)
+        self.assertRedirects(response, self.health_url)
+        report = BreedDNAReport.objects.get(health_record__dog=self.dog)
+        self.assertEqual(str(report.cane_corso_percentage), "100.00")
+        self.assertFalse(report.consent_public_summary)
+        self.assertFalse(report.health_record.is_public)
+        legacy.refresh_from_db()
+        self.assertEqual(legacy.result, "100% Cane Corso")
+        self.assertTrue(legacy.is_public)
+        self.client.logout()
+        public = self.client.get(self.public_url)
+        self.assertNotContains(public, "100% Cane Corso")
+        self.assertNotContains(public, "private/legacy/embark-evidence.pdf")
+
     def test_structured_editor_rejects_missing_evidence_and_non_dna_purity(self):
         self.client.force_login(self.moderator)
         url = reverse("accounts:save-structured-health", args=[self.dog.pk])
