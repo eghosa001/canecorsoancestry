@@ -18,7 +18,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from registry.dna import parse_breed_composition, percentage_text
-from registry.genetic_health import MARKER_CODES, SCREENING_RESULTS, readable_health_result
+from registry.genetic_health import MARKER_CODES, SCREENING_RESULTS, readable_health_result, unstructured_breed_claim
 from registry.models import (
     BreedDNAReport, Dog, DogDocument, HealthRecord, ModerationAudit,
     VerificationEvent, VerificationState,
@@ -107,6 +107,14 @@ class HistoricalHealthEvidenceForm(forms.Form):
                 (data.get("result") or "").strip().lower() not in SCREENING_RESULTS
             ):
                 self.add_error("result", "Use the actual recorded status: Clear, Carrier, Affected, Inconclusive or Not tested.")
+            if unstructured_breed_claim(data.get("test_type")):
+                self.add_error(
+                    "test_type",
+                    "Breed DNA/composition cannot be saved as a public health test. "
+                    "Choose the dedicated DNA breed composition category; owner "
+                    "publication consent is required. Enter actual health markers "
+                    "as separate tests.",
+                )
         return data
 
 
