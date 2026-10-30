@@ -7,7 +7,7 @@
   <header class="page-heading">
     <p class="eyebrow">Moderator · Private health workspace</p>
     <h1>{{ dog.name }}</h1>
-    <p>Check each result's <strong>actual public visibility</strong> below. A saved Public flag is not sufficient if the dog profile is hidden or the result requires owner DNA consent or restructuring. To enter missing scores from accepted evidence, add a reviewed result below.</p>
+    <p>Update verified results one test at a time in the structured editor below. A result is public only when it also meets the site's evidence, profile visibility and DNA consent requirements.</p>
     <p class="muted">Exact dog record: {{ dog.pk }} · {{ dog.slug }}</p>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">← Health review queue</a>
@@ -22,6 +22,17 @@
       </div>
     </div>
     <p class="health-review-help">Change each test separately, just like the public dog's Health &amp; DNA page. Choose only the results you have checked in an accepted laboratory report. Unchanged rows stay as they are.</p>
+    {% if selected_legacy_record %}
+      <div class="structured-evidence" role="status" id="legacy-source-help">
+        <strong>Converting an older combined record</strong>
+        <p>The original “{{ selected_legacy_record.test_type }}” entry is preserved as historical evidence. Use the separate CMR1, DSRA and other fields below to transcribe only values actually shown on the accepted report. Breed-composition percentages require a DNA-classified report and publication consent.</p>
+        {% if selected_source_document %}
+          <p><strong>Evidence selected:</strong> {{ selected_source_document.title }}</p>
+        {% else %}
+          <p>Select the correct accepted certificate under <strong>1. Select the approved evidence</strong> to save any changes.</p>
+        {% endif %}
+      </div>
+    {% endif %}
     <form action="{% url 'accounts:save-structured-health' dog.pk %}" method="post" class="structured-health-form">
       {% csrf_token %}
       <div class="structured-evidence">
@@ -97,7 +108,7 @@
   </section>
   <section class="panel">
     <div class="health-section-heading"><div><p class="health-review-overline">Staff health results</p><h2 id="approved-health-results">Approved health records</h2></div><span class="health-count-badge">{{ records|length }}</span></div>
-    <p class="health-review-help">To change a verified result, select <strong>Edit health record</strong>. The same editor shows a live preview of your changes before you save. Compare the accepted certificate and keep the original evidence private; the audit history stays intact.</p>
+    <p class="health-review-help">Use <strong>Edit individual results</strong> for older combined reports, or <strong>Edit health record</strong> for one already-separated finding. The original certificate and audit record stay intact.</p>
     {% for item in records %}
       <div class="health-result-editor-row">
         <div class="health-result-editor-copy">
@@ -110,7 +121,7 @@
             <small class="health-workflow-pill health-workflow-pill--pending">{{ item.staff_public_status_label }}</small>
             <small class="muted">{{ item.staff_public_status_reason }}</small>
             {% if item.staff_public_status_code == "needs_structuring" or item.staff_public_status_code == "summary_only" %}
-              <a class="text-link" href="#add-approved-condition">Enter verified health findings from approved evidence</a>
+              <a class="text-link" href="{% url 'accounts:reviewed-dog-health' dog.pk %}?source_record={{ item.pk }}#structured-health-editor">Enter individual verified values in the structured editor</a>
             {% endif %}
           {% endif %}
           {% if item.breed_dna_report %}<small>Laboratory: {{ item.breed_dna_report.provider }}</small>{% endif %}
@@ -118,7 +129,11 @@
         </div>
         <div class="health-result-editor-action">
           {% if item.verification_state == "health" %}
-            <a class="btn btn-gold" href="{% url 'accounts:edit-reviewed-health-result' dog.pk item.pk %}">Edit health record</a>
+            {% if item.is_legacy_mixed %}
+              <a class="btn btn-gold" href="{% url 'accounts:reviewed-dog-health' dog.pk %}?source_record={{ item.pk }}#structured-health-editor">Edit individual results</a>
+            {% else %}
+              <a class="btn btn-gold" href="{% url 'accounts:edit-reviewed-health-result' dog.pk item.pk %}">Edit health record</a>
+            {% endif %}
           {% else %}
             <small class="muted">This record is not evidence-verified. Review an accepted report before changing its verified status.</small>
           {% endif %}
