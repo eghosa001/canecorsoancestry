@@ -62,6 +62,10 @@ class StructuredHealthForm(forms.Form):
         max_digits=5, decimal_places=2, label="Cane Corso percentage",
         widget=forms.NumberInput(attrs={"min": "0", "max": "100", "step": "0.01", "placeholder": "e.g. 100"}),
     )
+    dna_evidence_confirmed = forms.BooleanField(
+        required=False,
+        label="I verified that the accepted legacy Health/DNA certificate contains a laboratory breed-composition percentage.",
+    )
     laboratory = forms.CharField(required=False, max_length=100, label="DNA testing laboratory")
     other_breeds = forms.CharField(
         required=False, max_length=2000, label="Other breeds (if percentage is below 100)",
@@ -108,8 +112,17 @@ class StructuredHealthForm(forms.Form):
             source = data.get("source_document")
             submission = data.get("source_submission")
             # A clinical health certificate must never become a breed-DNA proof.
-            if source is not None and source.document_type != DogDocument.DocumentType.DNA:
-                self.add_error("source_document", "Choose an accepted DNA certificate for breed composition.")
+            if (
+                source is not None
+                and source.document_type != DogDocument.DocumentType.DNA
+                and not data.get("dna_evidence_confirmed")
+            ):
+                self.add_error(
+                    "dna_evidence_confirmed",
+                    "This accepted document is classified as Health. Confirm that "
+                    "its actual laboratory certificate contains the reported "
+                    "breed-composition percentage before recording it privately.",
+                )
             if submission is not None and (submission.payload or {}).get("evidence_type") != "breed":
                 self.add_error("source_submission", "Choose an approved breed-composition submission.")
             try:
@@ -241,8 +254,15 @@ def save_structured_health(request, pk):
             # Publication permission is NEVER inferred from staff review. If
             # there is an owner-consented report for this source, editing its
             # values retains its existing consent; a new source is private.
-            if document is None or document.document_type != DogDocument.DocumentType.DNA:
-                form.add_error("source_document", "A stored accepted DNA report is required.")
+            if document is None or (
+                document.document_type != DogDocument.DocumentType.DNA
+                and not data.get("dna_evidence_confirmed")
+            ):
+                form.add_error(
+                    "source_document",
+                    "Use an accepted DNA report or confirm the actual breed-composition "
+                    "findings in the accepted legacy Health/DNA certificate.",
+                )
             else:
                 prior = BreedDNAReport.objects.select_for_update().filter(
                     health_record__dog=dog, evidence_document=document,
