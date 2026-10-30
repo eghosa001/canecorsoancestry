@@ -193,6 +193,15 @@ def reviewed_dog_health(request, pk):
              and record.verification_state == VerificationState.HEALTH_VERIFIED),
             None,
         )
+        if selected_legacy_record is None:
+            # Old records may fall outside the newest 150 results shown in
+            # the workspace; a bookmarked link must still resolve safely.
+            older = HealthRecord.objects.filter(
+                pk=int(selected_id), dog=dog,
+                verification_state=VerificationState.HEALTH_VERIFIED,
+            ).select_related("evidence_document").first()
+            if older and legacy_mixed_health_rows(older.test_type, older.result) is not None:
+                selected_legacy_record = older
         if selected_legacy_record and selected_legacy_record.evidence_document_id:
             candidate = selected_legacy_record.evidence_document
             allowed = StructuredHealthForm(dog=dog).fields["source_document"].queryset
