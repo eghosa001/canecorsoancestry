@@ -117,3 +117,41 @@
 .health-final-actions{display:flex;gap:.7rem;flex-wrap:wrap}
 .health-final-actions .btn{min-height:46px}
 @media(max-width:650px){.health-final-preview{padding:1.1rem}.health-final-actions{flex-direction:column}.health-final-actions>.btn{width:100%;text-align:center}}
+
+/* Staff structured Health & DNA editor: mirrors public two-column results. */
+.structured-health-panel{max-width:100%;overflow:visible}
+.structured-health-form{display:grid;gap:1rem}
+.structured-evidence,.structured-health-group,.structured-health-footer{border:1px solid var(--line,#555);border-radius:14px;padding:1rem;min-width:0}
+.structured-evidence>strong{display:block;margin-bottom:.65rem}
+.structured-health-source-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.9rem;margin:.65rem 0}
+.structured-health-source-fields>div,.structured-health-footer>div{display:grid;gap:.3rem;min-width:0}
+.structured-health-panel label{font-size:.86rem;font-weight:650}
+.structured-health-panel select,.structured-health-panel input:not([type=checkbox]),.structured-health-panel textarea{width:100%;min-width:0;max-width:100%;min-height:46px;padding:.65rem;border:1px solid var(--line,#555);border-radius:10px;background:var(--surface,#202020);color:var(--text,#eee);font:inherit}
+.structured-health-panel select:focus-visible,.structured-health-panel input:focus-visible,.structured-health-panel textarea:focus-visible{outline:2px solid #c6a46e;outline-offset:2px}
+.structured-health-group h3{font-size:1.15rem;margin:0 0 .5rem}
+.structured-health-group>.muted{margin:.25rem 0 .8rem}
+.structured-health-rows{display:grid;gap:0}
+.structured-health-row,.structured-breed-value{display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,220px);align-items:center;gap:1rem;padding:1rem 0;border-bottom:1px solid var(--line,#555)}
+.structured-health-row:last-child{border-bottom:none}
+.structured-health-identity{display:flex;flex-direction:column;align-items:flex-start;gap:.2rem;min-width:0}
+.structured-health-identity>strong{font-size:1.04rem}
+.structured-health-identity small{font-size:.84rem;color:var(--muted,#aaa);line-height:1.45;overflow-wrap:anywhere}
+.structured-health-identity small strong{color:var(--text,#eee)}
+.structured-health-control{display:grid;gap:.35rem;min-width:0}
+.structured-breed-panel{border-color:#8b734b}
+.structured-breed-value{margin-bottom:.5rem}
+.structured-breed-value input{font-size:1.15rem;font-weight:700}
+.structured-privacy-note{font-size:.86rem;line-height:1.5;margin:1rem 0 0}
+.structured-health-footer{display:grid;gap:.9rem}
+.structured-health-footer>div{max-width:320px}
+.structured-health-attest{display:flex;align-items:flex-start;gap:.65rem;line-height:1.55}
+.structured-health-attest input{flex:0 0 20px;min-width:20px;min-height:20px;accent-color:#bfa06b}
+.structured-health-footer button{justify-self:start;min-height:48px}
+@media(max-width:650px){
+.structured-health-source-fields{grid-template-columns:1fr}
+.structured-health-row,.structured-breed-value{grid-template-columns:minmax(0,1fr);gap:.55rem}
+.structured-health-control{width:100%}
+.structured-health-panel select{min-height:50px}
+.structured-evidence,.structured-health-group,.structured-health-footer{padding:.85rem}
+.structured-health-footer button{width:100%}
+}
