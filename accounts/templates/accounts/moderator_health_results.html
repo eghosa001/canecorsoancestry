@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Health result visibility · Cane Corso Ancestry{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261030-structured-v1">
+<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261030-structured-v2">
 <section class="page-shell moderation-page health-review-workspace">
   <header class="page-heading">
     <p class="eyebrow">Moderator · Private health workspace</p>
@@ -88,6 +88,7 @@
           <div><label for="{{ structured_form.laboratory.id_for_label }}">DNA laboratory</label>{{ structured_form.laboratory }}</div>
           <div><label for="{{ structured_form.other_breeds.id_for_label }}">Other breed percentages (if any)</label>{{ structured_form.other_breeds }}</div>
         </div>
+        <label class="structured-health-attest">{{ structured_form.dna_evidence_confirmed }} <span>{{ structured_form.dna_evidence_confirmed.label }} Use this for an older accepted report categorized as Health that includes real DNA breed-composition findings; do not infer purity from a generic health result.</span></label>
         <p class="structured-privacy-note">Staff may record a reviewed breed-DNA percentage, but a <strong>new report stays private until the kennel owner's publication consent is recorded</strong>. No private PDF or image will be published.</p>
       </div>
       <div class="structured-health-footer">
