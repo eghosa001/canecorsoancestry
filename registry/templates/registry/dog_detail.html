@@ -245,7 +245,7 @@
         <h2>Health &amp; DNA</h2>
       </div>
       {% if staff_identity %}
-        <a class="btn btn-outline" href="{% url 'accounts:reviewed-dog-health' dog.pk %}#approved-health-results">Edit verified health values →</a>
+        <a class="btn btn-outline" href="{% url 'accounts:reviewed-dog-health' dog.pk %}#structured-health-editor">Edit verified health values →</a>
       {% elif user.is_authenticated %}
         <a class="profile-review-chip" href="{% url 'accounts:open-dispute' dog.pk %}?reason=health&amp;field=health">Report an error →</a>
       {% endif %}
