@@ -201,7 +201,7 @@ def save_structured_health(request, pk):
             # Preserve the original approved row and its immutable evidence.
             # Carry forward the previous privacy choice BEFORE marking the old
             # row superseded; otherwise the replacement would be hidden too.
-            new_visibility = previous.is_public if previous else True
+            new_visibility = previous.is_public if previous else False
             if previous and previous.is_public:
                 previous.is_public = False
                 previous.save(update_fields=["is_public"])
@@ -274,7 +274,7 @@ def save_structured_health(request, pk):
                         result=percentage_text(pct) + "% Cane Corso",
                         tested_on=when, verification_state=VerificationState.HEALTH_VERIFIED,
                         is_public=False,
-                        notes=f"Structured staff DNA transcription from accepted {source_key}; awaiting owner consent",
+                        notes=f"Structured staff DNA transcription from accepted {source_key}; held privately until published",
                     )
                     BreedDNAReport.objects.create(
                         health_record=rec, evidence_document=document,
