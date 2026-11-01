@@ -6,7 +6,7 @@
 {% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and health information.{% endblock %}
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'core/dog-portrait-gallery.css' %}?v=20261011-stable-gallery-v7">
-  <link rel="stylesheet" href="{% static 'core/breed-dna.css' %}?v=20261024-health-status-compact-v4">
+  <link rel="stylesheet" href="{% static 'core/breed-dna.css' %}?v=20261101-breed-purity-compact-premium-v5">
   {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}?v=20261002-2">{% elif dog.source_image_url %}<meta property="og:image" content="{{ dog.source_image_url }}">{% endif %}
   <script type="application/ld+json">{{ structured_data }}</script>
 {% endblock %}
@@ -255,16 +255,12 @@
             <span class="breed-dna-symbol" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3c10 3 6 15 16 18M20 3C10 6 14 18 4 21M7 6h10M8.5 10h7M8.5 14h7M7 18h10"/></svg>
             </span>
-            <span class="breed-dna-label">Breed DNA composition</span>
+            <span class="breed-dna-label">Breed Purity</span>
           </div>
           <div class="breed-dna-summary">
-            <strong class="breed-dna-score">{{ breed_dna_percentage }}<span>%</span></strong>
-            <div class="breed-dna-summary-copy">
-              <strong>Cane Corso</strong>
-              <span>DNA breed-composition estimate</span>
-            </div>
+            <strong class="breed-dna-score">{{ breed_dna_percentage }}<span>%</span> <span class="breed-dna-breed">Cane Corso</span></strong>
           </div>
-          <p class="breed-dna-meta">Tested by <strong>{{ breed_dna.provider }}</strong></p>
+          <p class="breed-dna-meta"><span>DNA-tested</span><span class="breed-dna-dot" aria-hidden="true">·</span><span>Tested by <strong>{{ breed_dna.provider }}</strong></span></p>
           {% if breed_dna.composition|length > 1 %}
             <div class="breed-dna-breakdown" aria-label="Reported breed composition">
               {% for entry in breed_dna.composition %}
