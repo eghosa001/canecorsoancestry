@@ -185,7 +185,7 @@
               <div class="button-row">
                 {% if not item.is_legacy_mixed %}
                   {% if not item.breed_dna_report or item.breed_dna_report.consent_public_summary or can_admin_publish_breed or item.staff_breed_authorized %}
-                    <button type="submit" name="visibility" value="show" class="btn btn-gold" {% if item.is_public %}disabled{% endif %}>Public</button>
+                    <button type="submit" name="visibility" value="show" class="btn btn-gold" {% if item.is_public and item.staff_public_status_code == "published" %}disabled{% endif %}>Public</button>
                   {% endif %}
                 {% endif %}
                 <button type="submit" name="visibility" value="hide" class="btn btn-outline" {% if not item.is_public %}disabled{% endif %}>Private</button>
