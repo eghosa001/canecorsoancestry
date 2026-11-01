@@ -29,7 +29,7 @@ class PublicEvidenceClarityTests(TestCase):
         )
         response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertNotContains(response, "No source attribution recorded")
-        self.assertContains(response, "Not independently verified")
+        self.assertNotContains(response, "Not independently verified")
 
     def test_imported_photo_source_caption_is_not_public(self):
         dog = Dog.objects.create(
