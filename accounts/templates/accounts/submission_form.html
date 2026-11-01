@@ -66,14 +66,10 @@
           {% for item in owner_health_submissions %}
             <div class="health-history-item">
               <div><strong>{{ item.payload.test_type|default:"Health / DNA report" }}</strong><small>{{ item.created_at|date:"j M Y" }}</small></div>
-              {% if item.status == "approved" %}
-                <span class="health-workflow-pill health-workflow-pill--approved">Approved</span>
-              {% elif item.status == "rejected" %}
-                <span class="health-workflow-pill health-workflow-pill--rejected">Rejected</span>
-              {% elif item.verification_status == "awaiting_evidence" %}
-                <span class="health-workflow-pill health-workflow-pill--needs">Evidence requested</span>
+              {% if item.status == "pending" and item.verification_status == "awaiting_evidence" %}
+                <span class="health-workflow-pill health-workflow-pill--needs">Additional information requested</span>
               {% else %}
-                <span class="health-workflow-pill health-workflow-pill--pending">Awaiting review</span>
+                <span class="health-workflow-pill">Report received</span>
               {% endif %}
             </div>
           {% endfor %}
