@@ -58,6 +58,28 @@ class StaffChangeVisibilityTests(TestCase):
         data.update(kwargs)
         return editor, data
 
+    def test_publish_only_form_does_not_require_identity_or_related_formsets(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        page_url = reverse("accounts:dog-direct-edit", args=[self.dog.pk])
+        page = self.client.get(page_url)
+        self.assertContains(page, "Publish or unpublish only")
+        self.assertContains(page, reverse("accounts:dog-set-public-visibility", args=[self.dog.pk]))
+        self.assertContains(page, "All saved details and individual health-result settings remain unchanged")
+        # Only publication fields are submitted; no name, birth date or
+        # inline health/photo formsets are sent or cleared.
+        action = reverse("accounts:dog-set-public-visibility", args=[self.dog.pk])
+        response = self.client.post(action, {
+            "version": page.context["version"],
+            "action": "publish",
+            "confirm_visibility": "yes",
+            "reason": "Reviewed individual publication decision.",
+        })
+        self.assertRedirects(response, page_url)
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+        self.assertEqual(self.dog.name, "Before")
+
     def test_live_edit_clears_cached_public_metadata(self):
         url, data = self.payload(name="After")
         caches['public'].set("cca:home:featured-dog-ids:v1", [self.dog.pk], 300)
