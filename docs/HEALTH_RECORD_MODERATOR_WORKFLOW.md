@@ -89,17 +89,19 @@ for each test and a separate numeric percentage field for breed composition.
    Values must add up to 100%. Do not infer breed percentages from pedigree
    records, historical claims or photographs.
 5. Optionally enter the laboratory report date, tick the evidence-review
-   attestation, and select **Save reviewed health values**. Each selected
-   result is stored separately and audited; original certificates remain
-   private. Changing one marker leaves other markers unchanged.
-6. If the result already exists, the original reviewed record is retained
-   as historical evidence; a corrected result retains its preceding visibility
-   setting. New results start Private until staff explicitly publishes them.
+   attestation, then select **Save selected privately** or **Save & publish
+   selected**. Only the selected findings are saved or published. Existing
+   results in other categories remain unchanged; original evidence stays private.
+6. When a selected result is corrected, the prior record is retained as
+   historical evidence. Saving privately preserves a corrected result's prior
+   public visibility. Publishing affects only selected findings, and an
+   unchanged private result can be published without duplicating it.
 
 **Important:** Super Admin, Senior Moderator and Moderator accounts may record
 and correct independently evidenced DNA breed percentages, but new reports
-remain private until owner consent exists or an authorized moderator makes a
-separately audited publication decision. Evidence review alone does not publish.
+remain private unless owner consent exists or an authorized moderator explicitly
+chooses **Save & publish selected** or uses that result's **Public** control.
+Every staff publication decision is audited; evidence review alone does not publish.
 Even a reported
 100% value is a laboratory breed-composition estimate, not a universal proof
 of pedigree purity.
@@ -111,9 +113,9 @@ enter **Exact genetic condition / test name** and **Reported result / grade**
 or **Exact numeric value (optional)** with the unit. For example, a
 `12.50 mm` measurement may be typed as `12.50` with unit `mm`, or a
 compound score may be entered exactly as `12/24`.
-Use **Save reviewed result** only after reading and attesting to the original
-certificate. Enter each uncommon test separately rather than combining multiple
-findings into one text field.
+Choose **Save privately** or **Save & publish this result** after reading and
+attesting to the original certificate. Enter each uncommon test separately rather
+than combining multiple findings into one text field.
 
 ## Viewing the original certificate after approval
 
