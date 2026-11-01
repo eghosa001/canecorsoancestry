@@ -119,8 +119,9 @@ class StructuredHealthForm(forms.Form):
                 )
             except ValidationError as exc:
                 self.add_error("other_breeds", exc)
-        elif data.get("laboratory") or data.get("other_breeds"):
-            self.add_error("cane_corso_percentage", "Enter the reported breed percentage first.")
+        # Lab/provider details belong only to breed composition. When a
+        # reviewer is updating HD, ED or an individual genetic marker, empty
+        # breed-composition fields must not block that unrelated result.
         if not changed:
             self.add_error(None, "Select at least one test value to change.")
         if data.get("tested_on") and data["tested_on"] > timezone.localdate():
@@ -137,10 +138,11 @@ def structured_rows(records):
         code = record.test_type.strip().upper()
         if code not in {"CMR1", "DSRA", "NCL1", "HD", "ED"}:
             continue
-        if code not in latest or (
-            (record.tested_on or timezone.datetime.min.date()), record.created_at, record.pk
-        ) > (
-            (latest[code].tested_on or timezone.datetime.min.date()), latest[code].created_at, latest[code].pk
+        # The latest staff correction is authoritative. Sorting primarily by
+        # the lab date could resurrect an older, superseded public result after
+        # a newer correction references an older laboratory report.
+        if code not in latest or (record.created_at, record.pk) > (
+            latest[code].created_at, latest[code].pk
         ):
             latest[code] = record
     return latest
