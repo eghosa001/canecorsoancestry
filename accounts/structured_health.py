@@ -2,8 +2,8 @@
 
 Each field represents a separate result. Never reinterpret historical mixed
 text as verified markers; a reviewer selects the actual accepted source.
-Breed composition may be recorded privately by staff but not published
-without the kennel owner's existing consent workflow.
+Breed composition is privately recorded after review and only published by
+an explicit authorized moderator decision; owner consent remains unchanged.
 """
 from django import forms
 from django.contrib import messages
