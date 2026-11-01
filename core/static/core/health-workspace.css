@@ -155,3 +155,29 @@
 .structured-evidence,.structured-health-group,.structured-health-footer{padding:.85rem}
 .structured-health-footer button{width:100%}
 }
+
+
+/* Staff-only approved certificate inspection. The selected preview stays
+   beside the source dropdown; the original file inventory is available when
+   historical records lack a single provenance link. */
+.health-selected-evidence{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:12px 0 2px}
+.health-selected-evidence>strong{font-size:1rem;line-height:1.45;overflow-wrap:anywhere}
+.health-selected-evidence>a{flex:0 1 auto}
+.health-selected-evidence>a[hidden]{display:none!important}
+.health-source-directory{margin:18px 0 0;border:1px solid var(--cca-border,var(--line,#777));border-radius:12px;padding:14px;background:var(--cca-surface,var(--surface,transparent))}
+.health-source-directory>summary{display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;font-size:1.06rem;line-height:1.4}
+.health-source-directory>summary span{font-size:.91rem;color:var(--cca-secondary,var(--muted,#aaa))}
+.health-source-directory>.health-review-help{margin:12px 0;max-width:85ch}
+.health-source-list{display:grid;gap:8px;margin-top:12px}
+.health-source-item{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:14px;border:1px solid var(--cca-border,var(--line,#777));border-radius:10px;background:var(--cca-raised,var(--surface-2,transparent));min-width:0}
+.health-source-item--selected{border-color:var(--cca-green,var(--gold,#aaa));outline:2px solid var(--cca-green,var(--gold,#aaa));outline-offset:0}
+.health-source-copy{display:grid;gap:5px;min-width:0;flex:1 1 250px;overflow-wrap:anywhere}
+.health-source-copy>strong{font-size:1.05rem}
+.health-source-copy>small{font-size:.9rem;line-height:1.4;color:var(--cca-secondary,var(--muted,#aaa))}
+.health-source-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.health-source-actions .btn,.health-source-item>.btn{min-height:44px;white-space:normal}
+@media(max-width:650px){
+  .health-source-directory{padding:12px}
+  .health-source-directory>summary{align-items:flex-start}
+  .health-source-actions,.health-source-actions>.btn,.health-source-item>.btn,.health-selected-evidence>a{width:100%}
+}
