@@ -60,7 +60,7 @@ class PrivateReviewBoundaryTests(TestCase):
             ):
                 self.assertNotContains(page, forbidden)
             self.assertContains(page, "No available records")
-            self.assertEqual(self.client.get(self.staff_url).status_code, 403)
+            self.assertEqual(self.client.get(self.staff_url).status_code, 403 if viewer else 302)
         self.client.force_login(self.staff)
         page = self.client.get(self.staff_url)
         self.assertContains(page, "CMR1")
