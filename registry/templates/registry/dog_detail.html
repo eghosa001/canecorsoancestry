@@ -28,7 +28,7 @@
            aria-label="Enlarge photograph of {{ dog.name }}">
           {% if dog.display_images %}
             <img class="dog-portrait-image" data-dog-photo-main
-                 src="{{ dog.display_images.0.image.url|dog_photo:'portrait' }}" srcset="{{ dog.display_images.0.image.url|dog_photo:'card' }} 480w, {{ dog.display_images.0.image.url|dog_photo:'portrait' }} 960w" sizes="(max-width: 720px) 94vw, 650px"
+                 data-media-fallback="{{ dog.display_images.0.image.url }}" src="{{ dog.display_images.0.image.url|dog_photo:'portrait' }}" srcset="{{ dog.display_images.0.image.url|dog_photo:'card' }} 480w, {{ dog.display_images.0.image.url|dog_photo:'portrait' }} 960w" sizes="(max-width: 720px) 94vw, 650px"
                  alt="{{ dog.name }}{% if dog.display_images.0.public_caption %} — {{ dog.display_images.0.public_caption }}{% endif %}"
                  loading="eager" fetchpriority="high" decoding="async">
           {% else %}
@@ -57,7 +57,7 @@
                       data-photo-caption="{% if photo.public_caption %}{{ photo.public_caption }}{% else %}Photo {{ forloop.counter }}{% endif %}"
                       aria-label="Show photograph {{ forloop.counter }} of {{ dog.name }}"
                       aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">
-                <img src="{{ photo.image.url|dog_photo:'thumb' }}" alt="" loading="lazy" decoding="async">
+                <img data-media-fallback="{{ photo.image.url }}" src="{{ photo.image.url|dog_photo:'thumb' }}" alt="" loading="lazy" decoding="async">
                 <span>{{ forloop.counter }}</span>
               </button>
             {% endfor %}
