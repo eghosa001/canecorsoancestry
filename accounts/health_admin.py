@@ -1,7 +1,7 @@
 """Super Admin-only historical health and DNA evidence management.
 
 Evidence review is not owner permission. Staff-uploaded reports are private;
-breed-composition summaries require independently recorded owner consent.
+breed-composition summaries can be explicitly published by the Super Admin.
 """
 import uuid
 
@@ -25,7 +25,7 @@ from registry.models import (
 )
 from registry.permissions import can_manage_verification
 from registry.public_freshness import invalidate_public_content
-from registry.health_publication import publication_status
+from registry.health_publication import publication_status, staff_authorized_breed_record_ids
 from registry.legacy_health import legacy_mixed_health_rows
 from registry.services import record_audit
 
@@ -255,12 +255,19 @@ def health_genetic_dog(request, pk):
                         "breed_dna_report__evidence_document")
         .order_by("-created_at")[:60]
     )
+    staff_breed_ids = staff_authorized_breed_record_ids(dog)
     for record in history:
         (record.staff_public_status_code,
          record.staff_public_status_label,
-         record.staff_public_status_reason) = publication_status(record, dog=dog)
+         record.staff_public_status_reason) = publication_status(
+            record, dog=dog, staff_authorized_ids=staff_breed_ids,
+        )
     visible_dna_count = BreedDNAReport.objects.filter(
-        health_record__dog=dog, consent_public_summary=True
+        health_record__dog=dog,
+        health_record__verification_state=VerificationState.HEALTH_VERIFIED,
+        health_record__is_public=True,
+    ).filter(
+        Q(consent_public_summary=True) | Q(health_record_id__in=staff_breed_ids)
     ).count()
     return render(request, "accounts/health_genetic_admin.html", _context(
         request, dog=dog, form=form, history=history,
@@ -284,21 +291,35 @@ def withdraw_dna_publication(request, pk):
             .filter(health_record__dog=dog)
         )
         changed = []
+        staff_breed_ids = staff_authorized_breed_record_ids(dog)
         for report in reports:
-            if report.consent_public_summary or report.consent_full_report or report.evidence_document.is_public:
+            if (report.consent_public_summary or report.consent_full_report
+                    or report.evidence_document.is_public or report.health_record.is_public
+                    or report.health_record_id in staff_breed_ids):
                 changed.append(report.pk)
                 report.consent_public_summary = False
                 report.consent_full_report = False
                 report.save(update_fields=["consent_public_summary", "consent_full_report"])
+                if report.health_record.is_public:
+                    report.health_record.is_public = False
+                    report.health_record.save(update_fields=["is_public"])
                 if report.evidence_document.is_public:
                     report.evidence_document.is_public = False
                     report.evidence_document.save(update_fields=["is_public"])
+                record_audit(
+                    action=ModerationAudit.Action.VERIFICATION, actor=request.user, dog=dog,
+                    summary={
+                        "kind": "staff_breed_dna_publication",
+                        "health_record_id": report.health_record_id, "public": False,
+                    },
+                    note="Super Admin withdrew public breed-DNA summary permission and kept source evidence private.",
+                )
         if changed:
             record_audit(
                 action=ModerationAudit.Action.VERIFICATION, actor=request.user, dog=dog,
                 summary={"kind": "dna_publication_withdrawn", "report_ids": changed},
                 note="All DNA breed-composition summaries and full reports hidden. "
-                     "Only a new owner-authorized submission can restore publication.",
+                     "A future explicit Super Admin publication decision can restore public summary display.",
             )
             invalidate_public_content()
     messages.success(
