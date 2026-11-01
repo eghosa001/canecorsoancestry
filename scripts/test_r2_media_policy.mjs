@@ -109,4 +109,66 @@ assert.equal(privatePdf.status, 404);
 const head = await worker.fetch(new Request(imageURL, { method: "HEAD" }), env, {});
 assert.equal(head.status, 200);
 assert.equal(transforms, 1, "HEAD never triggers transformation");
+
+const emptyDigest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new Uint8Array()))]
+  .map(x => x.toString(16).padStart(2, "0")).join("");
+const timestamp = String(Math.floor(Date.now() / 1000));
+const headSigned = new Uint8Array(await crypto.subtle.sign(
+  "HMAC", importedKey, encoder.encode(["HEAD", key, timestamp, emptyDigest].join("\n")),
+));
+const headSignature = [...headSigned].map(x => x.toString(16).padStart(2, "0")).join("");
+let readCount = 0;
+let headCount = 0;
+const secureEnv = {
+  R2_GATEWAY_SIGNING_KEY: signingKey,
+  MEDIA_BUCKET: {
+    async get() { readCount += 1; return {
+      body: new Response("SENSITIVE-ORIGINAL-BODY").body, size: 23,
+      writeHttpMetadata(h) { h.set("content-type", "image/jpeg"); },
+    }; },
+    async head() { headCount += 1; return {
+      size: 23,
+      writeHttpMetadata(h) { h.set("content-type", "image/jpeg"); },
+    }; },
+  },
+};
+const headHeaders = {
+  "x-r2-timestamp": timestamp,
+  "x-r2-content-sha256": emptyDigest,
+  "x-r2-signature": headSignature,
+};
+const promoted = await worker.fetch(new Request(
+  "https://media.example.workers.dev/_r2/" + key,
+  { method: "GET", headers: headHeaders },
+), secureEnv);
+assert.equal(promoted.status, 200);
+assert.equal(await promoted.text(), "", "A HEAD signature must never read object bytes");
+assert.equal(headCount, 1);
+assert.equal(readCount, 0, "HEAD to GET promotion must not expose the object");
+const realHead = await worker.fetch(new Request(
+  "https://media.example.workers.dev/_r2/" + key,
+  { method: "HEAD", headers: headHeaders },
+), secureEnv);
+assert.equal(realHead.status, 200);
+assert.equal(headCount, 2);
+assert.equal(readCount, 0);
+const deniedRequest = await worker.fetch(new Request(
+  "https://media.example.workers.dev/_r2/" + key,
+  { method: "GET", headers: {...headHeaders, "x-r2-signature": "incorrect"} },
+), secureEnv);
+assert.equal(deniedRequest.status, 403);
+assert.equal(readCount, 0);
+const getSigned = new Uint8Array(await crypto.subtle.sign(
+  "HMAC", importedKey, encoder.encode(["GET", key, timestamp, emptyDigest].join("\n")),
+));
+const getSignature = [...getSigned].map(x => x.toString(16).padStart(2, "0")).join("");
+const realGet = await worker.fetch(new Request(
+  "https://media.example.workers.dev/_r2/" + key,
+  { method: "GET", headers: {...headHeaders, "x-r2-signature": getSignature} },
+), secureEnv);
+assert.equal(realGet.status, 200);
+assert.equal(await realGet.text(), "SENSITIVE-ORIGINAL-BODY");
+assert.equal(readCount, 1);
+console.log("Cloudflare HEAD-to-GET R2 signature compatibility tests passed");
+
 console.log("Signed R2 dog-photo variants and privacy tests passed");

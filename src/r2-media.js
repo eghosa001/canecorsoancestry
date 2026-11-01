@@ -124,21 +124,26 @@ async function verifyGatewayRequest(request, env, key, body) {
     return { ok: false, reason: "digest" };
   }
 
-  const method = request.method.toUpperCase();
-  const message = [
-    method,
-    key,
-    timestamp,
-    digest,
-  ].join("\n");
+  const wireMethod = request.method.toUpperCase();
+  const signingKey = env.R2_GATEWAY_SIGNING_KEY || env.DJANGO_SECRET_KEY;
   const expected = await hmacHex(
-    env.R2_GATEWAY_SIGNING_KEY || env.DJANGO_SECRET_KEY,
-    message,
+    signingKey, [wireMethod, key, timestamp, digest].join("\n"),
   );
-  if (!constantTimeEqual(expected, signature)) {
-    return { ok: false, reason: "signature", method };
+  if (constantTimeEqual(expected, signature)) {
+    return { ok: true, reason: "ok", method: wireMethod };
   }
-  return { ok: true, reason: "ok", method };
+  // Cloudflare may internally convert HEAD into GET when handling a cold
+  // cache entry. Verify the *HEAD* HMAC, but retain its limited authority:
+  // such a request must NEVER be allowed to download the object body.
+  if (wireMethod === "GET") {
+    const signedHead = await hmacHex(
+      signingKey, ["HEAD", key, timestamp, digest].join("\n"),
+    );
+    if (constantTimeEqual(signedHead, signature)) {
+      return { ok: true, reason: "head_promoted_to_get", method: "HEAD" };
+    }
+  }
+  return { ok: false, reason: "signature", method: wireMethod };
 }
 
 async function handleR2Gateway(request, env, url) {
@@ -164,7 +169,7 @@ async function handleR2Gateway(request, env, url) {
     );
   }
 
-  if (request.method === "GET") {
+  if (verification.method === "GET") {
     const object = await env.MEDIA_BUCKET.get(key);
     if (!object) return new Response("Not found", { status: 404 });
     return new Response(object.body, {
@@ -173,7 +178,7 @@ async function handleR2Gateway(request, env, url) {
     });
   }
 
-  if (request.method === "HEAD") {
+  if (verification.method === "HEAD") {
     const object = await env.MEDIA_BUCKET.head(key);
     if (!object) return new Response(null, { status: 404 });
     return new Response(null, {
