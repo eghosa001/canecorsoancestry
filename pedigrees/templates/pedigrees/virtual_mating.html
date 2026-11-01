@@ -5,7 +5,7 @@
   <header class="page-heading">
     <p class="eyebrow">Pedigree analysis</p>
     <h1>Virtual mating</h1>
-    <p>Registered members, administrators and active moderators can compare a public sire and dam using the ancestry already connected in the database. This is a hypothetical pedigree analysis only and does not create a litter or registration.</p>
+    <p>Compare a sire and dam using recorded ancestry. The analysis is hypothetical and does not create a litter or registration.</p>
   </header>
 
   <form id="pairing-form" class="mating-form mating-form-expanded" method="get" action="{% url 'pedigrees:virtual-mating' %}{% if user.is_authenticated %}#analysis-outcome{% else %}#mating-access{% endif %}">
@@ -45,7 +45,6 @@
 
   <p class="mating-help muted">New dog not in the archive? Registered breeders with verified kennel access can <a href="{% url 'accounts:submit-dog' %}">submit it privately</a> for review before it becomes an official public record.</p>
 
-  <p class="mating-help muted">Search is resolved on the server, so this works across the full dog database without loading thousands of dogs into the page. Exact registration numbers are best when names are duplicated.</p>
 
   <div id="analysis-outcome" class="mating-outcome-anchor" tabindex="-1"></div>
   {% if error %}
