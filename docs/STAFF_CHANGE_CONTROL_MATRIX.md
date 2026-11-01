@@ -93,10 +93,10 @@ Category links cover the following **actual** workflows:
   **Approved health results · Edit as needed**, select **Edit health record**
   and **Save changes**, or **Hide incorrect result** as appropriate.
   Verified breed-composition records have explicit **Public / Private**
-  actions. The Super Admin can publish an accepted DNA summary directly
-  with a separately audited administrative decision, including when the
-  owner confirms verbally. Only summary text is published; private evidence
-  is not exposed.
+  actions. Any active Moderator, Senior Moderator or Super Admin can
+  publish an accepted DNA summary with a separately audited staff decision.
+  No additional owner authorization is required. Only summary text is
+  published; private evidence is not exposed.
   See `docs/HEALTH_RECORD_MODERATOR_WORKFLOW.md`.
 - **Kennels:** Manage kennels → search → Manage publication. Confirm visibility
   actions, reason and selected dog scope. Associate existing dogs only after
@@ -129,7 +129,7 @@ Category links cover the following **actual** workflows:
 - Original accepted evidence and audit history remain available for accountability.
 - Payments and transaction confirmations are read-only through the supported
   admin surface and should never be fabricated or directly overwritten.
-- Staff cannot impersonate an owner's consent. The Super Admin may make a separately audited administrative publication decision for an evidence-reviewed DNA summary.
+- Staff cannot impersonate an owner's consent. Any authorized moderator may make a separately audited publication decision for an evidence-reviewed DNA summary.
 - A moderator cannot edit another moderator's permissions, promote themselves,
   delete staff, override protected Super Admin publication locks or sign their
   own independent high-risk second approval.
