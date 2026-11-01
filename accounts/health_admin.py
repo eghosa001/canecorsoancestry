@@ -202,9 +202,8 @@ def health_genetic_dog(request, pk):
                 tested_on=data["tested_on"],
                 verification_state=VerificationState.HEALTH_VERIFIED,
                 notes=notes,
-                # Approved health/marker text appears automatically. DNA breed
-                # composition remains private until owner summary consent.
-                is_public=category != "breed",
+                # Verified archival evidence remains private until publication.
+                is_public=False,
                 evidence_document=evidence,
             )
             if category == "breed":
@@ -243,9 +242,7 @@ def health_genetic_dog(request, pk):
         messages.success(
             request,
             "Evidence saved. " + (
-                "DNA breed composition is PRIVATE until the kennel owner submits publication consent."
-                if category == "breed" else
-                "The reviewed test result is available on a published dog's Health & DNA profile."
+                "Reviewed evidence saved privately. Open Health values and choose Public to publish the summary."
             ),
         )
         return redirect("accounts:health-genetic-dog", pk=dog.pk)
