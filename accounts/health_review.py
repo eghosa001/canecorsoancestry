@@ -23,6 +23,10 @@ from registry.health_publication import publication_status
 from registry.legacy_health import legacy_mixed_health_rows
 from registry.orthopaedic_health import describe_orthopaedic_result
 from registry.services import record_audit
+from .health_sources import (
+    approved_evidence_entries, approved_health_submissions,
+    accepted_health_documents, source_for_record,
+)
 from registry.verification import verify_submission
 
 
@@ -245,6 +249,7 @@ def reviewed_dog_health(request, pk):
     pending = list(Submission.objects.filter(
         dog=dog, kind=Submission.Kind.HEALTH, status=Submission.Status.PENDING
     ).order_by("-created_at")[:30])
+    evidence_entries = approved_evidence_entries(dog)
     return render(request, "accounts/moderator_health_results.html", {
         "dog": dog, "records": records, "pending": pending,
         "add_condition_form": AdditionalHealthConditionForm(dog=dog),
@@ -254,6 +259,7 @@ def reviewed_dog_health(request, pk):
         "latest_breed": latest_breed,
         "selected_legacy_record": selected_legacy_record,
         "selected_source_document": selected_source_document,
+        "evidence_entries": evidence_entries,
     })
 
 
@@ -395,16 +401,8 @@ class AdditionalHealthConditionForm(forms.Form):
 
     def __init__(self, *args, dog, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["source_submission"].queryset = Submission.objects.filter(
-            dog=dog, kind=Submission.Kind.HEALTH, status=Submission.Status.APPROVED
-        ).exclude(attachment="").order_by("-created_at")
-        self.fields["source_document"].queryset = DogDocument.objects.filter(
-            Q(staff_review_only=True,
-              staff_health_record__verification_state=VerificationState.HEALTH_VERIFIED)
-            | Q(source_submission__kind=Submission.Kind.DOCUMENT,
-                source_submission__status=Submission.Status.APPROVED),
-            dog=dog, document_type__in=(DogDocument.DocumentType.HEALTH, DogDocument.DocumentType.DNA),
-        ).exclude(file="").distinct().order_by("-created_at")
+        self.fields["source_submission"].queryset = approved_health_submissions(dog)
+        self.fields["source_document"].queryset = accepted_health_documents(dog)
 
     def clean(self):
         data = super().clean()
@@ -608,29 +606,16 @@ def edit_reviewed_health_result(request, pk, record_id):
     else:
         form = ReviewedHealthResultForm(record=record)
     report = getattr(record, "breed_dna_report", None)
-    source_document = record.evidence_document or (report.evidence_document if report else None)
-    if not source_document:
-        # A source can back several conditions, while the model's direct
-        # evidence link is one-to-one. Recover the approved source via audit.
-        provenance = ModerationAudit.objects.filter(
-            dog=record.dog, action=ModerationAudit.Action.VERIFICATION,
-            summary__kind="additional_health_condition",
-            summary__health_record_id=record.pk,
-        ).order_by("-pk").first()
-        if provenance:
-            details = provenance.summary or {}
-            if details.get("source_document_id"):
-                source_document = DogDocument.objects.filter(
-                    dog=record.dog, pk=details["source_document_id"],
-                ).first()
-            elif details.get("source_submission_id"):
-                source_document = DogDocument.objects.filter(
-                    dog=record.dog,
-                    source_submission_id=details["source_submission_id"],
-                ).first()
+    evidence_entries = approved_evidence_entries(record.dog)
+    matched_source = source_for_record(record, evidence_entries)
+    # An existing result may have been approved before durable provenance
+    # links were added. Show the eligible original uploads without falsely
+    # claiming that any one of them backs this particular result.
     return render(request, "accounts/moderator_health_edit.html", {
         "dog": record.dog, "record": record, "form": form,
-        "breed_report": report, "source_document": source_document,
+        "breed_report": report,
+        "matched_source": matched_source,
+        "evidence_entries": evidence_entries,
         "can_publish": not report or report.consent_public_summary,
     })
 
