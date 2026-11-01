@@ -18,3 +18,5 @@ binding = "IMAGES"
 
 # Explicit, post-HMAC thumbnail caching uses Cache API only.
 # Do not enable Worker-wide HTTP caching for the signed R2 gateway.
+[cache]
+enabled = false
