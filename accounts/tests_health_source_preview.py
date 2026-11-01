@@ -75,7 +75,10 @@ class HealthSourcePreviewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response["Content-Disposition"].startswith("inline"))
         self.assertIn("no-store", response["Cache-Control"])
-        response.close()
+        # Closing Django's full FileResponse dispatches request_finished,
+        # which closes PostgreSQL's TestCase atomic connection mid-test.
+        # Close only the streamed file handle here.
+        response.file_to_stream.close()
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(url).status_code, 403)
         self.client.force_login(self.member)
@@ -198,7 +201,10 @@ class HealthSourcePreviewTests(TestCase):
         response = self.client.get(doc_url)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response["Content-Disposition"].startswith("inline"))
-        response.close()
+        # Closing Django's full FileResponse dispatches request_finished,
+        # which closes PostgreSQL's TestCase atomic connection mid-test.
+        # Close only the streamed file handle here.
+        response.file_to_stream.close()
         pending_url = reverse(
             "accounts:preview-health-submission",
             args=[self.dog.pk, pending.pk],
