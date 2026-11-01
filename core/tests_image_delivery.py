@@ -87,6 +87,7 @@ class DogPhotoDeliveryTests(TestCase):
         DogImage.objects.create(
             dog=dog, image="dogs/photo-preview.jpg", is_primary=True,
         )
+        DogImage.objects.create(dog=dog, image="dogs/second-photo.jpg")
         response = self.client.get(f"/dogs/{dog.slug}/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "/_thumb/dogs/photo-preview.jpg?variant=portrait")
