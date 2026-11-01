@@ -540,8 +540,12 @@ class ModeratorLabResultTests(TestCase):
         record = HealthRecord.objects.get(dog=self.dog, test_type="Elbow measurement")
         self.assertEqual(record.result, "12.50 mm")
         self.assertEqual(record.verification_state, VerificationState.HEALTH_VERIFIED)
-        self.assertTrue(record.is_public)
+        self.assertFalse(record.is_public)
         self.assertEqual(record.evidence_document, evidence)
+        self.assertEqual(self.client.post(
+            reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk]),
+            {"visibility": "show"},
+        ).status_code, 302)
         evidence.refresh_from_db()
         self.assertFalse(evidence.is_public)
         from core.media_views import _can_read_media
@@ -550,7 +554,7 @@ class ModeratorLabResultTests(TestCase):
         public = self.client.get(self.public_url)
         self.assertContains(public, "12.50 mm")
         self.assertContains(public, "Other health results")
-        self.assertContains(public, "Verified")
+        self.assertNotContains(public, "· Verified")
         self.assertNotContains(public, "Additional laboratory screening")
 
     def test_moderator_can_correct_accepted_health_value_and_non_staff_cannot(self):
@@ -612,7 +616,8 @@ class ModeratorLabResultTests(TestCase):
         self.assertEqual(record.verification_state, VerificationState.HEALTH_VERIFIED)
         public = self.client.get(self.public_url)
         self.assertContains(public, "<strong>Hip scores</strong>", html=True)
-        self.assertContains(public, 'A <small class="muted">')
+        self.assertContains(public, "<span>A</span>", html=True)
+        self.assertNotContains(public, 'A <small class="muted">')
         submission.refresh_from_db()
         evidence.refresh_from_db()
         self.assertEqual(submission.status, Submission.Status.APPROVED)
