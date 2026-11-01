@@ -118,6 +118,50 @@ class HealthSourcePreviewTests(TestCase):
         )
         self.assertContains(self.client.get(marker_editor), preview)
 
+
+    def test_two_results_from_same_report_can_both_open_original(self):
+        accepted = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT,
+            status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.member,
+            payload={"document_type": DogDocument.DocumentType.HEALTH},
+        )
+        document = DogDocument.objects.create(
+            dog=self.dog, title="Two-marker diagnostic report",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file=SimpleUploadedFile(
+                "both-markers.pdf", b"%PDF-1.4 two laboratory markers",
+                content_type="application/pdf",
+            ),
+            source_submission=accepted,
+            submitted_by=self.member,
+        )
+        self.client.force_login(self.reviewer)
+        save = reverse("accounts:save-structured-health", args=[self.dog.pk])
+        reply = self.client.post(save, {
+            "source_document": document.pk,
+            "cmr1": "Clear",
+            "dsra": "Carrier",
+            "reviewed": "on",
+        })
+        self.assertRedirects(
+            reply, reverse("accounts:reviewed-dog-health", args=[self.dog.pk]),
+        )
+        results = HealthRecord.objects.filter(
+            dog=self.dog, test_type__in=["CMR1", "DSRA"]
+        )
+        self.assertEqual(results.count(), 2)
+        preview = reverse(
+            "accounts:preview-health-document", args=[self.dog.pk, document.pk],
+        )
+        for result in results:
+            with self.subTest(condition=result.test_type):
+                edit = reverse(
+                    "accounts:edit-reviewed-health-result",
+                    args=[self.dog.pk, result.pk],
+                )
+                self.assertContains(self.client.get(edit), preview)
+
     def test_approved_document_preview_and_pending_source_exclusion(self):
         accepted = Submission.objects.create(
             kind=Submission.Kind.DOCUMENT,
