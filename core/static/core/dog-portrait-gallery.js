@@ -167,6 +167,8 @@
       hero.removeAttribute("srcset");
       hero.removeAttribute("sizes");
     }
+    hero.setAttribute("data-media-fallback", item.src);
+    hero.removeAttribute("data-media-fallback-used");
     const preview = selected === 0 ? initialHero.src : item.preview;
     if (hero.getAttribute("src") !== preview) hero.src = preview;
     hero.alt = item.alt;
