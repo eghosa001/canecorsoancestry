@@ -1,5 +1,7 @@
 """Private review workflow must never leak onto public or member dog pages."""
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
+from django.utils import timezone
 from django.test import TestCase
 from django.urls import reverse
 
@@ -20,6 +22,7 @@ class PrivateReviewBoundaryTests(TestCase):
         )
         self.kennel = Kennel.objects.create(
             name="Private review kennel", slug="private-review-kennel",
+            verified_at=timezone.now(),
         )
         self.dog = Dog.objects.create(
             name="Private review dog", slug="private-review-dog",
@@ -125,8 +128,7 @@ class PrivateReviewBoundaryTests(TestCase):
             self.assertNotContains(page, "internal-source-lab-report.pdf")
             self.assertNotContains(page, 'class="breed-dna-score">100')
             self.assertEqual(
-                _can_read_media(self.client.session and self.member if viewer else
-                                get_user_model()(), source.file.name)[0], False,
+                _can_read_media(viewer or AnonymousUser(), source.file.name)[0], False,
             )
         self.assertEqual(_can_read_media(self.staff, source.file.name)[0], True)
 
