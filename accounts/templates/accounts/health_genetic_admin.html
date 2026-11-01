@@ -30,7 +30,7 @@
 
     <section class="panel">
       <h2>Add evidence-backed historical result</h2>
-      <p class="muted">Check the report's dog identity, date, test and issuing laboratory before attesting. Supporting files stay staff-only. Health and genetic-marker results appear after saving on published profiles; historical breed percentages are private until the owner consents through the existing member submission process.</p>
+      <p class="muted">Check the report's dog identity, date, test and issuing laboratory before attesting. Supporting files stay staff-only. Health and genetic-marker results appear after saving on published profiles; historical breed percentages are private until a separate Super Admin publication decision or owner consent is recorded.</p>
       <form method="post" enctype="multipart/form-data" class="member-form">
         <datalist id="health-reported-status-options"><option value="Clear"><option value="Carrier"><option value="Affected"><option value="Inconclusive"><option value="Not tested"></datalist>
         {% csrf_token %}
@@ -47,7 +47,7 @@
         </div>
         <button class="btn btn-gold" type="submit">Save independently reviewed evidence</button>
       </form>
-      <p class="muted">For a breed DNA report, record Cane Corso percentage and each other breed exactly as printed; a staff review is not a substitute for owner consent.</p>
+      <p class="muted">For a breed DNA report, record Cane Corso percentage and each other breed exactly as printed; the Super Admin can choose Public or Private after verifying the evidence, without editing the owner's consent record.</p>
       {% if dog %}<a class="text-link" href="{% url 'accounts:reviewed-dog-health' dog.pk %}">Edit or publish this dog's individual health statuses →</a>{% endif %}
     </section>
 
@@ -92,17 +92,17 @@
     </section>
 
     <section class="panel">
-      <h2>DNA publication consent</h2>
-      <p>Reviewed DNA breed composition may be privately retained. Only the kennel owner can authorize public breed percentages. Full original reports remain private.</p>
+      <h2>DNA publication controls</h2>
+      <p>Reviewed DNA breed composition may be privately retained. The Super Admin can publish or hide verified breed percentages using Show / hide approved results above. The owner's original consent record is retained separately. Full original reports remain private.</p>
       {% if visible_dna_count %}
-      <p><strong>{{ visible_dna_count }} DNA report{{ visible_dna_count|pluralize }}</strong> currently have publication permission on file.</p>
+      <p><strong>{{ visible_dna_count }} DNA report{{ visible_dna_count|pluralize }}</strong> currently have public summaries enabled.</p>
       <form method="post" action="{% url 'accounts:health-genetic-withdraw' dog.pk %}" class="member-form">
         {% csrf_token %}
         <label><input type="checkbox" name="confirmation" value="hide_all" required> Hide this dog's published DNA composition summaries; retain the private evidence.</label>
         <div><button class="btn btn-outline" type="submit">Withdraw all DNA publication</button></div>
       </form>
       {% else %}
-      <p class="muted">No breed DNA publication permission is currently active. Historic staff DNA reports remain private.</p>
+      <p class="muted">No breed DNA summaries are public for this dog at present. Open Show / hide approved results to publish an accepted, verified report.</p>
       {% endif %}
     </section>
   {% else %}
