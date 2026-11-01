@@ -23,12 +23,36 @@
         <strong>{{ record.test_type }} · {{ record.result }}</strong>
         <small>Approved health/DNA result{% if record.tested_on %} · tested {{ record.tested_on|date:"j M Y" }}{% endif %}</small>
       </div>
-      {% if source_document %}
-        <a class="btn btn-outline" href="{{ source_document.file.url }}" target="_blank" rel="noopener noreferrer">Open confidential evidence ↗</a>
+      {% if matched_source %}
+        <a class="btn btn-gold" href="{{ matched_source.preview_url }}" target="_blank" rel="noopener noreferrer">View original uploaded PDF / image ↗</a>
       {% else %}
-        <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">Find approved source report ↗</a>
+        <span class="muted">No single approved upload is linked to this older result. Check the accepted source files below; never assume a laboratory name.</span>
       {% endif %}
     </div>
+    <details class="health-source-directory"{% if not matched_source %} open{% endif %}>
+      <summary><strong>View approved source files for this dog</strong> <span>{{ evidence_entries|length }} file{{ evidence_entries|length|pluralize }}</span></summary>
+      {% if evidence_entries %}
+        <p class="health-review-help">Use the original PDF or picture to identify the actual laboratory and test result. Records approved before source linking may require you to identify the correct report manually.</p>
+        <div class="health-source-list">
+          {% for source in evidence_entries %}
+            <article class="health-source-item">
+              <div class="health-source-copy">
+                <strong>{{ source.label }}</strong>
+                <small>{{ source.filename }} · {{ source.date|date:"j M Y" }}</small>
+                {% if source.laboratory %}
+                  <small>Laboratory supplied by member: {{ source.laboratory }} (verify on upload)</small>
+                {% else %}
+                  <small>Laboratory not entered in submission; read the original report.</small>
+                {% endif %}
+              </div>
+              <a class="btn btn-outline" href="{{ source.preview_url }}" target="_blank" rel="noopener noreferrer">View original PDF / image ↗</a>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">No approved Health/DNA file is currently recorded for this dog. Review the supporting evidence before making corrections.</p>
+      {% endif %}
+    </details>
     <div class="health-review-step"><span>02 · Edit</span><strong>Edit health record</strong></div>
 
     <form method="post" class="member-form health-final-form">
