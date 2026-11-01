@@ -65,7 +65,7 @@
       <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
         <div class="dog-card-media">
           {% if dog.card_image_url %}
-            <img src="{{ dog.card_image_url|dog_photo:'card' }}" srcset="{{ dog.card_image_url|dog_photo:'card' }} 480w, {{ dog.card_image_url|dog_photo:'portrait' }} 960w" sizes="(max-width: 640px) 92vw, (max-width: 980px) 45vw, 25vw" alt="{{ dog.name }}" width="480" height="384" {% if forloop.first %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async">
+            <img data-media-fallback="{{ dog.card_image_url }}" src="{{ dog.card_image_url|dog_photo:'card' }}" srcset="{{ dog.card_image_url|dog_photo:'card' }} 480w, {{ dog.card_image_url|dog_photo:'portrait' }} 960w" sizes="(max-width: 640px) 92vw, (max-width: 980px) 45vw, 25vw" alt="{{ dog.name }}" width="480" height="384" {% if forloop.first %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async">
           {% elif dog.source_image_url %}
             <img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="480" height="384" {% if forloop.first %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" referrerpolicy="no-referrer">
           {% else %}
