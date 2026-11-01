@@ -70,10 +70,13 @@ class ModeratorLabResultTests(TestCase):
         approve_submission(submission, self.moderator)
         records = HealthRecord.objects.filter(dog=self.dog)
         self.assertEqual(records.count(), 4)
-        self.assertTrue(records.get(test_type="Hip scores").is_public)
-        self.assertTrue(records.get(test_type="CMR1").is_public)
-        self.assertTrue(records.get(test_type="DSRA").is_public)
-        self.assertTrue(records.get(test_type="NCL1").is_public)
+        self.assertTrue(all(not record.is_public for record in records))
+        for marker in ("DSRA", "NCL1", "CMR1"):
+            rec = records.get(test_type=marker)
+            self.assertEqual(self.client.post(
+                reverse("accounts:toggle-health-result", args=[self.dog.pk, rec.pk]),
+                {"visibility": "show"},
+            ).status_code, 302)
         doc = DogDocument.objects.get(source_submission=submission)
         self.assertFalse(doc.is_public)
         self.client.logout()
@@ -142,7 +145,12 @@ class ModeratorLabResultTests(TestCase):
         self.assertEqual(records.count(), 2)
         self.assertEqual(records.get(test_type="CMR1").result, "Clear")
         self.assertEqual(records.get(test_type="DSRA").result, "Carrier")
-        self.assertTrue(all(item.is_public for item in records))
+        self.assertTrue(all(not item.is_public for item in records))
+        for item in records:
+            self.assertEqual(self.client.post(
+                reverse("accounts:toggle-health-result", args=[self.dog.pk, item.pk]),
+                {"visibility": "show"},
+            ).status_code, 302)
         doc.refresh_from_db()
         self.assertFalse(doc.is_public)
         self.client.logout()
@@ -268,8 +276,9 @@ class ModeratorLabResultTests(TestCase):
         self.client.force_login(self.moderator)
         approve_submission(submission, self.moderator)
         record = HealthRecord.objects.get(dog=self.dog)
-        self.assertTrue(record.is_public)
+        self.assertFalse(record.is_public)
         action = reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk])
+        self.assertEqual(self.client.post(action, {"visibility": "show"}).status_code, 302)
         self.assertEqual(self.client.post(action, {"visibility": "hide"}).status_code, 302)
         self.client.logout()
         self.assertContains(self.client.get(self.public_url), "No available records")
