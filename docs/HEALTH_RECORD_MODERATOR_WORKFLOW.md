@@ -62,6 +62,12 @@ for each test and a separate numeric percentage field for breed composition.
 
 1. Under **Select the approved evidence**, choose exactly one accepted Health/DNA
    certificate or approved member health report. Check it belongs to this dog.
+   **Open selected original PDF / image** becomes available beside the dropdown
+   after selecting a source. You can also expand **View the member's original
+   uploaded reports** to open each accepted file, read its laboratory name,
+   and use **Select for editing** to choose that source automatically.
+   Never assume the laboratory name: if the member did not type it into the
+   form, read it directly on the actual certificate before entering it.
 2. Under **Genetic health screening**, use the independent **CMR1**, **DSRA**,
    and **NCL1** dropdowns to select Clear, Carrier, Affected, Inconclusive, or
    Not tested **exactly as reported**. The **Current** label shows existing values.
@@ -107,6 +113,30 @@ compound score may be entered exactly as `12/24`.
 Use **Save reviewed result** only after reading and attesting to the original
 certificate. Enter each uncommon test separately rather than combining multiple
 findings into one text field.
+
+## Viewing the original certificate after approval
+
+A health result and its supporting upload are separate records. The original
+PDF, photograph or laboratory document remains protected but is available to
+an active Moderator, Senior Moderator or Super Admin.
+
+- In **Health values → Edit Health & DNA**, select an accepted source and
+  click **Open selected original PDF / image**. The expandable source list
+  contains **View original PDF / image** for every accepted member upload or
+  Health/DNA document belonging to that dog.
+- In **Approved health records → Edit health record**, the matching original
+  upload opens directly when the result has a verified provenance link.
+  Older imported results may lack that one-to-one association; the editor
+  then shows the accepted uploads for the dog without pretending to know
+  which certificate supports the old value.
+- PDFs and images open in a new browser tab. Other file formats may download
+  so they can be viewed in an appropriate application. Staff access is
+  checked again for each file request; visitor and unrelated-member access
+  remains blocked.
+- Some submissions include a typed laboratory name; it is shown as
+  **Laboratory supplied in submission** and must still be checked against
+  the actual certificate. Missing metadata does not justify inventing a lab.
+  Breed-DNA percentage publication still requires owner consent.
 
 ## Why the approved submission is read-only, and how to correct the saved result
 
