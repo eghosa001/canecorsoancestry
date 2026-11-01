@@ -2,7 +2,7 @@
 from django.test import TestCase
 from django.urls import reverse
 
-from registry.models import Dog, DogImage, DogSource, VerificationState
+from registry.models import Dog, DogImage, DogSource, DogTitle, VerificationState
 
 
 class PublicEvidenceClarityTests(TestCase):
@@ -61,3 +61,27 @@ class PublicEvidenceClarityTests(TestCase):
         response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertEqual(image.public_caption, "Side portrait")
         self.assertContains(response, "Side portrait")
+
+    def test_profile_shows_only_populated_biography_and_title_panels(self):
+        titled = Dog.objects.create(
+            name="Titled Without Bio", slug="titled-without-bio",
+            is_public=True, bio="", bloodline="",
+        )
+        DogTitle.objects.create(dog=titled, name="National Champion")
+        response = self.client.get(reverse("registry:dog-detail", args=[titled.slug]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "National Champion")
+        self.assertContains(response, '<h2>Titles</h2>', html=True)
+        self.assertNotContains(response, '<h2>About</h2>', html=True)
+        self.assertNotContains(response, "No public biography has been recorded")
+        self.assertNotContains(response, "<dt>Bloodline</dt>")
+
+        described = Dog.objects.create(
+            name="Described Without Titles", slug="described-without-titles",
+            is_public=True, bio="Calm, well-documented ancestry.",
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[described.slug]))
+        self.assertContains(response, "Calm, well-documented ancestry.")
+        self.assertContains(response, '<h2>About</h2>', html=True)
+        self.assertNotContains(response, '<h2>Titles</h2>', html=True)
+        self.assertNotContains(response, "No titles recorded.")
