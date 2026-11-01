@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static dog_images %}
 {% block title %}{{ dog.name }} · Cane Corso Ancestry{% endblock %}
 {% block meta_description %}Pedigree, ancestry, offspring, siblings and health information for Cane Corso {{ dog.name }}.{% endblock %}
 {% block og_title %}{{ dog.name }} · Cane Corso Pedigree{% endblock %}
@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="{% static 'core/breed-dna.css' %}?v=20261101-breed-purity-compact-premium-v5">
   {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}?v=20261002-2">{% elif dog.source_image_url %}<meta property="og:image" content="{{ dog.source_image_url }}">{% endif %}
   <script type="application/ld+json">{{ structured_data }}</script>
+  {% if dog.display_images %}<link rel="preload" as="image" href="{{ dog.display_images.0.image.url|dog_photo:'portrait' }}" imagesrcset="{{ dog.display_images.0.image.url|dog_photo:'card' }} 480w, {{ dog.display_images.0.image.url|dog_photo:'portrait' }} 960w" imagesizes="(max-width: 720px) 94vw, 650px">{% endif %}
 {% endblock %}
 {% block content %}
 <section class="dog-profile page-shell">
@@ -27,7 +28,7 @@
            aria-label="Enlarge photograph of {{ dog.name }}">
           {% if dog.display_images %}
             <img class="dog-portrait-image" data-dog-photo-main
-                 src="{{ dog.display_images.0.image.url }}"
+                 data-media-fallback="{{ dog.display_images.0.image.url }}" src="{{ dog.display_images.0.image.url|dog_photo:'portrait' }}" srcset="{{ dog.display_images.0.image.url|dog_photo:'card' }} 480w, {{ dog.display_images.0.image.url|dog_photo:'portrait' }} 960w" sizes="(max-width: 720px) 94vw, 650px"
                  alt="{{ dog.name }}{% if dog.display_images.0.public_caption %} — {{ dog.display_images.0.public_caption }}{% endif %}"
                  loading="eager" fetchpriority="high" decoding="async">
           {% else %}
@@ -51,11 +52,12 @@
                       type="button"
                       data-dog-photo-thumb
                       data-photo-src="{{ photo.image.url }}"
+                      data-photo-preview-src="{{ photo.image.url|dog_photo:'portrait' }}"
                       data-photo-alt="{{ dog.name }}{% if photo.public_caption %} — {{ photo.public_caption }}{% endif %}"
                       data-photo-caption="{% if photo.public_caption %}{{ photo.public_caption }}{% else %}Photo {{ forloop.counter }}{% endif %}"
                       aria-label="Show photograph {{ forloop.counter }} of {{ dog.name }}"
                       aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">
-                <img src="{{ photo.image.url }}" alt="" loading="lazy" decoding="async">
+                <img data-media-fallback="{{ photo.image.url }}" src="{{ photo.image.url|dog_photo:'thumb' }}" alt="" loading="lazy" decoding="async">
                 <span>{{ forloop.counter }}</span>
               </button>
             {% endfor %}

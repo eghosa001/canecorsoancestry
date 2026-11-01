@@ -24,8 +24,14 @@
   const zoomButton = dialog.querySelector("[data-dog-photo-zoom]");
   if (![openLink, hero, stage, viewport, image, prev, next, close, zoomButton].every(Boolean)) return;
 
+  const initialHero = {
+    src: hero.getAttribute("src"),
+    srcset: hero.getAttribute("srcset"),
+    sizes: hero.getAttribute("sizes"),
+  };
   const photos = thumbs.length ? thumbs.map((button) => ({
     src: button.dataset.photoSrc,
+    preview: button.dataset.photoPreviewSrc || button.dataset.photoSrc,
     alt: button.dataset.photoAlt || hero.alt,
     caption: button.dataset.photoCaption || "Photo",
     referrerPolicy: hero.referrerPolicy || "",
@@ -152,10 +158,20 @@
     selected = (index + photos.length) % photos.length;
     const item = photos[selected];
     openLink.href = item.src;
-    if (hero.getAttribute("src") !== item.src) {
-      hero.src = item.src;
-      hero.alt = item.alt;
+    // The visible card uses the small responsive photo; only the expanded
+    // viewer uses the original. Restore srcset for the first photograph.
+    if (selected === 0 && initialHero.srcset) {
+      hero.setAttribute("srcset", initialHero.srcset);
+      if (initialHero.sizes) hero.setAttribute("sizes", initialHero.sizes);
+    } else {
+      hero.removeAttribute("srcset");
+      hero.removeAttribute("sizes");
     }
+    hero.setAttribute("data-media-fallback", item.src);
+    hero.removeAttribute("data-media-fallback-used");
+    const preview = selected === 0 ? initialHero.src : item.preview;
+    if (hero.getAttribute("src") !== preview) hero.src = preview;
+    hero.alt = item.alt;
     if (caption) caption.textContent = item.caption;
     if (counter) counter.textContent = `${selected + 1} of ${photos.length}`;
     thumbs.forEach((button, i) => {

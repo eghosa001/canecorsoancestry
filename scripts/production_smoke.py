@@ -156,7 +156,7 @@ def verify_dog_portrait(page, label):
     thumbnails = gallery.locator("[data-dog-photo-thumb]")
     if thumbnails.count() > 1:
         second = thumbnails.nth(1)
-        expected = second.get_attribute("data-photo-src")
+        expected = second.get_attribute("data-photo-preview-src") or second.get_attribute("data-photo-src")
         second.click()
         if second.get_attribute("aria-pressed") != "true":
             raise AssertionError(f"{label}: alternate photograph cannot be selected")

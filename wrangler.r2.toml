@@ -9,3 +9,12 @@ enabled = true
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "canecorsoancestry-media"
+
+# Optimize dog photo renditions directly from private R2 object bytes.
+# Cloudflare Images Free supports 5,000 unique transformations per month;
+# our Worker falls back to the original when unavailable or over quota.
+[images]
+binding = "IMAGES"
+
+[cache]
+enabled = true
