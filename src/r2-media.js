@@ -395,10 +395,128 @@ async function handleSignedMedia(request, env, url) {
   });
 }
 
-export { isAllowedSourceUrl };
+
+const PHOTO_WIDTHS = Object.freeze({ thumb: 176, card: 480, portrait: 960 });
+
+function isPhotoKey(key) {
+  return (
+    typeof key === "string" &&
+    key.startsWith("dogs/") &&
+    !key.split("/").includes("..") &&
+    /\\.(jpe?g|png|webp|avif)$/i.test(key)
+  );
+}
+
+function photoSignatureMessage(key, variant, expires) {
+  return ["GET", key, variant, expires].join("\\n");
+}
+
+async function handleOptimizedDogPhoto(request, env, url, ctx) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response("Method not allowed", {
+      status: 405, headers: { allow: "GET,HEAD" },
+    });
+  }
+
+  const key = safeKey(url, "/_thumb/");
+  const variant = url.searchParams.get("variant") || "";
+  if (!isPhotoKey(key) || !Object.hasOwn(PHOTO_WIDTHS, variant)) {
+    return new Response("Not found", { status: 404 });
+  }
+
+  // A signed, short-lived URL is required *before* consulting the shared
+  // rendition cache. Nothing here serves arbitrary R2 paths or evidence.
+  const expires = url.searchParams.get("expires") || "";
+  const signature = url.searchParams.get("signature") || "";
+  const now = Math.floor(Date.now() / 1000);
+  if (!/^\\d+$/.test(expires) ||
+      Number(expires) < now ||
+      Number(expires) > now + 3600) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  const expected = await hmacHex(
+    env.R2_GATEWAY_SIGNING_KEY || env.DJANGO_SECRET_KEY,
+    photoSignatureMessage(key, variant, expires),
+  );
+  if (!constantTimeEqual(expected, signature)) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  // A HEAD request must never run an image transformation.
+  if (request.method === "HEAD") {
+    const source = await env.MEDIA_BUCKET.head(key);
+    if (!source) return new Response(null, { status: 404 });
+    return new Response(null, {
+      status: 200, headers: r2Headers(source, "private, max-age=30"),
+    });
+  }
+
+  const cache = globalThis.caches?.default;
+  // Not a public route: only an internal cache key. Cache is checked only
+  // after validating the HMAC, and cached data expires quickly if moderation
+  // updates or replaces the public source photo.
+  const cacheKey = new Request(
+    url.origin + "/__photo_cache/" + variant + "/" + encodeURIComponent(key),
+  );
+  if (cache) {
+    const stored = await cache.match(cacheKey);
+    if (stored) {
+      const headers = new Headers(stored.headers);
+      headers.set("cache-control", "private, max-age=45");
+      headers.set("x-cca-image-cache", "HIT");
+      return new Response(stored.body, { status: 200, headers });
+    }
+  }
+
+  const object = await env.MEDIA_BUCKET.get(key);
+  if (!object) return new Response("Not found", { status: 404 });
+
+  if (env.IMAGES && typeof env.IMAGES.input === "function") {
+    try {
+      // Width-only, scale-down: no cropping, no distortion, never upscale.
+      const rendition = (
+        await env.IMAGES.input(object.body)
+          .transform({ width: PHOTO_WIDTHS[variant], fit: "scale-down" })
+          .output({ format: "image/webp", quality: 84, anim: true })
+      ).response();
+      const cacheHeaders = new Headers(rendition.headers);
+      cacheHeaders.set("cache-control", "public, max-age=120");
+      cacheHeaders.set("x-content-type-options", "nosniff");
+      if (cache) {
+        const store = cache.put(
+          cacheKey,
+          new Response(rendition.clone().body, {
+            status: 200, headers: cacheHeaders,
+          }),
+        );
+        if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(store);
+        else await store;
+      }
+      cacheHeaders.set("cache-control", "private, max-age=45");
+      cacheHeaders.set("x-cca-image-cache", "MISS");
+      cacheHeaders.set("x-cca-image-variant", variant);
+      return new Response(rendition.body, { status: 200, headers: cacheHeaders });
+    } catch {
+      // Free transformation quota, unsupported photo or service outage must
+      // never break an image. Preserve the unchanged R2 original instead.
+      const original = await env.MEDIA_BUCKET.get(key);
+      if (!original) return new Response("Not found", { status: 404 });
+      const headers = r2Headers(original, "private, max-age=30");
+      headers.set("x-cca-image-variant", "original-fallback");
+      return new Response(original.body, { status: 200, headers });
+    }
+  }
+
+  const headers = r2Headers(object, "private, max-age=30");
+  headers.set("x-cca-image-variant", "original-fallback");
+  return new Response(object.body, { status: 200, headers });
+}
+
+export { isAllowedSourceUrl, isPhotoKey, photoSignatureMessage };
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (url.pathname === "/healthz/") {
@@ -415,6 +533,9 @@ export default {
 
     if (url.pathname.startsWith("/_media/")) {
       return handleSignedMedia(request, env, url);
+    }
+    if (url.pathname.startsWith("/_thumb/")) {
+      return handleOptimizedDogPhoto(request, env, url, ctx);
     }
 
     return new Response("Not found", { status: 404 });
