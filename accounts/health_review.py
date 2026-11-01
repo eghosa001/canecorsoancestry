@@ -172,6 +172,7 @@ def reviewed_dog_health(request, pk):
     # breed publication decisions and dog-level visibility.
     staff_breed_ids = staff_authorized_breed_record_ids(dog)
     for record in records:
+        record.staff_breed_authorized = record.pk in staff_breed_ids
         record.is_legacy_mixed = legacy_mixed_health_rows(
             record.test_type, record.result,
             record_verified=record.verification_state == VerificationState.HEALTH_VERIFIED,
@@ -567,6 +568,9 @@ def edit_reviewed_health_result(request, pk, record_id):
                 if intent == "publish" and report and not staff_authorized and not staff_override:
                     form.add_error(None, "Only the Super Admin can authorize publication of this reviewed breed-DNA summary.")
                 else:
+                    if intent == "publish" and report and report.evidence_document.is_public:
+                        report.evidence_document.is_public = False
+                        report.evidence_document.save(update_fields=["is_public"])
                     if staff_override:
                         basis = request.POST.get("publication_basis", "admin_decision")
                         if basis not in ("admin_decision", "owner_verbal", "owner_written"):
@@ -684,6 +688,10 @@ def toggle_health_result(request, pk, record_id):
                 "use a reviewed structured breed-composition report.",
             )
             return redirect("accounts:reviewed-dog-health", pk=pk)
+        if show and report and report.evidence_document.is_public:
+            # Visibility of the summary never grants access to the source file.
+            report.evidence_document.is_public = False
+            report.evidence_document.save(update_fields=["is_public"])
         if report and (record.is_public != show or (show and not has_authority)):
             # This publication decision is separate from owner-consent data.
             if show and not has_authority:
