@@ -680,7 +680,7 @@ def toggle_health_result(request, pk, record_id):
             messages.error(
                 request,
                 "This free-text breed-DNA claim cannot be displayed as a verified test. "
-                "Transcribe each evidence-supported health result separately, or obtain "
+                "Transcribe each evidence-supported health result separately, or "
                 "use a reviewed structured breed-composition report.",
             )
             return redirect("accounts:reviewed-dog-health", pk=pk)
