@@ -26,6 +26,10 @@ PUBLIC_ROUTES = (
     ("/accounts/login/", "login"),
     ("/member/signup/", "signup"),
     ("/accounts/password_reset/", "password-reset"),
+    ("/member/resend-verification/", "resend-verification"),
+    ("/privacy/", "privacy"),
+    ("/terms/", "terms"),
+    ("/billing-policy/", "billing-policy"),
 )
 
 
@@ -615,6 +619,10 @@ def main():
             ("/accounts/login/", "login"),
             ("/member/signup/", "signup"),
             ("/accounts/password_reset/", "password-reset"),
+            ("/member/resend-verification/", "resend-verification"),
+            ("/privacy/", "privacy"),
+            ("/terms/", "terms"),
+            ("/billing-policy/", "billing-policy"),
         ):
             page = browser.new_page(viewport={"width": 390, "height": 844})
             report["mobile"].append(visit(page, path, f"{label}-mobile", mobile=True))
