@@ -28,6 +28,21 @@
     })();
   </script>
   <link rel="preconnect" href="https://canecorsoancestry-edge.aighewieghosa111.workers.dev">
+  <script>
+    // A visitor may scroll to a lazy-loaded photo after its short-lived
+    // signature has expired. Retry once using the permission-checked original,
+    // never by making signed public links valid indefinitely.
+    window.addEventListener("error", function (event) {
+      var image = event.target;
+      if (!image || image.tagName !== "IMG") return;
+      var fallback = image.getAttribute("data-media-fallback");
+      if (!fallback || image.getAttribute("data-media-fallback-used")) return;
+      image.setAttribute("data-media-fallback-used", "1");
+      image.removeAttribute("srcset");
+      image.removeAttribute("sizes");
+      image.src = fallback;
+    }, true);
+  </script>
   <link rel="icon" href="{% static 'core/cane-corso-head-logo-right.svg' %}?v=20261003-headlogo-v46" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'core/site.css' %}?v=20261017-pairing-dashboard-v90">
   <link rel="stylesheet" href="{% static 'core/premium-polish.css' %}?v=20261007-interaction-v50">
