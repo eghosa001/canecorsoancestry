@@ -6,7 +6,7 @@
 {% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and health information.{% endblock %}
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'core/dog-portrait-gallery.css' %}?v=20261011-stable-gallery-v7">
-  <link rel="stylesheet" href="{% static 'core/breed-dna.css' %}?v=20261101-breed-purity-compact-premium-v5">
+  <link rel="stylesheet" href="{% static 'core/breed-dna.css' %}?v=20261101-orthopedic-screening-v6">
   {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}?v=20261002-2">{% elif dog.source_image_url %}<meta property="og:image" content="{{ dog.source_image_url }}">{% endif %}
   <script type="application/ld+json">{{ structured_data }}</script>
   {% if dog.display_images %}<link rel="preload" as="image" href="{{ dog.display_images.0.image.url|dog_photo:'portrait' }}" imagesrcset="{{ dog.display_images.0.image.url|dog_photo:'card' }} 480w, {{ dog.display_images.0.image.url|dog_photo:'portrait' }} 960w" imagesizes="(max-width: 720px) 94vw, 650px">{% endif %}
