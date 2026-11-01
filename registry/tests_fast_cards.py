@@ -115,3 +115,48 @@ class FastPublicDogCardTests(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "CARD-001")
+
+    def test_public_cards_omit_empty_registration_authority_and_colour(self):
+        """Never display database nulls or invented metadata in public cards."""
+        dog = Dog.objects.create(
+            name="Unlabelled Registration Test", slug="unlabelled-registration-test",
+            is_public=True, sex=Dog.Sex.FEMALE, search_count=500,
+            country="Serbia", colour="",
+        )
+        DogImage.objects.create(
+            dog=dog, image="dogs/unlabelled-registration-test.jpg", is_primary=True,
+        )
+        DogRegistration.objects.create(
+            dog=dog, authority=None, number="NOAUTH-771",
+        )
+        caches["public"].delete("cca:home:featured-dog-ids:v1")
+        home = self.client.get("/")
+        self.assertEqual(home.status_code, 200)
+        self.assertContains(home, dog.name)
+        self.assertContains(home, "NOAUTH-771")
+        self.assertNotContains(home, "None · NOAUTH-771")
+        self.assertNotContains(home, "Colour not recorded")
+
+        search = self.client.get("/dogs/?q=Unlabelled%20Registration")
+        self.assertEqual(search.status_code, 200)
+        self.assertContains(search, dog.name)
+        self.assertContains(search, "NOAUTH-771")
+        self.assertNotContains(search, "None · NOAUTH-771")
+        self.assertNotContains(search, "Colour not recorded")
+
+        pedigrees = self.client.get("/pedigrees/?q=Unlabelled%20Registration")
+        self.assertEqual(pedigrees.status_code, 200)
+        self.assertContains(pedigrees, dog.name)
+        self.assertNotContains(pedigrees, "Kennel not recorded")
+
+    def test_public_kennel_list_omits_unavailable_location(self):
+        from registry.models import Kennel
+
+        kennel = Kennel.objects.create(
+            name="Public Minimal Kennel", slug="public-minimal-kennel",
+            city="", country="",
+        )
+        response = self.client.get("/kennels/?q=Public%20Minimal%20Kennel")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, kennel.name)
+        self.assertNotContains(response, "Location not recorded")
