@@ -1,7 +1,7 @@
 """Super Admin-only historical health and DNA evidence management.
 
 Evidence review is not owner permission. Staff-uploaded reports are private;
-breed-composition summaries can be explicitly published by the Super Admin.
+breed-composition summaries can be explicitly published by any authorized moderator.
 """
 import uuid
 
