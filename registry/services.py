@@ -761,6 +761,12 @@ def approve_submission(
             submitted_by=submission.submitted_by,
             source_submission=submission,
         )
+        # Keep a durable private provenance link for the primary approved
+        # result. The uploaded certificate can support additional markers,
+        # so those retain their submission ID in the review notes.
+        if not is_breed:
+            health_record.evidence_document = document
+            health_record.save(update_fields=["evidence_document"])
         if is_breed:
             BreedDNAReport.objects.create(
                 health_record=health_record,
