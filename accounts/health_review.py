@@ -670,7 +670,7 @@ def toggle_health_result(request, pk, record_id):
     show = request.POST["visibility"] == "show"
     with transaction.atomic():
         record = get_object_or_404(
-            HealthRecord.objects.select_for_update().select_related("breed_dna_report"), pk=record_id, dog_id=pk
+            HealthRecord.objects.select_for_update(of=("self",)).select_related("breed_dna_report"), pk=record_id, dog_id=pk
         )
         if show and record.verification_state != "health":
             messages.error(request, "Only approved, evidence-reviewed results may be public.")
