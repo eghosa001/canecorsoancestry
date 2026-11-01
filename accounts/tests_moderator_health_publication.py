@@ -915,7 +915,7 @@ class ModeratorLabResultTests(TestCase):
         self.assertRedirects(response, expected, fetch_redirect_response=False)
         listing = self.client.get(editor, {"source_record": str(legacy.pk)})
         self.assertContains(listing, "Converting an older combined record")
-        self.assertContains(listing, "Edit individual results")
+        self.assertContains(listing, "Transcribe verified findings")
         self.assertContains(listing, "Approved legacy B-ZEUS laboratory evidence")
         self.assertEqual(
             listing.context["structured_form"].initial["source_document"], source.pk,
