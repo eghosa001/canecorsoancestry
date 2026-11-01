@@ -80,15 +80,24 @@
       <strong id="health-card-preview-result">{% if breed_report %}{{ record.result }}{% else %}{{ record.test_type }} · {{ record.result }}{% endif %}</strong>
       <p>{% if breed_report %}DNA-tested · <span id="health-card-preview-lab">{{ breed_report.provider }}</span> · Report reviewed{% else %}Laboratory result · Report reviewed{% endif %}</p>
     </div>
-    {% if not can_publish %}
-      <p class="health-private-caption"><strong>Publication blocked:</strong> Owner authorization for displaying this breed-composition summary has not been recorded. You may correct and save the draft, but not publish it.</p>
+    {% if breed_report and can_admin_publish_breed and not breed_report.consent_public_summary %}
+      <div class="health-review-field">
+        <label for="publication-basis-edit">Breed-DNA publication basis (Super Admin)</label>
+        <select name="publication_basis" id="publication-basis-edit">
+          <option value="admin_decision">Administrative decision to publish this verified summary</option>
+          <option value="owner_verbal">Owner confirmed verbally</option>
+          <option value="owner_written">Owner confirmed in writing or message</option>
+        </select>
+        <small>This controls the public text summary only. The uploaded certificate remains private. Your decision is saved in the audit history, not recorded as owner consent.</small>
+      </div>
+    {% elif breed_report and not can_publish %}
+      <p class="health-private-caption">Only the Super Admin can authorize public display of this breed-DNA summary. You can still correct and save it privately.</p>
     {% endif %}
       <div class="health-review-confirm"><label>{{ form.reviewed }} <strong>{{ form.reviewed.label }}</strong></label>{{ form.reviewed.errors }}</div>
       <div class="button-row health-final-actions">
+        <button type="submit" name="intent" value="save" class="btn btn-outline">Save as Private</button>
         {% if can_publish %}
-          <button type="submit" name="intent" value="publish" class="btn btn-gold">Save changes</button>
-        {% else %}
-          <button type="submit" name="intent" value="save" class="btn btn-outline">Save privately (owner consent required)</button>
+          <button type="submit" name="intent" value="publish" class="btn btn-gold">Save &amp; make Public</button>
         {% endif %}
       </div>
     </form>
