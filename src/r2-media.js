@@ -408,7 +408,7 @@ function isPhotoKey(key) {
 }
 
 function photoSignatureMessage(key, variant, expires) {
-  return ["GET", key, variant, expires].join("\\n");
+  return ["GET", key, variant, expires].join("\n");
 }
 
 async function handleOptimizedDogPhoto(request, env, url, ctx) {
