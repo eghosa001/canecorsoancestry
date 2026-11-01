@@ -48,8 +48,9 @@ entries remain readable.
    genetic markers before approval. Use the existing risk-based approval flow
    (high-risk submissions can require a second reviewer).
 3. Upon final approval, the saved HealthRecord is **Health/DNA verified**
-   (`verification_state=health`). Its result summary is automatically visible
-   on the profile of a public dog. The underlying certificate stays private.
+   (`verification_state=health`), but remains **Private**. An authorized
+   moderator uses **Public** to publish the exact reviewed summary on a
+   publicly visible dog's profile. The underlying certificate stays private.
 4. Open **Review health results & values** to add missing findings or correct a
    reported number. The existing verified record stays verified after an
    audited correction.
@@ -92,9 +93,8 @@ for each test and a separate numeric percentage field for breed composition.
    result is stored separately and audited; original certificates remain
    private. Changing one marker leaves other markers unchanged.
 6. If the result already exists, the original reviewed record is retained
-   as historical evidence and the newer verified version replaces its
-   public screening status. An intentionally private result stays private
-   until staff explicitly permits publication.
+   as historical evidence; a corrected result retains its preceding visibility
+   setting. New results start Private until staff explicitly publishes them.
 
 **Important:** Super Admin, Senior Moderator and Moderator accounts may record
 and correct independently evidenced DNA breed percentages, but new reports
