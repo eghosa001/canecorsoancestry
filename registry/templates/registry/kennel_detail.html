@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ kennel.name }} · Cane Corso Ancestry{% endblock %}
+{% load dog_images %}
 {% block content %}
 <section class="page-shell">
   <header class="kennel-hero">
@@ -20,7 +21,7 @@
   <div class="dog-card-grid">
     {% for dog in dogs %}
       <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
-        <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url }}?v=20261002-2" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async">{% else %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async" referrerpolicy="no-referrer">{% endif %}</div>
+        <div class="dog-card-media">{% if dog.display_images %}<img src="{{ dog.display_images.0.image.url|dog_photo:'card' }}" srcset="{{ dog.display_images.0.image.url|dog_photo:'card' }} 480w, {{ dog.display_images.0.image.url|dog_photo:'portrait' }} 960w" sizes="(max-width: 640px) 92vw, (max-width: 980px) 45vw, 25vw" alt="{{ dog.name }}" width="480" height="384" {% if forloop.counter <= 2 %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async">{% else %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="480" height="384" {% if forloop.counter <= 2 %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" referrerpolicy="no-referrer">{% endif %}</div>
         <div class="dog-card-body"><h3>{{ dog.name }}</h3><p>{% if dog.colour %}{{ dog.colour }} · {% endif %}{{ dog.get_sex_display }}</p></div>
       </a>
     {% empty %}<div class="empty-state"><p>{% if public_dog_total %}This kennel has public pedigree records, but no public dog photos yet.{% elif possible_bred_count %}No confirmed breeding-origin links yet. Possible matches are listed separately below.{% else %}No public dogs are linked yet.{% endif %}</p></div>{% endfor %}
