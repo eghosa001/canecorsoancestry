@@ -217,7 +217,7 @@
           <small>{{ item.tested_on|date:"j M Y"|default:"Date not provided" }} · Historical free-text claim</small>
         </div>
         <p class="health-legacy-source"><span>Original recorded text</span>{{ item.result }}</p>
-        <p class="health-legacy-notice" role="note">This wording is preserved as historical evidence. It cannot be published as a verified breed percentage or individual screening result without a separately reviewed, structured entry.</p>
+        <p class="health-legacy-notice" role="note"><strong>{{ item.staff_public_status_label }}.</strong> {{ item.staff_public_status_reason }} This original wording is preserved for staff audit and must not be presented as a structured breed-DNA or individual screening result.</p>
         {% if item.is_public %}
         <p class="health-legacy-flag">An older Public flag is saved for this entry. It does not authorize a structured breed-DNA claim. You can make this legacy entry private without changing other results.</p>
         {% endif %}
