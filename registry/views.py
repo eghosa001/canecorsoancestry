@@ -394,7 +394,7 @@ def _public_profile_dog(slug):
         if dog._has_profile_titles else []
     )
     dog.display_documents = (
-        list(DogDocument.objects.filter(dog=dog, is_public=True).exclude(source_submission__kind="health").order_by("-created_at"))
+        list(DogDocument.objects.filter(dog=dog, is_public=True, staff_review_only=False).exclude(source_submission__kind="health").exclude(staff_health_record__isnull=False).order_by("-created_at"))
         if dog._has_public_documents else []
     )
     # The approved source text holds a reference to the reviewed document.
@@ -470,7 +470,6 @@ def dog_detail(request, slug):
             {"@type": "PropertyValue", "name": "Sex", "value": dog.get_sex_display()},
             {"@type": "PropertyValue", "name": "Colour", "value": dog.colour or "Not recorded"},
             {"@type": "PropertyValue", "name": "Country", "value": dog.country or "Not recorded"},
-            {"@type": "PropertyValue", "name": "Verification", "value": public_verification_label(dog.verification_state)},
         ],
     }
     if dog.date_of_birth:
@@ -577,23 +576,11 @@ def dog_detail(request, slug):
             record_verified=record.verification_state == VerificationState.HEALTH_VERIFIED,
         )
         if legacy_rows is not None:
-            # A combined historical purity/health text does not establish a
-            # DNA breed percentage. Display individually extracted health
-            # findings only. If the staff-reviewed certificate was accepted
-            # but no usable health score was recorded, disclose the existence
-            # of reviewed evidence without inventing a medical result.
+            # Only test-specific findings deliberately published by staff
+            # belong on public profiles. Internal evidence-review-only
+            # records remain exclusively in the moderation workspace.
             if legacy_rows:
                 other_health_rows.extend(legacy_rows)
-                other_health_records.append(record)
-            elif (
-                record.verification_state == VerificationState.HEALTH_VERIFIED
-                and record.evidence_document_id
-            ):
-                other_health_rows.append({
-                    "test": "Evidence review",
-                    "result": "Laboratory evidence reviewed; individual health test results have not been transcribed.",
-                    "verified": False,
-                })
                 other_health_records.append(record)
             continue
         if unstructured_breed_claim(record.test_type):
@@ -679,7 +666,6 @@ def dog_detail(request, slug):
             "coi_display_state": coi_display_state,
             "coi_below_display_precision": coi_below_display_precision,
             "public_parentage_complete": public_parentage_complete,
-            "verification_label": public_verification_label(dog.verification_state),
             "has_source_attribution": dog._has_profile_sources,
             "relation_limit": relation_limit,
             "can_contribute": can_contribute_to_dog(request.user, dog),
