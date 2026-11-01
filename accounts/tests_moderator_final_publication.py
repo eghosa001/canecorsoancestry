@@ -122,7 +122,7 @@ class ModeratorFinalPublicationTests(TestCase):
         self.assertEqual(document.file.name, "private/documents/final-lab.pdf")
         self.assertContains(self.client.get(self.public_url), 'class="breed-dna-score">92.5')
 
-    def test_breed_publication_blocked_without_owner_consent(self):
+    def test_moderator_publishes_reviewed_breed_summary_without_owner_consent(self):
         document = DogDocument.objects.create(
             dog=self.dog, title="Private report", document_type="dna",
             file="private/documents/restricted.pdf", is_public=False,
@@ -144,10 +144,16 @@ class ModeratorFinalPublicationTests(TestCase):
             "intent": "publish", "reviewed": "on",
             "laboratory": "Embark", "breed_percentage": "100",
         })
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
         record.refresh_from_db()
-        self.assertFalse(record.is_public)
-        self.assertContains(response, "Only the Super Admin can authorize publication")
+        self.assertTrue(record.is_public)
+        self.assertContains(self.client.get(self.public_url), 'class="breed-dna-score">100')
+        self.assertTrue(ModerationAudit.objects.filter(
+            dog=self.dog, summary__kind="staff_breed_dna_publication",
+            actor=self.moderator,
+        ).exists())
+        document.refresh_from_db()
+        self.assertFalse(document.is_public)
 
     def test_add_omitted_condition_from_approved_evidence_is_private_until_published(self):
         source = Submission.objects.create(
