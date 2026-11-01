@@ -135,7 +135,7 @@ class StaffChangeCenterTests(TestCase):
         for phrase in (
             "Change center", "Manage dogs", "Search all dogs",
             "Review health results & values", "Review certificate",
-            "Open review", "Review warnings", "Save reviewed result",
+            "Open review", "Review warnings", "Save & publish this result",
             "Edit health record", "Exact numeric value (optional)",
             "Reported result / grade", "Save as Private",
             "Save & make Public",
@@ -155,9 +155,10 @@ class StaffChangeCenterTests(TestCase):
             reverse("accounts:reviewed-dog-health", args=[self.dog.pk])
         )
         self.assertContains(health, "Edit Health &amp; DNA")
-        self.assertContains(health, "Save reviewed health values")
+        self.assertContains(health, "Save selected privately")
+        self.assertContains(health, "Save &amp; publish selected")
         self.assertContains(health, "Add an uncommon test")
-        self.assertContains(health, "Save reviewed result")
+        self.assertContains(health, "Save &amp; publish this result")
 
         self.client.force_login(self.super_admin)
         owner = self.client.get(reverse("accounts:verification-dashboard"))
