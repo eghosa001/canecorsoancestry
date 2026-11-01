@@ -434,7 +434,12 @@ def test_staff_approved_lab_document_preview(page):
     assert destination.endswith(
         f"/member/moderation/health-results/{dog_id}/source/document/{doc_id}/"
     ), f"Wrong approved source linked: {destination}"
-    response = page.request.get(BASE + destination)
+    # The selector's JS assigns an absolute .href. Accept either URL shape
+    # instead of accidentally prefixing BASE twice.
+    response = page.request.get(
+        destination if destination.startswith("http://") or destination.startswith("https://")
+        else BASE + destination
+    )
     assert response.status == 200, "Original accepted PDF was not readable by moderator"
     assert "application/pdf" in response.headers.get("content-type", "")
     assert "no-store" in response.headers.get("cache-control", "")
