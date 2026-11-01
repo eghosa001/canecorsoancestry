@@ -137,8 +137,8 @@ class StaffChangeCenterTests(TestCase):
             "Review health results & values", "Review certificate",
             "Open review", "Review warnings", "Save reviewed result",
             "Edit health record", "Exact numeric value (optional)",
-            "Reported result / grade", "Hide incorrect result",
-            "Save privately (owner consent required)",
+            "Reported result / grade", "Save as Private",
+            "Save & make Public",
         ):
             with self.subTest(health_guide=phrase):
                 self.assertIn(phrase, health_guide)

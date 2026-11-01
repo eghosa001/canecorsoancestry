@@ -98,8 +98,8 @@ for each test and a separate numeric percentage field for breed composition.
 
 **Important:** Super Admin, Senior Moderator and Moderator accounts may record
 and correct independently evidenced DNA breed percentages, but new reports
-remain private until the kennel owner has recorded specific public-summary
-consent. Evidence verification does not substitute for consent. Even a reported
+remain private until owner consent exists or the Super Admin makes a separately
+logged publication decision. Evidence review alone does not publish. Even a reported
 100% value is a laboratory breed-composition estimate, not a universal proof
 of pedigree purity.
 
@@ -136,7 +136,7 @@ an active Moderator, Senior Moderator or Super Admin.
 - Some submissions include a typed laboratory name; it is shown as
   **Laboratory supplied in submission** and must still be checked against
   the actual certificate. Missing metadata does not justify inventing a lab.
-  Breed-DNA percentage publication still requires owner consent.
+  Publishing breed-DNA percentages requires owner consent or a separate audited Super Admin decision.
 
 ## Why the approved submission is read-only, and how to correct the saved result
 
@@ -154,7 +154,7 @@ The **HealthRecord** (the verified text shown to visitors) is corrected separate
 - Or go through **Manage dogs → Search all dogs → Health values**.
   Select the relevant **Edit health record** control, review the original
   evidence, change the exact value, check the attestation, and
-  choose **Save changes**.
+  choose **Save as Private** or **Save & make Public**.
 - An accepted historical **Purity Verification/Health Test** record is
   preserved, not rewritten as a new marker. Choose **Edit individual results**;
   the system opens the structured editor and selects that record's accepted
@@ -179,20 +179,20 @@ are permitted, with independent audit entries.
 2. Under **Approved health results · Edit as needed**, find the verified
    record and choose **Edit health record**.
 3. On the edit page, compare **01 · Verified evidence** with the confidential
-   original source, then examine **02 · Public preview**.
-4. Under **03 · Correction**, change **Reported result / grade** directly,
+   original source, then examine **03 · Review** and the live result preview.
+4. Under **02 · Edit**, change **Reported result / grade** directly,
    or clear the existing grade and use **Exact numeric measurement (optional)**
    plus **Measurement unit (optional)**.
 5. Tick **I checked the edited public summary against the original laboratory
-   evidence**, then select **Save changes** when publication is permitted.
-   Where owner consent for breed composition is missing, the screen instead
-   offers **Save privately (owner consent required)**; it does *not* authorize
-   publishing a DNA breed-composition summary. The audit retains the edit.
-6. To suppress a published incorrect result, return to
-   **Approved health results · Edit as needed** and choose
-   **Hide incorrect result**. This hides the public summary without deleting
-   its evidence or audit history. Restoring visibility remains subject to
-   publication restrictions and owner DNA consent.
+   evidence**. Choose **Save as Private** to hide the text, or **Save & make
+   Public** to publish. The Super Admin can directly publish a reviewed DNA
+   breed summary without a fresh member submission. Select the audit basis
+   (administrative decision, owner verbal, or owner written confirmation).
+   The original consent field remains untouched by this staff action.
+6. Under **Approved health records**, use **Public** or **Private** on the
+   exact record. Private hides the typed summary without deleting evidence;
+   Public restores it when the user has the appropriate publication authority.
+   Original files remain staff-only.
 
 ## Important boundaries
 
@@ -203,7 +203,8 @@ are permitted, with independent audit entries.
   do not reinterpret an arbitrary numeric measurement as genetic clearance.
 - DNA **breed composition** is different from clinical Health/DNA results:
   percentages are entered in the separate breed-report form, must total
-  100%, and cannot be published without the owner's explicit summary consent.
+  100%, and require owner consent or a separately audited Super Admin
+  publication decision.
 - Published dog profiles display result summaries only. Accepted laboratory
   source documents used for transcription are private.
 - All source links are dog-specific, the staff permission is checked on the

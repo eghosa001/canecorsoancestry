@@ -319,6 +319,120 @@ class ModeratorLabResultTests(TestCase):
         self.client.logout()
         self.assertNotContains(self.client.get(self.public_url), "100% Cane Corso")
 
+    def test_super_admin_can_publish_private_breed_dna_and_revoke_again(self):
+        admin = get_user_model().objects.create_superuser(
+            username="health-super-admin", email="health-admin@example.com",
+            password="abc123xyz",
+        )
+        record = HealthRecord.objects.create(
+            dog=self.dog, test_type="DNA breed composition",
+            result="100% Cane Corso",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=False,
+        )
+        evidence = DogDocument.objects.create(
+            dog=self.dog, title="DNA original", document_type="dna",
+            file="private/documents/owner-dna-certificate.pdf",
+            is_public=False, staff_review_only=True, submitted_by=self.owner,
+        )
+        report = BreedDNAReport.objects.create(
+            health_record=record, evidence_document=evidence,
+            provider="Embark", cane_corso_percentage="100.00",
+            composition=[{"breed": "Cane Corso", "percentage": "100"}],
+            consent_public_summary=False,
+        )
+        toggle = reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk])
+        edit = reverse("accounts:edit-reviewed-health-result", args=[self.dog.pk, record.pk])
+        withdraw = reverse("accounts:health-genetic-withdraw", args=[self.dog.pk])
+        score = 'class="breed-dna-score">100'
+        self.assertNotContains(self.client.get(self.public_url), score)
+
+        self.client.force_login(self.moderator)
+        self.assertNotContains(self.client.get(edit), "Save &amp; make Public", html=False)
+        self.assertEqual(
+            self.client.post(toggle, {"visibility": "show"}).status_code, 302,
+        )
+        record.refresh_from_db()
+        self.assertFalse(record.is_public)
+
+        self.client.force_login(admin)
+        editor = self.client.get(edit)
+        self.assertContains(editor, "Save &amp; make Public")
+        self.assertContains(self.client.get(self.health_url), 'value="owner_verbal"')
+        self.assertEqual(self.client.post(toggle, {
+            "visibility": "show", "publication_basis": "owner_verbal",
+        }).status_code, 302)
+        record.refresh_from_db()
+        report.refresh_from_db()
+        evidence.refresh_from_db()
+        self.assertTrue(record.is_public)
+        self.assertFalse(report.consent_public_summary)
+        self.assertFalse(evidence.is_public)
+        self.client.logout()
+        page = self.client.get(self.public_url)
+        self.assertContains(page, score)
+        self.assertNotContains(page, "owner-dna-certificate.pdf")
+
+        self.client.force_login(admin)
+        self.assertEqual(self.client.post(toggle, {"visibility": "hide"}).status_code, 302)
+        record.refresh_from_db()
+        self.assertFalse(record.is_public)
+        self.client.logout()
+        self.assertNotContains(self.client.get(self.public_url), score)
+
+        self.client.force_login(admin)
+        self.assertEqual(self.client.post(edit, {
+            "intent": "publish", "reviewed": "on",
+            "laboratory": "Embark", "breed_percentage": "100",
+            "publication_basis": "admin_decision",
+        }).status_code, 302)
+        record.refresh_from_db()
+        report.refresh_from_db()
+        self.assertTrue(record.is_public)
+        self.assertFalse(report.consent_public_summary)
+        self.assertContains(self.client.get(self.public_url), score)
+
+        self.assertEqual(self.client.post(withdraw, {
+            "confirmation": "hide_all",
+        }).status_code, 302)
+        record.refresh_from_db()
+        self.assertFalse(record.is_public)
+        self.client.logout()
+        self.assertNotContains(self.client.get(self.public_url), score)
+
+    def test_staff_override_can_repair_legacy_public_flag_without_owner_consent(self):
+        admin = get_user_model().objects.create_superuser(
+            username="health-override-admin", email="override-admin@example.com",
+            password="abc123xyz",
+        )
+        record = HealthRecord.objects.create(
+            dog=self.dog, test_type="DNA breed composition",
+            result="100% Cane Corso",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        evidence = DogDocument.objects.create(
+            dog=self.dog, title="DNA original", document_type="dna",
+            file="private/documents/dna-evidence.pdf",
+            staff_review_only=True, is_public=False,
+        )
+        BreedDNAReport.objects.create(
+            health_record=record, evidence_document=evidence,
+            provider="Embark", cane_corso_percentage="100.00",
+            composition=[{"breed": "Cane Corso", "percentage": "100"}],
+            consent_public_summary=False,
+        )
+        self.assertNotContains(
+            self.client.get(self.public_url), 'class="breed-dna-score">',
+        )
+        self.client.force_login(admin)
+        listing = self.client.get(self.health_url)
+        self.assertContains(listing, 'name="visibility" value="show"')
+        toggle = reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk])
+        self.assertEqual(self.client.post(toggle, {
+            "visibility": "show", "publication_basis": "admin_decision",
+        }).status_code, 302)
+        self.client.logout()
+        self.assertContains(self.client.get(self.public_url), 'class="breed-dna-score">100')
+
     def test_incomplete_lab_transcription_is_rejected(self):
         submission = self.upload()
         self.client.force_login(self.moderator)
@@ -572,7 +686,7 @@ class ModeratorLabResultTests(TestCase):
         self.client.force_login(self.moderator)
         health = self.client.get(reverse("accounts:reviewed-dog-health", args=[dog.pk]))
         self.assertContains(health, "Not visible — correct the result")
-        self.assertContains(health, "owner-authorized")
+        self.assertContains(health, "publication-approved")
         public = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertNotContains(public, "100% Cane Corso")
 

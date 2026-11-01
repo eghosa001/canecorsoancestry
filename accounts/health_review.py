@@ -17,9 +17,11 @@ from registry.genetic_health import MARKER_CODES, SCREENING_MARKERS, SCREENING_R
 from registry.models import (
     BreedDNAReport, Dog, DogDocument, HealthRecord, ModerationAudit, Submission, VerificationState, VerificationEvent,
 )
-from registry.permissions import can_review_submissions
+from registry.permissions import can_manage_verification, can_review_submissions
 from registry.public_freshness import invalidate_public_content
-from registry.health_publication import publication_status
+from registry.health_publication import (
+    breed_publication_allowed, publication_status, staff_authorized_breed_record_ids,
+)
 from registry.legacy_health import legacy_mixed_health_rows
 from registry.orthopaedic_health import describe_orthopaedic_result
 from registry.services import record_audit
@@ -166,17 +168,18 @@ def reviewed_dog_health(request, pk):
         .select_related("breed_dna_report", "evidence_document", "breed_dna_report__evidence_document")
         .order_by("-created_at")[:150]
     )
-    # Do not label a database is_public flag as proof of public visibility.
-    # The public page also enforces dog/kennel visibility, DNA consent and
-    # filtering of unsafe unstructured breed-composition claims.
+    # Match badges to the real public page, including separate audited staff
+    # breed publication decisions and dog-level visibility.
+    staff_breed_ids = staff_authorized_breed_record_ids(dog)
     for record in records:
+        record.staff_breed_authorized = record.pk in staff_breed_ids
         record.is_legacy_mixed = legacy_mixed_health_rows(
             record.test_type, record.result,
             record_verified=record.verification_state == VerificationState.HEALTH_VERIFIED,
         ) is not None
         (record.staff_public_status_code,
          record.staff_public_status_label,
-         record.staff_public_status_reason) = publication_status(record, dog=dog)
+         record.staff_public_status_reason) = publication_status(record, dog=dog, staff_authorized_ids=staff_breed_ids)
     from .structured_health import StructuredHealthForm, structured_rows
     current_rows = structured_rows(records)
     latest_breed = next(
@@ -260,6 +263,8 @@ def reviewed_dog_health(request, pk):
         "selected_legacy_record": selected_legacy_record,
         "selected_source_document": selected_source_document,
         "evidence_entries": evidence_entries,
+        "can_admin_publish_breed": can_manage_verification(request.user),
+        "staff_breed_ids": staff_breed_ids,
     })
 
 
@@ -553,9 +558,43 @@ def edit_reviewed_health_result(request, pk, record_id):
             if form.is_valid():
                 data = form.cleaned_data
                 report = getattr(record, "breed_dna_report", None)
-                if intent == "publish" and report and not report.consent_public_summary:
-                    form.add_error(None, "The owner has not authorized publication of this DNA breed summary.")
+                staff_authorized = (
+                    breed_publication_allowed(report) if report else True
+                )
+                staff_override = bool(
+                    intent == "publish" and report and not staff_authorized
+                    and can_manage_verification(request.user)
+                )
+                if intent == "publish" and report and not staff_authorized and not staff_override:
+                    form.add_error(None, "Only the Super Admin can authorize publication of this reviewed breed-DNA summary.")
                 else:
+                    if intent == "publish" and report and report.evidence_document.is_public:
+                        report.evidence_document.is_public = False
+                        report.evidence_document.save(update_fields=["is_public"])
+                    if staff_override:
+                        basis = request.POST.get("publication_basis", "admin_decision")
+                        if basis not in ("admin_decision", "owner_verbal", "owner_written"):
+                            return HttpResponseBadRequest("Choose a valid publication basis.")
+                        record_audit(
+                            action=ModerationAudit.Action.VERIFICATION,
+                            actor=request.user, dog=record.dog,
+                            summary={
+                                "kind": "staff_breed_dna_publication",
+                                "health_record_id": record.pk,
+                                "public": True, "basis": basis,
+                            },
+                            note="Super Admin authorized public display of verified breed-DNA summary. Private evidence stays restricted.",
+                        )
+                    elif intent == "save" and report:
+                        record_audit(
+                            action=ModerationAudit.Action.VERIFICATION,
+                            actor=request.user, dog=record.dog,
+                            summary={
+                                "kind": "staff_breed_dna_publication",
+                                "health_record_id": record.pk, "public": False,
+                            },
+                            note="Staff withdrew public display of the breed-DNA summary.",
+                        )
                     before = {
                         "test_type": record.test_type, "result": record.result,
                         "tested_on": record.tested_on.isoformat() if record.tested_on else None,
@@ -616,7 +655,8 @@ def edit_reviewed_health_result(request, pk, record_id):
         "breed_report": report,
         "matched_source": matched_source,
         "evidence_entries": evidence_entries,
-        "can_publish": not report or report.consent_public_summary,
+        "can_publish": not report or can_manage_verification(request.user) or breed_publication_allowed(report),
+        "can_admin_publish_breed": can_manage_verification(request.user),
     })
 
 
@@ -630,26 +670,47 @@ def toggle_health_result(request, pk, record_id):
     show = request.POST["visibility"] == "show"
     with transaction.atomic():
         record = get_object_or_404(
-            HealthRecord.objects.select_for_update(), pk=record_id, dog_id=pk
+            HealthRecord.objects.select_for_update(of=("self",)).select_related("breed_dna_report"), pk=record_id, dog_id=pk
         )
         if show and record.verification_state != "health":
             messages.error(request, "Only approved, evidence-reviewed results may be public.")
             return redirect("accounts:reviewed-dog-health", pk=pk)
-        if show and BreedDNAReport.objects.filter(
-            health_record=record, consent_public_summary=False
-        ).exists():
-            messages.error(request, "DNA breed percentages require the owner's consent before publication.")
+        report = getattr(record, "breed_dna_report", None)
+        has_authority = breed_publication_allowed(report) if report else False
+        if show and report and not has_authority and not can_manage_verification(request.user):
+            messages.error(request, "Only the Super Admin can authorize publication of this breed-DNA summary.")
             return redirect("accounts:reviewed-dog-health", pk=pk)
-        if show and unstructured_breed_claim(record.test_type) and not BreedDNAReport.objects.filter(
-            health_record=record, consent_public_summary=True
-        ).exists():
+        if show and unstructured_breed_claim(record.test_type) and not report:
             messages.error(
                 request,
                 "This free-text breed-DNA claim cannot be displayed as a verified test. "
-                "Transcribe each evidence-supported health result separately, or obtain "
-                "owner consent for a structured breed-composition report.",
+                "Transcribe each evidence-supported health result separately, or "
+                "use a reviewed structured breed-composition report.",
             )
             return redirect("accounts:reviewed-dog-health", pk=pk)
+        if show and report and report.evidence_document.is_public:
+            # Visibility of the summary never grants access to the source file.
+            report.evidence_document.is_public = False
+            report.evidence_document.save(update_fields=["is_public"])
+        if report and (record.is_public != show or (show and not has_authority)):
+            # This publication decision is separate from owner-consent data.
+            if show and not has_authority:
+                basis = request.POST.get("publication_basis", "admin_decision")
+                if basis not in ("admin_decision", "owner_verbal", "owner_written"):
+                    return HttpResponseBadRequest("Choose a valid publication basis.")
+            else:
+                basis = None
+            record_audit(
+                action=ModerationAudit.Action.VERIFICATION, actor=request.user,
+                dog=record.dog,
+                summary={
+                    "kind": "staff_breed_dna_publication",
+                    "health_record_id": record.pk, "public": show,
+                    "basis": basis,
+                },
+                note="Staff changed breed-DNA summary publication. The original certificate remains private.",
+            )
+            invalidate_public_content()
         if record.is_public != show:
             record.is_public = show
             record.save(update_fields=["is_public"])

@@ -2,12 +2,12 @@
 {% load static %}
 {% block title %}Health result visibility · Cane Corso Ancestry{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261101-source-preview-v1">
+<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261101-admin-publication-v2">
 <section class="page-shell moderation-page health-review-workspace">
   <header class="page-heading">
     <p class="eyebrow">Moderator · Private health workspace</p>
     <h1>{{ dog.name }}</h1>
-    <p>Update verified results one test at a time in the structured editor below. A result is public only when it also meets the site's evidence, profile visibility and DNA consent requirements.</p>
+    <p>Update verified results one test at a time in the structured editor below. A result is public when it is evidence-reviewed, approved for public display and its dog's profile is visible. Super Admins can publish reviewed breed-DNA summaries directly.</p>
     <p class="muted">Exact dog record: {{ dog.pk }} · {{ dog.slug }}</p>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">← Health review queue</a>
@@ -25,7 +25,7 @@
     {% if selected_legacy_record %}
       <div class="structured-evidence" role="status" id="legacy-source-help">
         <strong>Converting an older combined record</strong>
-        <p>The original “{{ selected_legacy_record.test_type }}” entry is preserved as historical evidence. Use the separate CMR1, DSRA and other fields below to transcribe only values actually shown on the accepted report. Breed-composition percentages require a DNA-classified report and publication consent.</p>
+        <p>The original “{{ selected_legacy_record.test_type }}” entry is preserved as historical evidence. Use the separate CMR1, DSRA and other fields below to transcribe only values actually shown on the accepted report. Breed-composition percentages require a verified, structured DNA report and a separate publication decision.</p>
         {% if selected_source_document %}
           <p><strong>Evidence selected:</strong> {{ selected_source_document.title }}</p>
         {% else %}
@@ -93,7 +93,7 @@
           <div><label for="{{ structured_form.other_breeds.id_for_label }}">Other breed percentages (if any)</label>{{ structured_form.other_breeds }}</div>
         </div>
         <label class="structured-health-attest">{{ structured_form.dna_evidence_confirmed }} <span>{{ structured_form.dna_evidence_confirmed.label }} Use this for an older accepted report categorized as Health that includes real DNA breed-composition findings; do not infer purity from a generic health result.</span></label>
-        <p class="structured-privacy-note">Staff may record a reviewed breed-DNA percentage, but a <strong>new report stays private until the kennel owner's publication consent is recorded</strong>. No private PDF or image will be published.</p>
+        <p class="structured-privacy-note">Staff may record a reviewed breed-DNA percentage, but a <strong>new report stays private until the Super Admin publishes it or owner consent is already recorded</strong>. No private PDF or image will be published.</p>
       </div>
       <div class="structured-health-footer">
         <div><label for="{{ structured_form.tested_on.id_for_label }}">Date of report (optional)</label>{{ structured_form.tested_on }}</div>
@@ -157,7 +157,9 @@
             {% endif %}
           {% endif %}
           {% if item.breed_dna_report %}<small>Laboratory: {{ item.breed_dna_report.provider }}</small>{% endif %}
-          {% if item.breed_dna_report and not item.breed_dna_report.consent_public_summary %}<small>Owner consent is required before publishing breed composition.</small>{% endif %}
+          {% if item.breed_dna_report and not item.breed_dna_report.consent_public_summary %}
+            <small>Staff publication: {% if item.staff_public_status_code == "published" %}approved{% elif can_admin_publish_breed %}Super Admin may make this Public{% else %}Super Admin authorization required{% endif %}.</small>
+          {% endif %}
         </div>
         <div class="health-result-editor-action">
           {% if item.verification_state == "health" %}
@@ -169,9 +171,26 @@
           {% else %}
             <small class="muted">This record is not evidence-verified. Review an accepted report before changing its verified status.</small>
           {% endif %}
-          {% if item.staff_public_status_code == "published" %}
-            <form method="post" action="{% url 'accounts:toggle-health-result' dog.pk item.pk %}">{% csrf_token %}<input type="hidden" name="visibility" value="hide"><button type="submit" class="btn btn-outline">Hide incorrect result</button></form>
-          {% else %}
+          {% if item.verification_state == "health" %}
+            <form method="post" action="{% url 'accounts:toggle-health-result' dog.pk item.pk %}" class="health-visibility-form">
+              {% csrf_token %}
+              {% if item.breed_dna_report and can_admin_publish_breed and not item.breed_dna_report.consent_public_summary %}
+                <label for="pub-basis-{{ item.pk }}">Publication basis</label>
+                <select id="pub-basis-{{ item.pk }}" name="publication_basis">
+                  <option value="admin_decision">Admin decision</option>
+                  <option value="owner_verbal">Owner confirmed verbally</option>
+                  <option value="owner_written">Owner confirmed in writing</option>
+                </select>
+              {% endif %}
+              <div class="button-row">
+                {% if not item.is_legacy_mixed %}
+                  {% if not item.breed_dna_report or item.breed_dna_report.consent_public_summary or can_admin_publish_breed or item.staff_breed_authorized %}
+                    <button type="submit" name="visibility" value="show" class="btn btn-gold" {% if item.is_public and item.staff_public_status_code == "published" %}disabled{% endif %}>Public</button>
+                  {% endif %}
+                {% endif %}
+                <button type="submit" name="visibility" value="hide" class="btn btn-outline" {% if not item.is_public %}disabled{% endif %}>Private</button>
+              </div>
+            </form>
           {% endif %}
         </div>
       </div>

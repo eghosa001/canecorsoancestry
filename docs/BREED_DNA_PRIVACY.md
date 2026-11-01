@@ -49,3 +49,22 @@ The public dog profile displays "No available records" when nothing verified
 is being published. Raw genetic/medical certificates stay private.
 
 **Policy update:** Full laboratory reports and images are kept private regardless of any older full-report consent flag. Only owner-authorized, moderator-reviewed typed breed percentages and independently reviewed health results can be published. The full-file publication option has been retired.
+
+## Super Admin publication control (November 2026)
+
+The Super Admin can publish a previously verified, structured breed-DNA
+summary through **Manage dogs → Health values → Approved health records →
+Public**, or **Edit health record → Save & make Public**. The staff decision
+can be marked as an administrative publication decision or as the owner's
+verbal or written confirmation. Staff decisions are recorded separately in
+the moderation audit history. The original owner consent field is **never
+changed** by a staff action. Authorized moderators may continue correcting
+reviewed test values but cannot independently create this administrative
+publication authorization.
+
+The **Private** action removes the public summary immediately; a new Super
+Admin action can restore it. The Super Admin's **Withdraw all DNA publication**
+removes all existing staff publication decisions and owner-publication grants
+from the displayed summaries. Raw certificates and uploaded laboratory files
+remain private under the media access policy regardless of either summary
+setting. Unstructured or unverified breed-purity prose is never made public.

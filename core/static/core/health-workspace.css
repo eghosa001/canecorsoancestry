@@ -181,3 +181,12 @@
   .health-source-directory>summary{align-items:flex-start}
   .health-source-actions,.health-source-actions>.btn,.health-source-item>.btn,.health-selected-evidence>a{width:100%}
 }
+
+/* Deliberate, readable Public / Private controls for approved records. */
+.health-visibility-form{display:grid;gap:.45rem;min-width:min(220px,100%)}
+.health-visibility-form label{font-size:.88rem;font-weight:650}
+.health-visibility-form select,.health-final-form #publication-basis-edit{width:100%;max-width:100%;min-height:44px;padding:.55rem .65rem;border:1px solid var(--line,#555);border-radius:9px;background:var(--surface,#202020);color:var(--text,#eee);font:inherit;font-size:.9rem}
+.health-visibility-form .button-row{display:flex;gap:.55rem;flex-wrap:wrap}
+.health-visibility-form .button-row .btn{min-height:44px}
+.health-visibility-form button:disabled{opacity:.56;cursor:default}
+@media(max-width:650px){.health-visibility-form{width:100%}.health-visibility-form .button-row .btn{flex:1 1 110px;text-align:center}}

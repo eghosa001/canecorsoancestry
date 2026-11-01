@@ -46,6 +46,7 @@ from .genetic_health import MARKER_CODES, SCREENING_RESULTS, marker_status_rows,
 from .orthopaedic_health import describe_orthopaedic_result
 from .legacy_health import legacy_mixed_health_rows
 from .dna import percentage_text
+from .health_publication import staff_authorized_breed_record_ids
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
 
@@ -371,7 +372,7 @@ def _public_profile_dog(slug):
                 HealthRecord.objects.filter(dog_id=OuterRef("pk"), is_public=True)
             ),
             _has_breed_dna=Exists(
-                BreedDNAReport.objects.filter(health_record__dog_id=OuterRef("pk"), consent_public_summary=True)
+                BreedDNAReport.objects.filter(health_record__dog_id=OuterRef("pk"))
             ),
         )
     )
@@ -596,7 +597,7 @@ def dog_detail(request, slug):
                 other_health_records.append(record)
             continue
         if unstructured_breed_claim(record.test_type):
-            continue  # Only BreedDNAReport + owner consent enables public breed percent.
+            continue  # Only a reviewed, publication-approved BreedDNAReport can display percentages.
         interpreted = describe_orthopaedic_result(record.test_type, record.result)
         if interpreted:
             verified = record.verification_state == VerificationState.HEALTH_VERIFIED
@@ -629,13 +630,15 @@ def dog_detail(request, slug):
             "verified": record.verification_state == VerificationState.HEALTH_VERIFIED,
         })
 
-    # Surface only moderator-reviewed lab estimates, never pending submissions.
+    # Surface only verified, authorized summaries; raw certificates remain private.
+    staff_breed_ids = staff_authorized_breed_record_ids(dog) if dog._has_breed_dna else set()
     breed_dna = (
         BreedDNAReport.objects.filter(
             health_record__dog=dog,
             health_record__verification_state=VerificationState.HEALTH_VERIFIED,
             health_record__is_public=True,
-            consent_public_summary=True,
+        ).filter(
+            Q(consent_public_summary=True) | Q(health_record_id__in=staff_breed_ids)
         ).select_related("health_record", "evidence_document")
         .order_by("-health_record__tested_on", "-health_record__created_at").first()
         if dog._has_breed_dna else None
