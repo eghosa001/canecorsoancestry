@@ -24,6 +24,7 @@ from registry.models import (
 from registry.permissions import can_review_submissions
 from registry.public_freshness import invalidate_public_content
 from registry.services import record_audit
+from .health_sources import approved_health_submissions, accepted_health_documents
 
 
 _MARKER_CHOICES = [
@@ -82,22 +83,8 @@ class StructuredHealthForm(forms.Form):
 
     def __init__(self, *args, dog, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["source_submission"].queryset = (
-            Submission.objects.filter(
-                dog=dog, kind=Submission.Kind.HEALTH, status=Submission.Status.APPROVED,
-            ).exclude(attachment="").order_by("-created_at")
-        )
-        self.fields["source_document"].queryset = (
-            DogDocument.objects.filter(
-                Q(staff_review_only=True,
-                  staff_health_record__verification_state=VerificationState.HEALTH_VERIFIED)
-                | Q(breed_dna_report__health_record__verification_state=VerificationState.HEALTH_VERIFIED)
-                | Q(source_submission__kind=Submission.Kind.DOCUMENT,
-                    source_submission__status=Submission.Status.APPROVED),
-                dog=dog,
-                document_type__in=(DogDocument.DocumentType.HEALTH, DogDocument.DocumentType.DNA),
-            ).exclude(file="").distinct().order_by("-created_at")
-        )
+        self.fields["source_submission"].queryset = approved_health_submissions(dog)
+        self.fields["source_document"].queryset = accepted_health_documents(dog)
 
     def clean(self):
         data = super().clean()
