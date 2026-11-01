@@ -144,13 +144,13 @@ class HealthRecordSubmissionTests(TestCase):
 
         approve_submission(submission, self.reviewer, "Evidence checked.")
 
-        # Approved result appears automatically; original report remains private.
+        # Approval records the evidence privately until staff publish it.
         public_profile = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
         record = HealthRecord.objects.get(dog=self.dog, test_type="Hip score")
-        self.assertTrue(record.is_public)
+        self.assertFalse(record.is_public)
         public_profile = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
-        self.assertContains(public_profile, "HD-A")
-        self.assertContains(public_profile, "Normal hips")
+        self.assertNotContains(public_profile, "HD-A")
+        self.assertNotContains(public_profile, "Normal hips")
         self.assertContains(public_profile, "Health &amp; DNA")
         self.assertEqual(record.result, "A")
         self.assertEqual(record.verification_state, VerificationState.HEALTH_VERIFIED)
@@ -203,7 +203,7 @@ class HealthRecordSubmissionTests(TestCase):
         self.assertContains(invalid, "must add up to exactly 100")
         self.assertFalse(Submission.objects.exists())
 
-    def test_private_breed_report_shows_public_summary_only(self):
+    def test_private_breed_report_requires_explicit_publication(self):
         self.client.force_login(self.owner)
         response = self.client.post(reverse("accounts:submit-health-record", args=[self.dog.pk]), {
             "evidence_type": "breed", "dna_provider": "Embark",
@@ -215,15 +215,23 @@ class HealthRecordSubmissionTests(TestCase):
         self.assertFalse(BreedDNAReport.objects.exists())
         approve_submission(submission, self.reviewer)
         report = BreedDNAReport.objects.get(health_record__dog=self.dog)
-        self.assertTrue(report.health_record.is_public)
+        self.assertFalse(report.health_record.is_public)
         self.assertFalse(report.consent_full_report)
         self.assertFalse(report.evidence_document.is_public)
+        self.client.logout()
+        page = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
+        self.assertNotContains(page, 'class="breed-dna-score">100')
+        self.client.force_login(self.reviewer)
+        self.assertEqual(self.client.post(
+            reverse("accounts:toggle-health-result", args=[self.dog.pk, report.health_record_id]),
+            {"visibility": "show"},
+        ).status_code, 302)
         self.client.logout()
         page = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
         self.assertContains(page, 'class="breed-dna-score">100')
         self.assertContains(page, "Cane Corso")
         self.assertContains(page, "Embark")
-        self.assertContains(page, "Original report privately reviewed")
+        self.assertNotContains(page, "Original report privately reviewed")
         self.assertNotContains(page, "View owner-authorized DNA report")
 
     def test_owner_consented_mixed_breed_summary_but_private_certificate(self):
@@ -237,9 +245,17 @@ class HealthRecordSubmissionTests(TestCase):
         self.assertEqual(response.status_code, 302)
         approve_submission(Submission.objects.get(kind=Submission.Kind.HEALTH), self.reviewer)
         report = BreedDNAReport.objects.get(health_record__dog=self.dog)
-        self.assertTrue(report.health_record.is_public)
+        self.assertFalse(report.health_record.is_public)
         self.assertFalse(report.consent_full_report)
         self.assertFalse(report.evidence_document.is_public)
+        self.client.logout()
+        page = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
+        self.assertNotContains(page, 'class="breed-dna-score">92.5')
+        self.client.force_login(self.reviewer)
+        self.assertEqual(self.client.post(
+            reverse("accounts:toggle-health-result", args=[self.dog.pk, report.health_record_id]),
+            {"visibility": "show"},
+        ).status_code, 302)
         self.client.logout()
         page = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
         self.assertContains(page, 'class="breed-dna-score">92.5')

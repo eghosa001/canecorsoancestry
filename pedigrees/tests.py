@@ -4,7 +4,7 @@ from django.db import connection
 from django.test import TestCase
 from django.urls import reverse
 
-from registry.models import Dog, HealthRecord
+from registry.models import Dog, HealthRecord, VerificationState
 
 from .services import (
     descendant_generations,
@@ -361,8 +361,8 @@ class PedigreeServiceTests(TestCase):
             name="Combined Health Dog", slug="combined-health-dog",
             sire=sire, is_public=True
         )
-        HealthRecord.objects.create(dog=sire, test_type="Hips", result="Good")
-        HealthRecord.objects.create(dog=subject, test_type="Eyes", result="Clear")
+        HealthRecord.objects.create(dog=sire, test_type="Hips", result="Good", verification_state=VerificationState.HEALTH_VERIFIED, is_public=True)
+        HealthRecord.objects.create(dog=subject, test_type="Eyes", result="Clear", verification_state=VerificationState.HEALTH_VERIFIED, is_public=True)
 
         with self.assertNumQueries(1):
             relatives, subject_records = direct_relative_health(
@@ -380,7 +380,7 @@ class PedigreeServiceTests(TestCase):
         dog = Dog.objects.create(
             name="Unrelated Health Dog", slug="unrelated-health-dog", is_public=True
         )
-        HealthRecord.objects.create(dog=dog, test_type="Heart", result="Normal")
+        HealthRecord.objects.create(dog=dog, test_type="Heart", result="Normal", verification_state=VerificationState.HEALTH_VERIFIED, is_public=True)
         with self.assertNumQueries(1):
             relatives, subject_records = direct_relative_health(
                 dog, sibling_rows=[], children=[], include_subject_records=True
@@ -407,7 +407,8 @@ class PedigreeServiceTests(TestCase):
             is_public=True,
         )
         HealthRecord.objects.create(
-            dog=sire, test_type="Hips", result="Good"
+            dog=sire, test_type="Hips", result="Good",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
         )
 
         rows = direct_relative_health(child)

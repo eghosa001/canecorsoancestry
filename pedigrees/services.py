@@ -9,7 +9,7 @@ from django.db.models.functions import RowNumber
 
 from registry.genetic_health import unstructured_breed_claim
 from registry.legacy_health import legacy_mixed_health_rows
-from registry.models import Dog, HealthRecord, Kennel
+from registry.models import Dog, HealthRecord, Kennel, VerificationState
 from registry.querysets import published_dogs
 
 
@@ -502,10 +502,13 @@ def direct_relative_health(
     if include_subject_records:
         ids.add(dog.pk)
     subject_records = []
+    # Unpublished or not-yet-verified health records never enter visitor or
+    # member profile data. DNA composition has its own publication-authorized
+    # public card and must not leak through direct relatives' raw-text rows.
     records = HealthRecord.objects.filter(
-        dog_id__in=ids, is_public=True
-    ).exclude(
-        breed_dna_report__consent_public_summary=False
+        dog_id__in=ids, is_public=True,
+        verification_state=VerificationState.HEALTH_VERIFIED,
+        breed_dna_report__isnull=True,
     ).select_related("dog").order_by("dog__name", "test_type", "-tested_on")
     for record in records:
         if unstructured_breed_claim(record.test_type):

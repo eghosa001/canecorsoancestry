@@ -2,8 +2,8 @@
 
 Each field represents a separate result. Never reinterpret historical mixed
 text as verified markers; a reviewer selects the actual accepted source.
-Breed composition may be recorded privately by staff but not published
-without the kennel owner's existing consent workflow.
+Breed composition is privately recorded after review and only published by
+an explicit authorized moderator decision; owner consent remains unchanged.
 """
 from django import forms
 from django.contrib import messages
@@ -201,7 +201,7 @@ def save_structured_health(request, pk):
             # Preserve the original approved row and its immutable evidence.
             # Carry forward the previous privacy choice BEFORE marking the old
             # row superseded; otherwise the replacement would be hidden too.
-            new_visibility = previous.is_public if previous else True
+            new_visibility = previous.is_public if previous else False
             if previous and previous.is_public:
                 previous.is_public = False
                 previous.save(update_fields=["is_public"])
@@ -274,7 +274,7 @@ def save_structured_health(request, pk):
                         result=percentage_text(pct) + "% Cane Corso",
                         tested_on=when, verification_state=VerificationState.HEALTH_VERIFIED,
                         is_public=False,
-                        notes=f"Structured staff DNA transcription from accepted {source_key}; awaiting owner consent",
+                        notes=f"Structured staff DNA transcription from accepted {source_key}; held privately until published",
                     )
                     BreedDNAReport.objects.create(
                         health_record=rec, evidence_document=document,
@@ -310,6 +310,6 @@ def save_structured_health(request, pk):
     else:
         messages.success(
             request, f"Saved {updates} reviewed result{'s' if updates != 1 else ''}."
-            + (" Breed-DNA publication remains subject to owner consent." if pct is not None else "")
+            + " Newly entered values are Private until a moderator chooses Public; previously published corrections retain their existing visibility."
         )
     return redirect("accounts:reviewed-dog-health", pk=pk)

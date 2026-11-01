@@ -67,3 +67,18 @@ removes all existing staff publication decisions and owner-publication grants
 from the displayed summaries. Raw certificates and uploaded laboratory files
 remain private under the media access policy regardless of either summary
 setting. Unstructured or unverified breed-purity prose is never made public.
+
+## Moderator-only review state and delayed publication
+
+Reviewing evidence is not the same as publishing it. Newly accepted Health/DNA
+records and new structured findings begin **Private**. An active Moderator,
+Senior Moderator or Super Admin must explicitly choose **Public** to publish
+an evidence-backed summary and can return it to **Private** at any time.
+Existing published data retains its previously set visibility unless staff
+chooses to hide it.
+
+Internal review decisions, reviewer notes, risk flags, evidence-only notices,
+and private certificate references belong in staff moderation pages only.
+Visitors and members may see deliberately published results, but not the
+private review process. Members retain a neutral submission receipt and any
+necessary evidence requests, without access to internal moderation metadata.

@@ -17,8 +17,8 @@ class PublicEvidenceClarityTests(TestCase):
         )
         response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Not independently verified")
-        self.assertContains(response, 'class="profile-evidence-summary"')
+        self.assertNotContains(response, "Not independently verified")
+        self.assertNotContains(response, 'class="profile-evidence-summary"')
         self.assertNotContains(response, "Source attribution on file")
         self.assertNotContains(response, "Imported pedigree listing")
         self.assertNotContains(response, "About COI &amp; sources")
@@ -29,7 +29,7 @@ class PublicEvidenceClarityTests(TestCase):
         )
         response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertNotContains(response, "No source attribution recorded")
-        self.assertContains(response, "Not independently verified")
+        self.assertNotContains(response, "Not independently verified")
 
     def test_imported_photo_source_caption_is_not_public(self):
         dog = Dog.objects.create(

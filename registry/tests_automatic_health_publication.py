@@ -75,16 +75,17 @@ class AutomaticHealthPublicationTests(TestCase):
         self.assertNotContains(first_page, "CMR1")
         self.assertNotContains(second_page, "Unreviewed marker")
 
-    def test_existing_published_results_display_without_verification_badges(self):
+    def test_unverified_record_with_stale_public_flag_stays_private(self):
         HealthRecord.objects.create(
             dog=self.first, test_type="CMR1", result="Clear",
             verification_state=VerificationState.COMMUNITY, is_public=True,
         )
         page = self.client.get(reverse("registry:dog-detail", args=[self.first.slug]))
-        self.assertContains(page, "CMR1")
-        self.assertContains(page, "Clear")
+        self.assertNotContains(page, "CMR1")
+        self.assertNotContains(page, "Clear")
         self.assertNotContains(page, "Not verified")
-        self.assertNotContains(page, "Reviewed results")  # No false lab-verified banner.
+        self.assertNotContains(page, "Reviewed results")
+        self.assertContains(page, "No available records")
 
 
 class ProductionBackfillApprovalTests(TestCase):

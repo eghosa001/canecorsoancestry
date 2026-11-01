@@ -112,11 +112,12 @@ class PublicLegacyMixedHealthTests(TestCase):
         legacy.save(update_fields=["evidence_document"])
         self.assertEqual(publication_status(legacy)[0], "summary_only")
         page = self.client.get(self.url)
-        self.assertContains(page, "Laboratory evidence reviewed")
-        self.assertContains(page, "individual health test results have not been transcribed")
+        self.assertNotContains(page, "Laboratory evidence reviewed")
+        self.assertNotContains(page, "individual health test results have not been transcribed")
+        self.assertContains(page, "No available records")
         self.assertNotContains(page, "100% Cane Corso")
 
-    def test_unverified_source_still_labels_clear_as_reported(self):
+    def test_unverified_source_does_not_show_unpublished_review_details(self):
         HealthRecord.objects.create(
             dog=self.dog, test_type="Purity Verification/Health Test",
             result="100% Cane Corso. CMR1 CLEAR. DSRA CLEAR",
@@ -124,9 +125,9 @@ class PublicLegacyMixedHealthTests(TestCase):
             is_public=True,
         )
         page = self.client.get(self.url)
-        self.assertContains(page, "CMR1")
-        self.assertContains(page, "DSRA")
-        self.assertNotContains(page, "Not verified")
+        self.assertNotContains(page, "CMR1")
+        self.assertNotContains(page, "DSRA")
+        self.assertContains(page, "No available records")
 
     def test_relative_health_does_not_leak_raw_legacy_breed_purity(self):
         sire = Dog.objects.create(

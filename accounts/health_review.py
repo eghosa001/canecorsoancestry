@@ -153,7 +153,7 @@ def transcribe_health_submission(request, pk):
             note="Reviewer transcribed structured results from original private laboratory evidence.",
         )
         verify_submission(submission)
-    messages.success(request, "Laboratory transcription saved. Approved results will appear automatically on the dog's public profile.")
+    messages.success(request, "Laboratory transcription saved. Reviewed results remain private until you choose Public.")
     return redirect("accounts:moderation-submission", pk=pk)
 
 
@@ -489,7 +489,7 @@ def add_reviewed_health_condition(request, pk):
             dog=dog, test_type=data["test_type"].strip(),
             result=readable_health_result(data["resolved_result"]),
             tested_on=data.get("tested_on"), verification_state=VerificationState.HEALTH_VERIFIED,
-            is_public=True, notes=source_note, evidence_document=direct_evidence,
+            is_public=False, notes=source_note, evidence_document=direct_evidence,
         )
         VerificationEvent.objects.create(
             dog=dog, health_record=record, state=VerificationState.HEALTH_VERIFIED,
@@ -505,12 +505,12 @@ def add_reviewed_health_condition(request, pk):
                 "source_submission_id": str(source.pk) if source else None,
                 "source_document_id": document.pk if document else None,
                 "test_type": record.test_type, "result": record.result,
-                "public": True,
+                "public": False,
             },
             note="Staff reviewer added a laboratory condition; original evidence remains private.",
         )
     invalidate_public_content()
-    messages.success(request, "Additional reviewed condition saved and shown on the dog's public profile.")
+    messages.success(request, "Additional reviewed condition saved privately. Choose Public to publish it.")
     return redirect("accounts:edit-reviewed-health-result", pk=pk, record_id=record.pk)
 
 

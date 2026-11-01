@@ -164,7 +164,7 @@ class ApprovedPublicContentTests(TestCase):
             dog=self.dog, number="CORRECT-REG-01",
         ).exists())
 
-    def test_approved_health_is_auto_public_and_evidence_stays_private(self, _verification):
+    def test_health_is_private_after_approval_until_moderator_publishes(self, _verification):
         sub = self.submission(
             Submission.Kind.HEALTH, attachment=self.upload("health-evidence.jpg"),
             payload={"test_type": "Hip screening", "result": "Clear", "evidence_type": "health"},
@@ -172,6 +172,12 @@ class ApprovedPublicContentTests(TestCase):
         self.assertNotContains(self.profile(), "Hip screening")
         self.approve(sub)
         record = HealthRecord.objects.get(dog=self.dog, test_type="Hip screening", result="Clear")
+        self.assertFalse(record.is_public)
+        self.assertNotContains(self.profile(), "Hip screening")
+        self.client.force_login(self.reviewer)
+        toggle = reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk])
+        self.assertEqual(self.client.post(toggle, {"visibility": "show"}).status_code, 302)
+        record.refresh_from_db()
         self.assertTrue(record.is_public)
         self.assertContains(self.profile(), "Hip screening")
         self.assertContains(self.profile(), "Clear")

@@ -153,7 +153,6 @@
         <a class="btn btn-outline" href="#offspring">View offspring</a>
         <a class="btn btn-outline" href="{% url 'pedigrees:reverse' dog.slug %}">Reverse pedigree</a>
       </div>
-      <p class="profile-evidence-summary">{{ verification_label }}.</p>
       {% if can_contribute or user.is_authenticated %}
         <details class="profile-manage-actions ux-disclosure">
           <summary><span><strong>Contribute or request review</strong><small>Corrections, evidence and review requests stay separate from public browsing.</small></span></summary>
@@ -228,9 +227,8 @@
         {% for title in dog.display_titles %}
           <div>
             <strong>{{ title.name }}</strong>
-            {% if title.display_certificate %}
-              {% if title.display_certificate.is_public %}<a class="text-link" href="{{ title.display_certificate.file.url }}" rel="noopener">View reviewed certificate →</a>
-              {% else %}<small> · Certificate privately reviewed</small>{% endif %}
+            {% if title.display_certificate and title.display_certificate.is_public and not title.display_certificate.staff_review_only %}
+              <a class="text-link" href="{{ title.display_certificate.file.url }}" rel="noopener">View published certificate →</a>
             {% endif %}
           </div>{% empty %}<p class="muted">No titles recorded.</p>{% endfor %}
       </div>
@@ -251,14 +249,13 @@
       {% endif %}
     </div>
     {% if show_dna_card %}
-      <section class="breed-dna-card" aria-label="Independently reviewed external DNA test results">
+      <section class="breed-dna-card" aria-label="Published DNA breed-composition results">
         {% if breed_dna %}
           <div class="breed-dna-intro">
             <span class="breed-dna-symbol" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3c10 3 6 15 16 18M20 3C10 6 14 18 4 21M7 6h10M8.5 10h7M8.5 14h7M7 18h10"/></svg>
             </span>
-            <span class="breed-dna-label">Breed DNA verification</span>
-            <span class="breed-dna-trust"><span aria-hidden="true">✓</span> Report reviewed</span>
+            <span class="breed-dna-label">Breed DNA composition</span>
           </div>
           <div class="breed-dna-summary">
             <strong class="breed-dna-score">{{ breed_dna_percentage }}<span>%</span></strong>
@@ -267,7 +264,7 @@
               <span>DNA breed-composition estimate</span>
             </div>
           </div>
-          <p class="breed-dna-meta">Tested by <strong>{{ breed_dna.provider }}</strong> <span aria-hidden="true">·</span> Original report privately reviewed</p>
+          <p class="breed-dna-meta">Tested by <strong>{{ breed_dna.provider }}</strong></p>
           {% if breed_dna.composition|length > 1 %}
             <div class="breed-dna-breakdown" aria-label="Reported breed composition">
               {% for entry in breed_dna.composition %}
@@ -283,7 +280,6 @@
                 <span class="breed-dna-eyebrow">Inherited conditions</span>
                 <h3>Genetic health screening</h3>
               </div>
-              <span class="genetic-screening-verified">Verified results</span>
             </div>
             <div class="genetic-screening-list">
               {% for marker in genetic_screenings %}
@@ -309,7 +305,7 @@
           {% for assessment in orthopaedic_screenings %}
             <div class="orthopaedic-compact-row">
               <strong class="orthopaedic-compact-grade">{{ assessment.grade }}</strong>
-              <span class="orthopaedic-compact-result">{{ assessment.headline }}{% if assessment.verification_label == "Health/DNA verified" %} <small class="muted">· Verified</small>{% endif %}</span>
+              <span class="orthopaedic-compact-result">{{ assessment.headline }}</span>
 
             </div>
           {% endfor %}
@@ -323,7 +319,7 @@
           {% for result in other_health_rows %}
             <div class="health-compact-row">
               <strong>{{ result.test }}</strong>
-              <span>{{ result.result }}{% if result.verified %} <small class="muted">· Verified</small>{% endif %}</span>
+              <span>{{ result.result }}</span>
 
             </div>
           {% endfor %}

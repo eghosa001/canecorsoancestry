@@ -110,7 +110,7 @@ class OwnerFeedbackFixesTests(TestCase):
         self.assertEqual(title.name, "National Champion")
         self.assertIn(f"[CCA certificate #{certificate.pk}]", title.source_text)
         self.assertIn("Example Club", certificate.title)
-        self.assertContains(self.client.get(url), "View reviewed certificate")
+        self.assertContains(self.client.get(url), "View published certificate")
 
     def test_reported_photo_replacement_changes_only_reviewed_image(self):
         previous = DogImage.objects.create(
