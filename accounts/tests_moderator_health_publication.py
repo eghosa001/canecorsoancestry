@@ -122,6 +122,83 @@ class ModeratorLabResultTests(TestCase):
         self.assertContains(page, "HD-A")
         self.assertContains(page, "Clear")
 
+    def test_legacy_dna_claims_are_collapsed_without_publication_controls(self):
+        # These match the two conflicting screenshot rows. They are old free
+        # text, not two approved typed breed-DNA reports.
+        legacy = HealthRecord.objects.create(
+            dog=self.dog, test_type="Purity Verification/Health Test",
+            result="100% Cane Corso",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        old_dna = HealthRecord.objects.create(
+            dog=self.dog, test_type="Breed Identification / DNA Breed Composition",
+            result="100% Cane Corso. CMR1 CLEAR. DSRA CLEAR",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        real_marker = HealthRecord.objects.create(
+            dog=self.dog, test_type="DSRA", result="Carrier",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        self.client.force_login(self.moderator)
+        page = self.client.get(self.health_url)
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual([r.pk for r in page.context["approved_records"]], [real_marker.pk])
+        self.assertEqual(
+            {r.pk for r in page.context["legacy_records"]},
+            {legacy.pk, old_dna.pk},
+        )
+        self.assertContains(page, "Historical DNA / health evidence")
+        self.assertContains(page, 'id="legacy-health-evidence"')
+        self.assertContains(page, "Transcribe verified findings", count=2)
+        html = page.content.decode()
+        active = html.split('id="approved-health-results"', 1)[1].split(
+            'id="legacy-health-evidence"', 1
+        )[0]
+        self.assertIn("DSRA", active)
+        self.assertNotIn("Purity Verification/Health Test", active)
+        self.assertNotIn("Breed Identification / DNA Breed Composition", active)
+        historical = html.split('id="legacy-health-evidence"', 1)[1].split(
+            'class="panel health-secondary-editor"', 1
+        )[0]
+        self.assertNotIn('name="visibility" value="show"', historical)
+        self.assertIn('name="visibility" value="hide"', historical)
+        legacy.refresh_from_db()
+        old_dna.refresh_from_db()
+        self.assertTrue(legacy.is_public)
+        self.assertTrue(old_dna.is_public)  # Read-only redesign: no covert edits.
+
+        # Even a forged POST cannot make an unstructured claim publication-ready.
+        endpoint = reverse(
+            "accounts:toggle-health-result", args=[self.dog.pk, old_dna.pk]
+        )
+        self.assertEqual(self.client.post(endpoint, {"visibility": "show"}).status_code, 302)
+        old_dna.refresh_from_db()
+        self.assertTrue(old_dna.is_public)
+        self.assertRedirects(
+            self.client.get(reverse(
+                "accounts:edit-reviewed-health-result", args=[self.dog.pk, old_dna.pk]
+            )),
+            self.health_url + "?source_record=" + str(old_dna.pk) + "#structured-health-editor",
+            fetch_redirect_response=False,
+        )
+        self.client.logout()
+        self.assertEqual(self.client.get(self.health_url).status_code, 302)
+        self.client.force_login(self.unauthorized)
+        self.assertEqual(self.client.get(self.health_url).status_code, 403)
+
+    def test_legacy_only_screen_has_no_misleading_approved_card(self):
+        HealthRecord.objects.create(
+            dog=self.dog, test_type="Purity Verification/Health Test",
+            result="100% Cane Corso",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=False,
+        )
+        self.client.force_login(self.moderator)
+        page = self.client.get(self.health_url)
+        self.assertEqual(len(page.context["approved_records"]), 0)
+        self.assertEqual(len(page.context["legacy_records"]), 1)
+        self.assertContains(page, "No individual results have been transcribed yet")
+        self.assertContains(page, "Historical DNA / health evidence")
+
     def test_structured_editor_saves_individual_marker_results_with_one_evidence_source(self):
         accepted = Submission.objects.create(
             kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
