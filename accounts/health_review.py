@@ -17,7 +17,7 @@ from registry.genetic_health import MARKER_CODES, SCREENING_MARKERS, SCREENING_R
 from registry.models import (
     BreedDNAReport, Dog, DogDocument, HealthRecord, ModerationAudit, Submission, VerificationState, VerificationEvent,
 )
-from registry.permissions import can_manage_verification, can_review_submissions
+from registry.permissions import can_review_submissions
 from registry.public_freshness import invalidate_public_content
 from registry.health_publication import (
     breed_publication_allowed, publication_status, staff_authorized_breed_record_ids,
@@ -263,7 +263,7 @@ def reviewed_dog_health(request, pk):
         "selected_legacy_record": selected_legacy_record,
         "selected_source_document": selected_source_document,
         "evidence_entries": evidence_entries,
-        "can_admin_publish_breed": can_manage_verification(request.user),
+        "can_staff_publish_breed": can_review_submissions(request.user),
         "staff_breed_ids": staff_breed_ids,
     })
 
@@ -563,10 +563,10 @@ def edit_reviewed_health_result(request, pk, record_id):
                 )
                 staff_override = bool(
                     intent == "publish" and report and not staff_authorized
-                    and can_manage_verification(request.user)
+                    and can_review_submissions(request.user)
                 )
                 if intent == "publish" and report and not staff_authorized and not staff_override:
-                    form.add_error(None, "Only the Super Admin can authorize publication of this reviewed breed-DNA summary.")
+                    form.add_error(None, "Only active authorized moderators may publish this reviewed breed-DNA summary.")
                 else:
                     if intent == "publish" and report and report.evidence_document.is_public:
                         report.evidence_document.is_public = False
@@ -583,7 +583,7 @@ def edit_reviewed_health_result(request, pk, record_id):
                                 "health_record_id": record.pk,
                                 "public": True, "basis": basis,
                             },
-                            note="Super Admin authorized public display of verified breed-DNA summary. Private evidence stays restricted.",
+                            note="Authorized moderator published a verified breed-DNA summary. Private evidence stays restricted.",
                         )
                     elif intent == "save" and report:
                         record_audit(
@@ -655,8 +655,8 @@ def edit_reviewed_health_result(request, pk, record_id):
         "breed_report": report,
         "matched_source": matched_source,
         "evidence_entries": evidence_entries,
-        "can_publish": not report or can_manage_verification(request.user) or breed_publication_allowed(report),
-        "can_admin_publish_breed": can_manage_verification(request.user),
+        "can_publish": can_review_submissions(request.user),
+        "can_staff_publish_breed": can_review_submissions(request.user),
     })
 
 
@@ -677,8 +677,8 @@ def toggle_health_result(request, pk, record_id):
             return redirect("accounts:reviewed-dog-health", pk=pk)
         report = getattr(record, "breed_dna_report", None)
         has_authority = breed_publication_allowed(report) if report else False
-        if show and report and not has_authority and not can_manage_verification(request.user):
-            messages.error(request, "Only the Super Admin can authorize publication of this breed-DNA summary.")
+        if show and report and not has_authority and not can_review_submissions(request.user):
+            messages.error(request, "Only authorized moderators may publish this breed-DNA summary.")
             return redirect("accounts:reviewed-dog-health", pk=pk)
         if show and unstructured_breed_claim(record.test_type) and not report:
             messages.error(

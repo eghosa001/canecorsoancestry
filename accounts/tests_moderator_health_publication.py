@@ -295,7 +295,7 @@ class ModeratorLabResultTests(TestCase):
         self.client.logout()
         self.assertNotContains(self.client.get(self.public_url), "View owner-authorized DNA report")
 
-    def test_staff_cannot_publish_breed_report_without_owner_consent(self):
+    def test_moderator_can_publish_breed_report_without_owner_consent(self):
         report = HealthRecord.objects.create(
             dog=self.dog, test_type="DNA breed composition", result="100% Cane Corso",
             verification_state=VerificationState.HEALTH_VERIFIED, is_public=False,
@@ -314,6 +314,14 @@ class ModeratorLabResultTests(TestCase):
         self.client.force_login(self.moderator)
         action = reverse("accounts:toggle-health-result", args=[self.dog.pk, report.pk])
         self.assertEqual(self.client.post(action, {"visibility": "show"}).status_code, 302)
+        report.refresh_from_db()
+        evidence.refresh_from_db()
+        self.assertTrue(report.is_public)
+        self.assertFalse(evidence.is_public)
+        self.assertContains(self.client.get(self.public_url), 'class="breed-dna-score">100')
+        self.assertEqual(
+            self.client.post(action, {"visibility": "hide"}).status_code, 302,
+        )
         report.refresh_from_db()
         self.assertFalse(report.is_public)
         self.client.logout()
@@ -347,9 +355,16 @@ class ModeratorLabResultTests(TestCase):
         self.assertNotContains(self.client.get(self.public_url), score)
 
         self.client.force_login(self.moderator)
-        self.assertNotContains(self.client.get(edit), "Save &amp; make Public", html=False)
+        self.assertContains(self.client.get(edit), "Save &amp; make Public")
+        self.assertContains(self.client.get(self.health_url), 'name="visibility" value="show"')
         self.assertEqual(
             self.client.post(toggle, {"visibility": "show"}).status_code, 302,
+        )
+        record.refresh_from_db()
+        self.assertTrue(record.is_public)
+        self.assertContains(self.client.get(self.public_url), score)
+        self.assertEqual(
+            self.client.post(toggle, {"visibility": "hide"}).status_code, 302,
         )
         record.refresh_from_db()
         self.assertFalse(record.is_public)
@@ -398,6 +413,57 @@ class ModeratorLabResultTests(TestCase):
         self.assertFalse(record.is_public)
         self.client.logout()
         self.assertNotContains(self.client.get(self.public_url), score)
+
+    def test_senior_moderator_can_publish_dna_and_member_cannot(self):
+        senior = get_user_model().objects.create_user(
+            username="senior-dna-reviewer", password="abc123xyz",
+        )
+        ModerationRoleAssignment.objects.create(
+            user=senior, role=ModerationRoleAssignment.Role.SENIOR,
+        )
+        record = HealthRecord.objects.create(
+            dog=self.dog, test_type="DNA breed composition",
+            result="100% Cane Corso",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=False,
+        )
+        document = DogDocument.objects.create(
+            dog=self.dog, title="Restricted DNA certificate",
+            document_type="dna", file="private/documents/dna-for-senior.pdf",
+            is_public=False, staff_review_only=True, submitted_by=self.owner,
+        )
+        report = BreedDNAReport.objects.create(
+            health_record=record, evidence_document=document,
+            provider="Embark", cane_corso_percentage="100.00",
+            composition=[{"breed": "Cane Corso", "percentage": "100"}],
+            consent_public_summary=False,
+        )
+        toggle = reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk])
+        edit = reverse("accounts:edit-reviewed-health-result", args=[self.dog.pk, record.pk])
+        self.client.force_login(self.unauthorized)
+        self.assertEqual(self.client.post(toggle, {"visibility": "show"}).status_code, 403)
+        self.assertEqual(self.client.get(edit).status_code, 403)
+        record.refresh_from_db()
+        self.assertFalse(record.is_public)
+
+        self.client.force_login(senior)
+        self.assertContains(self.client.get(edit), "Save &amp; make Public")
+        self.assertEqual(self.client.post(edit, {
+            "intent": "publish", "reviewed": "on",
+            "laboratory": "Embark", "breed_percentage": "100",
+        }).status_code, 302)
+        record.refresh_from_db()
+        report.refresh_from_db()
+        document.refresh_from_db()
+        self.assertTrue(record.is_public)
+        self.assertFalse(report.consent_public_summary)
+        self.assertFalse(document.is_public)
+        self.client.logout()
+        self.assertContains(self.client.get(self.public_url), 'class="breed-dna-score">100')
+
+        self.client.force_login(senior)
+        self.assertEqual(self.client.post(toggle, {"visibility": "hide"}).status_code, 302)
+        self.client.logout()
+        self.assertNotContains(self.client.get(self.public_url), 'class="breed-dna-score">100')
 
     def test_staff_override_can_repair_legacy_public_flag_without_owner_consent(self):
         admin = get_user_model().objects.create_superuser(

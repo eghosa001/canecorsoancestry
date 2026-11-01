@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Edit approved health result · Cane Corso Ancestry{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261101-admin-publication-v2">
+<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261101-moderator-publication-v3">
 <section class="page-shell moderation-page health-review-workspace health-final-editor">
   <header class="page-heading">
     <p class="eyebrow">Moderator · Health record editor</p>
@@ -80,9 +80,9 @@
       <strong id="health-card-preview-result">{% if breed_report %}{{ record.result }}{% else %}{{ record.test_type }} · {{ record.result }}{% endif %}</strong>
       <p>{% if breed_report %}DNA-tested · <span id="health-card-preview-lab">{{ breed_report.provider }}</span> · Report reviewed{% else %}Laboratory result · Report reviewed{% endif %}</p>
     </div>
-    {% if breed_report and can_admin_publish_breed and not breed_report.consent_public_summary %}
+    {% if breed_report and can_staff_publish_breed and not breed_report.consent_public_summary %}
       <div class="health-review-field">
-        <label for="publication-basis-edit">Breed-DNA publication basis (Super Admin)</label>
+        <label for="publication-basis-edit">Breed-DNA publication basis (authorized moderator)</label>
         <select name="publication_basis" id="publication-basis-edit">
           <option value="admin_decision">Administrative decision to publish this verified summary</option>
           <option value="owner_verbal">Owner confirmed verbally</option>
@@ -90,8 +90,6 @@
         </select>
         <small>This controls the public text summary only. The uploaded certificate remains private. Your decision is saved in the audit history, not recorded as owner consent.</small>
       </div>
-    {% elif breed_report and not can_publish %}
-      <p class="health-private-caption">Only the Super Admin can authorize public display of this breed-DNA summary. You can still correct and save it privately.</p>
     {% endif %}
       <div class="health-review-confirm"><label>{{ form.reviewed }} <strong>{{ form.reviewed.label }}</strong></label>{{ form.reviewed.errors }}</div>
       <div class="button-row health-final-actions">

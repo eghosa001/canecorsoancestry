@@ -12,8 +12,7 @@ from .models import ModerationAudit, VerificationState
 def staff_authorized_breed_record_ids(dog):
     """Last explicit staff publication decision per breed summary, from audit.
 
-    This does not alter or impersonate the kennel owner's consent. A Super
-    Admin publication decision is separately attributable and reversible.
+    This does not alter or impersonate the kennel owner's consent. Every authorized moderator publication decision is attributable and reversible.
     """
     decisions = {}
     entries = (
@@ -65,7 +64,7 @@ def publication_status(record, *, dog=None, staff_authorized_ids=None):
         if not breed_publication_allowed(report, staff_authorized_ids=staff_authorized_ids):
             return (
                 "authorization", "Not visible — publication decision required",
-                "A Super Admin can make this reviewed breed-DNA summary public. "
+                "Any authorized moderator can make this reviewed breed-DNA summary public. "
                 "The private source report always stays private.",
             )
         if record.verification_state != VerificationState.HEALTH_VERIFIED:

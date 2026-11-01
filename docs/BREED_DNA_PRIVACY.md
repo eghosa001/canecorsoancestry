@@ -33,7 +33,7 @@ DSRA, NCL1 and CMR1 appear as Clear, Carrier, Affected, or Not tested on
 published dog profiles. Only specifically approved laboratory-evidenced
 results can produce a health classification. No available result (including
 ambiguous results) means Not tested, NEVER a presumption of genetic clearance.
-DNA breed-composition percentages continue to require separate owner consent.
+DNA breed-composition percentages can be published by an authorized moderator after the underlying report has been verified; the owner's original consent record is not changed.
 The original member Health & DNA submission form is reusable for newly
 received test certificates, including after dog/pedigree publication.
 
@@ -44,26 +44,25 @@ laboratory's DSRA, NCL1 and CMR1 results as structured data. Results can be
 enabled individually; absent results are never automatically interpreted as
 Clear. They remain pending until a separate moderator approval. Approved typed
 records are independently show/hide toggleable with audit history and stored
-private evidence retained. Breed percentages additionally require owner consent.
+private evidence retained. Verified breed percentages can be published by any active authorized moderator.
 The public dog profile displays "No available records" when nothing verified
 is being published. Raw genetic/medical certificates stay private.
 
-**Policy update:** Full laboratory reports and images are kept private regardless of any older full-report consent flag. Only owner-authorized, moderator-reviewed typed breed percentages and independently reviewed health results can be published. The full-file publication option has been retired.
+**Policy update:** Full laboratory reports and images are kept private regardless of any older full-report consent flag. Only evidence-reviewed and publication-approved typed breed percentages and independently reviewed health results can be published. The full-file publication option has been retired.
 
-## Super Admin publication control (November 2026)
+## Authorized moderator publication control (November 2026)
 
-The Super Admin can publish a previously verified, structured breed-DNA
-summary through **Manage dogs → Health values → Approved health records →
-Public**, or **Edit health record → Save & make Public**. The staff decision
-can be marked as an administrative publication decision or as the owner's
-verbal or written confirmation. Staff decisions are recorded separately in
-the moderation audit history. The original owner consent field is **never
-changed** by a staff action. Authorized moderators may continue correcting
-reviewed test values but cannot independently create this administrative
-publication authorization.
+Every active Moderator, Senior Moderator and Super Admin can publish a previously
+verified, structured breed-DNA summary through **Manage dogs → Health values →
+Approved health records → Public**, or **Edit health record → Save & make Public**.
+Publication is an explicit staff decision, not a request for owner authorization.
+Staff may record an administrative decision or existing verbal/written confirmation.
+The decision is separately audited and the original owner consent field is **never
+changed** by a staff action. Suspended or deregistered staff and members cannot
+use these publication controls.
 
-The **Private** action removes the public summary immediately; a new Super
-Admin action can restore it. The Super Admin's **Withdraw all DNA publication**
+The **Private** action hides the public summary immediately; any authorized
+moderator can restore it. The Super Admin-only **Withdraw all DNA publication**
 removes all existing staff publication decisions and owner-publication grants
 from the displayed summaries. Raw certificates and uploaded laboratory files
 remain private under the media access policy regardless of either summary

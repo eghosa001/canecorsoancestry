@@ -98,8 +98,9 @@ for each test and a separate numeric percentage field for breed composition.
 
 **Important:** Super Admin, Senior Moderator and Moderator accounts may record
 and correct independently evidenced DNA breed percentages, but new reports
-remain private until owner consent exists or the Super Admin makes a separately
-logged publication decision. Evidence review alone does not publish. Even a reported
+remain private until owner consent exists or an authorized moderator makes a
+separately audited publication decision. Evidence review alone does not publish.
+Even a reported
 100% value is a laboratory breed-composition estimate, not a universal proof
 of pedigree purity.
 
@@ -136,7 +137,7 @@ an active Moderator, Senior Moderator or Super Admin.
 - Some submissions include a typed laboratory name; it is shown as
   **Laboratory supplied in submission** and must still be checked against
   the actual certificate. Missing metadata does not justify inventing a lab.
-  Publishing breed-DNA percentages requires owner consent or a separate audited Super Admin decision.
+  Publishing breed-DNA percentages requires verified evidence and an authorized moderator's public decision; original uploads remain private.
 
 ## Why the approved submission is read-only, and how to correct the saved result
 
@@ -185,7 +186,7 @@ are permitted, with independent audit entries.
    plus **Measurement unit (optional)**.
 5. Tick **I checked the edited public summary against the original laboratory
    evidence**. Choose **Save as Private** to hide the text, or **Save & make
-   Public** to publish. The Super Admin can directly publish a reviewed DNA
+   Public** to publish. Any authorized moderator can directly publish a reviewed DNA
    breed summary without a fresh member submission. Select the audit basis
    (administrative decision, owner verbal, or owner written confirmation).
    The original consent field remains untouched by this staff action.
@@ -203,8 +204,8 @@ are permitted, with independent audit entries.
   do not reinterpret an arbitrary numeric measurement as genetic clearance.
 - DNA **breed composition** is different from clinical Health/DNA results:
   percentages are entered in the separate breed-report form, must total
-  100%, and require owner consent or a separately audited Super Admin
-  publication decision.
+  100%, and require a separately audited publication decision by an
+  authorized moderator when no owner consent is already recorded.
 - Published dog profiles display result summaries only. Accepted laboratory
   source documents used for transcription are private.
 - All source links are dog-specific, the staff permission is checked on the
