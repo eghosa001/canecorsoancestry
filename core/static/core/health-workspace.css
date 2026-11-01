@@ -190,3 +190,47 @@
 .health-visibility-form .button-row .btn{min-height:44px}
 .health-visibility-form button:disabled{opacity:.56;cursor:default}
 @media(max-width:650px){.health-visibility-form{width:100%}.health-visibility-form .button-row .btn{flex:1 1 110px;text-align:center}}
+
+/* Staff workspace: keep validation messages in the document flow, not as
+   floating dark toasts obscuring the editable health records. */
+#main-content:has(.health-review-workspace) > .flash-stack{
+  position:static;inset:auto;z-index:auto;width:min(100%,1240px);
+  max-width:none;margin:.8rem auto 1rem;padding:0 1.15rem;
+}
+#main-content:has(.health-review-workspace) > .flash-stack .flash{
+  color:var(--text,#20312c);background:var(--surface,#fff);
+  box-shadow:none;border-radius:10px;font-size:.84rem;line-height:1.5;
+  overflow-wrap:anywhere;
+}
+#main-content:has(.health-review-workspace) > .flash-stack .flash.error{
+  border-inline-start:3px solid #b35b50;
+}
+#main-content:has(.health-review-workspace) > .flash-stack .flash.warning{
+  border-inline-start:3px solid #a57d38;
+}
+
+/* Legacy claims remain accessible for moderators, but are not results cards.
+   Preserve exact source wording without showing it as a verified score. */
+.health-legacy-panel{padding:1rem 1.15rem}
+.health-legacy-panel > summary{display:flex;align-items:center;justify-content:space-between;gap:.7rem;cursor:pointer;list-style:none}
+.health-legacy-panel > summary::-webkit-details-marker{display:none}
+.health-legacy-panel > summary:focus-visible{outline:2px solid var(--gold,#b69259);outline-offset:5px;border-radius:4px}
+.health-legacy-panel > summary > span:first-child{display:grid;gap:.2rem;min-width:0}
+.health-legacy-panel > summary strong{font-size:1rem}
+.health-legacy-panel > summary small{font-size:.76rem;line-height:1.4;color:var(--muted,#7c8682)}
+.health-legacy-panel > .health-review-help{max-width:90ch;margin:.95rem 0 0}
+.health-legacy-list{display:grid;gap:.8rem;margin-top:1rem}
+.health-legacy-entry{border:1px solid var(--line,#d7ded9);border-radius:12px;padding:.9rem 1rem;min-width:0}
+.health-legacy-heading{display:grid;gap:.15rem}
+.health-legacy-heading > strong{font-size:.89rem;overflow-wrap:anywhere}
+.health-legacy-heading > small{font-size:.74rem;color:var(--muted,#7c8682)}
+.health-legacy-source{margin:.65rem 0;padding:.65rem .75rem;border-inline-start:2px solid var(--line,#aaa);overflow-wrap:anywhere;font-size:.85rem;line-height:1.5}
+.health-legacy-source > span{display:block;margin-bottom:.16rem;font-size:.7rem;font-weight:650;color:var(--muted,#7c8682)}
+.health-legacy-notice,.health-legacy-flag{margin:.5rem 0;font-size:.79rem;line-height:1.5;color:var(--muted,#65716c);overflow-wrap:anywhere}
+.health-legacy-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin-top:.75rem}
+.health-legacy-actions form{margin:0}
+.health-legacy-actions .btn{min-height:42px}
+@media(max-width:650px){
+  .health-legacy-panel{padding:.85rem}
+  .health-legacy-actions > .btn,.health-legacy-actions form,.health-legacy-actions form .btn{width:100%}
+}

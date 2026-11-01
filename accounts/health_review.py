@@ -177,10 +177,19 @@ def reviewed_dog_health(request, pk):
             record.test_type, record.result,
             record_verified=record.verification_state == VerificationState.HEALTH_VERIFIED,
         ) is not None
+        # Both "Purity Verification / Health Test" and older free-text
+        # "Breed Identification / DNA" claims belong in read-only history,
+        # never among separately reviewed, publication-ready test results.
+        record.is_legacy_claim = record.is_legacy_mixed or (
+            getattr(record, "breed_dna_report", None) is None
+            and unstructured_breed_claim(record.test_type)
+        )
         (record.staff_public_status_code,
          record.staff_public_status_label,
          record.staff_public_status_reason) = publication_status(record, dog=dog, staff_authorized_ids=staff_breed_ids)
     from .structured_health import StructuredHealthForm, structured_rows
+    approved_records = [record for record in records if not record.is_legacy_claim]
+    legacy_records = [record for record in records if record.is_legacy_claim]
     current_rows = structured_rows(records)
     latest_breed = next(
         (row.breed_dna_report for row in records if
@@ -196,7 +205,7 @@ def reviewed_dog_health(request, pk):
     if selected_id.isdecimal() and len(selected_id) <= 20:
         selected_legacy_record = next(
             (record for record in records
-             if record.pk == int(selected_id) and record.is_legacy_mixed
+             if record.pk == int(selected_id) and record.is_legacy_claim
              and record.verification_state == VerificationState.HEALTH_VERIFIED),
             None,
         )
@@ -207,7 +216,13 @@ def reviewed_dog_health(request, pk):
                 pk=int(selected_id), dog=dog,
                 verification_state=VerificationState.HEALTH_VERIFIED,
             ).select_related("evidence_document").first()
-            if older and legacy_mixed_health_rows(older.test_type, older.result) is not None:
+            if older and (
+                legacy_mixed_health_rows(older.test_type, older.result) is not None
+                or (
+                    getattr(older, "breed_dna_report", None) is None
+                    and unstructured_breed_claim(older.test_type)
+                )
+            ):
                 selected_legacy_record = older
         if selected_legacy_record and selected_legacy_record.evidence_document_id:
             candidate = selected_legacy_record.evidence_document
@@ -254,7 +269,8 @@ def reviewed_dog_health(request, pk):
     ).order_by("-created_at")[:30])
     evidence_entries = approved_evidence_entries(dog)
     return render(request, "accounts/moderator_health_results.html", {
-        "dog": dog, "records": records, "pending": pending,
+        "dog": dog, "records": records, "approved_records": approved_records,
+        "legacy_records": legacy_records, "pending": pending,
         "add_condition_form": AdditionalHealthConditionForm(dog=dog),
         "structured_form": structured_form,
         "quick_results": quick_results,
@@ -544,12 +560,18 @@ def edit_reviewed_health_result(request, pk, record_id):
     # Old combined purity/health entries cannot be changed correctly by the
     # one-test form. Route both bookmarked GETs and stale POSTs to the safe
     # structured editor; no legacy database values are overwritten.
-    if legacy_mixed_health_rows(record.test_type, record.result) is not None:
+    if (
+        legacy_mixed_health_rows(record.test_type, record.result) is not None
+        or (
+            getattr(record, "breed_dna_report", None) is None
+            and unstructured_breed_claim(record.test_type)
+        )
+    ):
         if request.method == "POST":
             messages.warning(
                 request,
-                "This older combined record was not overwritten. Edit each "
-                "condition separately using the structured health editor.",
+                "This older free-text claim was not overwritten. Transcribe only "
+                "evidence-supported values in the structured health editor.",
             )
         return redirect(
             reverse("accounts:reviewed-dog-health", args=[pk])
@@ -690,12 +712,14 @@ def toggle_health_result(request, pk, record_id):
         if show and report and not has_authority and not can_review_submissions(request.user):
             messages.error(request, "Only authorized moderators may publish this breed-DNA summary.")
             return redirect("accounts:reviewed-dog-health", pk=pk)
-        if show and unstructured_breed_claim(record.test_type) and not report:
-            messages.error(
+        if show and not report and (
+            unstructured_breed_claim(record.test_type)
+            or legacy_mixed_health_rows(record.test_type, record.result) is not None
+        ):
+            messages.warning(
                 request,
-                "This free-text breed-DNA claim cannot be displayed as a verified test. "
-                "Transcribe each evidence-supported health result separately, or "
-                "use a reviewed structured breed-composition report.",
+                "An older combined claim is not a publishable health result. "
+                "Enter independently reviewed findings in the structured editor.",
             )
             return redirect("accounts:reviewed-dog-health", pk=pk)
         if show and report and report.evidence_document.is_public:

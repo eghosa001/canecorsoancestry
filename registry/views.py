@@ -618,6 +618,12 @@ def dog_detail(request, slug):
             "verified": record.verification_state == VerificationState.HEALTH_VERIFIED,
         })
 
+    # Result rows can arrive in photo/upload order (including ED before HD).
+    # Use a stable, explicit medical presentation order without changing records.
+    orthopaedic_screenings.sort(
+        key=lambda item: 0 if item["grade"].startswith("HD-") else 1
+    )
+
     # Surface only verified, authorized summaries; raw certificates remain private.
     staff_breed_ids = staff_authorized_breed_record_ids(dog) if dog._has_breed_dna else set()
     breed_dna = (

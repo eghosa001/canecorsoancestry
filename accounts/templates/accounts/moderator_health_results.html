@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Health result visibility · Cane Corso Ancestry{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261101-moderator-publication-v3">
+<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261101-legacy-history-v4">
 <section class="page-shell moderation-page health-review-workspace">
   <header class="page-heading">
     <p class="eyebrow">Moderator · Private health workspace</p>
@@ -142,9 +142,9 @@
     {% empty %}<p class="muted">No pending laboratory submissions.</p>{% endfor %}
   </section>
   <section class="panel">
-    <div class="health-section-heading"><div><p class="health-review-overline">Staff health results</p><h2 id="approved-health-results">Approved health records</h2></div><span class="health-count-badge">{{ records|length }}</span></div>
-    <p class="health-review-help">Use <strong>Edit individual results</strong> for older combined reports, or <strong>Edit health record</strong> for one already-separated finding. The original certificate and audit record stay intact.</p>
-    {% for item in records %}
+    <div class="health-section-heading"><div><p class="health-review-overline">Staff health results</p><h2 id="approved-health-results">Approved health records</h2></div><span class="health-count-badge">{{ approved_records|length }}</span></div>
+    <p class="health-review-help">Only separately reviewed findings appear here. Older combined breed/DNA claims are retained below as historical evidence; they are not publication-ready test results.</p>
+    {% for item in approved_records %}
       <div class="health-result-editor-row">
         <div class="health-result-editor-copy">
           <strong>{{ item.test_type }}</strong>
@@ -198,10 +198,43 @@
         </div>
       </div>
     {% empty %}
-      <div class="health-empty-editor">No available records</div>
+      <div class="health-empty-editor">No individual results have been transcribed yet. Use the editor above to save only the supported findings.</div>
     {% endfor %}
     <p class="health-private-caption">Approval does not automatically make every result publicly displayable. The status above reflects the actual profile, not just the database publication flag. Editing creates an audited correction; confidential images and PDFs never appear in public.</p>
   </section>
+  {% if legacy_records %}
+  <details class="panel health-legacy-panel" id="legacy-health-evidence">
+    <summary>
+      <span><strong>Historical DNA / health evidence</strong><small>Original free-text entries · not individual verified results</small></span>
+      <span class="health-count-badge">{{ legacy_records|length }}</span>
+    </summary>
+    <p class="health-review-help">These older records are retained for staff audit and source review. They are not a substitute for a structured breed-DNA report or individually confirmed genetic and orthopedic findings. No original evidence file is made public here.</p>
+    <div class="health-legacy-list">
+      {% for item in legacy_records %}
+      <article class="health-legacy-entry">
+        <div class="health-legacy-heading">
+          <strong>{{ item.test_type }}</strong>
+          <small>{{ item.tested_on|date:"j M Y"|default:"Date not provided" }} · Historical free-text claim</small>
+        </div>
+        <p class="health-legacy-source"><span>Original recorded text</span>{{ item.result }}</p>
+        <p class="health-legacy-notice" role="note"><strong>{{ item.staff_public_status_label }}.</strong> {{ item.staff_public_status_reason }} This original wording is preserved for staff audit and must not be presented as a structured breed-DNA or individual screening result.</p>
+        {% if item.is_public %}
+        <p class="health-legacy-flag">An older Public flag is saved for this entry. It does not authorize a structured breed-DNA claim. You can make this legacy entry private without changing other results.</p>
+        {% endif %}
+        <div class="health-legacy-actions">
+          <a class="btn btn-outline" href="{% url 'accounts:reviewed-dog-health' dog.pk %}?source_record={{ item.pk }}#structured-health-editor">Transcribe verified findings</a>
+          {% if item.is_public %}
+          <form method="post" action="{% url 'accounts:toggle-health-result' dog.pk item.pk %}">
+            {% csrf_token %}
+            <button class="btn btn-outline" type="submit" name="visibility" value="hide">Make legacy entry private</button>
+          </form>
+          {% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
   <details class="panel health-secondary-editor">
     <summary><strong>Add an uncommon test</strong> <small>For findings not listed above</small></summary>
     <div class="health-section-heading"><div><p class="health-review-overline">Other laboratory tests</p><h2 id="add-approved-condition">Add an uncommon test</h2></div></div>
