@@ -649,7 +649,7 @@ class DogModelTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Source attached")
-        self.assertContains(response, "Not independently verified")
+        self.assertNotContains(response, "Not independently verified")
 
     def test_isolated_public_profile_requires_only_one_database_query(self):
         dog = Dog.objects.create(
@@ -667,7 +667,7 @@ class DogModelTests(TestCase):
         dog = Dog.objects.create(
             name="Isolated Health Dog", slug="isolated-health-dog", is_public=True
         )
-        HealthRecord.objects.create(dog=dog, test_type="Heart", result="Normal")
+        HealthRecord.objects.create(dog=dog, test_type="Heart", result="Normal", verification_state=VerificationState.HEALTH_VERIFIED, is_public=True)
         with self.assertNumQueries(2):
             response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertEqual(response.context["siblings"], [])
