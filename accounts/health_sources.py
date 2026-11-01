@@ -133,4 +133,21 @@ def source_for_record(record, evidence_entries):
             if (item["kind"] == "submission"
                     and item["source_id"] == note.group(1)):
                 return item
+
+    # Structured corrections may share a single certificate. Because
+    # evidence_document is OneToOne, their durable source key is in notes
+    # and the audit entry rather than on every HealthRecord.
+    matched_key = re.search(
+        r"(?:Structured staff health transcription from accepted |"
+        r"Structured staff DNA transcription from accepted )"
+        r"(submission|document):([0-9a-fA-F-]+)",
+        record.notes or "",
+    )
+    if matched_key:
+        for item in evidence_entries:
+            if (
+                item["kind"] == matched_key.group(1)
+                and item["source_id"] == matched_key.group(2)
+            ):
+                return item
     return None
