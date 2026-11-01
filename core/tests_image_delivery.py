@@ -94,3 +94,26 @@ class DogPhotoDeliveryTests(TestCase):
         self.assertContains(response, 'rel="preload" as="image"')
         self.assertContains(response, 'data-photo-src="/media/dogs/photo-preview.jpg"')
         self.assertContains(response, 'data-media-fallback="/media/dogs/photo-preview.jpg"')
+
+    def test_home_first_public_photo_is_priority_loaded_without_full_size_download(self):
+        from django.core.cache import caches
+        from registry.models import Dog, DogImage
+
+        dog = Dog.objects.create(
+            name="High Priority Photo", slug="high-priority-photo",
+            is_public=True, search_count=900,
+        )
+        DogImage.objects.create(
+            dog=dog, image="dogs/home-priority.jpg", is_primary=True,
+        )
+        caches["public"].delete("cca:home:featured-dog-ids:v1")
+        page = self.client.get("/")
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "High Priority Photo")
+        self.assertContains(page, 'rel="preload" as="image"')
+        self.assertContains(page, "/_thumb/dogs/home-priority.jpg?variant=card")
+        self.assertContains(page, 'fetchpriority="high"')
+        self.assertContains(page, 'loading="eager"')
+        self.assertContains(page, "480w")
+        self.assertContains(page, "960w")
+        self.assertNotContains(page, 'src="/media/dogs/home-priority.jpg"')
