@@ -395,6 +395,51 @@ def test_super_admin_edit_and_delete_private_dog(page):
     )
 
 
+def test_staff_approved_lab_document_preview(page):
+    """The actual selected source must open, not merely appear in a dropdown."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from registry.models import DogDocument
+
+    dog_id = CREDS["dog_id"]
+    def create_accepted():
+        submission = Submission.objects.create(
+            dog_id=dog_id, kind=Submission.Kind.DOCUMENT,
+            status=Submission.Status.APPROVED,
+            submitted_by_id=CREDS["roles"]["member"]["id"],
+            payload={"document_type": DogDocument.DocumentType.HEALTH,
+                     "laboratory": "QA Report Laboratory"},
+        )
+        doc = DogDocument.objects.create(
+            dog_id=dog_id,
+            title="QA accepted original health certificate",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file=SimpleUploadedFile(
+                "qa-approved-health.pdf",
+                b"%PDF-1.4 original QA health source",
+                content_type="application/pdf",
+            ),
+            source_submission=submission,
+            submitted_by_id=CREDS["roles"]["member"]["id"],
+        )
+        return doc.pk
+    doc_id = db_call(create_accepted)
+    sign_in(page, "moderator")
+    go(page, f"/member/moderation/health-results/{dog_id}/")
+    assert "QA Report Laboratory" in page.locator(".health-source-directory").inner_text()
+    choice = page.locator(".structured-health-form [name=source_document]")
+    choice.select_option(str(doc_id))
+    preview_link = page.locator("[data-evidence-selected-link]")
+    assert preview_link.is_visible(), "Selecting approved certificate did not reveal preview"
+    destination = preview_link.get_attribute("href")
+    assert destination.endswith(
+        f"/member/moderation/health-results/{dog_id}/source/document/{doc_id}/"
+    ), f"Wrong approved source linked: {destination}"
+    response = page.request.get(BASE + destination)
+    assert response.status == 200, "Original accepted PDF was not readable by moderator"
+    assert "application/pdf" in response.headers.get("content-type", "")
+    assert "no-store" in response.headers.get("cache-control", "")
+
+
 CASES = [
     ("guest", "public_search_navigation_responsive", test_visitor),
     ("member", "email_signup_verification_password_reset", test_account_email_lifecycle),
@@ -410,6 +455,7 @@ CASES = [
     ("moderator", "staff_isolation", test_staff_and_admin_boundaries),
     ("member2", "kennel_claim_with_private_certificate", test_member_kennel_ownership_claim),
     ("member", "health_evidence_pending_moderation", test_member_private_health_upload),
+    ("moderator", "approved_lab_original_document_preview", test_staff_approved_lab_document_preview),
     ("member", "saved_pairing_create_delete", test_saved_pairing_add_remove),
     ("member", "paystack_unconfigured_safety", test_safe_payment_screen_without_live_gateway),
     ("super_admin", "private_dog_admin_edit_delete", test_super_admin_edit_and_delete_private_dog),
