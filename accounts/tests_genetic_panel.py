@@ -49,15 +49,22 @@ class GeneticPanelTests(TestCase):
         self.assertNotContains(response, "100% Cane Corso")
         self.assertNotContains(response, "genetic-screening-status--clear")
 
-    def test_public_status_only_after_approval_and_members_can_upload_again(self):
+    def test_member_uploads_stay_private_after_review_until_published(self):
         self.client.force_login(self.owner)
         upload = self.submit_marker("DSRA", "Clear")
         self.assertEqual(upload.status_code, 302)
         submission = Submission.objects.get(kind=Submission.Kind.HEALTH)
         self.assertNotContains(self.client.get(self.profile), 'genetic-screening-status--clear')
         approve_submission(submission, self.reviewer)
-        self.assertContains(self.client.get(self.profile), 'genetic-screening-status--clear')
+        self.assertNotContains(self.client.get(self.profile), 'genetic-screening-status--clear')
         record = HealthRecord.objects.get(dog=self.dog, test_type="DSRA")
+        self.assertFalse(record.is_public)
+        self.client.force_login(self.reviewer)
+        self.assertEqual(self.client.post(
+            reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk]),
+            {"visibility": "show"},
+        ).status_code, 302)
+        record.refresh_from_db()
         self.assertTrue(record.is_public)
         self.client.force_login(self.owner)
         page = self.client.get(self.profile)
@@ -70,6 +77,13 @@ class GeneticPanelTests(TestCase):
         submission = Submission.objects.filter(kind=Submission.Kind.HEALTH).order_by("-created_at").first()
         approve_submission(submission, self.reviewer)
         second = HealthRecord.objects.get(dog=self.dog, test_type="NCL1")
+        self.assertFalse(second.is_public)
+        self.client.force_login(self.reviewer)
+        self.assertEqual(self.client.post(
+            reverse("accounts:toggle-health-result", args=[self.dog.pk, second.pk]),
+            {"visibility": "show"},
+        ).status_code, 302)
+        second.refresh_from_db()
         self.assertTrue(second.is_public)
         self.client.logout()
         page = self.client.get(self.profile)
@@ -84,7 +98,7 @@ class GeneticPanelTests(TestCase):
         self.assertEqual(self.submit_marker("CMR1", "Carrier").status_code, 302)
         page = self.client.get(self.url)
         self.assertContains(page, "Recent submissions")
-        self.assertContains(page, "Awaiting review")
+        self.assertContains(page, "Report received")
         self.assertContains(page, "CMR1")
         self.assertContains(page, "Your report stays private")
         self.assertNotContains(page, "genetics.pdf")
