@@ -75,10 +75,9 @@ class HealthSourcePreviewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response["Content-Disposition"].startswith("inline"))
         self.assertIn("no-store", response["Cache-Control"])
-        # Closing Django's full FileResponse dispatches request_finished,
-        # which closes PostgreSQL's TestCase atomic connection mid-test.
-        # Close only the streamed file handle here.
-        response.file_to_stream.close()
+        # Do not call response.close() in Django TestCase: the request_finished
+        # signal would close the test transaction's PostgreSQL connection.
+        # The test client owns the streamed response lifetime.
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(url).status_code, 403)
         self.client.force_login(self.member)
@@ -201,10 +200,9 @@ class HealthSourcePreviewTests(TestCase):
         response = self.client.get(doc_url)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response["Content-Disposition"].startswith("inline"))
-        # Closing Django's full FileResponse dispatches request_finished,
-        # which closes PostgreSQL's TestCase atomic connection mid-test.
-        # Close only the streamed file handle here.
-        response.file_to_stream.close()
+        # Do not call response.close() in Django TestCase: the request_finished
+        # signal would close the test transaction's PostgreSQL connection.
+        # The test client owns the streamed response lifetime.
         pending_url = reverse(
             "accounts:preview-health-submission",
             args=[self.dog.pk, pending.pk],
