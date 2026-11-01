@@ -56,3 +56,40 @@ class DogPhotoDeliveryTests(TestCase):
             '{% load dog_images %}<img src="{{ value|dog_photo:"thumb" }}">'
         ).render(Context({"value": "/media/dogs/zeus.jpg"}))
         self.assertIn("/_thumb/dogs/zeus.jpg?variant=thumb&amp;expires=", result)
+
+    def test_public_search_uses_light_thumbnail_and_keeps_private_media_hidden(self):
+        from registry.models import Dog, DogImage
+
+        public = Dog.objects.create(
+            name="Optimized Search Dog", slug="optimized-search-dog",
+            is_public=True,
+        )
+        private = Dog.objects.create(
+            name="Optimized Secret Dog", slug="optimized-secret-dog",
+            is_public=False,
+        )
+        DogImage.objects.create(dog=public, image="dogs/fast-search.jpg")
+        DogImage.objects.create(dog=private, image="dogs/private-only.jpg")
+        result = self.client.get("/dogs/?q=Optimized")
+        self.assertEqual(result.status_code, 200)
+        self.assertContains(result, "Optimized Search Dog")
+        self.assertContains(result, "/_thumb/dogs/fast-search.jpg?variant=thumb")
+        self.assertContains(result, 'data-media-fallback="/media/dogs/fast-search.jpg"')
+        self.assertNotContains(result, "Optimized Secret Dog")
+        self.assertNotContains(result, "private-only.jpg")
+
+    def test_public_dog_profile_preloads_a_preview_but_lightbox_keeps_original(self):
+        from registry.models import Dog, DogImage
+
+        dog = Dog.objects.create(
+            name="Photo Preview Dog", slug="photo-preview-dog", is_public=True,
+        )
+        DogImage.objects.create(
+            dog=dog, image="dogs/photo-preview.jpg", is_primary=True,
+        )
+        response = self.client.get(f"/dogs/{dog.slug}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "/_thumb/dogs/photo-preview.jpg?variant=portrait")
+        self.assertContains(response, 'rel="preload" as="image"')
+        self.assertContains(response, 'data-photo-src="/media/dogs/photo-preview.jpg"')
+        self.assertContains(response, 'data-media-fallback="/media/dogs/photo-preview.jpg"')
