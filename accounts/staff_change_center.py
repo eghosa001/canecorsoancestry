@@ -107,7 +107,7 @@ CATEGORIES = (
         "description": "A verified result means an actual finding was checked against accepted evidence; it does not validate unrelated facts.",
         "actions": (
             _action("Enter or change verified health numbers", "accounts:dog-edit-list",
-                    "Manage dogs → Search records → Health values. Under Add a condition from an approved report, select one accepted source, enter each exact grade or numeric value and unit, attest to the original certificate, then Save reviewed result."),
+                    "Manage dogs → Search records → Health values. Under Add a condition from an approved report, select one accepted source, enter each exact grade or numeric value and unit, attest to the original certificate, then choose Save privately or Save & publish this result."),
             _action("Correct or hide published health results", "accounts:dog-edit-list",
                     "Open Health values for the exact dog. Under Approved health results · Edit as needed, choose Edit & preview, compare the original evidence and Save corrections; use Hide incorrect result to suppress the public summary."),
             _action("Upload reviewed historical laboratory evidence", "accounts:health-genetic-list",

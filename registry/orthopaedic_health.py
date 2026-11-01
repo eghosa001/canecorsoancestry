@@ -57,6 +57,7 @@ def describe_orthopaedic_result(test_type, result):
         headline, explanation, tone = HIP_GRADES[hip_grade]
         rows.append({
             "test": "Hip dysplasia screening",
+            "short_label": "HD (Hip Dysplasia)",
             "headline": headline,
             "explanation": explanation,
             "grade": "HD-" + hip_grade,
@@ -67,6 +68,7 @@ def describe_orthopaedic_result(test_type, result):
         headline, explanation, tone = ELBOW_GRADES[elbow_grade]
         rows.append({
             "test": "Elbow dysplasia screening",
+            "short_label": "ED (Elbow Dysplasia)",
             "headline": headline,
             "explanation": explanation,
             "grade": "ED-" + elbow_grade,

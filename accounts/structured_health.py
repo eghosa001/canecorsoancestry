@@ -10,6 +10,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.http import HttpResponseBadRequest
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
@@ -118,8 +119,9 @@ class StructuredHealthForm(forms.Form):
                 )
             except ValidationError as exc:
                 self.add_error("other_breeds", exc)
-        elif data.get("laboratory") or data.get("other_breeds"):
-            self.add_error("cane_corso_percentage", "Enter the reported breed percentage first.")
+        # Lab/provider details belong only to breed composition. When a
+        # reviewer is updating HD, ED or an individual genetic marker, empty
+        # breed-composition fields must not block that unrelated result.
         if not changed:
             self.add_error(None, "Select at least one test value to change.")
         if data.get("tested_on") and data["tested_on"] > timezone.localdate():
@@ -136,10 +138,11 @@ def structured_rows(records):
         code = record.test_type.strip().upper()
         if code not in {"CMR1", "DSRA", "NCL1", "HD", "ED"}:
             continue
-        if code not in latest or (
-            (record.tested_on or timezone.datetime.min.date()), record.created_at, record.pk
-        ) > (
-            (latest[code].tested_on or timezone.datetime.min.date()), latest[code].created_at, latest[code].pk
+        # The latest staff correction is authoritative. Sorting primarily by
+        # the lab date could resurrect an older, superseded public result after
+        # a newer correction references an older laboratory report.
+        if code not in latest or (record.created_at, record.pk) > (
+            latest[code].created_at, latest[code].pk
         ):
             latest[code] = record
     return latest
@@ -151,6 +154,10 @@ def save_structured_health(request, pk):
     if not can_review_submissions(request.user):
         raise PermissionDenied
     dog = get_object_or_404(Dog.objects.select_related("kennel"), pk=pk)
+    intent = request.POST.get("intent", "save")
+    if intent not in {"save", "publish"}:
+        return HttpResponseBadRequest("Choose Save privately or Save & publish selected results.")
+    publish_selected = intent == "publish"
     form = StructuredHealthForm(request.POST, dog=dog)
     if not form.is_valid():
         messages.error(
@@ -197,11 +204,27 @@ def save_structured_health(request, pk):
                 previous and previous.result.strip().lower() == result.lower()
                 and (not when or previous.tested_on == when)
             ):
+                # Publishing a previously saved private result does not require
+                # re-entering, duplicating or altering any other test.
+                if publish_selected and not previous.is_public:
+                    previous.is_public = True
+                    previous.save(update_fields=["is_public"])
+                    record_audit(
+                        action=ModerationAudit.Action.VERIFICATION,
+                        actor=request.user, dog=dog,
+                        summary={
+                            "kind": "structured_health_visibility",
+                            "health_record_id": previous.pk, "public": True,
+                            "source": source_key,
+                        },
+                        note="Staff independently published an evidence-reviewed result.",
+                    )
+                    updates += 1
                 continue
             # Preserve the original approved row and its immutable evidence.
             # Carry forward the previous privacy choice BEFORE marking the old
             # row superseded; otherwise the replacement would be hidden too.
-            new_visibility = previous.is_public if previous else False
+            new_visibility = publish_selected or (previous.is_public if previous else False)
             if previous and previous.is_public:
                 previous.is_public = False
                 previous.save(update_fields=["is_public"])
@@ -228,6 +251,7 @@ def save_structured_health(request, pk):
                 summary={
                     "kind": "structured_health_result", "health_record_id": record.pk,
                     "test_type": code, "result": result,
+                    "public": new_visibility,
                     "superseded_health_record_id": previous.pk if previous else None,
                     "source": source_key,
                 },
@@ -266,21 +290,36 @@ def save_structured_health(request, pk):
                     prior.save(update_fields=["cane_corso_percentage", "composition", "provider"])
                     rec.result = percentage_text(pct) + "% Cane Corso"
                     rec.tested_on = when or rec.tested_on
-                    rec.save(update_fields=["result", "tested_on"])
+                    if publish_selected:
+                        rec.is_public = True
+                    rec.save(update_fields=["result", "tested_on", "is_public"])
                 else:
                     old = None
                     rec = HealthRecord.objects.create(
                         dog=dog, test_type="DNA breed composition",
                         result=percentage_text(pct) + "% Cane Corso",
                         tested_on=when, verification_state=VerificationState.HEALTH_VERIFIED,
-                        is_public=False,
-                        notes=f"Structured staff DNA transcription from accepted {source_key}; held privately until published",
+                        is_public=publish_selected,
+                        notes=f"Structured staff DNA transcription from accepted {source_key}; original evidence remains private",
                     )
                     BreedDNAReport.objects.create(
                         health_record=rec, evidence_document=document,
                         provider=data["laboratory"].strip(),
                         cane_corso_percentage=pct, composition=data["composition"],
                         consent_public_summary=False, consent_full_report=False,
+                    )
+                if publish_selected:
+                    # Public text summary only. Store a separate audited staff
+                    # authorization; never set owner consent or expose the PDF.
+                    record_audit(
+                        action=ModerationAudit.Action.VERIFICATION,
+                        actor=request.user, dog=dog,
+                        summary={
+                            "kind": "staff_breed_dna_publication",
+                            "health_record_id": rec.pk, "public": True,
+                            "basis": "admin_decision",
+                        },
+                        note="Authorized moderator published reviewed breed composition; private report stays restricted.",
                     )
                 VerificationEvent.objects.create(
                     dog=dog, health_record=rec, state=VerificationState.HEALTH_VERIFIED,
@@ -310,6 +349,10 @@ def save_structured_health(request, pk):
     else:
         messages.success(
             request, f"Saved {updates} reviewed result{'s' if updates != 1 else ''}."
-            + " Newly entered values are Private until a moderator chooses Public; previously published corrections retain their existing visibility."
+            + (
+                " Selected results were published; all other health information was retained."
+                if publish_selected else
+                " New results are private; previously public corrections remain public. Other results were retained."
+            )
         )
     return redirect("accounts:reviewed-dog-health", pk=pk)

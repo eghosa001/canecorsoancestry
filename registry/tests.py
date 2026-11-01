@@ -67,7 +67,7 @@ class DogModelTests(TestCase):
             verification_state=VerificationState.HEALTH_VERIFIED,
         )
         response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
-        self.assertContains(response, "Hip &amp; elbow health")
+        self.assertContains(response, "Orthopedic Health Screening")
         self.assertContains(response, "HD-A")
         self.assertContains(response, "Normal hips")
         self.assertNotContains(response, "Breed DNA not yet verified")

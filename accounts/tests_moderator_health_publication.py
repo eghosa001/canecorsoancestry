@@ -173,6 +173,172 @@ class ModeratorLabResultTests(TestCase):
             "source_document": doc.pk, "cmr1": "Affected", "reviewed": "on",
         }).status_code, 403)
 
+    def test_publish_only_one_health_category_without_requiring_others(self):
+        accepted = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+            payload={"document_type": DogDocument.DocumentType.HEALTH},
+        )
+        document = DogDocument.objects.create(
+            dog=self.dog, title="Joint and DNA health certificate",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file="private/orthopedic-health.pdf", source_submission=accepted,
+            submitted_by=self.owner,
+        )
+        existing_public = HealthRecord.objects.create(
+            dog=self.dog, test_type="DSRA", result="Carrier",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        existing_private = HealthRecord.objects.create(
+            dog=self.dog, test_type="CMR1", result="Clear",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=False,
+        )
+        self.client.force_login(self.moderator)
+        url = reverse("accounts:save-structured-health", args=[self.dog.pk])
+        response = self.client.post(url, {
+            "source_document": document.pk, "hip": "HD-A",
+            "reviewed": "on", "intent": "publish",
+        })
+        self.assertRedirects(response, self.health_url)
+        hip = HealthRecord.objects.get(dog=self.dog, test_type="HD")
+        self.assertTrue(hip.is_public)
+        existing_public.refresh_from_db()
+        existing_private.refresh_from_db()
+        self.assertTrue(existing_public.is_public)
+        self.assertFalse(existing_private.is_public)
+        self.assertEqual(HealthRecord.objects.filter(dog=self.dog).count(), 3)
+        self.assertFalse(HealthRecord.objects.filter(dog=self.dog, test_type="ED").exists())
+        document.refresh_from_db()
+        self.assertFalse(document.is_public)
+        public = self.client.get(self.public_url)
+        self.assertContains(public, "HD-A")
+        self.assertContains(public, "Carrier")
+        self.assertNotContains(public, "CMR1")
+        self.assertNotContains(public, "private/orthopedic-health.pdf")
+
+        # Publishing an unchanged private score is not a new health record.
+        self.assertRedirects(self.client.post(url, {
+            "source_document": document.pk, "cmr1": "Clear",
+            "reviewed": "on", "intent": "publish",
+        }), self.health_url)
+        existing_private.refresh_from_db()
+        self.assertTrue(existing_private.is_public)
+        self.assertEqual(HealthRecord.objects.filter(dog=self.dog).count(), 3)
+
+        # Changing only ED still must keep the already published HD/DSRA/CMR1.
+        self.assertRedirects(self.client.post(url, {
+            "source_document": document.pk, "elbow": "ED-0",
+            "reviewed": "on", "intent": "publish",
+        }), self.health_url)
+        for test in ("HD", "ED", "DSRA", "CMR1"):
+            self.assertTrue(HealthRecord.objects.get(dog=self.dog, test_type=test).is_public)
+
+    def test_orthopedic_update_ignores_unused_dna_fields_and_keeps_latest_revision(self):
+        accepted = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+            payload={"document_type": DogDocument.DocumentType.HEALTH},
+        )
+        doc = DogDocument.objects.create(
+            dog=self.dog, title="Older dated orthopedic report",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file="private/orthopedic-update.pdf", source_submission=accepted,
+            submitted_by=self.owner,
+        )
+        from datetime import date
+        original = HealthRecord.objects.create(
+            dog=self.dog, test_type="HD", result="HD-B",
+            tested_on=date(2026, 10, 1),
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        self.client.force_login(self.moderator)
+        url = reverse("accounts:save-structured-health", args=[self.dog.pk])
+        # An unrelated populated laboratory control must not require a
+        # breed-percentage field when only HD is being changed.
+        self.assertRedirects(self.client.post(url, {
+            "source_document": doc.pk, "hip": "HD-A",
+            "laboratory": "Unused form autofill",
+            "tested_on": "2025-01-01",
+            "reviewed": "on", "intent": "publish",
+        }), self.health_url)
+        original.refresh_from_db()
+        self.assertFalse(original.is_public)
+        self.assertContains(self.client.get(self.health_url), "Current: <strong>HD-A</strong>", html=False)
+        self.assertRedirects(self.client.post(url, {
+            "source_document": doc.pk, "hip": "HD-C",
+            "tested_on": "2025-02-01",
+            "reviewed": "on", "intent": "publish",
+        }), self.health_url)
+        public_hd = HealthRecord.objects.filter(dog=self.dog, test_type="HD", is_public=True)
+        self.assertEqual(public_hd.count(), 1)
+        self.assertEqual(public_hd.get().result, "HD-C")
+        self.assertContains(self.client.get(self.public_url), "HD-C")
+        self.assertNotContains(self.client.get(self.public_url), "HD-B")
+
+    def test_independent_breed_dna_publication_keeps_other_values_and_evidence_private(self):
+        accepted = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+            payload={"document_type": DogDocument.DocumentType.DNA},
+        )
+        doc = DogDocument.objects.create(
+            dog=self.dog, title="DNA report",
+            document_type=DogDocument.DocumentType.DNA,
+            file="private/embark-dna.pdf", is_public=True,
+            source_submission=accepted, submitted_by=self.owner,
+        )
+        marker = HealthRecord.objects.create(
+            dog=self.dog, test_type="NCL1", result="Clear",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        self.client.force_login(self.moderator)
+        url = reverse("accounts:save-structured-health", args=[self.dog.pk])
+        self.assertRedirects(self.client.post(url, {
+            "source_document": doc.pk, "cane_corso_percentage": "100",
+            "laboratory": "Embark", "reviewed": "on", "intent": "publish",
+        }), self.health_url)
+        report = BreedDNAReport.objects.get(health_record__dog=self.dog)
+        self.assertTrue(report.health_record.is_public)
+        self.assertFalse(report.consent_public_summary)
+        doc.refresh_from_db()
+        marker.refresh_from_db()
+        self.assertFalse(doc.is_public)
+        self.assertTrue(marker.is_public)
+        page = self.client.get(self.public_url)
+        self.assertContains(page, "Embark")
+        self.assertContains(page, "NCL1")
+        self.assertNotContains(page, "private/embark-dna.pdf")
+
+    def test_uncommon_verified_condition_publishes_without_requiring_other_categories(self):
+        approved = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+        )
+        evidence = DogDocument.objects.create(
+            dog=self.dog, title="Cardiac veterinary report",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file="private/heart-report.pdf", source_submission=approved,
+            submitted_by=self.owner,
+        )
+        existing = HealthRecord.objects.create(
+            dog=self.dog, test_type="DSRA", result="Carrier",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        self.client.force_login(self.moderator)
+        response = self.client.post(
+            reverse("accounts:add-reviewed-health-condition", args=[self.dog.pk]),
+            {
+                "source_document": evidence.pk, "test_type": "Cardiac examination",
+                "result": "Normal", "reviewed": "on", "intent": "publish",
+            },
+        )
+        self.assertRedirects(response, self.health_url)
+        added = HealthRecord.objects.get(dog=self.dog, test_type="Cardiac examination")
+        self.assertTrue(added.is_public)
+        existing.refresh_from_db()
+        self.assertTrue(existing.is_public)
+        self.assertContains(self.client.get(self.public_url), "Cardiac examination")
+
     def test_structured_breed_percentage_records_privately_without_granting_consent(self):
         accepted = Submission.objects.create(
             kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
@@ -748,7 +914,7 @@ class ModeratorLabResultTests(TestCase):
         self.assertContains(health, reverse("registry:dog-detail", args=[dog.slug]))
         self.assertContains(health, reverse("accounts:edit-reviewed-health-result", args=[dog.pk, record.pk]))
         public = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
-        self.assertContains(public, "Hip &amp; elbow health")
+        self.assertContains(public, "Orthopedic Health Screening")
         self.assertContains(public, "HD-A")
 
     def test_misleading_public_flag_reports_why_result_is_not_on_site(self):

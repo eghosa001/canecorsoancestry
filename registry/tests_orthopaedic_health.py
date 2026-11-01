@@ -64,7 +64,11 @@ class PublicOrthopaedicGradeTests(TestCase):
             verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
         )
         response = self.client.get(self.url)
-        self.assertContains(response, "Hip &amp; elbow health")
+        self.assertContains(response, "Orthopedic Health Screening")
+        self.assertContains(response, "Radiographic evaluation")
+        self.assertContains(response, "HD (Hip Dysplasia)")
+        self.assertContains(response, "ED (Elbow Dysplasia)")
+        self.assertContains(response, "orthopaedic-compact-grade--normal", count=2)
         self.assertContains(response, "Normal hips")
         self.assertContains(response, "Normal elbows")
         self.assertContains(response, "HD-A")
@@ -97,7 +101,7 @@ class PublicOrthopaedicGradeTests(TestCase):
             is_public=True,
         )
         response = self.client.get(self.url)
-        self.assertNotContains(response, "Hip &amp; elbow health")
+        self.assertNotContains(response, "Orthopedic Health Screening")
         self.assertNotContains(response, "Normal hips")
         self.assertNotContains(response, "Normal elbows")
         self.assertNotContains(response, "Not verified")
@@ -110,6 +114,18 @@ class PublicOrthopaedicGradeTests(TestCase):
         self.assertNotContains(response, "Legacy health summary")
         source.refresh_from_db()
         self.assertEqual(source.result, "HD A · ED 0 (as shown on supplied pedigree)")
+
+    def test_independently_published_hip_grade_does_not_require_elbow_grade(self):
+        HealthRecord.objects.create(
+            dog=self.dog, test_type="HD", result="HD-B",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        page = self.client.get(self.url)
+        self.assertContains(page, "Orthopedic Health Screening")
+        self.assertContains(page, "HD (Hip Dysplasia)")
+        self.assertContains(page, "HD-B")
+        self.assertContains(page, "orthopaedic-compact-grade--borderline")
+        self.assertNotContains(page, "ED (Elbow Dysplasia)")
 
     def test_private_results_still_have_no_public_card(self):
         HealthRecord.objects.create(

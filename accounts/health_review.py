@@ -431,6 +431,10 @@ def add_reviewed_health_condition(request, pk):
     if not can_review_submissions(request.user):
         raise PermissionDenied
     dog = get_object_or_404(Dog, pk=pk)
+    intent = request.POST.get("intent", "save")
+    if intent not in {"save", "publish"}:
+        return HttpResponseBadRequest("Choose Save privately or Save & publish.")
+    publish_selected = intent == "publish"
     form = AdditionalHealthConditionForm(request.POST, dog=dog)
     if not form.is_valid():
         messages.error(request, "Check the additional condition and select its approved source document: " + form.errors.as_text())
@@ -489,7 +493,7 @@ def add_reviewed_health_condition(request, pk):
             dog=dog, test_type=data["test_type"].strip(),
             result=readable_health_result(data["resolved_result"]),
             tested_on=data.get("tested_on"), verification_state=VerificationState.HEALTH_VERIFIED,
-            is_public=False, notes=source_note, evidence_document=direct_evidence,
+            is_public=publish_selected, notes=source_note, evidence_document=direct_evidence,
         )
         VerificationEvent.objects.create(
             dog=dog, health_record=record, state=VerificationState.HEALTH_VERIFIED,
@@ -505,12 +509,18 @@ def add_reviewed_health_condition(request, pk):
                 "source_submission_id": str(source.pk) if source else None,
                 "source_document_id": document.pk if document else None,
                 "test_type": record.test_type, "result": record.result,
-                "public": False,
+                "public": publish_selected,
             },
-            note="Staff reviewer added a laboratory condition; original evidence remains private.",
+            note="Staff reviewer saved one evidence-reviewed condition; original evidence remains private.",
         )
     invalidate_public_content()
-    messages.success(request, "Additional reviewed condition saved privately. Choose Public to publish it.")
+    messages.success(request, (
+        "Additional reviewed condition published; other health values were retained."
+        if publish_selected else
+        "Additional reviewed condition saved privately; other health values were retained."
+    ))
+    if publish_selected:
+        return redirect("accounts:reviewed-dog-health", pk=pk)
     return redirect("accounts:edit-reviewed-health-result", pk=pk, record_id=record.pk)
 
 
