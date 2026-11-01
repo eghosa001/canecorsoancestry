@@ -403,7 +403,7 @@ function isPhotoKey(key) {
     typeof key === "string" &&
     key.startsWith("dogs/") &&
     !key.split("/").includes("..") &&
-    /\\.(jpe?g|png|webp|avif)$/i.test(key)
+    /\.(jpe?g|png|webp|avif)$/i.test(key)
   );
 }
 
@@ -429,7 +429,7 @@ async function handleOptimizedDogPhoto(request, env, url, ctx) {
   const expires = url.searchParams.get("expires") || "";
   const signature = url.searchParams.get("signature") || "";
   const now = Math.floor(Date.now() / 1000);
-  if (!/^\\d+$/.test(expires) ||
+  if (!/^\d+$/.test(expires) ||
       Number(expires) < now ||
       Number(expires) > now + 3600) {
     return new Response("Forbidden", { status: 403 });
