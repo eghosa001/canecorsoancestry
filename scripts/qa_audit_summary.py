@@ -18,6 +18,7 @@ EXPECTED = {
         "kennel_claim_with_private_certificate", "health_evidence_pending_moderation",
         "saved_pairing_create_delete", "paystack_unconfigured_safety",
         "private_dog_admin_edit_delete",
+        "approved_lab_original_document_preview",
     },
     "firefox": None,
     "webkit": None,
@@ -92,7 +93,7 @@ phase_evidence = {
     10: ["paystack_unconfigured_safety", "backend-accounts.log"],
     11: ["existing role browser audit"],
     13: ["django_admin_synthetic_dog", "private_dog_admin_edit_delete"],
-    14: ["image_upload_rejection_review", "document_certificate_evidence_review", "health_evidence_pending_moderation"],
+    14: ["image_upload_rejection_review", "document_certificate_evidence_review", "health_evidence_pending_moderation", "approved_lab_original_document_preview"],
     15: ["public_search_navigation_responsive"], 16: ["staff_isolation", "cross_account_dog_authorization"],
     18: ["feature-inventory.json"], 20: ["junit-*.xml", "cases-*.json", "Playwright traces"],
 }

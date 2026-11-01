@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}Health result visibility · Cane Corso Ancestry{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261030-structured-v2">
+<link rel="stylesheet" href="{% static 'core/health-workspace.css' %}?v=20261101-source-preview-v1">
 <section class="page-shell moderation-page health-review-workspace">
   <header class="page-heading">
     <p class="eyebrow">Moderator · Private health workspace</p>
@@ -42,6 +42,10 @@
           <div><label for="{{ structured_form.source_document.id_for_label }}">Or an accepted health/DNA certificate</label>{{ structured_form.source_document }}</div>
         </div>
         <small>Choose one source. Original reports remain private and every corrected value is audited.</small>
+        <div class="health-selected-evidence" aria-live="polite">
+          <strong data-evidence-selected-label>Select a report to inspect its actual laboratory name.</strong>
+          <a class="btn btn-outline" data-evidence-selected-link href="#" target="_blank" rel="noopener noreferrer" hidden>Open selected original PDF / image ↗</a>
+        </div>
       </div>
       <div class="structured-health-group">
         <h3>2. Genetic health screening</h3>
@@ -97,6 +101,33 @@
         <button type="submit" class="btn btn-gold">Save reviewed health values</button>
       </div>
     </form>
+    <details class="health-source-directory" open>
+      <summary><strong>View the member's original uploaded reports</strong> <span>{{ evidence_entries|length }} accepted source{{ evidence_entries|length|pluralize }}</span></summary>
+      {% if evidence_entries %}
+        <p class="health-review-help">Open a PDF or picture to read the laboratory name, exact test values and dates. Select that same source in the editor above. A blank laboratory name below means the member did not type it into the submission; it does not mean the report is missing it.</p>
+        <div class="health-source-list">
+          {% for source in evidence_entries %}
+            <article class="health-source-item" data-health-source-kind="{{ source.kind }}" data-health-source-id="{{ source.source_id }}">
+              <div class="health-source-copy">
+                <strong>{{ source.label }}</strong>
+                <small>{{ source.filename }} · {{ source.date|date:"j M Y" }} · {% if source.kind == "submission" %}Member Health/DNA upload{% else %}Approved Health/DNA document{% endif %}</small>
+                {% if source.laboratory %}
+                  <small>Laboratory supplied in submission: <strong>{{ source.laboratory }}</strong> (verify on certificate)</small>
+                {% else %}
+                  <small>Laboratory name not entered in the submission. Open the original certificate to check.</small>
+                {% endif %}
+              </div>
+              <div class="health-source-actions">
+                <a class="btn btn-outline" href="{{ source.preview_url }}" target="_blank" rel="noopener noreferrer">View original PDF / image ↗</a>
+                <button class="btn btn-outline" type="button" data-use-health-source>Select for editing</button>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">There is no approved uploaded laboratory file for this dog yet. Open the pending health review queue to check whether evidence is awaiting approval. Do not invent a laboratory name.</p>
+      {% endif %}
+    </details>
   </section>
   <section class="panel">
     <div class="health-section-heading"><div><p class="health-review-overline">Awaiting decision</p><h2>New laboratory evidence</h2></div><span class="health-count-badge">{{ pending|length }}</span></div>
@@ -171,4 +202,50 @@
     <p class="health-private-caption">For an uncommon health test, copy its name and value exactly as reported. Each change is audited against the accepted source; use the structured breed composition field above for percentages.</p>
   </details>
 </section>
+<script>
+(function () {
+  var form = document.querySelector(".structured-health-form");
+  if (!form) return;
+  var submission = form.querySelector('[name="source_submission"]');
+  var documentInput = form.querySelector('[name="source_document"]');
+  var selectedLink = form.querySelector("[data-evidence-selected-link]");
+  var selectedLabel = form.querySelector("[data-evidence-selected-label]");
+  var entries = Array.prototype.slice.call(document.querySelectorAll(".health-source-item"));
+  function update(changedField) {
+    if (changedField === submission && submission && submission.value && documentInput) documentInput.value = "";
+    if (changedField === documentInput && documentInput && documentInput.value && submission) submission.value = "";
+    var kind = submission && submission.value ? "submission" : documentInput && documentInput.value ? "document" : "";
+    var id = kind === "submission" ? submission.value : kind === "document" ? documentInput.value : "";
+    var match = entries.find(function (item) {
+      return item.dataset.healthSourceKind === kind && item.dataset.healthSourceId === id;
+    });
+    entries.forEach(function (item) {
+      item.classList.toggle("health-source-item--selected", item === match);
+    });
+    if (selectedLink) {
+      selectedLink.hidden = !match;
+      if (match) selectedLink.href = match.querySelector(".health-source-actions a").href;
+      else selectedLink.removeAttribute("href");
+    }
+    if (selectedLabel) selectedLabel.textContent = match
+      ? "Selected source: " + match.querySelector(".health-source-copy strong").textContent.trim()
+      : "Select a report to inspect its actual laboratory name.";
+  }
+  if (submission) submission.addEventListener("change", function () { update(submission); });
+  if (documentInput) documentInput.addEventListener("change", function () { update(documentInput); });
+  entries.forEach(function (entry) {
+    var choose = entry.querySelector("[data-use-health-source]");
+    if (!choose) return;
+    choose.addEventListener("click", function () {
+      var kind = entry.dataset.healthSourceKind;
+      var target = kind === "submission" ? submission : documentInput;
+      if (!target) return;
+      target.value = entry.dataset.healthSourceId;
+      update(target);
+      target.focus();
+    });
+  });
+  update();
+}());
+</script>
 {% endblock %}
