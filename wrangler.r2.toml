@@ -16,5 +16,5 @@ bucket_name = "canecorsoancestry-media"
 [images]
 binding = "IMAGES"
 
-[cache]
-enabled = true
+# Explicit, post-HMAC thumbnail caching uses Cache API only.
+# Do not enable Worker-wide HTTP caching for the signed R2 gateway.

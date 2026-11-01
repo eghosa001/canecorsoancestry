@@ -156,6 +156,7 @@ async function handleR2Gateway(request, env, url) {
       {
         status: 403,
         headers: {
+          "cache-control": "private, no-store",
           "x-r2-auth-reason": verification.reason,
           "x-r2-auth-method": verification.method || request.method.toUpperCase(),
         },
@@ -245,6 +246,7 @@ async function handleR2Ingest(request, env, url) {
       {
         status: 403,
         headers: {
+          "cache-control": "private, no-store",
           "x-r2-auth-reason": verification.reason,
           "x-r2-auth-method": verification.method || request.method.toUpperCase(),
         },
