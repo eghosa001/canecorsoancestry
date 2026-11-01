@@ -21,7 +21,7 @@
         <h2>Edit Health &amp; DNA</h2>
       </div>
     </div>
-    <p class="health-review-help">Change each test separately, just like the public dog's Health &amp; DNA page. Choose only the results you have checked in an accepted laboratory report. Unchanged rows stay as they are.</p>
+    <p class="health-review-help">Select only the findings shown on the approved report. Leave every other test blank: existing public and private values will remain unchanged. Save privately, or publish only the selected findings.</p>
     {% if selected_legacy_record %}
       <div class="structured-evidence" role="status" id="legacy-source-help">
         <strong>Converting an older combined record</strong>
@@ -98,7 +98,10 @@
       <div class="structured-health-footer">
         <div><label for="{{ structured_form.tested_on.id_for_label }}">Date of report (optional)</label>{{ structured_form.tested_on }}</div>
         <label class="structured-health-attest">{{ structured_form.reviewed }} <span>{{ structured_form.reviewed.label }}</span></label>
-        <button type="submit" class="btn btn-gold">Save reviewed health values</button>
+        <div class="button-row">
+          <button type="submit" name="intent" value="save" class="btn btn-outline">Save selected privately</button>
+          <button type="submit" name="intent" value="publish" class="btn btn-gold">Save &amp; publish selected</button>
+        </div>
       </div>
     </form>
     <details class="health-source-directory" open>
@@ -216,7 +219,10 @@
         <div class="health-review-field"><label for="{{ add_condition_form.tested_on.id_for_label }}">{{ add_condition_form.tested_on.label }}</label>{{ add_condition_form.tested_on }}</div>
       </div>
       <div class="health-review-confirm"><label>{{ add_condition_form.reviewed }} <strong>{{ add_condition_form.reviewed.label }}</strong></label></div>
-      <button type="submit" class="btn btn-gold">Save reviewed result →</button>
+      <div class="button-row">
+        <button type="submit" name="intent" value="save" class="btn btn-outline">Save privately</button>
+        <button type="submit" name="intent" value="publish" class="btn btn-gold">Save &amp; publish this result</button>
+      </div>
     </form>
     <p class="health-private-caption">For an uncommon health test, copy its name and value exactly as reported. Each change is audited against the accepted source; use the structured breed composition field above for percentages.</p>
   </details>
