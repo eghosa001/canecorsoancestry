@@ -686,7 +686,7 @@ class ModeratorLabResultTests(TestCase):
         self.client.force_login(self.moderator)
         health = self.client.get(reverse("accounts:reviewed-dog-health", args=[dog.pk]))
         self.assertContains(health, "Not visible — correct the result")
-        self.assertContains(health, "owner-authorized")
+        self.assertContains(health, "publication-approved")
         public = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
         self.assertNotContains(public, "100% Cane Corso")
 
