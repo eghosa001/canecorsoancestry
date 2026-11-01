@@ -163,7 +163,12 @@ def test_member_photo_review_and_corrupt_image(page):
     go(page, f"/member/dogs/{dog_id}/photo/")
     page.locator("#id_attachment").set_input_files(CREDS["fixtures"]["invalid-image.jpg"])
     submit_form_containing(page, "#id_attachment")
-    assert page.locator(".field-error").count() > 0, "Fake JPEG accepted"
+    # The rejection is server-rendered. On WebKit the click can return
+    # before navigation installs the new response, so a synchronous count()
+    # tests the previous page instead of whether the fake image was rejected.
+    # Wait for the actual error; a wrongly accepted upload still fails.
+    page.locator(".field-error").first.wait_for(state="attached", timeout=10000)
+    assert "/member/submissions/" not in page.url, "Fake JPEG accepted"
     go(page, f"/member/dogs/{dog_id}/photo/")
     caption = "QA image " + uuid.uuid4().hex[:8]
     page.locator("#id_attachment").set_input_files(CREDS["fixtures"]["dog-portrait.png"])
