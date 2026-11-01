@@ -710,6 +710,7 @@ def toggle_health_result(request, pk, record_id):
                 },
                 note="Staff changed breed-DNA summary publication. The original certificate remains private.",
             )
+            invalidate_public_content()
         if record.is_public != show:
             record.is_public = show
             record.save(update_fields=["is_public"])
