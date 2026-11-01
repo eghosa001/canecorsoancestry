@@ -1,7 +1,7 @@
 """One source of truth for whether a health result reaches the public dog page.
 
 The saved is_public flag is only a publication request. The dog profile
-also enforces dog visibility, breed-DNA owner consent, and safe structured
+also enforces dog visibility, DNA summary authorization, and safe structured
 test labels. Keep staff badges consistent with those actual display rules.
 """
 from .genetic_health import unstructured_breed_claim
