@@ -93,7 +93,7 @@
 
     <section class="panel">
       <h2>DNA publication controls</h2>
-      <p>Reviewed DNA breed composition may be privately retained. The Super Admin can publish or hide verified breed percentages using Show / hide approved results above. The owner's original consent record is retained separately. Full original reports remain private.</p>
+      <p>Reviewed DNA breed composition may be privately retained. Any authorized Moderator, Senior Moderator or Super Admin can publish or hide verified breed percentages using Show / hide approved results above. The owner's original consent record is retained separately. Full original reports remain private.</p>
       {% if visible_dna_count %}
       <p><strong>{{ visible_dna_count }} DNA report{{ visible_dna_count|pluralize }}</strong> currently have public summaries enabled.</p>
       <form method="post" action="{% url 'accounts:health-genetic-withdraw' dog.pk %}" class="member-form">
