@@ -235,6 +235,71 @@ jobs:
           echo "Verified rendered images: $checked; failures: $failures"
           test "$checked" -ge 1
           test "$failures" -eq 0
+      - name: Verify real signed dog thumbnails at the CDN
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from html.parser import HTMLParser
+          from urllib.error import HTTPError
+          from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
+          from urllib.request import Request, urlopen
+
+          SITE = os.environ["PUBLIC_SITE"].rstrip("/")
+          EDGE_HOST = "canecorsoancestry-edge.aighewieghosa111.workers.dev"
+          HEADERS = {"User-Agent": "Mozilla/5.0 CCA-Live-Image-Audit/1.0"}
+
+          class Images(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.managed = []
+
+              def handle_starttag(self, tag, attrs):
+                  if tag != "img":
+                      return
+                  values = dict(attrs)
+                  original = values.get("data-media-fallback", "")
+                  if original.startswith("/media/dogs/"):
+                      self.managed.append((original, values.get("src", "")))
+
+          validated = 0
+          for path in ("/", "/dogs/"):
+              with urlopen(Request(SITE + path, headers=HEADERS), timeout=30) as response:
+                  assert response.status == 200, f"HTML {path}: HTTP {response.status}"
+                  html = response.read().decode("utf-8")
+              parsed = Images()
+              parsed.feed(html)
+              print(f"{path}: {len(parsed.managed)} R2-managed public dog image tags")
+              for original, src in parsed.managed[:2]:
+                  photo = urlsplit(urljoin(SITE, src))
+                  assert (
+                      photo.scheme == "https"
+                      and photo.netloc == EDGE_HOST
+                      and photo.path.startswith("/_thumb/dogs/")
+                  ), f"Dog image is not using the direct signed CDN path on {path}"
+                  params = parse_qs(photo.query)
+                  assert all(len(params.get(key, [])) == 1 for key in ("variant", "expires", "signature"))
+                  assert params["variant"][0] in {"thumb", "card", "portrait"}
+                  with urlopen(Request(photo.geturl(), headers=HEADERS), timeout=30) as image:
+                      content_type = image.headers.get("content-type", "").lower()
+                      body = image.read()
+                      assert image.status == 200 and content_type.startswith("image/") and body
+                      cache = image.headers.get("x-cca-image-cache", "original-fallback")
+                  print(f"Direct image: HTTP 200, {len(body)} bytes, {content_type}, cache={cache}")
+                  signature = params["signature"][0]
+                  flipped = ("0" if signature[0] != "0" else "1") + signature[1:]
+                  invalid_query = photo.query.replace("signature=" + signature, "signature=" + flipped, 1)
+                  invalid_url = urlunsplit(photo._replace(query=invalid_query))
+                  try:
+                      with urlopen(Request(invalid_url, headers=HEADERS), timeout=20) as denied:
+                          raise AssertionError(f"Tampered image signature was accepted: HTTP {denied.status}")
+                  except HTTPError as e:
+                      assert e.code == 403, f"Tampered image signature returned HTTP {e.code}, expected 403"
+                  validated += 1
+          assert validated > 0, "No live R2-managed photo was checked via the direct CDN"
+          print(f"Verified {validated} live signed R2 thumbnails and tamper rejection.")
+          PY
       - name: Verify public production routes
         shell: bash
         run: |
