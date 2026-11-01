@@ -52,6 +52,7 @@
                       type="button"
                       data-dog-photo-thumb
                       data-photo-src="{{ photo.image.url }}"
+                      data-photo-preview-src="{{ photo.image.url|dog_photo:'portrait' }}"
                       data-photo-alt="{{ dog.name }}{% if photo.public_caption %} — {{ photo.public_caption }}{% endif %}"
                       data-photo-caption="{% if photo.public_caption %}{{ photo.public_caption }}{% else %}Photo {{ forloop.counter }}{% endif %}"
                       aria-label="Show photograph {{ forloop.counter }} of {{ dog.name }}"
