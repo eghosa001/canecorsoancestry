@@ -521,7 +521,8 @@ def dog_detail(request, slug):
         # to display. Preserve the empty Health & DNA section in the template.
         relative_health, dog.display_health_records = [], []
 
-    # The public verification card must show reviewed data, not a generic placeholder.
+    # Build only intentionally published health cards; private review evidence
+    # and unpublished status stay in the staff workspace.
     genetic_screenings = marker_status_rows(dog.display_health_records)
     # Only actual recorded marker statuses are displayed; never invent missing results.
     # Additional conditions are sourced from a moderator-reviewed approval event,
