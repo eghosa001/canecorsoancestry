@@ -310,6 +310,6 @@ def save_structured_health(request, pk):
     else:
         messages.success(
             request, f"Saved {updates} reviewed result{'s' if updates != 1 else ''}."
-            + (" Breed-DNA publication remains subject to owner consent." if pct is not None else "")
+            + " Newly entered values are Private until a moderator chooses Public; previously published corrections retain their existing visibility."
         )
     return redirect("accounts:reviewed-dog-health", pk=pk)
