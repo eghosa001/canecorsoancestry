@@ -6,10 +6,42 @@ test labels. Keep staff badges consistent with those actual display rules.
 """
 from .genetic_health import unstructured_breed_claim
 from .legacy_health import legacy_mixed_health_rows
-from .models import VerificationState
+from .models import ModerationAudit, VerificationState
 
 
-def publication_status(record, *, dog=None):
+def staff_authorized_breed_record_ids(dog):
+    """Last explicit staff publication decision per breed summary, from audit.
+
+    This does not alter or impersonate the kennel owner's consent. A Super
+    Admin publication decision is separately attributable and reversible.
+    """
+    decisions = {}
+    entries = (
+        ModerationAudit.objects.filter(
+            dog=dog,
+            action=ModerationAudit.Action.VERIFICATION,
+            summary__kind="staff_breed_dna_publication",
+        ).order_by("pk").values_list("summary", flat=True)
+    )
+    for entry in entries.iterator(chunk_size=200):
+        if not isinstance(entry, dict):
+            continue
+        record_id, public = entry.get("health_record_id"), entry.get("public")
+        if type(record_id) is int and type(public) is bool:
+            decisions[record_id] = public
+    return {pk for pk, is_public in decisions.items() if is_public}
+
+
+def breed_publication_allowed(report, *, staff_authorized_ids=None):
+    """True for member-consented or separately staff-authorized typed summaries."""
+    if report.consent_public_summary:
+        return True
+    if staff_authorized_ids is None:
+        staff_authorized_ids = staff_authorized_breed_record_ids(report.health_record.dog)
+    return report.health_record_id in staff_authorized_ids
+
+
+def publication_status(record, *, dog=None, staff_authorized_ids=None):
     """Return (code, short status, explanation) without mutating any record.
 
     A record's private evidence file never becomes a public attachment.
@@ -30,20 +62,20 @@ def publication_status(record, *, dog=None):
 
     report = getattr(record, "breed_dna_report", None)
     if report is not None:
-        if not report.consent_public_summary:
+        if not breed_publication_allowed(report, staff_authorized_ids=staff_authorized_ids):
             return (
-                "consent", "Not visible — owner consent required",
-                "The owner has not authorized a public breed-DNA summary. "
-                "The private report must not be published.",
+                "authorization", "Not visible — publication decision required",
+                "A Super Admin can make this reviewed breed-DNA summary public. "
+                "The private source report always stays private.",
             )
         if record.verification_state != VerificationState.HEALTH_VERIFIED:
             return (
                 "unverified_dna", "Not visible — DNA review required",
-                "Only verified, owner-authorized breed-DNA reports display publicly.",
+                "Only verified breed-DNA summaries approved for public display appear.",
             )
         return (
             "published", "Visible on public profile",
-            "The authorized breed-DNA summary appears in the Health & DNA section.",
+            "The approved breed-DNA summary appears in the Health & DNA section.",
         )
 
     legacy_rows = legacy_mixed_health_rows(
@@ -64,15 +96,14 @@ def publication_status(record, *, dog=None):
         return (
             "needs_structuring", "Not visible — enter health test results",
             "This legacy mixed breed/health record has no shareable test-specific "
-            "results. Do not publish a breed-purity percentage without owner consent.",
+            "results. Publish breed composition only via a reviewed, structured DNA report.",
         )
 
     if unstructured_breed_claim(record.test_type):
         return (
             "needs_structuring", "Not visible — correct the result",
-            "This older breed-DNA claim has no owner-authorized structured "
-            "breed report. Record independently verified clinical or genetic "
-            "test findings individually; do not publish unconsented DNA percentages.",
+            "This older breed-DNA claim has no structured, publication-approved "
+            "breed report. Review genuine DNA evidence before displaying percentages.",
         )
     return (
         "published", "Visible on public profile",
