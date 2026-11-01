@@ -24,7 +24,7 @@ class DogPhotoDeliveryTests(TestCase):
         expires = query["expires"][0]
         expected = hmac.new(
             b"test-only-r2-photo-key",
-            f"GET\\ndogs/archive/001/dog.jpg\\ncard\\n{expires}".encode(),
+            f"GET\ndogs/archive/001/dog.jpg\ncard\n{expires}".encode(),
             hashlib.sha256,
         ).hexdigest()
         self.assertEqual(query["signature"], [expected])
