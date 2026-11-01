@@ -50,7 +50,7 @@ def dog_photo(url, variant="card"):
     # while keeping links short-lived after a dog is made private.
     ttl = min(300, max(60, int(getattr(settings, "MEDIA_EDGE_URL_TTL", 300))))
     expires = ((int(time.time()) + ttl + 59) // 60) * 60
-    message = f"GET\\n{key}\\n{variant}\\n{expires}".encode()
+    message = f"GET\n{key}\n{variant}\n{expires}".encode()
     signature = hmac.new(signing_key.encode(), message, hashlib.sha256).hexdigest()
     return (
         f"{base}/_thumb/{quote(key, safe='/')}"
