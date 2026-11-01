@@ -26,6 +26,10 @@ PUBLIC_ROUTES = (
     ("/accounts/login/", "login"),
     ("/member/signup/", "signup"),
     ("/accounts/password_reset/", "password-reset"),
+    ("/member/resend-verification/", "resend-verification"),
+    ("/privacy/", "privacy"),
+    ("/terms/", "terms"),
+    ("/billing-policy/", "billing-policy"),
 )
 
 
@@ -35,8 +39,8 @@ def wait_for_real_app(page, path, *, attempts=8):
     started = time.perf_counter()
     for _ in range(attempts):
         response = page.goto(url, wait_until="domcontentloaded", timeout=45_000)
-        if response and response.status >= 500:
-            raise AssertionError(f"{path} returned HTTP {response.status}")
+        if response and response.status >= 400:
+            raise AssertionError(f"{path} returned HTTP {response.status} instead of a usable page")
         warming = response.headers.get("x-cca-edge-warming") if response else None
         if not warming and page.locator(".site-header").count() and page.locator("main").count():
             page.wait_for_load_state("networkidle")
@@ -46,6 +50,20 @@ def wait_for_real_app(page, path, *, attempts=8):
 
 
 def assert_page(page, label, *, mobile=False):
+    # Public listing metadata should never expose ORM null markers or JS sentinels.
+    if os.getenv("GITHUB_EVENT_NAME") != "pull_request":
+        # PR smoke audits the *previous* live release, so do not require
+        # brand-new public-card rules until the PR reaches production.
+        null_metadata = page.evaluate(
+            """() => [...document.querySelectorAll(
+              '.dog-card-body p, .search-result-card .registration-line, '
+              + '.kennel-card-top .eyebrow, .pedigree-index-card p'
+            )].map(el => (el.textContent || '').trim())
+              .filter(value => /^(?:None|undefined|null|NaN)(?:\\s*[·•]|\\s*$)/i.test(value))
+            """
+        )
+        if null_metadata:
+            raise AssertionError(f"{label} exposed empty metadata in public cards: {null_metadata[:5]}")
     overflow = page.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
     if overflow > 3:
         raise AssertionError(f"{label} has {overflow}px horizontal overflow")
@@ -601,6 +619,10 @@ def main():
             ("/accounts/login/", "login"),
             ("/member/signup/", "signup"),
             ("/accounts/password_reset/", "password-reset"),
+            ("/member/resend-verification/", "resend-verification"),
+            ("/privacy/", "privacy"),
+            ("/terms/", "terms"),
+            ("/billing-policy/", "billing-policy"),
         ):
             page = browser.new_page(viewport={"width": 390, "height": 844})
             report["mobile"].append(visit(page, path, f"{label}-mobile", mobile=True))

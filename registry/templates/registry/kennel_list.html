@@ -5,7 +5,7 @@
   <header class="page-heading">
     <p class="eyebrow">Kennel directory</p>
     <h1>Explore kennels</h1>
-    <p>Browse recorded breeding kennels and explore their dogs and litters. Historical names inferred from the original pedigree archive are labelled unverified until a breeder's identity and the dogs' origins can be confirmed.</p>
+    <p>Explore kennels, dogs and litters. Historical names remain labelled unverified until their origins are confirmed.</p>
   </header>
 
   <form class="filter-panel" method="get" role="search" aria-label="Search kennels">
@@ -36,9 +36,9 @@
     {% for kennel in kennels %}
       <a class="kennel-card" href="{% url 'registry:kennel-detail' kennel.slug %}">
         <div class="kennel-card-top">
-          <span class="eyebrow">
-            {% if kennel.city and kennel.country %}{{ kennel.city }}, {{ kennel.country }}{% elif kennel.country %}{{ kennel.country }}{% elif kennel.city %}{{ kennel.city }}{% else %}Location not recorded{% endif %}
-          </span>
+          {% if kennel.city or kennel.country %}
+          <span class="eyebrow">{% if kennel.city %}{{ kennel.city }}{% endif %}{% if kennel.city and kennel.country %}, {% endif %}{% if kennel.country %}{{ kennel.country }}{% endif %}</span>
+          {% endif %}
           {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% elif kennel.is_archive_hypothesis %}<span class="muted">Historical name · unverified</span>{% endif %}
         </div>
         <h2>{{ kennel.name }}</h2>

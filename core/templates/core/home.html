@@ -71,8 +71,8 @@
         </div>
         <div class="dog-card-body">
           <h3>{{ dog.name }}</h3>
-          {% if dog.card_registration_number %}<p>{{ dog.card_registration_code }} · {{ dog.card_registration_number }}</p>{% endif %}
-          <p>{{ dog.colour|default:"Colour not recorded" }}{% if dog.country %} · {{ dog.country }}{% endif %}</p>
+          {% if dog.card_registration_number %}<p>{% if dog.card_registration_code %}{{ dog.card_registration_code }} · {% endif %}{{ dog.card_registration_number }}</p>{% endif %}
+          {% if dog.colour or dog.country %}<p>{% if dog.colour %}{{ dog.colour }}{% endif %}{% if dog.colour and dog.country %} · {% endif %}{% if dog.country %}{{ dog.country }}{% endif %}</p>{% endif %}
         </div>
       </a>
     {% endfor %}

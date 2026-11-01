@@ -65,8 +65,8 @@
             <h2>{{ dog.name }}</h2>
             <span class="sex-mark">{{ dog.get_sex_display }}</span>
           </div>
-          {% if dog.card_registration_number %}<p class="registration-line">{{ dog.card_registration_code }} · {{ dog.card_registration_number }}</p>{% endif %}
-          <p>{{ dog.colour|default:"Colour not recorded" }}{% if dog.date_of_birth %} · Born {{ dog.date_of_birth }}{% endif %}</p>
+          {% if dog.card_registration_number %}<p class="registration-line">{% if dog.card_registration_code %}{{ dog.card_registration_code }} · {% endif %}{{ dog.card_registration_number }}</p>{% endif %}
+          {% if dog.colour or dog.date_of_birth %}<p>{% if dog.colour %}{{ dog.colour }}{% endif %}{% if dog.colour and dog.date_of_birth %} · {% endif %}{% if dog.date_of_birth %}Born {{ dog.date_of_birth }}{% endif %}</p>{% endif %}
           {% if dog.kennel %}<p class="muted">{{ dog.kennel.name }}</p>{% endif %}
           {% if not dog.card_image_url and not dog.source_image_url %}<p class="muted">Pedigree record · no public photo</p>{% endif %}
         </div>

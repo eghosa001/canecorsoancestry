@@ -100,7 +100,7 @@
         <dt>Sex</dt><dd>{{ dog.get_sex_display }}</dd>
         <dt>Date of birth</dt><dd>{{ dog.date_of_birth|default:"Not recorded" }}</dd>
         <dt>Colour</dt><dd>{{ dog.colour|default:"Not recorded" }}</dd>
-        <dt>Bloodline</dt><dd>{{ dog.bloodline|default:"Not recorded" }}</dd>
+        {% if dog.bloodline %}<dt>Bloodline</dt><dd>{{ dog.bloodline }}</dd>{% endif %}
         <dt class="profile-coi-label">COI ({{ coi_label }})</dt>
         <dd class="profile-coi-value">
           {% if coi_percent != None %}
@@ -217,10 +217,13 @@
 
   {% if dog.bio or dog.display_titles %}
   <div class="profile-section-grid">
+    {% if dog.bio %}
     <article class="panel profile-bio" id="biography">
       <div class="panel-heading"><h2>About</h2>{% if user.is_authenticated and not staff_identity %}<a class="profile-review-chip" href="{% url 'accounts:open-dispute' dog.pk %}?field=biography">Report detail →</a>{% endif %}</div>
-      <p>{{ dog.bio|default:"No public biography has been recorded." }}</p>
+      <p>{{ dog.bio }}</p>
     </article>
+    {% endif %}
+    {% if dog.display_titles %}
     <article class="panel" id="titles">
       <div class="panel-heading"><h2>Titles</h2>{% if user.is_authenticated and not staff_identity %}<a class="profile-review-chip" href="{% url 'accounts:open-dispute' dog.pk %}?field=titles">Report detail →</a>{% endif %}</div>
       <div class="relationship-list">
@@ -233,6 +236,7 @@
           </div>{% empty %}<p class="muted">No titles recorded.</p>{% endfor %}
       </div>
     </article>
+    {% endif %}
   </div>
   {% endif %}
 
