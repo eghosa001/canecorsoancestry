@@ -147,7 +147,7 @@ class ModeratorFinalPublicationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         record.refresh_from_db()
         self.assertFalse(record.is_public)
-        self.assertContains(response, "owner has not authorized publication")
+        self.assertContains(response, "Only the Super Admin can authorize publication")
 
     def test_add_omitted_condition_from_approved_evidence_is_private_until_published(self):
         source = Submission.objects.create(
