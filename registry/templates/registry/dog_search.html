@@ -58,7 +58,7 @@
       <a class="search-result-card{% if not dog.card_image_url and not dog.source_image_url %} no-media{% endif %}" href="{% url 'registry:dog-detail' dog.slug %}?source=search">
         {% if dog.card_image_url or dog.source_image_url %}
           <div class="search-result-media">
-            {% if dog.card_image_url %}<img src="{{ dog.card_image_url|dog_photo:'thumb' }}" alt="{{ dog.name }}" width="84" height="84" {% if forloop.counter <= 3 %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async">{% else %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="84" height="84" {% if forloop.counter <= 3 %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" referrerpolicy="no-referrer">{% endif %}
+            {% if dog.card_image_url %}<img data-media-fallback="{{ dog.card_image_url }}" src="{{ dog.card_image_url|dog_photo:'thumb' }}" alt="{{ dog.name }}" width="84" height="84" {% if forloop.counter <= 3 %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async">{% else %}<img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="84" height="84" {% if forloop.counter <= 3 %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" referrerpolicy="no-referrer">{% endif %}
           </div>
         {% endif %}
         <div class="search-result-main">
