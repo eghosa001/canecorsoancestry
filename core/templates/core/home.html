@@ -1,9 +1,12 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static dog_images %}
 {% block title %}Cane Corso Ancestry · Pedigree & Bloodline Research{% endblock %}
 {% block meta_description %}Search Cane Corso pedigrees, trace ancestors and offspring, explore kennels and compare bloodlines.{% endblock %}
 {% block og_title %}Cane Corso Ancestry · Pedigree & Bloodline Research{% endblock %}
-{% block extra_head %}<script type="application/ld+json">{{ structured_data }}</script>{% endblock %}
+{% block extra_head %}
+<script type="application/ld+json">{{ structured_data }}</script>
+{% if featured_dogs and featured_dogs.0.card_image_url %}<link rel="preload" as="image" href="{{ featured_dogs.0.card_image_url|dog_photo:'card' }}" imagesrcset="{{ featured_dogs.0.card_image_url|dog_photo:'card' }} 480w, {{ featured_dogs.0.card_image_url|dog_photo:'portrait' }} 960w" imagesizes="(max-width: 640px) 92vw, (max-width: 980px) 45vw, 25vw">{% endif %}
+{% endblock %}
 {% block content %}
 <section class="hero">
   <div class="hero-copy">
@@ -62,9 +65,9 @@
       <a class="dog-card" href="{% url 'registry:dog-detail' dog.slug %}">
         <div class="dog-card-media">
           {% if dog.card_image_url %}
-            <img src="{{ dog.card_image_url }}?v=20261002-2" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async">
+            <img src="{{ dog.card_image_url|dog_photo:'card' }}" srcset="{{ dog.card_image_url|dog_photo:'card' }} 480w, {{ dog.card_image_url|dog_photo:'portrait' }} 960w" sizes="(max-width: 640px) 92vw, (max-width: 980px) 45vw, 25vw" alt="{{ dog.name }}" width="480" height="384" {% if forloop.first %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async">
           {% elif dog.source_image_url %}
-            <img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="480" height="384" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+            <img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" width="480" height="384" {% if forloop.first %}loading="eager" fetchpriority="high"{% else %}loading="lazy"{% endif %} decoding="async" referrerpolicy="no-referrer">
           {% else %}
             <div class="media-placeholder">CCA</div>
           {% endif %}
