@@ -76,15 +76,16 @@ class PublicOrthopaedicGradeTests(TestCase):
         record.refresh_from_db()
         self.assertEqual((record.test_type, record.result), ("HDA ED0", "Certified"))
 
-    def test_unverified_entry_never_says_verified(self):
+    def test_unverified_entry_never_appears_even_if_stale_public_flag(self):
         HealthRecord.objects.create(
             dog=self.dog, test_type="ED0", result="Recorded",
             verification_state=VerificationState.COMMUNITY, is_public=True,
         )
         response = self.client.get(self.url)
-        self.assertContains(response, "Normal elbows")
+        self.assertNotContains(response, "Normal elbows")
         self.assertNotContains(response, "Not verified")
         self.assertNotContains(response, "Health/DNA verified")
+        self.assertContains(response, "No available records")
 
     def test_actual_legacy_pedigree_health_summary_is_easy_to_read_and_not_falsely_verified(self):
         # Matches the existing public dog-profile screenshot exactly.
@@ -96,13 +97,13 @@ class PublicOrthopaedicGradeTests(TestCase):
             is_public=True,
         )
         response = self.client.get(self.url)
-        self.assertContains(response, "Hip &amp; elbow health")
-        self.assertContains(response, "Normal hips")
-        self.assertContains(response, "Normal elbows")
+        self.assertNotContains(response, "Hip &amp; elbow health")
+        self.assertNotContains(response, "Normal hips")
+        self.assertNotContains(response, "Normal elbows")
         self.assertNotContains(response, "Not verified")
-        self.assertContains(response, "HD-A")
-        self.assertContains(response, "ED-0")
-        self.assertContains(response, 'class="orthopaedic-compact-row"', count=2)
+        self.assertNotContains(response, "HD-A")
+        self.assertNotContains(response, "ED-0")
+        self.assertNotContains(response, 'class="orthopaedic-compact-row"')
         self.assertNotContains(response, "The X-ray screening found no signs")
         self.assertNotContains(response, "Source: supplied pedigree")
         self.assertNotContains(response, "orthopaedic-health-card")
