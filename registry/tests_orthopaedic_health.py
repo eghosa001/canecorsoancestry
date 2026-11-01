@@ -80,6 +80,24 @@ class PublicOrthopaedicGradeTests(TestCase):
         record.refresh_from_db()
         self.assertEqual((record.test_type, record.result), ("HDA ED0", "Certified"))
 
+    def test_hd_precedes_ed_even_when_elbow_record_is_newer(self):
+        # Database ordering must never determine the HD/ED display order.
+        HealthRecord.objects.create(
+            dog=self.dog, test_type="HD", result="HD-A",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        HealthRecord.objects.create(
+            dog=self.dog, test_type="ED", result="ED-0",
+            verification_state=VerificationState.HEALTH_VERIFIED, is_public=True,
+        )
+        page = self.client.get(self.url)
+        self.assertEqual(page.status_code, 200)
+        html = page.content.decode()
+        self.assertEqual(html.count('class="orthopaedic-compact-row"'), 2)
+        self.assertLess(
+            html.index("HD (Hip Dysplasia)"), html.index("ED (Elbow Dysplasia)")
+        )
+
     def test_unverified_entry_never_appears_even_if_stale_public_flag(self):
         HealthRecord.objects.create(
             dog=self.dog, test_type="ED0", result="Recorded",
