@@ -341,9 +341,19 @@ def test_saved_pairing_add_remove(page):
     ).first())
     assert saved is not None, "Pairing not persisted"
     go(page, f"/member/research/pairings/")
+    # The current page already has the final redirect URL. wait_for_url()
+    # can therefore return *before* the POST reaches Django (notably WebKit).
+    # Wait for an actual navigation and completed redirected response instead.
     page.once("dialog", lambda dialog: dialog.accept())
-    page.locator(f'form[action*="{saved.pk}/delete/"] button[type="submit"]').click()
-    page.wait_for_url("**/member/research/pairings/", wait_until="domcontentloaded", timeout=15000)
+    with page.expect_navigation(wait_until="domcontentloaded", timeout=15000) as nav:
+        page.locator(f'form[action*="{saved.pk}/delete/"] button[type="submit"]').click()
+    response = nav.value
+    assert response is not None and response.status == 200, (
+        f"Removing saved research did not return the list page: {response.status if response else 'no response'}"
+    )
+    assert page.url.rstrip("/").endswith("/member/research/pairings"), (
+        f"Delete did not redirect to saved research: {page.url}"
+    )
     assert not db_call(lambda: SavedPairing.objects.filter(pk=saved.pk).exists()), (
         "Removing saved research did not delete the pairing"
     )
