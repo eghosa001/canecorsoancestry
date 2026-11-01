@@ -9,7 +9,7 @@ from django.db.models.functions import RowNumber
 
 from registry.genetic_health import unstructured_breed_claim
 from registry.legacy_health import legacy_mixed_health_rows
-from registry.models import Dog, HealthRecord, Kennel
+from registry.models import Dog, HealthRecord, Kennel, VerificationState
 from registry.querysets import published_dogs
 
 
