@@ -154,3 +154,35 @@ fi
 echo "PASS: Restored pedigree parent references, application indexes and foreign keys are structurally valid."
 echo "PASS: Encrypted R2 archive restored to independent PostgreSQL 17; $restored_dogs dogs and $restored_migrations migrations."
 echo "Production database was not accessed for restore or modified."
+# Publish a minimal, auditable receipt. Never include archive object keys,
+# credentials, dog identities, row contents or decrypted backup bytes.
+sudo -n python3 - "$RUNNER_TEMP/cca-recovery-proof.json" "$restored_dogs" "$restored_migrations" <<'PY'
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+receipt = {
+    "format": "CCA-RECOVERY-PROOF-v1",
+    "run_id": os.environ["GITHUB_RUN_ID"],
+    "checked_at_utc": datetime.now(timezone.utc).isoformat(),
+    "database": "isolated-postgresql-17",
+    "backup_source": "encrypted-offsite-r2",
+    "restored_dog_count": int(sys.argv[2]),
+    "restored_migrations_count": int(sys.argv[3]),
+    "checks": {
+        "archive_checksum": "passed",
+        "encryption_open": "passed",
+        "independent_restore": "passed",
+        "pedigree_parent_references": "passed",
+        "schema_indexes": "passed",
+        "foreign_keys": "passed",
+    },
+    "production_primary_modified": False,
+}
+Path(sys.argv[1]).write_text(json.dumps(receipt, indent=2) + "\\n", encoding="utf-8")
+PY
+sudo -n chmod 0644 "$RUNNER_TEMP/cca-recovery-proof.json"
+echo "## Oracle offsite recovery verification" >> "$GITHUB_STEP_SUMMARY"
+echo "Restored **$restored_dogs** canonical dog records and **$restored_migrations** migrations in an isolated PostgreSQL 17 container. Source: encrypted offsite R2 snapshot; checksum, parent references, indexes and foreign keys passed. Live primary unchanged." >> "$GITHUB_STEP_SUMMARY"
