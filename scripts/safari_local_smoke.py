@@ -428,6 +428,32 @@ def run():
             changed = navigation.value
             assert changed and changed.status == 200, "Safari 6-generation pedigree returned an error"
             assert "generations=6" in page.url, "Safari generation switch lost its target"
+            # Deep mobile pedigrees must remain readable and independently
+            # navigable; a large generation must not create a 10-column
+            # horizontal page or hide the selected generation entirely.
+            picker = page.locator(".cca-generation-picker")
+            picker.wait_for(state="visible")
+            assert picker.locator("option").count() == 7, (
+                "Six generations should include subject and six ancestor layers"
+            )
+            assert page.locator("#cca-pedigree-scroll .pedigree-column:visible").count() == 1, (
+                "Phone displays multiple huge generations simultaneously"
+            )
+            assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 3, (
+                "Deep ancestry created page-level horizontal overflow"
+            )
+            page.get_by_role("button", name="Next generation").tap()
+            assert picker.input_value() == "1", "Next did not switch ancestor generation"
+            picker.select_option("6")
+            assert page.locator("#cca-pedigree-scroll .pedigree-column:visible").count() == 1
+            assert page.locator("#cca-pedigree-scroll .pedigree-node:visible").count() > 0
+            assert page.get_by_role("button", name="Next generation").is_disabled()
+            assert page.get_by_role("link", name="Download pedigree data (CSV)").count() == 1
+            assert page.get_by_role("button", name="Save pedigree as PDF / Print").count() == 1
+            page.get_by_role("button", name="Reset view").tap()
+            assert picker.input_value() == "0", "Reset did not return to the dog"
+            assert page.locator("#cca-pedigree-scroll .pedigree-column:visible").count() == 1
+
             page.locator("#coi-generations").select_option("2")
             with page.expect_navigation(wait_until="domcontentloaded") as navigation:
                 page.get_by_role("button", name="Recalculate COI").tap()
