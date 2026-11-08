@@ -1,0 +1,46 @@
+name: Production Django release attestation
+
+on:
+  schedule:
+    - cron: "27 */3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/verify_live_release.py"
+      - "scripts/tests/test_live_release_attestation.py"
+      - ".github/workflows/production-release-attestation.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cca-production-release-attestation
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      PUBLIC_SITE: ${{ vars.CCA_CANONICAL_SITE_URL || 'https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate release-attestation policy
+        run: python -m unittest scripts.tests.test_live_release_attestation -v
+      - name: Compare Cloudflare Django health to latest main SHA
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_sha="$(git rev-parse HEAD)"
+          commit_epoch="$(git show -s --format=%ct HEAD)"
+          python scripts/verify_live_release.py \
+            --expected-sha "$expected_sha" \
+            --commit-epoch "$commit_epoch" \
+            --base-url "$PUBLIC_SITE"
