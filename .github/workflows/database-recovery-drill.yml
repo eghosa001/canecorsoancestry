@@ -8,7 +8,7 @@ on:
       - ".github/workflows/database-recovery-drill.yml"
       - "scripts/oracle_runner/verify_offsite_recovery.sh"
   schedule:
-    - cron: "27 4 1 * *"  # Monthly full isolated restore to prevent untested backups
+    - cron: "27 4 * * 0"  # Weekly independent restore; spot broken backups sooner
   pull_request:
     paths:
       - "scripts/oracle_runner/verify_offsite_recovery.sh"
@@ -34,6 +34,7 @@ jobs:
           bash -n scripts/oracle_runner/verify_offsite_recovery.sh
           python3 -m py_compile scripts/oracle_runner/r2_postgres_backup.py scripts/oracle_runner/seal_postgres_backup.py
           python3 scripts/fast_path_guard.py
+          python3 -m unittest scripts.tests.test_recovery_drill_contract -v
 
   verify-offsite:
     if: >-
