@@ -120,7 +120,7 @@ restored_migrations="$(sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres
 # Validate the restored DATABASE, not just pg_restore's successful exit. A
 # previously broken/missing parent or an invalid restored index should fail
 # the disaster-recovery drill. Never output individual private dog records.
-integrity_check="$(sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres -d postgres -Atq \
+integrity_check="$(sudo -n podman exec -i "$RESTORE_CONTAINER" psql -U postgres -d postgres -Atq \
   -v ON_ERROR_STOP=1 <<'SQL'
 SELECT CASE
   WHEN EXISTS (
