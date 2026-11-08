@@ -1,0 +1,60 @@
+name: Production availability watch
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/production-availability-watch.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cca-production-availability
+  cancel-in-progress: false
+
+jobs:
+  live-availability:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      BASE_URL: ${{ vars.CCA_CANONICAL_SITE_URL || 'https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev' }}
+    steps:
+      - name: Check Cloudflare edge and Oracle-backed public routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${BASE_URL%/}"
+          [[ "$base" == https://* ]] || { echo "::error::Production URL must use HTTPS"; exit 1; }
+          failed=0
+          for path in /__edge/health /healthz/ /accounts/login/ /dogs/ /pedigrees/; do
+            passed=0
+            for attempt in 1 2 3; do
+              result="$(curl --silent --show-error --location --max-redirs 2 \
+                --connect-timeout 6 --max-time 20 \
+                --output /dev/null --write-out '%{http_code}|%{time_total}' \
+                "$base$path" || true)"
+              status="${result%%|*}"
+              duration="${result#*|}"
+              echo "$path attempt $attempt: HTTP $status in ${duration}s"
+              if [[ "$status" == 200 ]]; then passed=1; break; fi
+              sleep 3
+            done
+            if [[ "$passed" != 1 ]]; then
+              echo "::error::Production availability failed for $path after three attempts"
+              failed=$((failed + 1))
+            fi
+          done
+          [[ "$failed" == 0 ]]
+          echo "Production public routes passed independent availability checks."
+
+  workflow-syntax:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Confirm workflow is parseable by GitHub
+        run: echo 'GitHub accepted production availability workflow syntax.'
