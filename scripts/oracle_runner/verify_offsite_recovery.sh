@@ -117,5 +117,71 @@ restored_migrations="$(sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres
 [[ "$restored_migrations" =~ ^[0-9]+$ && "$restored_migrations" -gt 0 ]] || {
   echo "::error::Isolated restore is missing Django migration state"; exit 1;
 }
+# Validate the restored DATABASE, not just pg_restore's successful exit. A
+# previously broken/missing parent or an invalid restored index should fail
+# the disaster-recovery drill. Never output individual private dog records.
+integrity_check="$(sudo -n podman exec -i "$RESTORE_CONTAINER" psql -U postgres -d postgres -Atq \
+  -v ON_ERROR_STOP=1 <<'SQL'
+SELECT CASE
+  WHEN EXISTS (
+    SELECT 1 FROM django_app.registry_dog child
+    LEFT JOIN django_app.registry_dog sire ON sire.id = child.sire_id
+    LEFT JOIN django_app.registry_dog dam ON dam.id = child.dam_id
+    WHERE (child.sire_id IS NOT NULL AND sire.id IS NULL)
+       OR (child.dam_id IS NOT NULL AND dam.id IS NULL)
+  ) THEN 'FAIL: missing pedigree parent row'
+  WHEN EXISTS (
+    SELECT 1 FROM pg_index i
+    JOIN pg_class t ON t.oid = i.indrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = 'django_app'
+      AND (NOT i.indisvalid OR NOT i.indisready)
+  ) THEN 'FAIL: restored schema has invalid or unready indexes'
+  WHEN EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_namespace n ON n.oid = c.connamespace
+    WHERE n.nspname = 'django_app'
+      AND c.contype = 'f' AND NOT c.convalidated
+  ) THEN 'FAIL: restored foreign key constraint is not validated'
+  ELSE 'PASS'
+END;
+SQL
+)"
+if [[ "$integrity_check" != PASS ]]; then
+  echo "::error::Isolated PostgreSQL restore failed integrity checks: $integrity_check"
+  exit 1
+fi
+echo "PASS: Restored pedigree parent references, application indexes and foreign keys are structurally valid."
 echo "PASS: Encrypted R2 archive restored to independent PostgreSQL 17; $restored_dogs dogs and $restored_migrations migrations."
 echo "Production database was not accessed for restore or modified."
+# Publish a minimal, auditable receipt. Never include archive object keys,
+# credentials, dog identities, row contents or decrypted backup bytes.
+sudo -n python3 - "$RUNNER_TEMP/cca-recovery-proof.json" "$restored_dogs" "$restored_migrations" "$GITHUB_RUN_ID" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+receipt = {
+    "format": "CCA-RECOVERY-PROOF-v1",
+    "run_id": sys.argv[4],
+    "checked_at_utc": datetime.now(timezone.utc).isoformat(),
+    "database": "isolated-postgresql-17",
+    "backup_source": "encrypted-offsite-r2",
+    "restored_dog_count": int(sys.argv[2]),
+    "restored_migrations_count": int(sys.argv[3]),
+    "checks": {
+        "archive_checksum": "passed",
+        "encryption_open": "passed",
+        "independent_restore": "passed",
+        "pedigree_parent_references": "passed",
+        "schema_indexes": "passed",
+        "foreign_keys": "passed",
+    },
+    "production_primary_modified": False,
+}
+Path(sys.argv[1]).write_text(json.dumps(receipt, indent=2) + "\\n", encoding="utf-8")
+PY
+sudo -n chmod 0644 "$RUNNER_TEMP/cca-recovery-proof.json"
+echo "## Oracle offsite recovery verification" >> "$GITHUB_STEP_SUMMARY"
+echo "Restored **$restored_dogs** canonical dog records and **$restored_migrations** migrations in an isolated PostgreSQL 17 container. Source: encrypted offsite R2 snapshot; checksum, parent references, indexes and foreign keys passed. Live primary unchanged." >> "$GITHUB_STEP_SUMMARY"
