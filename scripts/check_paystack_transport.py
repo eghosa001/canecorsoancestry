@@ -7,14 +7,20 @@ configured production key authenticates to Paystack over HTTPS.
 import json
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 class PaymentTransportError(RuntimeError):
     pass
 
 
-def check_paystack_transport(*, secret_key, base_url, opener=urlopen):
+class NoRedirects(HTTPRedirectHandler):
+    # urllib otherwise may propagate the Bearer token across redirects.
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def check_paystack_transport(*, secret_key, base_url, opener=None):
     if not isinstance(secret_key, str) or not secret_key:
         raise PaymentTransportError("Production Paystack secret is not configured.")
     if not secret_key.startswith("sk_live_"):
@@ -43,7 +49,8 @@ def check_paystack_transport(*, secret_key, base_url, opener=urlopen):
         },
     )
     try:
-        with opener(request, timeout=12) as response:
+        open_request = opener if opener is not None else build_opener(NoRedirects()).open
+        with open_request(request, timeout=12) as response:
             if response.status != 200:
                 raise PaymentTransportError("Paystack read-only authentication check failed.")
             payload = json.load(response)
