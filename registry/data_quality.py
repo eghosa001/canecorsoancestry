@@ -20,7 +20,13 @@ def quick_quality_report(sample_limit=12):
             filter=Q(sire__isnull=False) | Q(dam__isnull=False),
         ),
         both_parents_public=Count(
-            "pk", filter=Q(sire__is_public=True, dam__is_public=True),
+            "pk",
+            filter=(
+                Q(sire__is_public=True, dam__is_public=True)
+                & Q(sire__hidden_by_moderation=False, dam__hidden_by_moderation=False)
+                & (Q(sire__kennel__isnull=True) | Q(sire__kennel__hide_dogs=False))
+                & (Q(dam__kennel__isnull=True) | Q(dam__kennel__hide_dogs=False))
+            ),
         ),
         community_only_public=Count(
             "pk",
@@ -188,6 +194,12 @@ def public_coi_review_sample(limit=12):
     dogs = published_dogs().filter(
         sire__is_public=True,
         dam__is_public=True,
+        sire__hidden_by_moderation=False,
+        dam__hidden_by_moderation=False,
+    ).filter(
+        Q(sire__kennel__isnull=True) | Q(sire__kennel__hide_dogs=False)
+    ).filter(
+        Q(dam__kennel__isnull=True) | Q(dam__kennel__hide_dogs=False)
     ).only("pk", "name", "slug", "sire_id", "dam_id").order_by(
         "-date_of_birth", "pk"
     )[:limit]
