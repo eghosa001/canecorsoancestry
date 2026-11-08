@@ -141,11 +141,28 @@ def _layers_from_snapshot(snapshot):
                     "repeated": bool(current and counts[current.pk] > 1),
                 }
             )
+        # Keep every real ancestor position. Display a bounded sample of
+        # *unknown* slots at deep generations instead of rendering hundreds
+        # of redundant cards on phones or in printed pedigree reports.
+        # Do not alter the complete nodes list: COI, lineage and CSV exports
+        # still use full canonical ancestry coverage.
+        visible_nodes = nodes
+        if len(nodes) > 64:
+            visible_nodes = []
+            unknown_kept = 0
+            for node in nodes:
+                if node["dog"] is not None:
+                    visible_nodes.append(node)
+                elif unknown_kept < 12:
+                    visible_nodes.append(node)
+                    unknown_kept += 1
         layers.append(
             {
                 "number": generation,
                 "label": labels.get(generation, f"Generation {generation}"),
                 "nodes": nodes,
+                "display_nodes": visible_nodes,
+                "hidden_unknown_count": len(nodes) - len(visible_nodes),
             }
         )
     return layers
