@@ -3516,9 +3516,11 @@ def data_health_evidence(request):
     if issue not in choices:
         return HttpResponseBadRequest("Choose a supported evidence review filter.")
 
-    sources = DogSource.objects.filter(dog_id=OuterRef("pk")).filter(
-        Q(source_url__gt="") | Q(document__gt="")
-    )
+    # Preserve the existing review worklist's legacy attribution semantics:
+    # imported title-only DogSource records still count as an attribution,
+    # never as proof. The stricter source-file/URL coverage measurement lives
+    # in the separate public data-quality report.
+    sources = DogSource.objects.filter(dog_id=OuterRef("pk"))
     reviewed = sources.filter(verified_at__isnull=False)
     # Preserve moderation and kennel visibility rules, even in the public-data
     # worklist. Staff can investigate hidden records using protected editors.
