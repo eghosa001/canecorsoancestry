@@ -1030,22 +1030,42 @@ def paystack_callback(request):
 @csrf_exempt
 @require_POST
 def paystack_webhook(request):
+    # A provider signature validates bytes, not JSON shape. Bound the payload
+    # and validate its structure before it reaches record_successful_payment.
+    # The regular checkout/payment validation remains authoritative.
+    max_webhook_bytes = 256 * 1024
+    if request.META.get("CONTENT_LENGTH"):
+        try:
+            declared_length = int(request.META["CONTENT_LENGTH"])
+        except (TypeError, ValueError):
+            return HttpResponse(status=400)
+        if declared_length < 0 or declared_length > max_webhook_bytes:
+            return HttpResponse(status=413)
+    raw_body = request.body
+    if len(raw_body) > max_webhook_bytes:
+        return HttpResponse(status=413)
     signature = request.headers.get("x-paystack-signature", "")
-    if not webhook_signature_valid(request.body, signature):
+    if not webhook_signature_valid(raw_body, signature):
         return HttpResponse(status=400)
     try:
-        event = json.loads(request.body.decode("utf-8"))
+        event = json.loads(raw_body.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
+        return HttpResponse(status=400)
+    if not isinstance(event, dict):
         return HttpResponse(status=400)
 
     if event.get("event") == "charge.success":
-        data = event.get("data") or {}
-        reference = str(data.get("reference") or "")
-        if reference and SubmissionPayment.objects.filter(reference=reference).exists():
+        data = event.get("data")
+        if not isinstance(data, dict):
+            return HttpResponse(status=400)
+        reference = data.get("reference")
+        if not isinstance(reference, str) or not 1 <= len(reference) <= 80:
+            return HttpResponse(status=400)
+        if SubmissionPayment.objects.filter(reference=reference).exists():
             try:
                 record_successful_payment(reference, data)
             except PaystackError:
-                logger.exception("paystack_webhook_validation_failed reference=%s", reference)
+                logger.warning("paystack_webhook_payment_validation_failed")
                 return HttpResponse(status=400)
     return HttpResponse(status=200)
 
