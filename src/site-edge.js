@@ -132,6 +132,13 @@ function originRequest(request, env, pathOverride = null) {
   const target = originUrlFor(request, env, pathOverride);
   const headers = new Headers(request.headers);
   headers.delete("host");
+  // Never inherit visitor-supplied proxy or edge-trust headers. The origin
+  // uses X-Forwarded-For for login/signup abuse limits, so passing a forged
+  // value when CF-Connecting-IP is absent would let a visitor evade a limit.
+  for (const header of [
+    "x-forwarded-for", "x-real-ip", "x-forwarded-host",
+    "x-forwarded-proto", "x-cca-edge", "x-cca-origin-secret",
+  ]) headers.delete(header);
   headers.set("x-forwarded-proto", "https");
   headers.set("x-forwarded-host", env.CANDIDATE_FORWARD_HOST || incoming.host);
   const clientIp = request.headers.get("cf-connecting-ip");
