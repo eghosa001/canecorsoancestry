@@ -67,6 +67,24 @@ class PublishedQualityVisibilityTests(TestCase):
             [visible.pk],
         )
 
+    def test_suppressed_parent_not_counted_as_publicly_linked_parent(self):
+        sire = Dog.objects.create(
+            name="Suppressed Sire", slug="suppressed-sire-quality",
+            sex=Dog.Sex.MALE, is_public=True, hidden_by_moderation=True,
+        )
+        dam = Dog.objects.create(
+            name="Visible Dam", slug="visible-dam-quality",
+            sex=Dog.Sex.FEMALE, is_public=True,
+        )
+        Dog.objects.create(
+            name="Public Child With Hidden Sire", slug="public-child-hidden-sire",
+            is_public=True, sire=sire, dam=dam,
+        )
+        report = quick_quality_report()
+        self.assertEqual(report["counts"]["both_parents_public"], 0)
+        self.assertEqual(report["counts"]["pedigree_linked_public"], 1)
+        self.assertEqual(public_coi_review_sample(), [])
+
     def test_public_coi_sample_excludes_moderation_hidden_subject(self):
         sire = Dog.objects.create(
             name="Public Father", slug="quality-public-father", is_public=True,
