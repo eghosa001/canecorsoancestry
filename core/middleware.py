@@ -6,7 +6,7 @@ import time
 import uuid
 
 from django.conf import settings
-from django.core.cache import cache
+from .abuse_counter import increment_abuse_counter
 from django.db import connection
 from django.http import HttpResponse, JsonResponse
 from django.utils.cache import patch_cache_control
@@ -184,14 +184,20 @@ class AbuseProtectionMiddleware:
                     f"{request.path}|{principal}".encode("utf-8")
                 ).hexdigest()
                 key = f"abuse:{digest}"
-                if cache.add(key, 1, timeout=window):
-                    count = 1
-                else:
-                    try:
-                        count = cache.incr(key)
-                    except ValueError:
-                        cache.set(key, 1, timeout=window)
-                        count = 1
+                try:
+                    count = increment_abuse_counter(key, window)
+                except Exception:
+                    # Fail closed for protected POST endpoints. Falling back to
+                    # per-worker memory when shared storage is unavailable
+                    # silently disables the production abuse protection.
+                    logger.exception("Shared login/contribution rate limiter unavailable")
+                    response = JsonResponse(
+                        {"detail": "This action is temporarily unavailable. Please retry shortly."},
+                        status=503,
+                    )
+                    response["Retry-After"] = "60"
+                    response["Cache-Control"] = "no-store"
+                    return response
                 if count > limit:
                     response = JsonResponse(
                         {

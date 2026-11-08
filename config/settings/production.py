@@ -45,6 +45,17 @@ CACHES["public"] = {
     "OPTIONS": {"MAX_ENTRIES": 100},
 }
 
+# Per-worker LocMemCache is unsafe for auth/signup rate limiting: each
+# independent Gunicorn process would grant a new allowance. The dedicated
+# file cache and per-key update lock live on the same Oracle container
+# filesystem; they require neither Redis nor production schema migrations.
+CACHES["abuse"] = {
+    "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+    "LOCATION": os.getenv("DJANGO_ABUSE_CACHE_DIR", "/tmp/cca-abuse-rate-limits"),
+    "TIMEOUT": 3600,
+    "OPTIONS": {"MAX_ENTRIES": 20000},
+}
+
 # The deployment layer overrides the default storage backend with the R2 media gateway.
 # Keeping production.py storage-neutral avoids stale provider-specific branches.
 STORAGES = {
