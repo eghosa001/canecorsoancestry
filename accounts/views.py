@@ -31,6 +31,7 @@ from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from registry.querysets import published_dogs
 from registry.public_freshness import invalidate_public_content
 from registry.data_quality import quick_quality_report, public_coi_review_sample
 from registry.coi_identity_audit import audit_registration_backed_duplicates
@@ -3507,6 +3508,7 @@ def data_health_evidence(request):
     choices = {
         "missing-source": "Missing source attribution",
         "unreviewed-source": "No independently reviewed source",
+        "reviewed-status-needs-source-check": "Reviewed status requiring source cross-check",
         "community-only": "Community-submitted verification state",
         "unknown-sex": "Unknown sex on a public record",
         "missing-photo": "No displayable public photograph",
@@ -3514,9 +3516,13 @@ def data_health_evidence(request):
     if issue not in choices:
         return HttpResponseBadRequest("Choose a supported evidence review filter.")
 
-    sources = DogSource.objects.filter(dog_id=OuterRef("pk"))
+    sources = DogSource.objects.filter(dog_id=OuterRef("pk")).filter(
+        Q(source_url__gt="") | Q(document__gt="")
+    )
     reviewed = sources.filter(verified_at__isnull=False)
-    public = Dog.objects.filter(is_public=True).annotate(
+    # Preserve moderation and kennel visibility rules, even in the public-data
+    # worklist. Staff can investigate hidden records using protected editors.
+    public = published_dogs().annotate(
         has_source=Exists(sources),
         has_reviewed_source=Exists(reviewed),
     )
@@ -3524,6 +3530,11 @@ def data_health_evidence(request):
         public = public.filter(has_source=False)
     elif issue == "unreviewed-source":
         public = public.filter(has_reviewed_source=False)
+    elif issue == "reviewed-status-needs-source-check":
+        public = public.filter(
+            verification_state__in=("identity", "pedigree", "health"),
+            has_reviewed_source=False,
+        )
     elif issue == "community-only":
         public = public.filter(verification_state="community")
     elif issue == "unknown-sex":
@@ -3546,16 +3557,23 @@ def data_health_evidence(request):
             has_trusted_archive_photo=Exists(trusted),
         ).filter(has_managed_photo=False, has_trusted_archive_photo=False)
 
+    # Prioritize the records people seek most. Allow a stable alphabetical
+    # alternative for a reviewer who is looking up a known archive name.
+    sort = request.GET.get("sort", "most-searched")
+    if sort not in {"most-searched", "name"}:
+        return HttpResponseBadRequest("Choose a supported evidence sort order.")
+    order = ("-search_count", "name", "pk") if sort == "most-searched" else ("name", "pk")
     # Bound each request to 30 existing dogs, rather than materializing 33k
     # source/history rows or inspecting every public photo.
     page_obj = Paginator(
-        public.select_related("kennel").order_by("name", "pk"),
+        public.select_related("kennel").order_by(*order),
         30,
     ).get_page(request.GET.get("page"))
     return render(request, "accounts/data_health_evidence.html", {
         "dogs": page_obj.object_list,
         "page_obj": page_obj,
         "issue": issue,
+        "sort": sort,
         "issue_title": choices[issue],
         "issue_filters": choices,
         "can_manage_sources": can_manage_verification(request.user),
