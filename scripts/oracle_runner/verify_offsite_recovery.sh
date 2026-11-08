@@ -117,5 +117,40 @@ restored_migrations="$(sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres
 [[ "$restored_migrations" =~ ^[0-9]+$ && "$restored_migrations" -gt 0 ]] || {
   echo "::error::Isolated restore is missing Django migration state"; exit 1;
 }
+# Validate the restored DATABASE, not just pg_restore's successful exit. A
+# previously broken/missing parent or an invalid restored index should fail
+# the disaster-recovery drill. Never output individual private dog records.
+integrity_check="$(sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres -d postgres -Atq \
+  -v ON_ERROR_STOP=1 <<'SQL'
+SELECT CASE
+  WHEN EXISTS (
+    SELECT 1 FROM django_app.registry_dog child
+    LEFT JOIN django_app.registry_dog sire ON sire.id = child.sire_id
+    LEFT JOIN django_app.registry_dog dam ON dam.id = child.dam_id
+    WHERE (child.sire_id IS NOT NULL AND sire.id IS NULL)
+       OR (child.dam_id IS NOT NULL AND dam.id IS NULL)
+  ) THEN 'FAIL: missing pedigree parent row'
+  WHEN EXISTS (
+    SELECT 1 FROM pg_index i
+    JOIN pg_class t ON t.oid = i.indrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = 'django_app'
+      AND (NOT i.indisvalid OR NOT i.indisready)
+  ) THEN 'FAIL: restored schema has invalid or unready indexes'
+  WHEN EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_namespace n ON n.oid = c.connamespace
+    WHERE n.nspname = 'django_app'
+      AND c.contype = 'f' AND NOT c.convalidated
+  ) THEN 'FAIL: restored foreign key constraint is not validated'
+  ELSE 'PASS'
+END;
+SQL
+)"
+if [[ "$integrity_check" != PASS ]]; then
+  echo "::error::Isolated PostgreSQL restore failed integrity checks: $integrity_check"
+  exit 1
+fi
+echo "PASS: Restored pedigree parent references, application indexes and foreign keys are structurally valid."
 echo "PASS: Encrypted R2 archive restored to independent PostgreSQL 17; $restored_dogs dogs and $restored_migrations migrations."
 echo "Production database was not accessed for restore or modified."
