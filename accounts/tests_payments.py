@@ -93,6 +93,9 @@ class PaidSubmissionTests(TestCase):
         line = "**₦1,500** — one genuine litter plus the puppies belonging to that litter."
         self.assertIn(line, readme)
         self.assertIn(line, requirements)
+        skill = (Path(settings.BASE_DIR) / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("₦1,500 for one genuine litter plus its puppies", skill)
+        self.assertNotIn("₦1,000 for one litter", skill)
 
     def test_paystack_rejects_malformed_amount_without_recording_paid(self):
         payment = SubmissionPayment.objects.create(
