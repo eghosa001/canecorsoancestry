@@ -4,10 +4,13 @@ from django.db.models import Count, Exists, F, OuterRef, Q
 from django.utils import timezone
 
 from .models import DisputeCase, Dog, DogSource, Submission, VerificationState
+from .querysets import published_dogs
 
 
 def quick_quality_report(sample_limit=12):
-    public = Dog.objects.filter(is_public=True)
+    # Public review figures must match what visitors can actually see. A
+    # nominal is_public flag alone ignores moderator/kennel visibility locks.
+    public = published_dogs()
     source_rows = DogSource.objects.filter(dog_id=OuterRef("pk"))
 
     public_summary = public.aggregate(
@@ -17,7 +20,13 @@ def quick_quality_report(sample_limit=12):
             filter=Q(sire__isnull=False) | Q(dam__isnull=False),
         ),
         both_parents_public=Count(
-            "pk", filter=Q(sire__is_public=True, dam__is_public=True),
+            "pk",
+            filter=(
+                Q(sire__is_public=True, dam__is_public=True)
+                & Q(sire__hidden_by_moderation=False, dam__hidden_by_moderation=False)
+                & (Q(sire__kennel__isnull=True) | Q(sire__kennel__hide_dogs=False))
+                & (Q(dam__kennel__isnull=True) | Q(dam__kennel__hide_dogs=False))
+            ),
         ),
         community_only_public=Count(
             "pk",
@@ -29,14 +38,14 @@ def quick_quality_report(sample_limit=12):
         ),
     )
     source_backed_public = (
-        DogSource.objects.filter(dog__is_public=True)
+        DogSource.objects.filter(dog__in=public)
         .values("dog_id")
         .distinct()
         .count()
     )
     verified_source_backed_public = (
         DogSource.objects.filter(
-            dog__is_public=True,
+            dog__in=public,
             verified_at__isnull=False,
         )
         .values("dog_id")
@@ -182,10 +191,15 @@ def public_coi_review_sample(limit=12):
     from pedigrees.services import PedigreeCycleError, inbreeding_coefficient
 
     limit = max(1, min(int(limit), 20))
-    dogs = Dog.objects.filter(
-        is_public=True,
+    dogs = published_dogs().filter(
         sire__is_public=True,
         dam__is_public=True,
+        sire__hidden_by_moderation=False,
+        dam__hidden_by_moderation=False,
+    ).filter(
+        Q(sire__kennel__isnull=True) | Q(sire__kennel__hide_dogs=False)
+    ).filter(
+        Q(dam__kennel__isnull=True) | Q(dam__kennel__hide_dogs=False)
     ).only("pk", "name", "slug", "sire_id", "dam_id").order_by(
         "-date_of_birth", "pk"
     )[:limit]
