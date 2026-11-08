@@ -52,3 +52,5 @@ class RecoveryDrillContractTests(TestCase):
         self.assertIn("retention-days: 30", workflow)
         self.assertIn("cca-recovery-proof.json", SCRIPT.read_text())
         self.assertIn('"production_primary_modified": False', SCRIPT.read_text())
+        self.assertIn('"run_id": sys.argv[4]', SCRIPT.read_text())
+        self.assertIn('"$restored_migrations" "$GITHUB_RUN_ID"', SCRIPT.read_text())
