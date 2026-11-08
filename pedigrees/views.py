@@ -16,6 +16,7 @@ from registry.models import Dog
 from registry.permissions import can_access_public_pedigree_analysis, can_use_member_features
 from registry.querysets import public_dog_match_filter, published_dogs
 
+from .csv_safe import safe_pedigree_csv_rows
 from .services import (
     descendant_generations,
     pedigree_analysis,
@@ -76,7 +77,9 @@ def _csv_response(dog, generations, public_only=True):
     )
     writer.writeheader()
     writer.writerows(
-        pedigree_export_rows(dog, generations, public_only=public_only)
+        safe_pedigree_csv_rows(
+            pedigree_export_rows(dog, generations, public_only=public_only)
+        )
     )
     return response
 
