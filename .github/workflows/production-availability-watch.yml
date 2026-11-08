@@ -56,16 +56,16 @@ jobs:
             failed=$((failed + 1))
           else
             if ! python3 - <<'PY'
-import json
-from pathlib import Path
-try:
-    data = json.loads(Path("/tmp/cca-health-response.json").read_text())
-    assert data.get("status") == "ok"
-    assert data.get("service") == "canecorsoancestry"
-    assert data.get("database_backend") == "oracle-local"
-except (ValueError, AssertionError, OSError) as exc:
-    raise SystemExit(f"Invalid live Oracle database health evidence: {exc}")
-PY
+          import json
+          from pathlib import Path
+          try:
+              data = json.loads(Path("/tmp/cca-health-response.json").read_text())
+              assert data.get("status") == "ok"
+              assert data.get("service") == "canecorsoancestry"
+              assert data.get("database_backend") == "oracle-local"
+          except (ValueError, AssertionError, OSError) as exc:
+              raise SystemExit(f"Invalid live Oracle database health evidence: {exc}")
+          PY
             then
               echo "::error::Production traffic is not verified on the Oracle-local primary"
               failed=$((failed + 1))
