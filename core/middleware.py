@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import logging
+import re
 import time
 import uuid
 
@@ -11,6 +12,15 @@ from django.http import HttpResponse, JsonResponse
 from django.utils.cache import patch_cache_control
 
 logger = logging.getLogger(__name__)
+
+# Upstream correlation IDs are untrusted. Keep traces readable and prevent
+# newline/control-character injection into responses and slow-request logs.
+_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$")
+
+
+def safe_request_id(value):
+    return value if isinstance(value, str) and _REQUEST_ID_PATTERN.fullmatch(value) else uuid.uuid4().hex
+
 
 PRIVATE_PREFIXES = ("/member/", "/accounts/", "/admin/", "/dashboard/")
 
@@ -79,7 +89,7 @@ class RequestSecurityMiddleware:
             response["X-Robots-Tag"] = "noindex, nofollow"
             return response
 
-        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
+        request_id = safe_request_id(request.headers.get("X-Request-ID", ""))
         request.request_id = request_id
         started = time.perf_counter()
         db_metrics = {"count": 0, "duration_ms": 0.0}
