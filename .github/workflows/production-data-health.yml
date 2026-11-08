@@ -11,6 +11,11 @@ on:
       - ".github/workflows/production-data-health.yml"
   schedule:
     - cron: "43 5 * * 4"
+  pull_request:
+    paths:
+      - "scripts/check_account_email_transport.py"
+      - "scripts/tests/test_account_email_transport.py"
+      - ".github/workflows/production-data-health.yml"
 
 permissions:
   contents: read
@@ -20,8 +25,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  smtp-script-test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m unittest scripts.tests.test_account_email_transport -v
+
   audit:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event_name != 'pull_request' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: [self-hosted, linux, arm64, cca-oracle]
     timeout-minutes: 15
     env:
@@ -333,3 +351,12 @@ jobs:
             exit 1
           fi
           grep -qi "Send reset link" /tmp/password-reset.html
+      - name: Authenticate production SMTP transport without sending mail
+        # Run only with the deployed Oracle image, not on the pre-release push.
+        if: github.event_name != 'push' && (github.event_name != 'workflow_run' || github.event.workflow_run.name == 'Oracle Django production release (CI-gated)')
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "eghosa001/canecorsoancestry"
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = local
+          sudo -n podman exec cca-oracle-staging python -m scripts.check_account_email_transport
