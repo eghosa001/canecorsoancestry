@@ -47,3 +47,7 @@ class RecoveryDrillContractTests(TestCase):
         self.assertIn("github.ref == 'refs/heads/main'", workflow)
         self.assertIn("runs-on: [self-hosted, linux, arm64, cca-oracle]", workflow)
         self.assertIn("scripts.tests.test_recovery_drill_contract", workflow)
+        self.assertIn("actions/upload-artifact@v4", workflow)
+        self.assertIn("retention-days: 30", workflow)
+        self.assertIn("cca-recovery-proof.json", SCRIPT.read_text())
+        self.assertIn('"production_primary_modified": False', SCRIPT.read_text())
