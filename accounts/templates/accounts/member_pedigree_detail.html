@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block extra_head %}<script src="{% static 'core/heritage-pedigree.js' %}?v=20261024-heritage-v1" defer></script>{% endblock %}
+{% block extra_head %}<script src="{% static 'core/heritage-pedigree.js' %}?v=20261108-mobile-v2" defer></script>{% endblock %}
 {% block title %}{{ dog.name }} · My Pedigrees{% endblock %}
 {% block content %}
 <section class="pedigree-page">
@@ -11,6 +11,7 @@
   <a class="btn btn-outline" href="#advanced-analysis-title">Jump to analysis</a>
   <a class="btn btn-gold" href="{% url 'accounts:submit-health-record' dog.pk %}">Upload health / DNA</a>
 </nav>
+<div class="page-shell button-row no-print cca-pedigree-download"><button class="btn btn-outline" type="button" onclick="window.print()">Save pedigree as PDF / Print</button><small class="muted">Private kennel information remains restricted to your account.</small></div>
 <div class="page-shell no-print cca-tree-tools" role="toolbar" aria-label="Private pedigree viewer controls">
   <button class="btn btn-outline" type="button" data-pedigree-step="-1" aria-label="Previous generation">← Previous</button>
   <button class="btn btn-outline" type="button" data-pedigree-step="1" aria-label="Next generation">Next →</button>
@@ -30,7 +31,7 @@
   <p>These are possible evidence states, not a verification claim about the dogs shown. Private records remain visible only to authorized accounts.</p>
   <p class="cca-tree-status" id="cca-tree-status" role="status" aria-live="polite">Focus an ancestor to highlight its other recorded positions.</p>
 </div>
-<p class="page-shell muted no-print" id="private-pedigree-navigation-help">Swipe sideways to explore generations, or focus the ancestry tree and use arrow keys. Private kennel dogs remain restricted to authorized members.</p>
+<p class="page-shell muted no-print" id="private-pedigree-navigation-help">On phones, choose a generation or swipe sideways to navigate, or focus the ancestry tree and use arrow keys. Private kennel dogs remain restricted to authorized members.</p>
 {% if cycle_error %}<div class="notice error page-shell">{{ cycle_error }}</div>{% endif %}
 <div class="pedigree-scroll" id="cca-pedigree-scroll" role="region" tabindex="0" aria-describedby="private-pedigree-navigation-help" aria-label="Private {{ generations }} generation ancestry for {{ dog.name }}"><div class="pedigree-board">{% for layer in layers %}<section class="pedigree-column"><h2>{{ layer.label }}</h2><div class="pedigree-nodes">{% for node in layer.nodes %}{% if node.dog %}{% if node.dog.is_public %}<a class="pedigree-node {% if node.repeated %}repeated{% endif %}" data-dog-id="{{ node.dog.pk }}" href="{% url 'registry:dog-detail' node.dog.slug %}"><strong>{{ node.dog.name }}</strong><span>{{ node.dog.get_sex_display }}{% if node.dog.colour %} · {{ node.dog.colour }}{% endif %}</span>{% if node.repeated %}<small>Repeated ancestor</small>{% endif %}</a>{% else %}<div class="pedigree-node private-node {% if node.repeated %}repeated{% endif %}" data-dog-id="{{ node.dog.pk }}" tabindex="0"><strong>{{ node.dog.name }}</strong><span>Private record{% if node.dog.colour %} · {{ node.dog.colour }}{% endif %}</span>{% if node.repeated %}<small>Repeated ancestor</small>{% endif %}</div>{% endif %}{% else %}<div class="pedigree-node missing"><strong>Unknown</strong><span>No canonical record</span></div>{% endif %}{% endfor %}</div></section>{% endfor %}</div></div>
 {% include "pedigrees/_analysis_report.html" %}
