@@ -99,14 +99,33 @@ def record_successful_payment(reference, data):
         raise PaystackError("Payment reference mismatch.")
     if data.get("status") != "success":
         raise PaystackError("Payment has not completed successfully.")
-    if int(data.get("amount") or 0) != payment.amount_kobo:
+    # Provider payloads are untrusted even after a successful verify request.
+    # Never let malformed amounts or mixed merchant metadata cause a 500 or
+    # accidentally attach a transaction to the wrong kennel/member package.
+    amount = data.get("amount")
+    if isinstance(amount, bool) or not isinstance(amount, (int, str)):
+        raise PaystackError("Invalid payment amount.")
+    try:
+        parsed_amount = int(amount)
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise PaystackError("Invalid payment amount.") from exc
+    if isinstance(amount, str) and (not amount.isascii() or not amount.isdecimal()):
+        raise PaystackError("Invalid payment amount.")
+    if parsed_amount != payment.amount_kobo:
         raise PaystackError("Payment amount mismatch.")
     if str(data.get("currency") or "").upper() != payment.currency:
         raise PaystackError("Payment currency mismatch.")
 
     metadata = _metadata_dict(data)
-    if metadata.get("payment_id") and str(metadata["payment_id"]) != str(payment.pk):
-        raise PaystackError("Payment metadata mismatch.")
+    expected_metadata = {
+        "payment_id": payment.pk,
+        "user_id": payment.user_id,
+        "kennel_id": payment.kennel_id,
+        "package": payment.package,
+    }
+    for key, expected in expected_metadata.items():
+        if key in metadata and str(metadata[key]) != str(expected):
+            raise PaystackError("Payment metadata mismatch.")
 
     payment.status = SubmissionPayment.Status.PAID
     payment.paystack_transaction_id = str(data.get("id") or "")
