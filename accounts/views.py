@@ -88,6 +88,7 @@ from registry.services import (
 
 from registry.verification import current_findings, verification_checklist, verify_submission
 
+from pedigrees.csv_safe import safe_pedigree_csv_rows
 from pedigrees.services import coi_linkage_summary, pedigree_analysis, pedigree_export_rows, requested_coi_generations, virtual_mating_analysis
 
 logger = logging.getLogger(__name__)
@@ -2260,7 +2261,11 @@ def member_pedigree_export(request, pk):
         ),
     )
     writer.writeheader()
-    writer.writerows(pedigree_export_rows(dog, generations, public_only=False))
+    writer.writerows(
+        safe_pedigree_csv_rows(
+            pedigree_export_rows(dog, generations, public_only=False)
+        )
+    )
     return response
 
 
