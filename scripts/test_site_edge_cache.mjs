@@ -126,8 +126,6 @@ assert.equal(proxied.headers.get("x-cca-origin-secret"), "edge-secret-test");
 // Header spoofing must never cross the Cloudflare -> Django trust boundary.
 const spoofed = originRequest(
   new Request("https://example.test/accounts/login/", {
-    method: "POST",
-    body: "username=anything",
     headers: {
       "x-forwarded-for": "203.0.113.15",
       "x-real-ip": "203.0.113.16",
