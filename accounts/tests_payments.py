@@ -79,6 +79,63 @@ class PaidSubmissionTests(TestCase):
         self.assertTrue(litter_form.is_valid(), litter_form.errors)
         self.assertEqual(litter_form.cleaned_data["amount_kobo"], 150000)
 
+
+    def test_litter_price_matches_published_owner_policy(self):
+        from pathlib import Path
+        from django.conf import settings
+
+        self.assertEqual(
+            SubmissionPayment.price_for(SubmissionPayment.Package.LITTER, 0), 150_000
+        )
+        # Safeguard against the historical README ₦1,000 / checkout ₦1,500 drift.
+        readme = (Path(settings.BASE_DIR) / "README.md").read_text(encoding="utf-8")
+        requirements = (Path(settings.BASE_DIR) / "docs" / "OWNER_REQUIREMENTS.md").read_text(encoding="utf-8")
+        line = "**₦1,500** — one genuine litter plus the puppies belonging to that litter."
+        self.assertIn(line, readme)
+        self.assertIn(line, requirements)
+
+    def test_paystack_rejects_malformed_amount_without_recording_paid(self):
+        payment = SubmissionPayment.objects.create(
+            user=self.user, kennel=self.kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1, amount_kobo=50_000,
+            reference="CCA-malformed-provider-amount",
+            status=SubmissionPayment.Status.PENDING,
+        )
+        for amount in ("not-an-amount", "50000.0", True, None, {}, "-50000"):
+            with self.subTest(amount=amount):
+                with self.assertRaises(PaystackError):
+                    record_successful_payment(payment.reference, {
+                        "reference": payment.reference, "status": "success",
+                        "amount": amount, "currency": "NGN",
+                    })
+                payment.refresh_from_db()
+                self.assertEqual(payment.status, SubmissionPayment.Status.PENDING)
+
+    def test_paystack_rejects_mismatched_kennel_and_user_metadata(self):
+        payment = SubmissionPayment.objects.create(
+            user=self.user, kennel=self.kennel,
+            package=SubmissionPayment.Package.SINGLE_DOG,
+            dog_count=1, amount_kobo=50_000,
+            reference="CCA-mismatched-provider-metadata",
+            status=SubmissionPayment.Status.PENDING,
+        )
+        for field, bad_value in (
+            ("user_id", "wrong-user"),
+            ("kennel_id", "wrong-kennel"),
+            ("package", SubmissionPayment.Package.LITTER),
+            ("payment_id", "wrong-payment"),
+        ):
+            with self.subTest(field=field):
+                with self.assertRaises(PaystackError):
+                    record_successful_payment(payment.reference, {
+                        "reference": payment.reference, "status": "success",
+                        "amount": 50000, "currency": "NGN",
+                        "metadata": {field: bad_value},
+                    })
+                payment.refresh_from_db()
+                self.assertEqual(payment.status, SubmissionPayment.Status.PENDING)
+
     @patch("accounts.views.verify_transaction")
     def test_member_can_recheck_pending_payment_status(self, verify):
         payment = SubmissionPayment.objects.create(
