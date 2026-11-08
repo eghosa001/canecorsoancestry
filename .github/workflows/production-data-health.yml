@@ -106,6 +106,11 @@ jobs:
           # Read-only: report published aggregate counts, never dog identities.
           # Source attachment is not equivalent to independent verification.
           sudo -n podman exec cca-oracle-staging python manage.py report_data_quality
+      - name: Report published-only evidence review priorities
+        # Do not call commands not yet staged on the Oracle production origin.
+        if: github.event_name != 'push' && (github.event_name != 'workflow_run' || github.event.workflow_run.name == 'Oracle Django production release (CI-gated)')
+        run: |
+          sudo -n podman exec cca-oracle-staging python manage.py audit_evidence_review_queue --limit 15
       - name: Audit live pedigree integrity
         run: sudo -n podman exec cca-oracle-staging python manage.py audit_pedigree_data --fail-on-critical
       - name: Audit live owner production invariants
