@@ -60,6 +60,15 @@
       if (focus) announce("Showing " + picker.options[index].textContent + ".");
     }
     picker.addEventListener("change", function () { goTo(Number(picker.value), true); });
+    // The viewer is keyboard navigable without intercepting links or forms.
+    scroll.addEventListener("keydown", function (event) {
+      if (!mobile.matches || event.target !== scroll) return;
+      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        goTo(index + (event.key === "ArrowRight" ? 1 : -1), true);
+      }
+    });
+
     document.querySelectorAll("[data-pedigree-step]").forEach(function (button) {
       button.addEventListener("click", function () {
         if (!mobile.matches) {
