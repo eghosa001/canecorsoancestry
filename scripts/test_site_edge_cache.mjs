@@ -123,6 +123,47 @@ assert.equal(proxied.headers.get("x-forwarded-host"), "example.test");
 assert.equal(proxied.headers.get("x-cca-edge"), "1");
 assert.equal(proxied.headers.get("x-cca-origin-secret"), "edge-secret-test");
 
+// Header spoofing must never cross the Cloudflare -> Django trust boundary.
+const spoofed = originRequest(
+  new Request("https://example.test/accounts/login/", {
+    headers: {
+      "x-forwarded-for": "203.0.113.15",
+      "x-real-ip": "203.0.113.16",
+      "x-forwarded-host": "attacker.example",
+      "x-forwarded-proto": "http",
+      "x-cca-origin-secret": "forged-secret",
+      "x-cca-edge": "1",
+      "content-type": "application/x-www-form-urlencoded",
+    },
+  }),
+  { ORIGIN_URL: "https://origin.example", ORIGIN_EDGE_SECRET: "real-edge-secret" },
+);
+assert.equal(spoofed.headers.get("x-forwarded-for"), null);
+assert.equal(spoofed.headers.get("x-real-ip"), null);
+assert.equal(spoofed.headers.get("x-forwarded-host"), "example.test");
+assert.equal(spoofed.headers.get("x-forwarded-proto"), "https");
+assert.equal(spoofed.headers.get("x-cca-origin-secret"), "real-edge-secret");
+assert.equal(spoofed.headers.get("x-cca-edge"), "1");
+
+const trustedClient = originRequest(
+  new Request("https://example.test/accounts/login/", {
+    headers: {
+      "cf-connecting-ip": "198.51.100.27",
+      "x-forwarded-for": "203.0.113.50",
+    },
+  }),
+  { ORIGIN_URL: "https://origin.example", ORIGIN_EDGE_SECRET: "real-edge-secret" },
+);
+assert.equal(trustedClient.headers.get("x-forwarded-for"), "198.51.100.27");
+const missingSecret = originRequest(
+  new Request("https://example.test/healthz/", {
+    headers: { "x-cca-origin-secret": "forged-secret" },
+  }),
+  { ORIGIN_URL: "https://origin.example" },
+);
+assert.equal(missingSecret.headers.get("x-cca-origin-secret"), null);
+
+
 
 const realFetch = globalThis.fetch;
 let warmupRequest = null;
