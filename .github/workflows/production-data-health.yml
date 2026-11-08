@@ -98,6 +98,11 @@ jobs:
           assert count >= 33000, count
           print(f'Oracle-local production dogs: {count}')
           "
+      - name: Measure public pedigree, photograph and reviewed-evidence coverage
+        run: |
+          # Read-only: report published aggregate counts, never dog identities.
+          # Source attachment is not equivalent to independent verification.
+          sudo -n podman exec cca-oracle-staging python manage.py report_data_quality
       - name: Audit live pedigree integrity
         run: sudo -n podman exec cca-oracle-staging python manage.py audit_pedigree_data --fail-on-critical
       - name: Audit live owner production invariants
