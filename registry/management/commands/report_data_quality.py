@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Q
 
 from registry.models import DogImage, DogSource, VerificationState
-from registry.querysets import published_dogs
+from registry.querysets import published_dogs, with_displayable_images
 
 
 def quality_snapshot():
@@ -18,6 +18,7 @@ def quality_snapshot():
     with_parents = public.filter(sire_id__isnull=False, dam_id__isnull=False).count()
     with_any_parent = public.filter(Q(sire_id__isnull=False) | Q(dam_id__isnull=False)).count()
     with_photos = DogImage.objects.filter(dog__in=public).values("dog_id").distinct().count()
+    with_displayable_photos = with_displayable_images(public).count()
     with_provenance = (
         DogSource.objects.filter(dog__in=public)
         .filter(Q(source_url__gt="") | Q(document__gt=""))
@@ -42,18 +43,21 @@ def quality_snapshot():
         "with_any_recorded_parent": with_any_parent,
         "with_both_recorded_parents": with_parents,
         "with_managed_photo": with_photos,
+        "with_displayable_photo": with_displayable_photos,
         "with_source_url_or_document": with_provenance,
         "with_timestamped_reviewed_source": with_reviewed_sources,
         "with_reviewed_dog_status": reviewed_states,
         "percent_with_any_recorded_parent": fraction(with_any_parent),
         "percent_with_both_recorded_parents": fraction(with_parents),
         "percent_with_managed_photo": fraction(with_photos),
+        "percent_with_displayable_photo": fraction(with_displayable_photos),
         "percent_with_provenance": fraction(with_provenance),
         "percent_with_timestamped_reviewed_source": fraction(with_reviewed_sources),
         "percent_with_reviewed_dog_status": fraction(reviewed_states),
         "disclosure": (
             "Source metadata, an uploaded document, a review timestamp and a "
-            "dog verification state are distinct signals. These counts do not "
+            "dog verification state are distinct signals. Displayable photographs "
+            "may be trusted imported-source URLs rather than managed files. These counts do not "
             "certify independent identity or pedigree accuracy, and exclude "
             "unpublished/private dogs."
         ),
