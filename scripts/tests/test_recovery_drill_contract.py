@@ -35,6 +35,7 @@ class RecoveryDrillContractTests(TestCase):
 
     def test_restored_relationship_and_schema_verification_are_required(self):
         script = SCRIPT.read_text()
+        self.assertIn('podman exec -i "$RESTORE_CONTAINER" psql', script)
         self.assertIn("LEFT JOIN django_app.registry_dog sire", script)
         self.assertIn("LEFT JOIN django_app.registry_dog dam", script)
         self.assertIn("NOT i.indisvalid OR NOT i.indisready", script)
