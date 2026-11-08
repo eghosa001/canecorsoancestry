@@ -83,6 +83,14 @@ jobs:
           else
             echo "Verified protected main release: $selected"
           fi
+      - name: Require a fresh encrypted Oracle-local database backup before release
+        if: env.CCA_SKIP_RELEASE != '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Fail closed: never replace the running Django container if the
+          # authoritative database has no recent verified offsite snapshot.
+          bash scripts/oracle_runner/check_offsite_backup_freshness.sh
       - name: Update and verify Oracle Django container; do not change Cloudflare routing
         if: env.CCA_SKIP_RELEASE != '1'
         shell: bash
