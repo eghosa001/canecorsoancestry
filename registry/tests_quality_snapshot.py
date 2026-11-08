@@ -30,6 +30,7 @@ class QualitySnapshotTests(TestCase):
         report = quality_snapshot()
         self.assertEqual(report["public_dogs"], 1)
         self.assertEqual(report["with_managed_photo"], 1)
+        self.assertEqual(report["with_displayable_photo"], 1)
         self.assertEqual(report["with_source_url_or_document"], 1)
         self.assertEqual(report["with_timestamped_reviewed_source"], 0)
         self.assertEqual(report["with_reviewed_dog_status"], 0)
@@ -48,3 +49,19 @@ class QualitySnapshotTests(TestCase):
         report = quality_snapshot()
         self.assertEqual(report["with_timestamped_reviewed_source"], 1)
         self.assertEqual(report["with_reviewed_dog_status"], 0)
+
+    def test_imported_photo_is_counted_as_displayable_not_managed(self):
+        dog = Dog.objects.create(
+            name="Archive Photo Dog", slug="archive-photo-dog", is_public=True,
+        )
+        DogSource.objects.create(
+            dog=dog, source_type=DogSource.SourceType.PEDIGREE,
+            title="Imported archive with photo",
+            raw_payload={
+                "image_url": "https://canecorsopedigree.com/static/images/animal/example.jpg"
+            },
+        )
+        report = quality_snapshot()
+        self.assertEqual(report["with_displayable_photo"], 1)
+        self.assertEqual(report["with_managed_photo"], 0)
+        self.assertEqual(report["with_timestamped_reviewed_source"], 0)

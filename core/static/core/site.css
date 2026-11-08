@@ -7291,3 +7291,27 @@ html[data-theme="light"] .hero-search input {
   #cca-pedigree-scroll .pedigree-column[hidden] { display: block !important; }
   .cca-generation-picker-label { display: none !important; }
 }
+
+/* Readable, complete print/PDF view: never crop a mobile single-generation panel. */
+@media print {
+  #cca-pedigree-scroll {
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+  #cca-pedigree-scroll .pedigree-board {
+    zoom: 1 !important;
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  #cca-pedigree-scroll .pedigree-column {
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+    max-height: none !important;
+  }
+  #cca-pedigree-scroll .pedigree-node {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
