@@ -156,16 +156,15 @@ echo "PASS: Encrypted R2 archive restored to independent PostgreSQL 17; $restore
 echo "Production database was not accessed for restore or modified."
 # Publish a minimal, auditable receipt. Never include archive object keys,
 # credentials, dog identities, row contents or decrypted backup bytes.
-sudo -n python3 - "$RUNNER_TEMP/cca-recovery-proof.json" "$restored_dogs" "$restored_migrations" <<'PY'
+sudo -n python3 - "$RUNNER_TEMP/cca-recovery-proof.json" "$restored_dogs" "$restored_migrations" "$GITHUB_RUN_ID" <<'PY'
 import json
-import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 receipt = {
     "format": "CCA-RECOVERY-PROOF-v1",
-    "run_id": os.environ["GITHUB_RUN_ID"],
+    "run_id": sys.argv[4],
     "checked_at_utc": datetime.now(timezone.utc).isoformat(),
     "database": "isolated-postgresql-17",
     "backup_source": "encrypted-offsite-r2",
