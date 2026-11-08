@@ -34,7 +34,9 @@ def increment_abuse_counter(key, window):
     base = Path(settings.CACHES["abuse"]["LOCATION"])
     base.mkdir(mode=0o700, parents=True, exist_ok=True)
     lock_flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
-    fd = os.open(str(base / ".counter.lock"), lock_flags, 0o600)
+    # Keep the advisory lock outside the cache directory: a cache cull or
+    # clear must never unlink the lock inode while other workers hold it.
+    fd = os.open(str(base.parent / f".{base.name}.counter.lock"), lock_flags, 0o600)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         return _increment(caches["abuse"], key, window)
