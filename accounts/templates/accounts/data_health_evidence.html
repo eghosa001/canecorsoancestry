@@ -22,12 +22,20 @@
           <option value="{{ code }}" {% if issue == code %}selected{% endif %}>{{ title }}</option>
         {% endfor %}
       </select>
+      <label for="evidence-sort">Order</label>
+      <select id="evidence-sort" name="sort">
+        <option value="most-searched" {% if sort == "most-searched" %}selected{% endif %}>Most searched first</option>
+        <option value="name" {% if sort == "name" %}selected{% endif %}>Dog name A–Z</option>
+      </select>
       <button class="btn btn-gold" type="submit">Show records</button>
     </form>
     <div class="panel-heading">
       <div><h2>{{ issue_title }}</h2><span>{{ page_obj.paginator.count }} existing public record{{ page_obj.paginator.count|pluralize }}</span></div>
       <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
     </div>
+    {% if issue == "reviewed-status-needs-source-check" %}
+      <p class="muted">The dog carries a reviewed verification status but no timestamped reviewed DogSource. Other approved evidence may exist elsewhere in its moderation or document history. Check the complete record before changing any verification state.</p>
+    {% endif %}
     {% if issue == "missing-photo" %}
       <p class="muted">This filter identifies public dogs with neither a managed photograph nor a trusted legacy archive image reference. It does not prove a source image can be fetched or that any photograph is suitable for publication. Review rights and the image before uploading it; retain the original file and do not use generic placeholder dog photos.</p>
     {% else %}
@@ -78,9 +86,9 @@
 
     {% if page_obj.paginator.num_pages > 1 %}
       <nav class="button-row" aria-label="Evidence worklist pages">
-        {% if page_obj.has_previous %}<a class="btn btn-outline" href="?issue={{ issue }}&amp;page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+        {% if page_obj.has_previous %}<a class="btn btn-outline" href="?issue={{ issue }}&amp;sort={{ sort }}&amp;page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
         <span class="muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-        {% if page_obj.has_next %}<a class="btn btn-outline" href="?issue={{ issue }}&amp;page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+        {% if page_obj.has_next %}<a class="btn btn-outline" href="?issue={{ issue }}&amp;sort={{ sort }}&amp;page={{ page_obj.next_page_number }}">Next</a>{% endif %}
       </nav>
     {% endif %}
   </section>
