@@ -25,16 +25,15 @@ sudo -n podman exec cca-pg-shadow pg_isready -h 127.0.0.1 -U cca_shadow_admin -d
 echo "=== Oracle Django container ==="
 sudo -n podman inspect cca-oracle-staging --format 'cpus={{.HostConfig.NanoCpus}} memory={{.HostConfig.Memory}} command={{.Config.Cmd}}'
 sudo -n podman stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}' cca-oracle-staging
-echo "=== Local Django request timings (2 samples/path) ==="
+echo "=== Real public Cloudflare edge request timings (2 samples/path) ==="
+# Measure through the authorized private-VPC Cloudflare edge. Never forge an
+# internal edge credential or substitute DJANGO_SECRET_KEY for its separate
+# ORIGIN_EDGE_SECRET. The previous direct-origin probe always returned 403.
 for path in "/" "/accounts/login/" "/pedigrees/virtual-mating/" "/dogs/?q=" "/dogs/?q=Branco" "/dogs/suggestions/?q=gar&sex=male"; do
   for n in 1 2; do
     headers_file="$(mktemp)"
     timing="$(curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -D "$headers_file" -w 'http=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}' \
-      -H "X-CCA-Origin-Secret: $DJANGO_SECRET_KEY" \
-      -H 'X-CCA-Edge: 1' \
-      -H 'X-Forwarded-Proto: https' \
-      -H 'X-Forwarded-Host: canecorsoancestry-site-edge.aighewieghosa111.workers.dev' \
-      "http://127.0.0.1:18080$path" || true)"
+      "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev$path" || true)"
     app="$(tr -d '\r' < "$headers_file" | grep -i '^server-timing:' | head -1 | sed -E 's/^server-timing:[[:space:]]*//' || true)"
     rm -f "$headers_file"
     printf 'path=%s sample=%d %s app=%s\n' "$path" "$n" "$timing" "$app"

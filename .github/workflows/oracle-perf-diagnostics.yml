@@ -9,6 +9,7 @@ on:
     paths:
       - "scripts/oracle_runner/oracle_perf_diagnostics.sh"
       - "scripts/oracle_runner/profile_dog_browse.py"
+      - "scripts/tests/test_oracle_perf_contract.py"
       - ".github/workflows/oracle-perf-diagnostics.yml"
   pull_request:
     paths:
@@ -33,6 +34,7 @@ jobs:
       - name: Check shell syntax and policy
         run: |
           bash -n scripts/oracle_runner/oracle_perf_diagnostics.sh
+          python3 -m unittest scripts.tests.test_oracle_perf_contract -v
           python3 scripts/fast_path_guard.py
 
   diagnostics:
@@ -42,8 +44,6 @@ jobs:
       github.repository == 'eghosa001/canecorsoancestry'
     runs-on: [self-hosted, linux, arm64, cca-oracle]
     timeout-minutes: 6
-    env:
-      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
