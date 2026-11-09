@@ -23,7 +23,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: cca-ops-incidents-${{ github.event.workflow_run.name || github.ref }}
@@ -41,6 +40,9 @@ jobs:
           python3 scripts/fast_path_guard.py
 
   sync-incident:
+    permissions:
+      contents: read
+      issues: write
     if: >-
       github.event_name == 'workflow_run' &&
       github.repository == 'eghosa001/canecorsoancestry' &&
