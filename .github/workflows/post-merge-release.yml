@@ -1,0 +1,52 @@
+name: Kick CI-gated Oracle release after merged application PR
+
+# API-based merges may not emit a normal push workflow in this environment.
+# A merged application PR therefore explicitly dispatches a fresh release
+# audit on protected main. Existing Oracle deployment still requires that
+# audit to succeed, verifies exact HEAD and checks fresh encrypted backups.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+    paths:
+      - "accounts/**"
+      - "config/**"
+      - "core/**"
+      - "pedigrees/**"
+      - "registry/**"
+      - "manage.py"
+      - "requirements.txt"
+      - "Dockerfile"
+      - "src/site-edge.js"
+      - "scripts/test_site_edge_cache.mjs"
+      - "scripts/oracle_runner/**"
+      - ".github/workflows/oracle-stage-django.yml"
+      - ".github/workflows/release-audit.yml"
+      - ".github/workflows/post-merge-release.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: cca-post-merge-release-kickoff
+  cancel-in-progress: false
+
+jobs:
+  dispatch-audited-release:
+    if: >-
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Start full release audit against current protected main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run release-audit.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo "Fresh protected-main full audit requested."
+          echo "Oracle deploy remains gated on that audit's success and live SHA validation."
