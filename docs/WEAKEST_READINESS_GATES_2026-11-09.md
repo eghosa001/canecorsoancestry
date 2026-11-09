@@ -50,5 +50,8 @@ Record a date, reviewer, environment, result and link to evidence for every comp
 - The weekly security audit now also runs bounded authentication, role-separation, member access and mocked Paystack regressions; a password-reset expiry regression is included.
 - The existing weekly network-isolated R2 recovery drill additionally requires nonempty restored pedigree provenance records. The live database is never a restoration target.
 - A scheduled public-page axe-core accessibility audit provides WCAG 2.2 A/AA issue evidence without signing into member accounts or publishing/indexing the site.
-- GitHub incident issues now consolidate failures from the existing production availability, backup-freshness, restoration, release-attestation, and payment safety workflows. GitHub notification delivery depends on watcher/notification settings; actual inbox delivery is not automatically certified.
+- GitHub incident issues now consolidate failures from production availability, encrypted backup uploads/freshness, isolated restores, release attestation, pre-launch data health, read-only payment safety, public accessibility, latency, security, and production smoke workflows. GitHub notification delivery depends on watcher/notification settings; actual inbox delivery is not automatically certified.
 - **Not automated / not implied:** live Paystack charges, ownership of a production custom domain, indexing submission, real SMS or email delivery to owner inboxes, and manual photo/pedigree provenance review. These are launch gates, not code-test achievements.
+
+- The existing WebKit/iPhone compatibility smoke is now scheduled weekly with isolated fixtures; it supplements, not replaces, real-device acceptance tests.
+- The public availability monitor now checks robots.txt and the sitemap index for HTTP availability without requesting search-engine indexing.
