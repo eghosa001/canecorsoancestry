@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+from urllib.parse import urlsplit
 
 import requests
 from django.conf import settings
@@ -52,9 +53,28 @@ def initialize_transaction(payment, callback_url):
     except (requests.RequestException, ValueError) as exc:
         raise PaystackError("Unable to start the Paystack payment.") from exc
 
-    data = body.get("data") or {}
-    if not body.get("status") or not data.get("authorization_url") or not data.get("access_code"):
-        raise PaystackError(body.get("message") or "Paystack did not return a checkout URL.")
+    if not isinstance(body, dict) or body.get("status") is not True:
+        raise PaystackError("Paystack did not authorize the checkout.")
+    data = body.get("data")
+    if not isinstance(data, dict):
+        raise PaystackError("Paystack returned an invalid checkout response.")
+    checkout_url = data.get("authorization_url")
+    access_code = data.get("access_code")
+    if not isinstance(checkout_url, str) or not isinstance(access_code, str) or not access_code:
+        raise PaystackError("Paystack did not return a valid checkout URL.")
+    try:
+        destination = urlsplit(checkout_url)
+        if (
+            destination.scheme != "https"
+            or destination.hostname != "checkout.paystack.com"
+            or destination.username is not None
+            or destination.password is not None
+            or destination.port is not None
+            or not destination.path.startswith("/")
+        ):
+            raise PaystackError("Paystack returned an untrusted checkout URL.")
+    except ValueError as exc:
+        raise PaystackError("Paystack returned an invalid checkout URL.") from exc
     return data
 
 
@@ -70,8 +90,10 @@ def verify_transaction(reference):
     except (requests.RequestException, ValueError) as exc:
         raise PaystackError("Unable to verify the Paystack payment.") from exc
 
-    if not body.get("status") or not isinstance(body.get("data"), dict):
-        raise PaystackError(body.get("message") or "Paystack could not verify this payment.")
+    if not isinstance(body, dict) or body.get("status") is not True:
+        raise PaystackError("Paystack could not verify this payment.")
+    if not isinstance(body.get("data"), dict):
+        raise PaystackError("Paystack returned an invalid verification response.")
     return body["data"]
 
 
