@@ -39,7 +39,7 @@ jobs:
       - name: Focused Oracle script/security and owner CI policy checks
         run: |
           bash -n scripts/oracle_runner/stage_django.sh
-          python3 -m unittest scripts.tests.test_oracle_domain
+          python3 -m unittest scripts.tests.test_oracle_domain scripts.tests.test_post_merge_release_contract
           python3 scripts/fast_path_guard.py
           python3 -m pip install -q -r requirements.txt
           python3 manage.py test scripts.tests.test_oracle_origin scripts.tests.test_oracle_migration_freeze scripts.tests.test_oracle_schema_allowlist --noinput
@@ -53,7 +53,8 @@ jobs:
         (github.event_name == 'workflow_run' &&
          github.event.workflow_run.head_branch == 'main' &&
          github.event.workflow_run.conclusion == 'success' &&
-         github.event.workflow_run.event == 'push')
+         (github.event.workflow_run.event == 'push' ||
+          github.event.workflow_run.event == 'workflow_dispatch'))
       )
     runs-on: [self-hosted, linux, arm64, cca-oracle]
     timeout-minutes: 40
