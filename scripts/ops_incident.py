@@ -101,7 +101,7 @@ def sync(event, repo):
         api("PATCH", f"/issues/{existing['number']}", payload={"body": body})
         print(f"Updated existing incident #{existing['number']} for {name}.")
     else:
-        new = api("POST", "/issues", payload={"title": title, "body": body})
+        new = api("POST", "/issues", payload={"title": title, "body": body, "assignees": ["eghosa001"]})
         print(f"Opened operational incident #{new['number']} for {name}.")
 
 

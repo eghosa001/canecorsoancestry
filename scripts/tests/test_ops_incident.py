@@ -1,6 +1,7 @@
 """The incident automation must not post on PRs, skips, cancelled runs or foreign repos."""
 from unittest import TestCase
-from scripts.ops_incident import REPOSITORY, eligible_run, incident_title
+from unittest.mock import patch
+from scripts.ops_incident import sync, REPOSITORY, eligible_run, incident_title
 
 
 def event(**kwargs):
@@ -33,3 +34,11 @@ class OperationalIssueSafetyTests(TestCase):
         ):
             with self.subTest(changes=changes, repo=repo):
                 self.assertFalse(eligible_run(event(**changes), repo))
+
+    def test_new_incident_is_assigned_to_repository_owner(self):
+        with patch("scripts.ops_incident.active_issue", return_value=None), \
+             patch("scripts.ops_incident.api", return_value={"number": 12}) as api:
+            sync(event(), REPOSITORY)
+        arguments = api.call_args.kwargs
+        self.assertEqual(arguments["payload"]["assignees"], ["eghosa001"])
+        self.assertIn("Production availability watch", arguments["payload"]["title"])
