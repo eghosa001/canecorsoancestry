@@ -58,6 +58,9 @@
     <p><strong>{{ counts.verified_source_backed_public }} of {{ counts.public_dogs }}</strong> public dogs have at least one source carrying an independent-review marker ({{ report.verified_source_coverage_percent|floatformat:2 }}%). These markers must be recorded only after genuine human evidence review; imported references are not automatically verified.</p>
     <p><strong>{{ counts.both_parents_recorded_with_reviewed_pedigree_source }} of {{ counts.both_parents_recorded_public }}</strong> public dogs with two recorded parents also have a timestamp-reviewed pedigree or registry source with a URL or uploaded document. This is evidence-review coverage, not certification that either parent link is correct.</p>
     <div class="button-row">
+      <a class="btn btn-gold" href="{% url 'accounts:data-health-evidence' %}?issue=priority">Open prioritized review queue</a>
+      <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=approval-cross-check">Reconcile prior approvals</a>
+      <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=shared-photo">Possible reused photos</a>
       <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=missing-source">Missing sources ({{ counts.public_without_sources }})</a>
       <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=unreviewed-source">Unreviewed sources</a>
       <a class="btn btn-outline" href="{% url 'accounts:data-health-evidence' %}?issue=parentage-source-review">Review parentage evidence</a>
