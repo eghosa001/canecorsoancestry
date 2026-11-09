@@ -174,3 +174,43 @@ jobs:
           node --check src/site-edge.js
           node --check core/static/core/site.js
           node scripts/test_site_edge_cache.mjs
+
+  oracle-production:
+    name: Deploy audited main to Oracle
+    if: >-
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    needs: [django-sqlite, django-postgres, security-and-edge]
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 40
+    env:
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_SECRET_KEY }}
+      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+      EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+      DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+      CCA_SUPPORT_EMAIL: ${{ vars.CCA_SUPPORT_EMAIL }}
+      CCA_CANONICAL_SITE_URL: ${{ vars.CCA_CANONICAL_SITE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require current protected main commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          selected="$(git rev-parse HEAD)"
+          current="$(git ls-remote https://github.com/eghosa001/canecorsoancestry.git refs/heads/main | cut -f1)"
+          if [[ -z "$current" || "$selected" != "$current" ]]; then
+            echo "::error::Audited commit is no longer current main; refusing stale deployment."
+            exit 1
+          fi
+          echo "PASS: Audited commit matches current protected main: $selected"
+      - name: Require fresh offsite encrypted backup
+        shell: bash
+        run: bash scripts/oracle_runner/check_offsite_backup_freshness.sh
+      - name: Deploy to private Oracle Django service and verify live PDF routes
+        shell: bash
+        run: bash scripts/oracle_runner/stage_django.sh
