@@ -2,7 +2,7 @@
 {% block title %}{{ dog.name }} · My Pedigrees{% endblock %}
 {% block content %}
 <section class="pedigree-page">
-<header class="pedigree-toolbar page-shell"><div><p class="eyebrow">Member pedigree</p><h1>{{ dog.name }}</h1><p>{% if dog.kennel %}{{ dog.kennel.name }} · {% endif %}Includes your permitted private kennel ancestry where available</p></div><div class="generation-switch no-print">{% for option in generation_options %}<a class="{% if generations == option %}active{% endif %}" href="?generations={{ option }}">{{ option }} generations</a>{% endfor %}</div></header>
+<header class="pedigree-toolbar page-shell"><div><p class="eyebrow">Member pedigree</p><h1>{{ dog.name }}</h1><p>{% if dog.kennel %}{{ dog.kennel.name }} · {% endif %}Includes your permitted private kennel ancestry where available</p></div><div class="generation-switch no-print">{% for option in generation_options %}<a class="{% if generations == option %}active{% endif %}" href="?generations={{ option }}&amp;coi_generations={{ analysis.coi_generation_value }}">{{ option }} generations</a>{% endfor %}</div></header>
 <div class="page-shell button-row no-print cca-pedigree-download">
   <a class="btn btn-gold" href="{% url 'accounts:member-pedigree-export-pdf' dog.pk %}?generations={{ generations }}" download>Download pedigree (PDF)</a>
   <button class="btn btn-outline" type="button" onclick="window.print()">Print pedigree</button>
