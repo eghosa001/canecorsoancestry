@@ -44,3 +44,11 @@ These are owner-reported tests performed before this readiness review, not fresh
 6. **Release**: verify current deployed build SHA matches the approved main branch via existing release attestation and focused smoke tests; do not assume a merged PR is deployed.
 
 Record a date, reviewer, environment, result and link to evidence for every completed gate. Until this is done, production scores remain provisional.
+## Automation added in the November 2026 hardening pass
+
+- An additional scheduled, read-only Oracle latency diagnosis runs weekly. It uses existing request/SQL timing budgets, without soak tests or mutating production.
+- The weekly security audit now also runs bounded authentication, role-separation, member access and mocked Paystack regressions; a password-reset expiry regression is included.
+- The existing weekly network-isolated R2 recovery drill additionally requires nonempty restored pedigree provenance records. The live database is never a restoration target.
+- A scheduled public-page axe-core accessibility audit provides WCAG 2.2 A/AA issue evidence without signing into member accounts or publishing/indexing the site.
+- GitHub incident issues now consolidate failures from the existing production availability, backup-freshness, restoration, release-attestation, and payment safety workflows. GitHub notification delivery depends on watcher/notification settings; actual inbox delivery is not automatically certified.
+- **Not automated / not implied:** live Paystack charges, ownership of a production custom domain, indexing submission, real SMS or email delivery to owner inboxes, and manual photo/pedigree provenance review. These are launch gates, not code-test achievements.

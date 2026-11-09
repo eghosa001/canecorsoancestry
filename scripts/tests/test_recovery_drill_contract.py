@@ -37,6 +37,7 @@ class RecoveryDrillContractTests(TestCase):
         script = SCRIPT.read_text()
         self.assertIn('podman exec -i "$RESTORE_CONTAINER" psql', script)
         self.assertIn("LEFT JOIN django_app.registry_dog sire", script)
+        self.assertIn("SELECT COUNT(*) FROM django_app.registry_dogsource", script)
         self.assertIn("LEFT JOIN django_app.registry_dog dam", script)
         self.assertIn("NOT i.indisvalid OR NOT i.indisready", script)
         self.assertIn("c.contype = 'f' AND NOT c.convalidated", script)

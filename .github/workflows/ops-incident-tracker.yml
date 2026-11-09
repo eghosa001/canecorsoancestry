@@ -1,0 +1,53 @@
+name: CCA operational incident tracking
+
+on:
+  workflow_run:
+    workflows:
+      - "Production availability watch"
+      - "Oracle R2 backup freshness watch"
+      - "Oracle offsite PostgreSQL recovery integrity"
+      - "Production Django release attestation"
+      - "Production payment and policy edge probe"
+    types: [completed]
+  pull_request:
+    paths:
+      - "scripts/ops_incident.py"
+      - "scripts/tests/test_ops_incident.py"
+      - ".github/workflows/ops-incident-tracker.yml"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: cca-ops-incidents-${{ github.event.workflow_run.name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m unittest scripts.tests.test_ops_incident -v
+          python3 scripts/fast_path_guard.py
+
+  sync-incident:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.repository == 'eghosa001/canecorsoancestry' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Open, refresh or resolve the single GitHub incident issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ops_incident.py

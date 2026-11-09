@@ -49,6 +49,17 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r requirements.txt --strict
+      - name: Weekly account recovery, member role and paid-access regression gates
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+        run: |
+          python manage.py test \
+            accounts.tests_account_recovery \
+            accounts.tests_role_separation \
+            pedigrees.tests_member_gates \
+            accounts.tests_paystack_provider_responses \
+            --verbosity 1
       - name: Django production security check
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production

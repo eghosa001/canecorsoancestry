@@ -117,6 +117,13 @@ restored_migrations="$(sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres
 [[ "$restored_migrations" =~ ^[0-9]+$ && "$restored_migrations" -gt 0 ]] || {
   echo "::error::Isolated restore is missing Django migration state"; exit 1;
 }
+# Verify the imported provenance graph is present in the restored database,
+# not just the canonical dog rows. Do not reveal individual source records.
+restored_sources="$(sudo -n podman exec "$RESTORE_CONTAINER" psql -U postgres -d postgres -Atqc \
+  'SELECT COUNT(*) FROM django_app.registry_dogsource;')"
+[[ "$restored_sources" =~ ^[0-9]+$ && "$restored_sources" -gt 0 ]] || {
+  echo "::error::Isolated restore lacks the historical pedigree source records"; exit 1;
+}
 # Validate the restored DATABASE, not just pg_restore's successful exit. A
 # previously broken/missing parent or an invalid restored index should fail
 # the disaster-recovery drill. Never output individual private dog records.
@@ -152,7 +159,7 @@ if [[ "$integrity_check" != PASS ]]; then
   exit 1
 fi
 echo "PASS: Restored pedigree parent references, application indexes and foreign keys are structurally valid."
-echo "PASS: Encrypted R2 archive restored to independent PostgreSQL 17; $restored_dogs dogs and $restored_migrations migrations."
+echo "PASS: Encrypted R2 archive restored to independent PostgreSQL 17; $restored_dogs dogs, $restored_sources source records and $restored_migrations migrations."
 echo "Production database was not accessed for restore or modified."
 # Publish a minimal, auditable receipt. Never include archive object keys,
 # credentials, dog identities, row contents or decrypted backup bytes.

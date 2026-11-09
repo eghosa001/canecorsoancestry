@@ -1,0 +1,66 @@
+name: Public page accessibility audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "29 4 * * 5"  # Weekly public-only WCAG checks, even before formal launch
+  push:
+    branches: [main]
+    paths:
+      - "scripts/public_accessibility_audit.py"
+      - ".github/workflows/public-accessibility.yml"
+  pull_request:
+    paths:
+      - "scripts/public_accessibility_audit.py"
+      - "scripts/tests/test_public_accessibility.py"
+      - ".github/workflows/public-accessibility.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cca-public-a11y-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m unittest scripts.tests.test_public_accessibility -v
+          python3 scripts/fast_path_guard.py
+
+  public-wcag:
+    if: github.event_name != 'pull_request' && github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PRODUCTION_BASE_URL: ${{ vars.CCA_CANONICAL_SITE_URL || 'https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install scoped browser and axe runtime
+        run: |
+          pip install 'playwright==1.64.1'
+          python -m playwright install --with-deps chromium
+          npm install --no-save axe-core@4
+      - name: Audit unauthenticated pages only
+        run: python3 scripts/public_accessibility_audit.py
+      - name: Retain WCAG evidence even after violations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cca-public-wcag-report
+          path: artifacts/public-accessibility.json
+          if-no-files-found: warn
+          retention-days: 30
