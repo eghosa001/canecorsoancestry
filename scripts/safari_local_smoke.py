@@ -268,6 +268,9 @@ def run():
             assert "2 / 2" in modal.locator("[data-dog-lightbox-count]").inner_text()
             modal.locator("[data-dog-photo-prev]").click()
             assert "safari-landscape.jpg" in modal.locator("[data-dog-lightbox-image]").get_attribute("src")
+            # In production this is a signed WebP rendition; in local tests
+            # the same fallback URL is used because no image CDN is configured.
+            assert modal.locator("[data-dog-lightbox-image]").get_attribute("data-media-fallback").endswith("safari-landscape.jpg")
             # An unzoomed photograph must not have an identity GPU transform
             # or flicker when Safari sends viewport-resize events.
             fitted = modal.locator("[data-dog-lightbox-image]")

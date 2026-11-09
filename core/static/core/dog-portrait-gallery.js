@@ -36,7 +36,9 @@
     caption: button.dataset.photoCaption || "Photo",
     referrerPolicy: hero.referrerPolicy || "",
   })) : [{
-    src: openLink.href, alt: hero.alt,
+    src: openLink.href,
+    preview: hero.getAttribute("src") || openLink.href,
+    alt: hero.alt,
     caption: caption?.textContent?.trim() || "Photo",
     referrerPolicy: hero.referrerPolicy || "",
   }];
@@ -52,6 +54,69 @@
   let tapTimer = null;
   let lastTap = null;
   const active = new Map();
+
+  // The profile and expanded viewer share the same small WebP rendition.
+  // Keep at most four decoded neighbouring photographs ready for a swipe;
+  // never eagerly download full-resolution originals or every gallery image.
+  const prepared = new Map();
+  const originals = new Map();
+  const previewFor = (item) => item.preview || item.src;
+  const loadDecoded = (candidate, url) => {
+    if (!url) return Promise.resolve(false);
+    candidate.decoding = "async";
+    candidate.src = url;
+    if (typeof candidate.decode === "function") {
+      return candidate.decode().then(() => true, () => false);
+    }
+    return new Promise((resolve) => {
+      if (candidate.complete) { resolve(candidate.naturalWidth > 0); return; }
+      candidate.onload = () => resolve(true);
+      candidate.onerror = () => resolve(false);
+    });
+  };
+  const prepare = (index) => {
+    if (photos.length < 2 || navigator.connection?.saveData) return;
+    const position = (index + photos.length) % photos.length;
+    if (prepared.has(position)) return;
+    const item = photos[position];
+    const candidate = new Image();
+    if (item.referrerPolicy) candidate.referrerPolicy = item.referrerPolicy;
+    prepared.set(position, candidate);
+    loadDecoded(candidate, previewFor(item)).then((ok) => {
+      if (!ok && prepared.get(position) === candidate) prepared.delete(position);
+    });
+    while (prepared.size > 4) prepared.delete(prepared.keys().next().value);
+  };
+  const prepareNeighbours = (index) => {
+    if (photos.length < 2) return;
+    prepare(index + 1);
+    if (photos.length > 2) prepare(index - 1);
+  };
+
+  // Only a deliberate zoom requests original pixels. Keep the fitted image
+  // visible while that request runs, then upgrade without resizing the view.
+  const upgradeOnZoom = (index) => {
+    if (!dialog.open || !isZoomed()) return;
+    const item = photos[index];
+    if (!item.src || item.src === previewFor(item)) return;
+    if (!originals.has(index)) {
+      const candidate = new Image();
+      if (item.referrerPolicy) candidate.referrerPolicy = item.referrerPolicy;
+      const done = loadDecoded(candidate, item.src).then((ok) => ok ? candidate : null);
+      originals.set(index, done);
+      while (originals.size > 2) originals.delete(originals.keys().next().value);
+    }
+    originals.get(index).then((candidate) => {
+      if (!candidate || !dialog.open || selected !== index || !isZoomed()) return;
+      if (image.getAttribute("src") === item.src) return;
+      const width = image.offsetWidth, height = image.offsetHeight;
+      if (width && height) {
+        image.style.width = width + "px";
+        image.style.height = height + "px";
+      }
+      image.src = item.src;
+    });
+  };
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const isZoomed = () => scale > 1.01;
 
@@ -102,6 +167,7 @@
     zoomButton.setAttribute("aria-pressed", String(isZoomed()));
     zoomButton.textContent = isZoomed() ? "Fit photo" : "Zoom in";
     viewport.dataset.zoomed = String(isZoomed());
+    if (isZoomed()) upgradeOnZoom(selected);
   };
   const fit = () => {
     scale = 1;
@@ -181,15 +247,38 @@
     if (dialog.open) {
       clearGestures();
       fit();
+      image.style.width = "";
+      image.style.height = "";
       image.referrerPolicy = item.referrerPolicy;
-      if (image.getAttribute("src") !== item.src) image.src = item.src;
+      // The original stays available as a permission-checked error fallback
+      // and for explicit zoom, but is not part of ordinary photo switching.
+      image.setAttribute("data-media-fallback", item.src);
+      image.removeAttribute("data-media-fallback-used");
+      image.loading = "eager";
+      const preview = previewFor(item);
+      if (image.getAttribute("src") !== preview) image.src = preview;
       image.alt = item.alt;
       if (modalCount) modalCount.textContent = `${selected + 1} / ${photos.length}`;
       if (modalCaption) modalCaption.textContent = item.caption;
     }
+    prepareNeighbours(selected);
   };
 
-  thumbs.forEach((button, index) => button.addEventListener("click", () => select(index)));
+  thumbs.forEach((button, index) => {
+    button.addEventListener("click", () => select(index));
+    button.addEventListener("mouseenter", () => prepare(index), { passive: true });
+    button.addEventListener("touchstart", () => prepare(index), { passive: true });
+  });
+  // Start warming adjacent photos only after the main page has settled.
+  const warmInitial = () => {
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(() => prepareNeighbours(selected), { timeout: 1500 });
+    } else {
+      window.setTimeout(() => prepareNeighbours(selected), 450);
+    }
+  };
+  if (document.readyState === "complete") warmInitial();
+  else window.addEventListener("load", warmInitial, { once: true });
   const single = photos.length < 2;
   prev.hidden = single;
   next.hidden = single;

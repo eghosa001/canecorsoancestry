@@ -192,7 +192,8 @@
           <div class="dog-photo-lightbox-viewport" data-dog-photo-viewport role="group"
                aria-label="Dog photo — pinch to zoom, drag to explore, tap to reset or close, swipe down to dismiss">
             <img data-dog-lightbox-image
-                 src="{% if dog.display_images %}{{ dog.display_images.0.image.url }}{% else %}{{ dog.source_image_url }}{% endif %}"
+                 data-media-fallback="{% if dog.display_images %}{{ dog.display_images.0.image.url }}{% else %}{{ dog.source_image_url }}{% endif %}"
+                 src="{% if dog.display_images %}{{ dog.display_images.0.image.url|dog_photo:'portrait' }}{% else %}{{ dog.source_image_url }}{% endif %}"
                  alt="{{ dog.name }}" loading="lazy" decoding="async" draggable="false"{% if not dog.display_images %} referrerpolicy="no-referrer"{% endif %}>
           </div>
           <button class="dog-photo-lightbox-nav" type="button" data-dog-photo-next aria-label="Next photograph" {% if dog.display_images|length <= 1 %}hidden{% endif %}>›</button>
@@ -487,5 +488,5 @@
   {% endif %}
 
 </section>
-<script src="{% static 'core/dog-portrait-gallery.js' %}?v=20261011-stable-gallery-v7" defer></script>
+<script src="{% static 'core/dog-portrait-gallery.js' %}?v=20261109-fast-gallery-v1" defer></script>
 {% endblock %}
