@@ -54,7 +54,7 @@ def run(base_url, axe_path, output):
         finally:
             browser.close()
     Path(output).parent.mkdir(parents=True, exist_ok=True)
-    Path(output).write_text(json.dumps(report, indent=2) + "\\n", encoding="utf-8")
+    Path(output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     if failed:
         raise SystemExit("Public-page accessibility audit found serious/critical WCAG violations.")
     print("PASS: no serious/critical automated WCAG violations on sampled public pages.")
