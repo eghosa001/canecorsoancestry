@@ -6,7 +6,7 @@
     <div>
       <p class="eyebrow">Internal pedigree integrity</p>
       <h1>Evidence review worklist</h1>
-      <p>Investigate existing public dogs without a source or independent evidence-review marker. No new dog records are created by this list.</p>
+      <p>Prioritize existing dog records by evidence gaps, disputes, photograph issues and earlier moderation history. This worklist never changes a pedigree or its verification state.</p>
     </div>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:data-health' %}">← Data health</a>
@@ -24,7 +24,7 @@
       </select>
       <label for="evidence-sort">Order</label>
       <select id="evidence-sort" name="sort">
-        <option value="most-searched" {% if sort == "most-searched" %}selected{% endif %}>Most searched first</option>
+        <option value="most-searched" {% if sort == "most-searched" %}selected{% endif %}>{% if priority_is_cohort %}Highest priority first{% else %}Most searched first{% endif %}</option>
         <option value="name" {% if sort == "name" %}selected{% endif %}>Dog name A–Z</option>
       </select>
       <button class="btn btn-gold" type="submit">Show records</button>
@@ -33,6 +33,15 @@
       <div><h2>{{ issue_title }}</h2><span>{{ page_obj.paginator.count }} existing public record{{ page_obj.paginator.count|pluralize }}</span></div>
       <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
     </div>
+    {% if priority_is_cohort %}
+      <p class="muted">Review cohort: up to 1,000 most-searched and 250 newest published dogs, plus published dogs with open disputes or impossible parent relationships. Scores represent urgency, not ancestry accuracy. The list count describes this cohort, not all 33,000-plus records.</p>
+    {% endif %}
+    {% if issue == "approval-cross-check" %}
+      <p class="muted">A historical staff approval exists but no corresponding timestamp-reviewed DogSource with a URL or document is recorded. Previous manual approval is valid as an audit event but is not automatically proof of a source review. Compare the audit, original document and exact dog before recording new evidence.</p>
+    {% endif %}
+    {% if issue == "shared-photo" %}
+      <p class="muted">The same managed photo SHA-256 hash occurs on multiple published dogs. This can be legitimate; it does not prove duplicate dog identity, and no files were changed or deleted.</p>
+    {% endif %}
     {% if issue == "reviewed-status-needs-source-check" %}
       <p class="muted">The dog carries a reviewed verification status but no timestamped reviewed DogSource. Other approved evidence may exist elsewhere in its moderation or document history. Check the complete record before changing any verification state.</p>
     {% endif %}
@@ -57,7 +66,25 @@
                   · Sex: {{ dog.get_sex_display }}
                   · {{ dog.get_verification_state_display }}
                 </p>
-                {% if issue == "missing-photo" %}
+                {% if priority_is_cohort %}
+                  <p class="muted"><strong>Triage priority {{ dog.priority_score }}</strong> · {{ dog.search_count }} searches. Not a verification badge.</p>
+                  <p class="muted">
+                    {% if dog.priority_has_conflict %}Impossible parent/date combination · {% endif %}
+                    {% if dog.priority_has_dispute %}Open dispute · {% endif %}
+                    {% if dog.priority_has_approval_audit and not dog.priority_has_reviewed_document %}Past approval needs evidence cross-check · {% endif %}
+                    {% if dog.priority_has_shared_photo %}Possible reused photo · {% endif %}
+                    {% if not dog.priority_has_source_document %}Missing usable source URL/document · {% endif %}
+                    {% if dog.sire_id and dog.dam_id and not dog.priority_has_reviewed_parentage %}Parentage needs document review · {% endif %}
+                    {% if not dog.priority_has_managed_photo and not dog.priority_has_archive_photo %}No displayable photo · {% endif %}
+                    {% if dog.sex == "unknown" %}Unknown sex · {% endif %}
+                    {% if dog.priority_has_reviewed_document %}At least one source carries a timestamped review · {% endif %}
+                    Inspect original evidence before changing anything.
+                  </p>
+                {% elif issue == "approval-cross-check" %}
+                  <p class="muted">Historical approval recorded; documentary evidence-review marker not found. Inspect prior audit history before taking any action.</p>
+                {% elif issue == "shared-photo" %}
+                  <p class="muted">A managed photo appears on multiple published dogs. Investigate usage rights and original dog identity.</p>
+                {% elif issue == "missing-photo" %}
                   <p class="muted">No managed or trusted archive photograph currently associated with this public dog.</p>
                 {% elif issue == "parentage-source-review" %}
                   <p class="muted">Two recorded parents · no reviewed pedigree/registry document or URL recorded. Other evidence may exist; inspect the full review history.</p>
@@ -71,7 +98,10 @@
               </div>
               <div class="button-row">
                 <a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">View public record</a>
-                {% if issue == "missing-photo" %}
+                {% if priority_is_cohort or issue == "approval-cross-check" %}
+                  <a class="btn btn-outline" href="{% url 'accounts:moderation-audit' %}?q={{ dog.name|urlencode }}">Audit history</a>
+                {% endif %}
+                {% if issue == "missing-photo" or issue == "shared-photo" %}
                   {% if can_manage_sources or not dog.is_record_locked %}
                     <a class="btn btn-gold" href="{% url 'accounts:dog-direct-edit' dog.pk %}">Review image options</a>
                   {% else %}
