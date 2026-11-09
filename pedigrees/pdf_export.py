@@ -170,7 +170,7 @@ def _directory(pdf, dog, generations, rows, is_private):
         meta_lines = simpleSplit(meta, FONT_REGULAR, 7.3, max_width - 10) if meta else []
         kennel = str(row.get("kennel") or "")
         kennel_lines = simpleSplit("Kennel: " + kennel, FONT_REGULAR, 7.3, max_width - 10) if kennel else []
-        block_height = 16 + 10 * len(relation_lines) + 12 * len(name_lines) + 10 * (len(meta_lines) + len(kennel_lines))
+        block_height = 36 + 10 * len(relation_lines) + 12 * len(name_lines) + 10 * (len(meta_lines) + len(kennel_lines))
         if y - block_height < 51:
             pdf.showPage()
             page += 1
