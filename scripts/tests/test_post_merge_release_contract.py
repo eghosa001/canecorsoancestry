@@ -43,6 +43,14 @@ class PostMergeReleaseContractTests(unittest.TestCase):
         self.assertIn("check_offsite_backup_freshness.sh", audit)
         self.assertIn("stage_django.sh", audit)
 
+    def test_production_image_installs_pdf_fonts_without_shell_escape_bug(self):
+        dockerfile = (ROOT / "Dockerfile").read_text()
+        self.assertIn(
+            "apt-get install -y --no-install-recommends fonts-dejavu-core && rm -rf",
+            dockerfile,
+        )
+        self.assertIn("RUN pip install --no-cache-dir -r requirements.txt", dockerfile)
+
     def test_pdf_deployment_is_required_by_live_release_gate(self):
         script = (ROOT / "scripts/oracle_runner/stage_django.sh").read_text()
         self.assertIn("pdf-release-probe/export.pdf", script)
