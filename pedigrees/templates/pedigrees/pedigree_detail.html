@@ -10,7 +10,7 @@
   <a class="btn btn-outline" href="{% url 'pedigrees:reverse' dog.slug %}">Explore descendants</a>
   <a class="btn btn-outline" href="#advanced-analysis-title">Jump to analysis</a>
 </nav>
-<div class="page-shell button-row no-print cca-pedigree-download"><a class="btn btn-gold" href="{% url 'pedigrees:export' dog.slug %}?generations={{ generations }}" download>Download pedigree data (CSV)</a><button class="btn btn-outline" type="button" onclick="window.print()">Save pedigree as PDF / Print</button></div>
+<div class="page-shell button-row no-print cca-pedigree-download"><a class="btn btn-gold" href="{% url 'pedigrees:export-pdf' dog.slug %}?generations={{ generations }}" download>Download pedigree (PDF)</a><a class="btn btn-outline" href="{% url 'pedigrees:export' dog.slug %}?generations={{ generations }}" download>Export data (CSV)</a><button class="btn btn-outline" type="button" onclick="window.print()">Print this page</button></div>
 <div class="page-shell no-print cca-tree-tools" role="toolbar" aria-label="Pedigree viewer controls">
   <button class="btn btn-outline" type="button" data-pedigree-step="-1" aria-label="Previous generation">← Previous</button>
   <button class="btn btn-outline" type="button" data-pedigree-step="1" aria-label="Next generation">Next →</button>
