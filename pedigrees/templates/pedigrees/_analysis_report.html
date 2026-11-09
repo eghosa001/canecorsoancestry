@@ -8,9 +8,9 @@
     <div class="button-row no-print">
       <button class="btn btn-outline" type="button" onclick="window.print()">Print pedigree</button>
       {% if member_mode %}
-        <a class="btn btn-gold" href="{% url 'accounts:member-pedigree-export' dog.pk %}?generations={{ generations }}">Export CSV</a>
+        <a class="btn btn-gold" href="{% url 'accounts:member-pedigree-export-pdf' dog.pk %}?generations={{ generations }}">Download PDF</a>
       {% else %}
-        <a class="btn btn-gold" href="{% url 'pedigrees:export' dog.slug %}?generations={{ generations }}">Export CSV</a>
+        <a class="btn btn-gold" href="{% url 'pedigrees:export-pdf' dog.slug %}?generations={{ generations }}">Download PDF</a>
       {% endif %}
     </div>
   </div>
