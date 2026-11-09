@@ -8,9 +8,6 @@ on:
         required: true
         type: choice
         options: [stage-only]
-  workflow_run:
-    workflows: ["Full release audit"]
-    types: [completed]
   pull_request:
     paths:
       - "scripts/oracle_runner/oracle_middleware.py"
@@ -45,19 +42,14 @@ jobs:
           python3 manage.py test scripts.tests.test_oracle_origin scripts.tests.test_oracle_migration_freeze scripts.tests.test_oracle_schema_allowlist --noinput
 
   oracle-stage:
-    # For workflow_run, github.ref is the workflow's default-branch ref and
-    # does not reliably identify the audited commit. Use the audited run's
-    # branch/result here; the next step independently requires exact main SHA.
+    # Automatic deployment occurs in release-audit.yml *after* every
+    # dependency, SQLite and PostgreSQL gate passes. Keep this workflow as a
+    # manual maintenance fallback to avoid duplicate competing Oracle deploys.
     if: >-
       github.repository == 'eghosa001/canecorsoancestry' &&
-      (
-        (github.event_name == 'workflow_dispatch' &&
-         github.ref == 'refs/heads/main' &&
-         inputs.deployment == 'stage-only') ||
-        (github.event_name == 'workflow_run' &&
-         github.event.workflow_run.head_branch == 'main' &&
-         github.event.workflow_run.conclusion == 'success')
-      )
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.deployment == 'stage-only'
     runs-on: [self-hosted, linux, arm64, cca-oracle]
     timeout-minutes: 40
     env:
@@ -72,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
       - name: Only update the current protected main commit
         shell: bash
