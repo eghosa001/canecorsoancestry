@@ -3,7 +3,7 @@
     <div>
       <p class="eyebrow">Advanced pedigree analysis</p>
       <h2 id="advanced-analysis-title">Depth-aware ancestry summary</h2>
-      <p class="muted">{{ generations }} generations shown. COI uses {{ analysis.coi_generation_label }} of direct ancestors (father, mother, grandparents and earlier). Siblings and offspring are not additional COI ancestors.</p>
+      {% if show_staff_notes %}<p class="muted">{{ generations }} generations shown. COI uses {{ analysis.coi_generation_label }} of direct ancestors (father, mother, grandparents and earlier). Siblings and offspring are not additional COI ancestors.</p>{% endif %}
     </div>
     <div class="button-row no-print">
       <button class="btn btn-outline" type="button" onclick="window.print()">Print pedigree</button>
@@ -22,7 +22,7 @@
     </select>
     <button class="btn btn-outline" type="submit">Recalculate COI</button>
   </form>
-  <aside class="panel cca-coi-disclosure" aria-label="How to interpret this COI estimate">
+  {% if show_staff_notes %}<aside class="panel cca-coi-disclosure" aria-label="How to interpret this COI estimate">
     <strong>COI is an ancestry estimate, not a health prediction.</strong>
     <p>The calculation uses the recorded direct ancestral paths and known common ancestors. It cannot prove that a dog or future puppy is free of inherited disease. Genomic tests, veterinary assessment and independently reviewed health evidence provide different information.</p>
     <p>Interpret the estimate alongside pedigree coverage ({{ analysis.known_slots }} of {{ analysis.total_slots }} ancestry positions known), uncertain identities and the depth used for this calculation. Missing records never establish that two founders are unrelated.</p>
@@ -38,10 +38,10 @@
       </strong>
       <span>
         {% if analysis.coi_percent != None %}
-          {% if analysis.coi_percent == 0 %}No shared ancestor in this recorded depth; missing ancestors can conceal relationships.
+          {% if analysis.coi_percent == 0 %}No shared ancestor detected in the recorded pedigree.
           {% else %}Calculated from shared ancestors on the sire and dam lines within this depth.{% endif %}
         {% elif analysis.coi_status == "insufficient" %}Both sire and dam must be linked and available.
-        {% else %}{{ analysis.cycle_error|default:"Pedigree parent links need review." }}{% endif %}
+        {% else %}{% if show_staff_notes %}{{ analysis.cycle_error|default:"Pedigree parent links need review." }}{% else %}Unavailable{% endif %}{% endif %}
       </span>
     </article>
     <article class="analysis-card"><p class="eyebrow">Pedigree coverage</p><strong class="analysis-number">{{ analysis.coverage_percent|floatformat:1 }}%</strong><span>{{ analysis.known_slots }} of {{ analysis.total_slots }} ancestry positions known</span></article>
@@ -50,7 +50,7 @@
   </div>
   <div class="analysis-detail-grid">
     <article class="panel contribution-panel">
-      <div class="panel-heading"><div><p class="eyebrow">Ancestor contribution</p><h2>Expected pedigree share</h2></div><span>Each path contributes ½ per generation; repeated paths are combined.</span></div>
+      <div class="panel-heading"><div><p class="eyebrow">Ancestor contribution</p><h2>Expected pedigree share</h2></div>{% if show_staff_notes %}<span>Each path contributes ½ per generation; repeated paths are combined.</span>{% endif %}</div>
       {% if analysis.contributions %}
         <div class="contribution-list">
           {% for item in analysis.contributions|slice:":12" %}
@@ -63,7 +63,7 @@
       {% else %}<p class="empty-state">No known ancestors are available at this depth yet.</p>{% endif %}
     </article>
     <article class="panel linebreeding-panel">
-      <div class="panel-heading"><div><p class="eyebrow">Linebreeding paths</p><h2>Repeated ancestor routes</h2></div><span>Analysis only; no pedigree record is changed.</span></div>
+      <div class="panel-heading"><div><p class="eyebrow">Linebreeding paths</p><h2>Repeated ancestor routes</h2></div>{% if show_staff_notes %}<span>Analysis only; no pedigree record is changed.</span>{% endif %}</div>
       {% if analysis.linebreeding %}
         <div class="linebreeding-list">
           {% for item in analysis.linebreeding|slice:":10" %}
