@@ -60,6 +60,7 @@
   // never eagerly download full-resolution originals or every gallery image.
   const prepared = new Map();
   const originals = new Map();
+  let pendingZoomUpgrade = -1;
   const previewFor = (item) => item.preview || item.src;
   const loadDecoded = (candidate, url) => {
     if (!url) return Promise.resolve(false);
@@ -99,10 +100,15 @@
     if (!dialog.open || !isZoomed()) return;
     const item = photos[index];
     if (!item.src || item.src === previewFor(item)) return;
+    if (pendingZoomUpgrade === index) return;
+    pendingZoomUpgrade = index;
     if (!originals.has(index)) {
       const candidate = new Image();
       if (item.referrerPolicy) candidate.referrerPolicy = item.referrerPolicy;
-      const done = loadDecoded(candidate, item.src).then((ok) => ok ? candidate : null);
+      const done = loadDecoded(candidate, item.src).then((ok) => {
+        if (!ok) originals.delete(index);
+        return ok ? candidate : null;
+      });
       originals.set(index, done);
       while (originals.size > 2) originals.delete(originals.keys().next().value);
     }
@@ -170,6 +176,7 @@
     if (isZoomed()) upgradeOnZoom(selected);
   };
   const fit = () => {
+    pendingZoomUpgrade = -1;
     scale = 1;
     panX = 0;
     panY = 0;

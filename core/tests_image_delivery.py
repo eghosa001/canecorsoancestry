@@ -121,4 +121,6 @@ class DogPhotoDeliveryTests(TestCase):
         self.assertContains(page, 'loading="eager"')
         self.assertContains(page, "480w")
         self.assertContains(page, "960w")
+        self.assertContains(page, 'imagesizes="(max-width: 760px) 40vw')
+        self.assertContains(page, 'sizes="(max-width: 760px) 40vw')
         self.assertNotContains(page, 'src="/media/dogs/home-priority.jpg"')
