@@ -1,6 +1,8 @@
 name: Safari compatibility
 
 on:
+  schedule:
+    - cron: "19 4 * * 4"  # Weekly iPhone/WebKit regression against isolated test data
   pull_request:
     paths:
       - "core/static/core/site.css"
