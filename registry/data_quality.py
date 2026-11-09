@@ -218,6 +218,56 @@ def public_coi_review_sample(limit=12):
     return rows
 
 
+def _cycles_in_parent_graph(graph, limit=50):
+    """Bounded iterative depth-first cycle scan; safe for long imported lineages.
+
+    `graph` maps each canonical dog ID to its recorded parent IDs. An active
+    stack (rather than recursive calls) detects back edges, preserving a
+    concrete cycle path for staff review without mutating any pedigree.
+    """
+    if limit <= 0:
+        return []
+
+    state = {}
+    active = []
+    active_positions = {}
+    found = []
+
+    for root in graph:
+        if state.get(root, 0):
+            continue
+        state[root] = 1
+        active_positions[root] = 0
+        active.append(root)
+        frames = [(root, iter(graph.get(root, ())))]
+
+        while frames:
+            node, parents = frames[-1]
+            parent = next(parents, None)
+            if parent is None:
+                frames.pop()
+                active.pop()
+                active_positions.pop(node)
+                state[node] = 2
+                continue
+
+            marker = state.get(parent, 0)
+            if marker == 1:
+                # A shared ancestor reached through a completed branch is
+                # not a cycle; only nodes currently on the path qualify.
+                position = active_positions[parent]
+                found.append(active[position:] + [parent])
+                if len(found) >= limit:
+                    return found
+            elif marker == 0:
+                state[parent] = 1
+                active_positions[parent] = len(active)
+                active.append(parent)
+                frames.append((parent, iter(graph.get(parent, ()))))
+
+    return found
+
+
 def pedigree_cycles(limit=50):
     graph = {
         dog_id: tuple(parent for parent in (sire_id, dam_id) if parent)
@@ -225,35 +275,7 @@ def pedigree_cycles(limit=50):
             "id", "sire_id", "dam_id"
         )
     }
-    state = {}
-    stack = []
-    found = []
-
-    def visit(node):
-        marker = state.get(node, 0)
-        if marker == 1:
-            if node in stack:
-                cycle = stack[stack.index(node):] + [node]
-                found.append(cycle)
-            return
-        if marker == 2 or len(found) >= limit:
-            return
-        state[node] = 1
-        stack.append(node)
-        for parent in graph.get(node, ()):
-            visit(parent)
-            if len(found) >= limit:
-                break
-        stack.pop()
-        state[node] = 2
-
-    for node in graph:
-        if state.get(node, 0) == 0:
-            visit(node)
-        if len(found) >= limit:
-            break
-    return found
-
+    return _cycles_in_parent_graph(graph, limit=limit)
 
 def full_quality_report(sample_limit=12, cycle_limit=50):
     report = quick_quality_report(sample_limit=sample_limit)
