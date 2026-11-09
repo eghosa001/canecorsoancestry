@@ -30,7 +30,7 @@ jobs:
           base="${BASE_URL%/}"
           [[ "$base" == https://* ]] || { echo "::error::Production URL must use HTTPS"; exit 1; }
           failed=0
-          for path in /__edge/health /healthz/ /accounts/login/ /dogs/ /pedigrees/; do
+          for path in /__edge/health /healthz/ /accounts/login/ /dogs/ /pedigrees/ /robots.txt /sitemap.xml; do
             passed=0
             for attempt in 1 2 3; do
               result="$(curl --silent --show-error --location --max-redirs 2 \

@@ -1,6 +1,9 @@
 name: Oracle read-only latency diagnosis
 
 on:
+  schedule:
+    - cron: "39 3 * * 2"  # Weekly low-volume, read-only Oracle latency diagnosis
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -34,7 +37,7 @@ jobs:
 
   diagnostics:
     if: >-
-      github.event_name == 'push' &&
+      github.event_name != 'pull_request' &&
       github.ref == 'refs/heads/main' &&
       github.repository == 'eghosa001/canecorsoancestry'
     runs-on: [self-hosted, linux, arm64, cca-oracle]

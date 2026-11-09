@@ -65,6 +65,23 @@ class AccountRecoveryTests(TestCase):
         self.assertEqual(mail.outbox, [])
 
 
+    @override_settings(PASSWORD_RESET_TIMEOUT=1)
+    def test_expired_password_reset_token_cannot_be_reused(self):
+        from datetime import datetime, timedelta
+        from unittest.mock import patch
+        from django.contrib.auth.tokens import default_token_generator
+
+        user = get_user_model().objects.create_user(
+            username="expired-reset", email="expired-reset@example.test",
+            password="Old-long-pass-1234",
+        )
+        issued = datetime(2026, 11, 1, 12, 0, 0)
+        with patch.object(default_token_generator, "_now", return_value=issued):
+            token = default_token_generator.make_token(user)
+            self.assertTrue(default_token_generator.check_token(user, token))
+        with patch.object(default_token_generator, "_now", return_value=issued + timedelta(seconds=2)):
+            self.assertFalse(default_token_generator.check_token(user, token))
+
 class EmailVerificationTests(TestCase):
     @override_settings(
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
