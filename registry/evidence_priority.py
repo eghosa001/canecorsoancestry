@@ -4,7 +4,7 @@ An old moderation approval or source reference is not independently verified
 pedigree evidence. No database updates, image imports or inferred identities.
 """
 from django.db.models import (
-    Case, Count, Exists, F, IntegerField, OuterRef, Q, Subquery, Value, When,
+    BooleanField, Case, Count, Exists, F, IntegerField, OuterRef, Q, Subquery, Value, When,
 )
 
 from .models import DisputeCase, Dog, DogImage, DogSource, ModerationAudit
@@ -75,6 +75,10 @@ def annotated_evidence_candidates(queryset):
         priority_has_reviewed_parentage=Exists(reviewed_parentage),
         priority_has_approval_audit=Exists(approvals),
         priority_has_dispute=Exists(disputes),
+        priority_has_conflict=Case(
+            When(PEDIGREE_CONFLICT, then=Value(True)),
+            default=Value(False), output_field=BooleanField(),
+        ),
         priority_has_managed_photo=Exists(uploads),
         priority_has_archive_photo=Exists(trusted_archive),
         priority_has_shared_photo=Exists(reused),
@@ -113,10 +117,7 @@ def prioritized_public_dogs(popular_limit=1000, recent_limit=250):
     annotated = annotated_evidence_candidates(cohort)
     need = (
         _points(value=150, priority_has_dispute=True)
-        + Case(
-            When(PEDIGREE_CONFLICT, then=Value(200)),
-            default=Value(0), output_field=IntegerField(),
-        )
+        + _points(value=200, priority_has_conflict=True)
         + _points(value=60, priority_has_approval_audit=True, priority_has_reviewed_document=False)
         + _points(value=70, verification_state__in=("identity", "pedigree", "health"), priority_has_reviewed_document=False)
         + _points(value=45, priority_has_source_document=False)
