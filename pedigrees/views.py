@@ -17,6 +17,7 @@ from registry.permissions import can_access_public_pedigree_analysis, can_use_me
 from registry.querysets import public_dog_match_filter, published_dogs
 
 from .csv_safe import safe_pedigree_csv_rows
+from .pdf_export import pedigree_pdf_response
 from .services import (
     descendant_generations,
     pedigree_analysis,
@@ -134,6 +135,12 @@ def pedigree_detail(request, slug):
 def pedigree_export(request, slug):
     dog = get_object_or_404(_public_dogs(), slug=slug)
     return _csv_response(dog, _requested_generations(request), public_only=True)
+
+
+@member_analysis_only
+def pedigree_pdf(request, slug):
+    dog = get_object_or_404(_public_dogs(), slug=slug)
+    return pedigree_pdf_response(dog, _requested_generations(request), public_only=True)
 
 
 @member_analysis_only
