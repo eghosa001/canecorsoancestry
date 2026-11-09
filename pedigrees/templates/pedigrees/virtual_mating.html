@@ -5,7 +5,7 @@
   <header class="page-heading">
     <p class="eyebrow">Pedigree analysis</p>
     <h1>Virtual mating</h1>
-    <p>Compare a sire and dam using recorded ancestry. The analysis is hypothetical and does not create a litter or registration.</p>
+    <p>Choose a sire and dam to compare their recorded ancestry. No litter is created.</p>
   </header>
 
   <form id="pairing-form" class="mating-form mating-form-expanded" method="get" action="{% url 'pedigrees:virtual-mating' %}{% if user.is_authenticated %}#analysis-outcome{% else %}#mating-access{% endif %}">
@@ -43,7 +43,7 @@
     </div>
   {% endif %}
 
-  <p class="mating-help muted">New dog not in the archive? Registered breeders with verified kennel access can <a href="{% url 'accounts:submit-dog' %}">submit it privately</a> for review before it becomes an official public record.</p>
+  <p class="mating-help muted">Need to add a dog? Verified kennel owners can <a href="{% url 'accounts:submit-dog' %}">submit a record</a> for review.</p>
 
 
   <div id="analysis-outcome" class="mating-outcome-anchor" tabindex="-1"></div>
@@ -57,7 +57,7 @@
         <div>
           <p class="eyebrow">Virtual mating result</p>
           <h2 id="mating-result-title">{{ sire.name }} × {{ dam.name }}</h2>
-          <p class="muted">{{ generations }}-generation analysis of the pedigree currently recorded in Cane Corso Ancestry.</p>
+          <p class="muted">{{ generations }} generations of recorded ancestry.</p>
           <p class="mating-hypothetical-note">HYPOTHETICAL PAIRING — NOT A REGISTERED LITTER</p>
         </div>
       </div>
@@ -94,7 +94,7 @@
         <article class="analysis-card">
           <p class="eyebrow">Sire ↔ dam relationship</p>
           <strong class="analysis-number">{{ analysis.relationship_percent|floatformat:2 }}%</strong>
-          <span>Twice the parental kinship coefficient</span>
+          <span>Estimated genetic relationship</span>
         </article>
         <article class="analysis-card">
           <p class="eyebrow">Common ancestors</p>
@@ -179,7 +179,7 @@
               </tbody>
             </table>
           </div>
-          <p class="mating-method-note muted">Only independent routes through shared ancestors of the sire and dam are counted. The headline COI and path contributions use the same {{ generations }}-generation limit, with the proposed offspring's parents as generation 1.</p>
+          {% if staff_identity %}<p class="mating-method-note muted">Only independent routes through shared ancestors of the sire and dam are counted. The headline COI and path contributions use the same {{ generations }}-generation limit, with the proposed offspring's parents as generation 1.</p>{% endif %}
         {% else %}
           <p class="empty-state">There are no shared ancestors within this pedigree depth, so no common-ancestor contribution is shown.</p>
         {% endif %}
@@ -191,7 +191,7 @@
             <p class="eyebrow">Pedigree overlap</p>
             <h2>Sire ancestry ↔ dam ancestry</h2>
           </div>
-          <span>Tap a highlighted ancestor to open its canonical dog record.</span>
+          <span>Select an ancestor to view its profile.</span>
         </div>
 
         {% if common %}
@@ -237,12 +237,12 @@
           <article class="analysis-card">
             <p class="eyebrow">Unique dogs</p>
             <strong class="analysis-number">{{ analysis.completeness.unique_ancestor_count }}</strong>
-            <span>Distinct dogs across known hypothetical-offspring pedigree positions</span>
+            <span>Distinct ancestors in this pedigree</span>
           </article>
           <article class="analysis-card">
             <p class="eyebrow">Deepest known</p>
             <strong class="analysis-number">G{{ analysis.completeness.deepest_known_generation }}</strong>
-            <span>Deepest generation with at least one known ancestor</span>
+            <span>Furthest recorded generation</span>
           </article>
         </div>
 
@@ -257,8 +257,8 @@
 
         {% if analysis.completeness.coverage_percent < 100 %}
           <div class="notice mating-coverage-warning">
-            <strong>Coverage matters.</strong>
-            <span>This result uses only ancestry currently connected in Cane Corso Ancestry. Missing ancestors can make the calculated COI lower than the value from a more complete pedigree.</span>
+            <strong>Incomplete ancestry</strong>
+            <span>Missing ancestors may cause the projected COI to be underestimated.</span>
           </div>
         {% endif %}
       </section>
@@ -327,7 +327,7 @@
           <div class="button-row"><button class="btn btn-gold" type="submit">Save to My research</button>
             <a class="btn btn-outline" href="{% url 'accounts:saved-pairings' %}">View saved pairings</a></div>
         </form>
-        <p class="muted">Saving a pairing never creates an actual litter or changes the pedigree. Future analyses use the newest published ancestry.</p>
+        <p class="muted">Saved pairings remain private. No dog or litter record is changed.</p>
       </section>
       {% endif %}
 

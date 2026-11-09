@@ -107,13 +107,13 @@
         <dd class="profile-coi-value">
           {% if coi_percent != None %}
             <strong>{% if coi_below_display_precision %}&lt;0.01%{% else %}{{ coi_percent|floatformat:2 }}%{% endif %}</strong>
-            <small class="profile-coi-context">{% if coi_percent == 0 %}No shared ancestor found within {{ coi_label }}{% else %}Based on shared published ancestors within {{ coi_label }}{% endif %}. Only sire/dam ancestry is included; missing ancestors can make the estimate too low.</small>
+            <small class="profile-coi-context">{% if coi_percent == 0 %}No shared ancestor found at this depth{% else %}Estimated from recorded ancestry{% endif %}. Missing ancestors may affect the result.</small>
           {% elif coi_display_state == "insufficient" %}
             <strong>Not enough ancestry</strong>
-            <small class="profile-coi-context">Both parents are needed. {{ coi_error }}</small>
+            <small class="profile-coi-context">Both parents must be recorded.{% if staff_identity and coi_error %} {{ coi_error }}{% endif %}</small>
           {% else %}
             <strong>Cannot calculate</strong>
-            <small class="profile-coi-context">Pedigree links need review. {{ coi_error }}</small>
+            <small class="profile-coi-context">Pedigree requires review.{% if staff_identity and coi_error %} {{ coi_error }}{% endif %}</small>
           {% endif %}
           {% if can_select_coi %}
           <form method="get" class="profile-coi-controls" aria-label="Compare COI by generation">
@@ -132,9 +132,9 @@
         <dt>Breeding kennel</dt>
         <dd>{% if dog.kennel.is_public %}<a class="text-link" href="{% url 'registry:kennel-detail' dog.kennel.slug %}">{{ dog.kennel.name }}</a>{% else %}{{ dog.kennel.name }}{% endif %}</dd>
         {% elif dog.inferred_kennel and dog.inferred_kennel.is_public %}
-        <dt>Possible breeding kennel (unverified)</dt>
+        <dt>Possible kennel · unverified</dt>
         <dd><a class="text-link" href="{% url 'registry:kennel-detail' dog.inferred_kennel.slug %}">{{ dog.inferred_kennel.name }}</a>
-          <small class="muted">Suggested from original historical dog-name patterns, not confirmed by breeder records.</small>
+          <small class="muted">Name-based match only; breeding origin is unconfirmed.</small>
         </dd>
         {% endif %}
       </dl>
@@ -157,7 +157,7 @@
       </div>
       {% if can_contribute or user.is_authenticated %}
         <details class="profile-manage-actions ux-disclosure">
-          <summary><span><strong>Contribute or request review</strong><small>Corrections, evidence and review requests stay separate from public browsing.</small></span></summary>
+          <summary><span><strong>Suggest an update</strong><small>Corrections, photos and supporting documents</small></span></summary>
           <div class="ux-disclosure-body button-row">
             {% if can_contribute %}
               <a class="btn btn-outline" href="{% url 'accounts:submit-correction' dog.pk %}">Suggest correction</a>
@@ -217,12 +217,12 @@
 
   <div id="overview"></div>
 
-  {% if dog.bio or dog.display_titles %}
+  {% if dog.public_bio or staff_identity and dog.bio or dog.display_titles %}
   <div class="profile-section-grid">
-    {% if dog.bio %}
+    {% if dog.public_bio or staff_identity and dog.bio %}
     <article class="panel profile-bio" id="biography">
       <div class="panel-heading"><h2>About</h2>{% if user.is_authenticated and not staff_identity %}<a class="profile-review-chip" href="{% url 'accounts:open-dispute' dog.pk %}?field=biography">Report detail →</a>{% endif %}</div>
-      <p>{{ dog.bio }}</p>
+      <p>{% if staff_identity %}{{ dog.bio }}{% else %}{{ dog.public_bio }}{% endif %}</p>
     </article>
     {% endif %}
     {% if dog.display_titles %}

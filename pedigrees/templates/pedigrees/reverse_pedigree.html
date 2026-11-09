@@ -6,7 +6,7 @@
   <header class="page-heading">
     <p class="eyebrow">Reverse pedigree</p>
     <h1>Descendants of {{ dog.name }}</h1>
-    <p>Every relationship below is derived automatically from recorded sire and dam links. Adding a dog with {{ dog.name }} as a parent makes that dog appear here after approval.</p>
+    <p>Explore recorded descendants of {{ dog.name }} across generations.</p>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'registry:dog-detail' dog.slug %}">Back to dog</a>
       <a class="btn btn-gold" href="{% url 'pedigrees:detail' dog.slug %}">View ancestry</a>
@@ -41,7 +41,7 @@
       </div>
     </article>
   {% empty %}
-    <div class="empty-state"><strong>No public descendants are connected yet.</strong><p>Descendants appear automatically when approved dogs point to this dog as sire or dam.</p></div>
+    <div class="empty-state"><strong>No public descendants are connected yet.</strong><p>No published descendants have been linked yet.</p></div>
   {% endfor %}
 </section>
 {% endblock %}

@@ -208,6 +208,27 @@ class Dog(models.Model):
         ]
 
     @property
+    def public_bio(self):
+        """Do not turn imported pedigree provenance notes into public biography."""
+        biography = (self.bio or "").strip()
+        if not biography:
+            return ""
+        text = biography.casefold()
+        if (
+            text.startswith("verified from ")
+            or text.startswith("pedigree ancestor.")
+            or " is a verified " in text
+            or " is the verified " in text
+            or " verified pedigree connects through " in text
+            or " is a bellissimo geni past production " in text
+            or " supplied primary photograph " in text
+            or " canonical parent links " in text
+            or " this record can merge back " in text
+        ):
+            return ""
+        return biography
+
+    @property
     def is_effectively_public(self):
         """Approved dogs can be temporarily suppressed without losing approval."""
         return bool(

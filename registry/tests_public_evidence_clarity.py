@@ -1,4 +1,5 @@
 """Public profiles keep verification clear but hide internal provenance labels."""
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
@@ -85,3 +86,40 @@ class PublicEvidenceClarityTests(TestCase):
         self.assertContains(response, '<h2>About</h2>', html=True)
         self.assertNotContains(response, '<h2>Titles</h2>', html=True)
         self.assertNotContains(response, "No titles recorded.")
+
+    def test_imported_boilerplate_is_staff_only_and_does_not_erase_bio(self):
+        source_note = "Verified from Tessa Sangue Magnifica’s supplied pedigree."
+        dog = Dog.objects.create(
+            name="Source Note Ancestor",
+            slug="source-note-ancestor",
+            is_public=True,
+            bio=source_note,
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, source_note)
+        self.assertNotContains(response, '<h2>About</h2>', html=True)
+        self.assertEqual(dog.bio, source_note)
+
+        staff = get_user_model().objects.create_superuser(
+            username="source-note-auditor",
+            email="source-note-auditor@example.test",
+            password="test-pass-123",
+        )
+        self.client.force_login(staff)
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, source_note)
+
+    def test_real_biography_and_factual_coi_disclosure_remain_public(self):
+        dog = Dog.objects.create(
+            name="Real Biography",
+            slug="real-biography",
+            is_public=True,
+            bio="Enjoys obedience training and lives with her breeder.",
+        )
+        response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
+        self.assertContains(response, dog.bio)
+        self.assertContains(response, "<h2>About</h2>", html=True)
+        self.assertNotContains(response, "pedigree intelligence")
+
