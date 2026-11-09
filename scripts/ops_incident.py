@@ -84,13 +84,13 @@ def sync(event, repo):
             print(f"PASS: {name}; no active incident.")
         return
     body = (
-        f"An operational check completed with **{conclusion}**.\\n\\n"
-        f"Workflow: **{name}**\\n\\n"
-        f"Failure evidence: {run['html_url']}\\n\\n"
+        f"An operational check completed with **{conclusion}**.\n\n"
+        f"Workflow: **{name}**\n\n"
+        f"Failure evidence: {run['html_url']}\n\n"
         "Investigate the failing step and confirm the next successful run. "
         "This GitHub issue is an incident marker, **not proof that anyone received an email**. "
         "It must not be closed solely to improve a readiness score."
-    ).replace("\\\\n", "\\n")
+    )
     if existing:
         api("PATCH", f"/issues/{existing['number']}", payload={"body": body})
         print(f"Updated existing incident #{existing['number']} for {name}.")
