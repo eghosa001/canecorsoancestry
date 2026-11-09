@@ -3,7 +3,7 @@
     <div>
       <p class="eyebrow">Advanced pedigree analysis</p>
       <h2 id="advanced-analysis-title">Depth-aware ancestry summary</h2>
-      {% if show_staff_notes %}<p class="muted">{{ generations }} generations shown. COI uses {{ analysis.coi_generation_label }} of direct ancestors (father, mother, grandparents and earlier). Siblings and offspring are not additional COI ancestors.</p>{% endif %}
+      <p class="muted">COI uses {{ analysis.coi_generation_label }}{% if show_staff_notes %} of direct ancestors (father, mother, grandparents and earlier). Siblings and offspring are not additional COI ancestors.{% endif %}</p>
     </div>
     <div class="button-row no-print">
       <button class="btn btn-outline" type="button" onclick="window.print()">Print pedigree</button>
