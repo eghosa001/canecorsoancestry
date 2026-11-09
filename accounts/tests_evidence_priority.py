@@ -86,11 +86,16 @@ class StaffEvidencePriorityTests(TestCase):
         from registry.models import DisputeCase, ModerationAudit
 
         sire = Dog.objects.create(
-            name="Candidate Parent", slug="priority-sire", is_public=True,
+            name="Parent Recorded Female", slug="priority-sire",
+            sex=Dog.Sex.FEMALE, is_public=True,
+        )
+        dam = Dog.objects.create(
+            name="Other Parent", slug="priority-dam",
+            sex=Dog.Sex.FEMALE, is_public=True,
         )
         dispute = Dog.objects.create(
             name="Disputed Parentage", slug="priority-disputed",
-            is_public=True, sire=sire, dam=sire, search_count=1,
+            is_public=True, sire=sire, dam=dam, search_count=1,
         )
         DisputeCase.objects.create(
             dog=dispute, opened_by=self.staff_user,
@@ -117,7 +122,7 @@ class StaffEvidencePriorityTests(TestCase):
         )
         health_only = Dog.objects.create(
             name="Reviewed Health Only", slug="health-not-parentage",
-            is_public=True, sire=sire, dam=sire,
+            is_public=True, sire=sire, dam=dam,
         )
         DogSource.objects.create(
             dog=health_only, source_type=DogSource.SourceType.HEALTH,
