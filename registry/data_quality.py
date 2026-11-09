@@ -58,6 +58,19 @@ def quick_quality_report(sample_limit=12):
         public_summary["public_dogs"] - source_backed_public,
         0,
     )
+    # A generic reviewed health or breeder document is not evidence that
+    # either recorded parent link was examined. Track that gap separately.
+    both_parents = public.filter(sire_id__isnull=False, dam_id__isnull=False)
+    public_summary["both_parents_recorded_public"] = both_parents.count()
+    public_summary["both_parents_recorded_with_reviewed_pedigree_source"] = (
+        DogSource.objects.filter(
+            dog__in=both_parents,
+            source_type__in=(DogSource.SourceType.PEDIGREE, DogSource.SourceType.REGISTRY),
+            verified_at__isnull=False,
+        )
+        .filter(Q(source_url__gt="") | Q(document__gt=""))
+        .values("dog_id").distinct().count()
+    )
 
     integrity_summary = Dog.objects.aggregate(
         sire_sex_conflicts=Count(

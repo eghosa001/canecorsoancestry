@@ -14,12 +14,28 @@
     var mobile = window.matchMedia("(max-width: 760px)");
     var scale = 1, pinned = false, selected = "", index = 0;
     function announce(message) { if (status) status.textContent = message; }
+    // Build the identity index once. Deep trees can contain hundreds of
+    // repeated positions; hovering must not scan every card each time.
+    var dogNodes = Array.prototype.slice.call(board.querySelectorAll(".pedigree-node[data-dog-id]"));
+    var nodesById = new Map(), repeatedNodes = [], highlightedNodes = new Set();
+    dogNodes.forEach(function (node) {
+      var key = node.dataset.dogId;
+      if (!nodesById.has(key)) nodesById.set(key, []);
+      nodesById.get(key).push(node);
+      if (node.classList.contains("repeated")) repeatedNodes.push(node);
+    });
     function highlight(id) {
-      board.querySelectorAll(".pedigree-node[data-dog-id]").forEach(function (node) {
-        node.classList.toggle("is-related-highlight",
-          (pinned && node.classList.contains("repeated")) ||
-          Boolean(id && node.dataset.dogId === id));
+      var next = new Set(pinned ? repeatedNodes : []);
+      if (id && nodesById.has(id)) {
+        nodesById.get(id).forEach(function (node) { next.add(node); });
+      }
+      highlightedNodes.forEach(function (node) {
+        if (!next.has(node)) node.classList.remove("is-related-highlight");
       });
+      next.forEach(function (node) {
+        if (!highlightedNodes.has(node)) node.classList.add("is-related-highlight");
+      });
+      highlightedNodes = next;
     }
     var picker = document.createElement("select");
     picker.className = "cca-generation-picker";
@@ -54,7 +70,10 @@
         scroll.scrollTop = 0;
       } else {
         columns.forEach(function (column) { column.hidden = false; column.classList.remove("cca-generation-active"); });
-        if (focus) scroll.scrollTo({ left: columns[index].offsetLeft, behavior: "smooth" });
+        if (focus) scroll.scrollTo({
+          left: columns[index].offsetLeft,
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+        });
       }
       updateButtons();
       if (focus) announce("Showing " + picker.options[index].textContent + ".");
@@ -101,11 +120,10 @@
       pinned = !pinned;
       repeats.setAttribute("aria-pressed", String(pinned));
       highlight(selected);
-      var ids = new Set(Array.prototype.map.call(board.querySelectorAll(".pedigree-node.repeated[data-dog-id]"),
-        function (node) { return node.dataset.dogId; }));
+      var ids = new Set(repeatedNodes.map(function (node) { return node.dataset.dogId; }));
       announce(pinned ? "Highlighting " + ids.size + " repeated ancestor identities." : "Repeated ancestor highlighting cleared.");
     });
-    board.querySelectorAll(".pedigree-node[data-dog-id]").forEach(function (node) {
+    dogNodes.forEach(function (node) {
       var id = node.dataset.dogId;
       node.addEventListener("pointerenter", function () { selected = id; highlight(id); });
       node.addEventListener("pointerleave", function () { selected = ""; highlight(""); });

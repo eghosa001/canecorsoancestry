@@ -36,6 +36,9 @@
     {% if issue == "reviewed-status-needs-source-check" %}
       <p class="muted">The dog carries a reviewed verification status but no timestamped reviewed DogSource. Other approved evidence may exist elsewhere in its moderation or document history. Check the complete record before changing any verification state.</p>
     {% endif %}
+    {% if issue == "parentage-source-review" %}
+      <p class="muted">These public dogs have two recorded parents but no timestamp-reviewed pedigree or registry source with a URL or document. A reviewed health source does not establish parentage. Confirm the source identifies the exact dog and both parents before recording a review; do not infer parentage or change verification automatically.</p>
+    {% endif %}
     {% if issue == "missing-photo" %}
       <p class="muted">This filter identifies public dogs with neither a managed photograph nor a trusted legacy archive image reference. It does not prove a source image can be fetched or that any photograph is suitable for publication. Review rights and the image before uploading it; retain the original file and do not use generic placeholder dog photos.</p>
     {% else %}
@@ -56,6 +59,8 @@
                 </p>
                 {% if issue == "missing-photo" %}
                   <p class="muted">No managed or trusted archive photograph currently associated with this public dog.</p>
+                {% elif issue == "parentage-source-review" %}
+                  <p class="muted">Two recorded parents · no reviewed pedigree/registry document or URL recorded. Other evidence may exist; inspect the full review history.</p>
                 {% else %}
                   <p class="muted">
                     {% if dog.has_source %}Source attribution on file{% else %}No source attribution{% endif %}

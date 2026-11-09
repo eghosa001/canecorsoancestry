@@ -144,6 +144,46 @@ class EvidenceTriageTests(TestCase):
         dashboard = self.client.get(reverse("accounts:data-health"), {"refresh": "1"})
         self.assertContains(dashboard, "Photo gaps in existing dogs")
 
+    def test_parentage_evidence_filter_does_not_mistake_health_review_for_parentage(self):
+        sire = Dog.objects.create(name="Sire", slug="parentage-sire", is_public=True)
+        dam = Dog.objects.create(name="Dam", slug="parentage-dam", is_public=True)
+        unresolved = Dog.objects.create(
+            name="Parentage Gap", slug="parentage-gap", is_public=True,
+            sire=sire, dam=dam, search_count=40,
+        )
+        confirmed_source = Dog.objects.create(
+            name="Parentage Reviewed Source", slug="parentage-reviewed-source",
+            is_public=True, sire=sire, dam=dam,
+        )
+        hidden = Dog.objects.create(
+            name="Hidden Parentage", slug="hidden-parentage", is_public=False,
+            sire=sire, dam=dam,
+        )
+        DogSource.objects.create(
+            dog=unresolved, source_type=DogSource.SourceType.HEALTH,
+            title="Reviewed health only", source_url="https://example.org/health",
+            verified_at=timezone.now(),
+        )
+        DogSource.objects.create(
+            dog=confirmed_source, source_type=DogSource.SourceType.PEDIGREE,
+            title="Reviewed ancestor chart", source_url="https://example.org/parentage",
+            verified_at=timezone.now(),
+        )
+        self.client.force_login(self.mod)
+        response = self.client.get(self.base, {"issue": "parentage-source-review"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, unresolved.name)
+        self.assertNotContains(response, confirmed_source.name)
+        self.assertNotContains(response, hidden.name)
+        self.assertContains(response, "A reviewed health source does not establish parentage")
+        self.assertNotContains(response, "Review source evidence")
+        unresolved.refresh_from_db()
+        self.assertEqual(unresolved.verification_state, VerificationState.COMMUNITY)
+        self.client.force_login(self.superadmin)
+        dashboard = self.client.get(reverse("accounts:data-health"), {"refresh": "1"})
+        self.assertContains(dashboard, "1 of 2")
+        self.assertContains(dashboard, "Review parentage evidence")
+
     def test_locked_dog_photo_remains_superadmin_only(self):
         Dog.objects.filter(pk=self.missing.pk).update(is_record_locked=True)
         self.client.force_login(self.mod)
