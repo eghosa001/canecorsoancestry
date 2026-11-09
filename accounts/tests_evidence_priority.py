@@ -163,7 +163,7 @@ class StaffEvidencePriorityTests(TestCase):
         DogImage.objects.create(dog=second, image="dogs/test/second.jpg", content_sha256=duplicate_hash)
         after = self.client.get(self.url, {"issue": "shared-photo"})
         self.assertEqual({dog.pk for dog in after.context["dogs"]}, {first.pk, second.pk})
-        self.assertContains(after, "may be legitimate")
+        self.assertContains(after, "This can be legitimate")
         self.assertNotContains(after, private.slug)
 
     def test_cohort_excludes_private_and_kennel_hidden_records(self):
