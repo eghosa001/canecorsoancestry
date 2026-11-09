@@ -91,6 +91,7 @@ from registry.services import (
 from registry.verification import current_findings, verification_checklist, verify_submission
 
 from pedigrees.csv_safe import safe_pedigree_csv_rows
+from pedigrees.pdf_export import pedigree_pdf_response
 from pedigrees.services import coi_linkage_summary, pedigree_analysis, pedigree_export_rows, requested_coi_generations, virtual_mating_analysis
 
 logger = logging.getLogger(__name__)
@@ -2289,6 +2290,20 @@ def member_pedigree_export(request, pk):
         )
     )
     return response
+
+
+@login_required
+def member_pedigree_pdf(request, pk):
+    dog = get_object_or_404(
+        _member_dogs(request.user).select_related("kennel"),
+        pk=pk,
+    )
+    try:
+        requested = int(request.GET.get("generations", "4"))
+    except (TypeError, ValueError):
+        requested = 4
+    generations = requested if requested in {4, 5, 6, 8, 10} else 4
+    return pedigree_pdf_response(dog, generations, public_only=False)
 
 
 @login_required

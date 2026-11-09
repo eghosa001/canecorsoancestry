@@ -39,6 +39,7 @@ urlpatterns = [
     path("pedigrees/", views.member_account_only(views.my_pedigrees), name="my-pedigrees"),
     path("pedigrees/<uuid:pk>/", views.member_account_only(views.member_pedigree_detail), name="member-pedigree"),
     path("pedigrees/<uuid:pk>/export.csv", views.member_account_only(views.member_pedigree_export), name="member-pedigree-export"),
+    path("pedigrees/<uuid:pk>/export.pdf", views.member_account_only(views.member_pedigree_pdf), name="member-pedigree-export-pdf"),
     path("litters/", views.member_account_only(views.my_litters), name="my-litters"),
     path("litters/submit/", views.member_account_only(views.submit_litter), name="submit-litter"),
     path("litters/<uuid:pk>/edit/", views.member_account_only(views.edit_litter), name="edit-litter"),
