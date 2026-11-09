@@ -125,7 +125,7 @@ class DashboardTests(TestCase):
         response = self.client.get(reverse("dashboard"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "What do you want to do?")
+        self.assertContains(response, "Manage your dogs and litters")
         self.assertContains(response, "Start dog submission")
         self.assertContains(response, "Manage existing records")
         self.assertContains(response, "Track review")

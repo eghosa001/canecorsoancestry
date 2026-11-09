@@ -464,7 +464,7 @@ def dog_detail(request, slug):
         "@type": "Thing",
         "name": dog.name,
         "url": request.build_absolute_uri(request.path),
-        "description": dog.bio or f"Cane Corso pedigree and ancestry record for {dog.name}.",
+        "description": dog.public_bio or f"Cane Corso pedigree and ancestry record for {dog.name}.",
         "identifier": [registration.number for registration in dog.display_registrations],
         "additionalProperty": [
             {"@type": "PropertyValue", "name": "Sex", "value": dog.get_sex_display()},
