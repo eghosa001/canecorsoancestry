@@ -36,6 +36,12 @@ class PostMergeReleaseContractTests(unittest.TestCase):
         self.assertIn("Only update the current protected main commit", oracle)
         self.assertIn("check_offsite_backup_freshness.sh", oracle)
         self.assertIn("stage_django.sh", oracle)
+        audit = (ROOT / ".github/workflows/release-audit.yml").read_text()
+        self.assertIn("needs: [django-sqlite, django-postgres, security-and-edge]", audit)
+        self.assertIn("name: Deploy audited main to Oracle", audit)
+        self.assertIn("github.ref == 'refs/heads/main'", audit)
+        self.assertIn("check_offsite_backup_freshness.sh", audit)
+        self.assertIn("stage_django.sh", audit)
 
     def test_pdf_deployment_is_required_by_live_release_gate(self):
         script = (ROOT / "scripts/oracle_runner/stage_django.sh").read_text()
