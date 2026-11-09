@@ -309,7 +309,7 @@ class DogModelTests(TestCase):
         response = self.client.get(reverse("registry:dog-detail", args=[dog.slug]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Contribute or request review")
+        self.assertContains(response, "Suggest an update")
         self.assertContains(response, 'class="profile-manage-actions ux-disclosure"', html=False)
         self.assertContains(response, "Request profile review")
 
@@ -1082,9 +1082,9 @@ class DogModelTests(TestCase):
         with self.assertNumQueries(1):
             response = self.client.get(reverse("registry:dog-detail", args=[no_parents.slug]))
         self.assertContains(response, "Not enough ancestry")
-        self.assertContains(response, "Both parents are needed")
+        self.assertContains(response, "Both parents must be recorded.")
         self.assertNotContains(response, "<strong>0.00%</strong>")
-        self.assertContains(response, "Both sire and dam must be linked and published")
+        self.assertNotContains(response, "Both sire and dam must be linked and published")
 
     def test_profile_with_unpublished_parent_does_not_report_false_zero(self):
         hidden = Dog.objects.create(name="Hidden Sire", slug="hidden-coi-sire", is_public=False)
@@ -1104,7 +1104,7 @@ class DogModelTests(TestCase):
                                    sire=sire, dam=dam, is_public=True)
         response = self.client.get(reverse("registry:dog-detail", args=[child.slug]))
         self.assertContains(response, "<strong>0.00%</strong>")
-        self.assertContains(response, "No shared ancestor found within all available generations")
+        self.assertContains(response, "No shared ancestor found at this depth")
 
     def test_profile_tiny_positive_coi_does_not_round_to_zero(self):
         sire = Dog.objects.create(name="Tiny Father", slug="tiny-coi-father", is_public=True)
@@ -1136,7 +1136,7 @@ class DogModelTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "0.00%")
         self.assertNotContains(response, "12.50%")
-        self.assertContains(response, "missing ancestors can make the estimate too low")
+        self.assertContains(response, "Missing ancestors may affect the result.")
 
     def test_profile_cycle_shows_actionable_coi_error_not_fabricated_number(self):
         father = Dog.objects.create(
@@ -1154,4 +1154,5 @@ class DogModelTests(TestCase):
         response = self.client.get(reverse("registry:dog-detail", args=[child.slug]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Cannot calculate")
-        self.assertContains(response, "Parentage contains a cycle")
+        self.assertContains(response, "Pedigree requires review.")
+        self.assertNotContains(response, "Parentage contains a cycle")

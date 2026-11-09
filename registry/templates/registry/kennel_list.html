@@ -5,7 +5,7 @@
   <header class="page-heading">
     <p class="eyebrow">Kennel directory</p>
     <h1>Explore kennels</h1>
-    <p>Explore kennels, dogs and litters. Historical names remain labelled unverified until their origins are confirmed.</p>
+    <p>Browse Cane Corso kennels, breeding records and litters.</p>
   </header>
 
   <form class="filter-panel" method="get" role="search" aria-label="Search kennels">
@@ -43,8 +43,8 @@
         </div>
         <h2>{{ kennel.name }}</h2>
         <div class="mini-stats">
-          <span><strong>{{ kennel.public_dog_count }}</strong> dog{{ kennel.public_dog_count|pluralize }} with recorded breeding origin</span>
-          {% if kennel.possible_breeding_dog_count %}<span><strong>{{ kennel.possible_breeding_dog_count }}</strong> possible origin match{{ kennel.possible_breeding_dog_count|pluralize:"es" }} (unverified)</span>{% endif %}
+          <span><strong>{{ kennel.public_dog_count }}</strong> recorded dog{{ kennel.public_dog_count|pluralize }}</span>
+          {% if kennel.possible_breeding_dog_count %}<span><strong>{{ kennel.possible_breeding_dog_count }}</strong> possible name match{{ kennel.possible_breeding_dog_count|pluralize:"es" }} · unverified</span>{% endif %}
           <span><strong>{{ kennel.public_litter_count }}</strong> litters</span>
         </div>
       </a>

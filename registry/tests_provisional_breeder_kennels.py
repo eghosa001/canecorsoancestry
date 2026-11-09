@@ -80,7 +80,7 @@ class ProvisionalKennelLinkTests(TestCase):
         ).exists())
         profile = self.client.get(reverse("registry:dog-detail", args=[self.dog.slug]))
         self.assertEqual(profile.status_code, 200)
-        self.assertContains(profile, "Possible breeding kennel (unverified)")
+        self.assertContains(profile, "Possible kennel · unverified")
         self.assertContains(profile, kennel.name)
         self.assertContains(profile, reverse("registry:kennel-detail", args=[kennel.slug]))
         kennel_profile = self.client.get(

@@ -73,13 +73,13 @@
 
     <section class="dashboard-action-section" aria-labelledby="dashboard-actions-title">
       <div class="panel-heading">
-        <div><p class="eyebrow">Start here</p><h2 id="dashboard-actions-title">What do you want to do?</h2></div>
+        <div><p class="eyebrow">Start here</p><h2 id="dashboard-actions-title">Manage your dogs and litters</h2></div>
       </div>
       <div class="dashboard-action-grid">
         <article class="dashboard-action-card">
           <span class="dashboard-action-number">01</span>
           <h3>Add a dog</h3>
-          <p>Enter your dog's details privately, then pay the listing fee. Your dog stays unpublished until payment and moderator approval.</p>
+          <p>Submit dog details and photos for review. Publication requires payment and approval.</p>
           {% if can_purchase_records %}
             <a class="btn btn-gold" href="{% url 'accounts:submit-dog' %}">Start dog submission</a>
           {% else %}
@@ -90,7 +90,7 @@
         <article class="dashboard-action-card">
           <span class="dashboard-action-number">02</span>
           <h3>Add a litter</h3>
-          <p>Submit one litter package, then add puppies under that litter with inherited parentage and optional photos.</p>
+          <p>Create a litter record and add its puppies.</p>
           {% if can_purchase_records %}
             <a class="btn btn-outline" href="{% url 'accounts:submit-litter' %}">Start litter submission</a>
           {% else %}
@@ -100,13 +100,13 @@
         <article class="dashboard-action-card">
           <span class="dashboard-action-number">03</span>
           <h3>Manage existing records</h3>
-          <p>Use the dog cards below to add photos, correct details, attach documents or open the pedigree.</p>
+          <p>Update photos, records and documents, or view a pedigree.</p>
           <a class="btn btn-outline" href="#my-dogs">Manage my dogs</a>
         </article>
         <article class="dashboard-action-card">
           <span class="dashboard-action-number">04</span>
           <h3>Track review</h3>
-          <p>See what is pending, upload requested private evidence and read moderator decisions.</p>
+          <p>Check submissions, evidence requests and review decisions.</p>
           <a class="btn btn-outline" href="{% url 'accounts:submissions' %}">Open submissions</a>
         </article>
       </div>
@@ -163,7 +163,7 @@
         {% else %}
           <div class="empty-state">
             <strong>No approved or linked dogs yet.</strong>
-            <p>A new dog appears here after moderator approval. You can include its first profile photo during the original paid submission.</p>
+            <p>Approved dog records appear here.</p>
             {% if can_purchase_records %}<a class="btn btn-gold" href="{% url 'accounts:submit-dog' %}">Submit first dog</a>{% endif %}
           </div>
         {% endif %}
