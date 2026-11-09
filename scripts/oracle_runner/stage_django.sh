@@ -506,6 +506,22 @@ done
 [[ "$public_ready" == 1 ]] || {
   echo "::error::Cloudflare public homepage or release identity is not healthy after Oracle deployment."; exit 1;
 }
+# The user-facing pedigree PDF route must exist on the live Django release.
+# A guest request must redirect to login (302), never 404/500, and must
+# not expose a private PDF without authenticating. Avoid following redirects.
+pdf_status="$(curl --connect-timeout 4 --max-time 12 -sS -o /dev/null -w '%{http_code}' \
+  "$PUBLIC_EDGE/pedigrees/pdf-release-probe/export.pdf" || true)"
+if [[ "$pdf_status" != 302 ]]; then
+  echo "::error::Public pedigree PDF route is unavailable or unprotected (HTTP $pdf_status)." >&2
+  exit 1
+fi
+member_pdf_status="$(curl --connect-timeout 4 --max-time 12 -sS -o /dev/null -w '%{http_code}' \
+  "$PUBLIC_EDGE/member/pedigrees/00000000-0000-0000-0000-000000000000/export.pdf" || true)"
+if [[ "$member_pdf_status" != 302 ]]; then
+  echo "::error::Private pedigree PDF route is unavailable or unprotected (HTTP $member_pdf_status)." >&2
+  exit 1
+fi
+echo "PASS: Both public and member pedigree PDF routes are live and require login."
 echo "PASS: Cloudflare public homepage HTTP 200 and exact Django release SHA verified."
 
 echo "PASS: Oracle CCA stage is healthy at 127.0.0.1:18080; DB and R2 work."
