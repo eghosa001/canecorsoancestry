@@ -78,7 +78,7 @@ class DogPhotoDeliveryTests(TestCase):
         self.assertNotContains(result, "Optimized Secret Dog")
         self.assertNotContains(result, "private-only.jpg")
 
-    def test_public_dog_profile_preloads_a_preview_but_lightbox_keeps_original(self):
+    def test_public_dog_profile_and_lightbox_use_optimized_preview_with_original_fallback(self):
         from registry.models import Dog, DogImage
 
         dog = Dog.objects.create(
@@ -94,6 +94,11 @@ class DogPhotoDeliveryTests(TestCase):
         self.assertContains(response, 'rel="preload" as="image"')
         self.assertContains(response, 'data-photo-src="/media/dogs/photo-preview.jpg"')
         self.assertContains(response, 'data-media-fallback="/media/dogs/photo-preview.jpg"')
+        lightbox = response.content.decode().split("data-dog-lightbox-image", 1)[1].split(">", 1)[0]
+        self.assertIn("/_thumb/dogs/photo-preview.jpg?variant=portrait", lightbox)
+        self.assertNotIn('src="/media/dogs/photo-preview.jpg"', lightbox)
+        self.assertIn('data-media-fallback="/media/dogs/photo-preview.jpg"', lightbox)
+        self.assertContains(response, "20261109-fast-gallery-v1")
 
     def test_home_first_public_photo_is_priority_loaded_without_full_size_download(self):
         from django.core.cache import caches
@@ -116,4 +121,6 @@ class DogPhotoDeliveryTests(TestCase):
         self.assertContains(page, 'loading="eager"')
         self.assertContains(page, "480w")
         self.assertContains(page, "960w")
+        self.assertContains(page, 'imagesizes="(max-width: 760px) 40vw')
+        self.assertContains(page, 'sizes="(max-width: 760px) 40vw')
         self.assertNotContains(page, 'src="/media/dogs/home-priority.jpg"')
