@@ -16,17 +16,32 @@ class PostMergeReleaseContractTests(unittest.TestCase):
         self.assertIn("--ref main", policy)
         self.assertNotIn("gh workflow run oracle-stage-django.yml", policy)
 
-    def test_oracle_requires_successful_current_main_audit(self):
+    def test_oracle_deploy_is_a_direct_child_of_full_audit_gates(self):
+        audit = (ROOT / ".github/workflows/release-audit.yml").read_text()
+        self.assertIn("oracle-production:", audit)
+        self.assertIn("needs: [django-sqlite, django-postgres, security-and-edge]", audit)
+        self.assertIn("github.ref == 'refs/heads/main'", audit)
+        self.assertIn("github.event_name == 'workflow_dispatch'", audit)
+        self.assertIn("github.event_name == 'push'", audit)
+        self.assertIn("runs-on: [self-hosted, linux, arm64, cca-oracle]", audit)
+        self.assertIn("Audited commit is no longer current main", audit)
+        self.assertIn("check_offsite_backup_freshness.sh", audit)
+        self.assertIn("stage_django.sh", audit)
+
+    def test_standalone_oracle_workflow_is_manual_fallback_only(self):
         oracle = (ROOT / ".github/workflows/oracle-stage-django.yml").read_text()
-        self.assertIn('github.event.workflow_run.conclusion == \'success\'', oracle)
-        self.assertIn("github.event.workflow_run.head_branch == 'main'", oracle)
-        self.assertIn("github.event_name == 'workflow_run'", oracle)
         self.assertIn("github.event_name == 'workflow_dispatch'", oracle)
         self.assertIn("github.ref == 'refs/heads/main'", oracle)
-        self.assertIn("github.event.workflow_run.head_sha || github.sha", oracle)
+        self.assertNotIn("workflow_run:", oracle)
         self.assertIn("Only update the current protected main commit", oracle)
         self.assertIn("check_offsite_backup_freshness.sh", oracle)
         self.assertIn("stage_django.sh", oracle)
+        audit = (ROOT / ".github/workflows/release-audit.yml").read_text()
+        self.assertIn("needs: [django-sqlite, django-postgres, security-and-edge]", audit)
+        self.assertIn("name: Deploy audited main to Oracle", audit)
+        self.assertIn("github.ref == 'refs/heads/main'", audit)
+        self.assertIn("check_offsite_backup_freshness.sh", audit)
+        self.assertIn("stage_django.sh", audit)
 
     def test_pdf_deployment_is_required_by_live_release_gate(self):
         script = (ROOT / "scripts/oracle_runner/stage_django.sh").read_text()
