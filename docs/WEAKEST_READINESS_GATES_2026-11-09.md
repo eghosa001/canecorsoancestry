@@ -24,13 +24,23 @@ This is an **operational checklist**, not a claim that the live service passed. 
 - Tester: run page-focused WCAG 2.2 AA checks on the home/search, public dog detail, member pedigree, staff worklists, login/recovery and purchase flow; include keyboard, screen-reader, text zoom, contrast, touch targets, and reduced-motion checks. Log issues and close with retests.
 - Success evidence: reproducible audit results and verified live indexing data, not a self-assigned site score.
 
+## Owner-confirmed acceptance tests (recorded 9 November 2026)
+
+These are owner-reported tests performed before this readiness review, not fresh independently witnessed tests. Do not mark them untested or ask the owner to repeat the basic happy-path test without a specific regression.
+
+- **Dog submission and administrator approval — PASS (owner-reported):** a genuine test dog was added and approved by the authorized head reviewer. This validates the demonstrated approval workflow, not source quality across every dog.
+- **10-generation mobile pedigree — PASS (owner-reported):** the owner tested the large pedigree on Samsung Android and the project’s iPhone user separately reported it working. Device responsiveness has been demonstrated; formal quantitative load measurements are separate.
+- **Account recovery delivery — PASS (owner-reported):** the owner previously completed the account-recovery flow and received the recovery message. The intended feature is **recovery email**; no SMS delivery feature is independently established by this report. The 9 November production data-health job separately logged **PASS** for SMTP TLS/authentication/NOOP (does not itself send a message). Existing successful recovery should be recognized; re-test only if the behavior or environment changes or a specific failure is reported.
+- **Paystack sandbox payment — PASS (owner-reported):** an end-to-end test-mode payment was performed. This is not live transaction acceptance. The production data-health job on 9 November reported no configured live Paystack secret; the live-payments gate remains open.
+- **Offsite database backup — PASS (GitHub run evidence):** [9 November encrypted Oracle/PostgreSQL R2 backup run](https://github.com/eghosa001/canecorsoancestry/actions/runs/42575504160) uploaded and re-downloaded the encrypted archive and updated the recovery pointer successfully. Restore validation is a distinct remaining gate.
+
 ## Owner-only live release gates
 
-1. **Account recovery**: verify real SMTP sending and inbox receipt for password-reset and verification emails on an authorized test account, including expired-token behavior. No passwords or mail credentials in GitHub or chat.
+1. **Account recovery — basic flow complete:** earlier owner-reported recovery message received and SMTP connectivity independently passed. Expired-token and security edge cases are not claimed as manually verified; recheck only when required by changes or incidents. No passwords or mail credentials in GitHub or chat.
 2. **Membership**: complete signup, email verification, kennel membership/permissions, paid submission entitlement and approved-vs-private viewing with genuine test accounts. Confirm no moderation bypass.
 3. **Paystack**: with controlled low-value real transactions, confirm checkout, webhook signature, idempotency, paid entitlement, reconciliation and refunds/failed paths. Never share secret keys.
 4. **Alerting**: trigger a safe, authorized test alert and confirm the actual recipient receives it; check uptime/backup failure alarms and incident owner.
-5. **Backups**: perform an isolated test restore of a fresh encrypted PostgreSQL backup, checksum/row-count verification and timed recovery. **Never** restore into the live authoritative Oracle database.
+5. **Backups — encrypted uploads proven:** the offsite backup run passed on 9 November 2026. Confirm an isolated test restore of a fresh PostgreSQL backup, checksum/row-count verification and timed recovery before marking disaster recovery fully validated. **Never** restore into the live authoritative Oracle database.
 6. **Release**: verify current deployed build SHA matches the approved main branch via existing release attestation and focused smoke tests; do not assume a merged PR is deployed.
 
 Record a date, reviewer, environment, result and link to evidence for every completed gate. Until this is done, production scores remain provisional.
