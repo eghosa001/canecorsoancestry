@@ -3529,6 +3529,7 @@ def data_health_evidence(request):
         "missing-source": "Missing source attribution",
         "unreviewed-source": "No independently reviewed source",
         "reviewed-status-needs-source-check": "Reviewed status requiring source cross-check",
+        "parentage-source-review": "Recorded parentage without reviewed pedigree source",
         "community-only": "Community-submitted verification state",
         "unknown-sex": "Unknown sex on a public record",
         "missing-photo": "No displayable public photograph",
@@ -3542,11 +3543,15 @@ def data_health_evidence(request):
     # in the separate public data-quality report.
     sources = DogSource.objects.filter(dog_id=OuterRef("pk"))
     reviewed = sources.filter(verified_at__isnull=False)
+    reviewed_parentage = reviewed.filter(
+        source_type__in=(DogSource.SourceType.PEDIGREE, DogSource.SourceType.REGISTRY),
+    ).filter(Q(source_url__gt="") | Q(document__gt=""))
     # Preserve moderation and kennel visibility rules, even in the public-data
     # worklist. Staff can investigate hidden records using protected editors.
     public = published_dogs().annotate(
         has_source=Exists(sources),
         has_reviewed_source=Exists(reviewed),
+        has_reviewed_parentage_source=Exists(reviewed_parentage),
     )
     if issue == "missing-source":
         public = public.filter(has_source=False)
@@ -3557,11 +3562,16 @@ def data_health_evidence(request):
             verification_state__in=("identity", "pedigree", "health"),
             has_reviewed_source=False,
         )
+    elif issue == "parentage-source-review":
+        public = public.filter(
+            sire_id__isnull=False, dam_id__isnull=False,
+            has_reviewed_parentage_source=False,
+        )
     elif issue == "community-only":
         public = public.filter(verification_state="community")
     elif issue == "unknown-sex":
         public = public.filter(sex=Dog.Sex.UNKNOWN)
-    else:
+    elif issue == "missing-photo":
         # Match the established public card/photo policy. Managed R2 uploads
         # and approved legacy archive references count; arbitrary external
         # image URLs do not. This is a read-only worklist, not an image import.
