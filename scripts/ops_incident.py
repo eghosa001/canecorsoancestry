@@ -15,6 +15,12 @@ WATCHED = frozenset({
     "Oracle offsite PostgreSQL recovery integrity",
     "Production Django release attestation",
     "Production payment and policy edge probe",
+    "Oracle PostgreSQL encrypted hourly backups",
+    "Production data health",
+    "Public page accessibility audit",
+    "Security audit",
+    "Oracle read-only latency diagnosis",
+    "Production smoke",
 })
 
 
