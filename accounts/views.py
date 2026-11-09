@@ -2247,6 +2247,7 @@ def member_pedigree_detail(request, pk):
             "coi_percent": analysis["coi_percent"],
             "cycle_error": analysis["cycle_error"],
             "member_mode": True,
+            "show_staff_notes": False,
         },
     )
 

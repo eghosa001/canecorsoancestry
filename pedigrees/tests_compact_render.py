@@ -41,7 +41,7 @@ class CompactPedigreeRenderTests(TestCase):
             self.assertEqual(layer["display_nodes"], layer["nodes"])
             self.assertEqual(layer["hidden_unknown_count"], 0)
 
-    def test_rendered_member_tree_discloses_omitted_unknown_positions(self):
+    def test_rendered_member_tree_keeps_compact_nodes_without_internal_omission_notice(self):
         dog = Dog.objects.create(name="Sparse Render", slug="sparse-render", is_public=True)
         user = get_user_model().objects.create_user(
             username="compact-tree-member", password="long-pass-test-123"
@@ -49,6 +49,6 @@ class CompactPedigreeRenderTests(TestCase):
         self.client.force_login(user)
         result = self.client.get(reverse("pedigrees:detail", args=[dog.slug]), {"generations": 10})
         self.assertEqual(result.status_code, 200)
-        self.assertContains(result, "1012 additional unknown ancestor positions omitted")
+        self.assertNotContains(result, "1012 additional unknown ancestor positions omitted")
         self.assertEqual(len(result.context["layers"][-1]["nodes"]), 1024)
         self.assertEqual(len(result.context["layers"][-1]["display_nodes"]), 12)

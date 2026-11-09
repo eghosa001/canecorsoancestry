@@ -13,7 +13,7 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 
 from registry.models import Dog
-from registry.permissions import can_access_public_pedigree_analysis, can_use_member_features
+from registry.permissions import can_access_public_pedigree_analysis, can_use_member_features, moderation_role
 from registry.querysets import public_dog_match_filter, published_dogs
 
 from .csv_safe import safe_pedigree_csv_rows
@@ -127,6 +127,7 @@ def pedigree_detail(request, slug):
         "coi_percent": analysis["coi_percent"],
         "cycle_error": analysis["cycle_error"],
         "member_mode": False,
+        "show_staff_notes": moderation_role(request.user) is not None,
     }
     return render(request, "pedigrees/pedigree_detail.html", context)
 
