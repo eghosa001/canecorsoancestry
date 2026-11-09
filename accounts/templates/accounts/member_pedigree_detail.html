@@ -11,7 +11,7 @@
   <a class="btn btn-outline" href="#advanced-analysis-title">Jump to analysis</a>
   <a class="btn btn-gold" href="{% url 'accounts:submit-health-record' dog.pk %}">Upload health / DNA</a>
 </nav>
-<div class="page-shell button-row no-print cca-pedigree-download"><button class="btn btn-outline" type="button" onclick="window.print()">Save pedigree as PDF / Print</button><small class="muted">Private kennel information remains restricted to your account.</small></div>
+<div class="page-shell button-row no-print cca-pedigree-download"><a class="btn btn-gold" href="{% url 'accounts:member-pedigree-export-pdf' dog.pk %}?generations={{ generations }}" download>Download pedigree (PDF)</a><a class="btn btn-outline" href="{% url 'accounts:member-pedigree-export' dog.pk %}?generations={{ generations }}" download>Export data (CSV)</a><button class="btn btn-outline" type="button" onclick="window.print()">Print this page</button><small class="muted">Private kennel information is included in your PDF. Share carefully.</small></div>
 <div class="page-shell no-print cca-tree-tools" role="toolbar" aria-label="Private pedigree viewer controls">
   <button class="btn btn-outline" type="button" data-pedigree-step="-1" aria-label="Previous generation">← Previous</button>
   <button class="btn btn-outline" type="button" data-pedigree-step="1" aria-label="Next generation">Next →</button>
