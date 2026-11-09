@@ -125,8 +125,16 @@ jobs:
             )
           fi
 
+          if grep -q '^registry/evidence_priority[.]py$' <<<"$changed"; then
+            targets+=("accounts.tests_evidence_priority" "accounts.tests_evidence_triage")
+          fi
+
           if grep -Eq '^accounts/.*\.py$' <<<"$changed"; then
             scoped_accounts=false
+            if grep -q '^accounts/tests_evidence_priority[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_evidence_priority" "accounts.tests_evidence_triage")
+              scoped_accounts=true
+            fi
             if grep -Eq '^accounts/(staff_change_center|tests_staff_change_center|urls)[.]py$' <<<"$changed"; then
               targets+=(
                 "accounts.tests_staff_change_center"
@@ -225,6 +233,9 @@ jobs:
                 )
               fi
 
+              if grep -Eq 'data_health_evidence|evidence_priority|approval-cross-check|shared-photo' <<<"$view_diff"; then
+                targets+=("accounts.tests_evidence_priority" "accounts.tests_evidence_triage")
+              fi
               scoped_accounts=true
             fi
 

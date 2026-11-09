@@ -20,7 +20,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Count, DurationField, Exists, ExpressionWrapper, F, OuterRef, Prefetch, Q
+from django.db.models import Avg, Count, DurationField, Exists, ExpressionWrapper, F, OuterRef, Prefetch, Q, Subquery
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -34,6 +34,7 @@ from django.views.decorators.http import require_POST
 from registry.querysets import published_dogs
 from registry.public_freshness import invalidate_public_content
 from registry.data_quality import quick_quality_report, public_coi_review_sample
+from registry.evidence_priority import annotated_evidence_candidates, prioritized_public_dogs, shared_photo_hashes
 from registry.coi_identity_audit import audit_registration_backed_duplicates
 from registry.models import (
     DisputeCase,
@@ -3526,6 +3527,9 @@ def data_health_evidence(request):
 
     issue = request.GET.get("issue", "missing-source")
     choices = {
+        "priority": "Prioritized review: popular, recent, disputed",
+        "approval-cross-check": "Past approval with no timestamp-reviewed source",
+        "shared-photo": "Possible reused uploaded photograph",
         "missing-source": "Missing source attribution",
         "unreviewed-source": "No independently reviewed source",
         "reviewed-status-needs-source-check": "Reviewed status requiring source cross-check",
@@ -3553,7 +3557,23 @@ def data_health_evidence(request):
         has_reviewed_source=Exists(reviewed),
         has_reviewed_parentage_source=Exists(reviewed_parentage),
     )
-    if issue == "missing-source":
+    if issue == "priority":
+        public = prioritized_public_dogs()
+    elif issue == "approval-cross-check":
+        public = annotated_evidence_candidates(public).filter(
+            priority_has_approval_audit=True,
+            priority_has_reviewed_document=False,
+        )
+    elif issue == "shared-photo":
+        public = public.annotate(
+            priority_has_shared_photo=Exists(
+                DogImage.objects.filter(
+                    dog_id=OuterRef("pk"),
+                    content_sha256__in=Subquery(shared_photo_hashes()),
+                )
+            )
+        ).filter(priority_has_shared_photo=True)
+    elif issue == "missing-source":
         public = public.filter(has_source=False)
     elif issue == "unreviewed-source":
         public = public.filter(has_reviewed_source=False)
@@ -3594,7 +3614,10 @@ def data_health_evidence(request):
     sort = request.GET.get("sort", "most-searched")
     if sort not in {"most-searched", "name"}:
         return HttpResponseBadRequest("Choose a supported evidence sort order.")
-    order = ("-search_count", "name", "pk") if sort == "most-searched" else ("name", "pk")
+    if issue == "priority" and sort == "most-searched":
+        order = ("-priority_score", "-search_count", "name", "pk")
+    else:
+        order = ("-search_count", "name", "pk") if sort == "most-searched" else ("name", "pk")
     # Bound each request to 30 existing dogs, rather than materializing 33k
     # source/history rows or inspecting every public photo.
     page_obj = Paginator(
@@ -3609,6 +3632,7 @@ def data_health_evidence(request):
         "issue_title": choices[issue],
         "issue_filters": choices,
         "can_manage_sources": can_manage_verification(request.user),
+        "priority_is_cohort": issue == "priority",
     })
 
 
