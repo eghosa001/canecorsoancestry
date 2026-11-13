@@ -1,12 +1,13 @@
-"""Validated optional commercial domain configuration; no DNS or traffic cutover."""
+"""Validate the official public domain and transitional legacy origins."""
 import re
 from urllib.parse import urlsplit
 
+OFFICIAL_SITE = "https://canecorsoancestry.com"
 PREVIEW_SITE = "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
 _LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 
 def canonical_site(value=""):
-    requested = (value or PREVIEW_SITE).strip()
+    requested = (value or OFFICIAL_SITE).strip()
     parsed = urlsplit(requested)
     if (parsed.scheme != "https" or not parsed.hostname or parsed.username
         or parsed.password or parsed.query or parsed.fragment
@@ -26,6 +27,6 @@ def host_settings(value=""):
     root = canonical_site(value)
     primary = root.removeprefix("https://")
     preview = PREVIEW_SITE.removeprefix("https://")
-    hosts = ",".join(dict.fromkeys((primary, preview, "127.0.0.1", "localhost")))
-    origins = ",".join(dict.fromkeys((root, PREVIEW_SITE)))
+    hosts = ",".join(dict.fromkeys((primary, "www.canecorsoancestry.com", preview, "127.0.0.1", "localhost")))
+    origins = ",".join(dict.fromkeys((root, "https://www.canecorsoancestry.com", PREVIEW_SITE)))
     return root, hosts, origins

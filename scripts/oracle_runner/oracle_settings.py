@@ -17,7 +17,7 @@ if not ORIGIN_EDGE_SECRET or ORIGIN_EDGE_SECRET == SECRET_KEY:  # noqa: F405
 
 # Oracle uses R2 object storage directly through its authenticated Cloudflare
 # gateway. Production storage must not import retired provider settings.
-R2_GATEWAY_URL = os.getenv("R2_GATEWAY_URL", "https://canecorsoancestry-edge.aighewieghosa111.workers.dev").rstrip("/")
+R2_GATEWAY_URL = os.getenv("R2_GATEWAY_URL", "https://media.canecorsoancestry.com").rstrip("/")
 MEDIA_EDGE_BASE_URL = os.getenv("MEDIA_EDGE_BASE_URL", R2_GATEWAY_URL).rstrip("/")
 MEDIA_EDGE_URL_TTL = int(os.getenv("MEDIA_EDGE_URL_TTL", "300"))
 R2_GATEWAY_SIGNING_KEY = os.getenv("R2_GATEWAY_SIGNING_KEY", "").strip()

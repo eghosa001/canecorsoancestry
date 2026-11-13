@@ -28,9 +28,9 @@ The machine-readable source of truth is [`infra/active-services.json`](infra/act
 - **GitHub Actions / CCA-ORACLE runner** — focused CI, test-gated production app releases from protected `main` (manual override remains available), hourly database backups, scheduled production integrity tests.
 - **Paystack** and **Gmail SMTP** — application integrations enabled only when their respective server credentials are configured.
 
-Public website: `https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev`
+Official public website (after Cloudflare DNS cutover): `https://canecorsoancestry.com`
 
-R2 media gateway: `https://canecorsoancestry-edge.aighewieghosa111.workers.dev`
+Media gateway (after Cloudflare DNS cutover): `https://media.canecorsoancestry.com`
 
 **Retired from production:** Northflank (former Django deployment) and Supabase (frozen historical PostgreSQL source). Neither may receive live writes or be used as an automatic fallback: after local-primary writes, a rollback to old Supabase would lose data. Older setup/migration documents are historical, not current deployment instructions.
 

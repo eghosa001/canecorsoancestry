@@ -2,6 +2,7 @@ name: Cloudflare site edge
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, closed]
     paths:
       - "src/site-edge.js"
       - "wrangler.site.toml"
@@ -27,6 +28,7 @@ concurrency:
 
 jobs:
   validate:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -54,7 +56,10 @@ jobs:
         run: python3 -m unittest scripts.tests.test_worker_origin_secret
 
   verify-derived-origin-secret:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main')
     needs: validate
     runs-on: [self-hosted, linux, arm64, cca-oracle]
     timeout-minutes: 5
@@ -89,7 +94,10 @@ jobs:
           echo "PASS: Live Oracle authenticated the new isolated Cloudflare credential."
 
   deploy:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main')
     needs: [validate, verify-derived-origin-secret]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -189,7 +197,7 @@ jobs:
       - name: Verify public workers.dev edge and fast warm-up response
         shell: bash
         run: |
-          base="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+          base="https://canecorsoancestry.com"
           expected_site_marker="core/site.css"
           expected_premium_marker="core/premium-polish.css"
 
@@ -310,7 +318,7 @@ jobs:
           import urllib.parse
           import urllib.request
 
-          base = "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+          base = "https://canecorsoancestry.com"
           males = [
               "0d1dcc5b-d146-48a9-a9fb-97e46692f358",
               "67fb5587-6abd-454e-8aaf-acd2dba66b66",

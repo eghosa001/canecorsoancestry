@@ -13,7 +13,18 @@ PY
 )"
 readonly PUBLIC_SITE
 export CCA_CANONICAL_SITE_URL="$PUBLIC_SITE"
-readonly MEDIA_EDGE="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
+readonly MEDIA_EDGE="https://media.canecorsoancestry.com"
+# Do not switch the live Django canonical host or media gateway to an
+# unreachable DNS zone. Fail before touching Oracle services or its database.
+for route in "$PUBLIC_SITE/__edge/health" "$MEDIA_EDGE/healthz/"; do
+  status="$(curl --silent --show-error --connect-timeout 5 --max-time 12 \
+    -o /dev/null -w '%{http_code}' "$route" || true)"
+  if [[ "$status" != 200 ]]; then
+    echo "::error::Official domain route is not ready ($route returned $status); preserving current production deployment." >&2
+    exit 1
+  fi
+done
+
 
 if [[ "$GITHUB_REPOSITORY" != "$REPO" ||
       "$GITHUB_REF" != "refs/heads/main" ||
@@ -126,8 +137,8 @@ values = {
     "DJANGO_HSTS_SECONDS": "31536000",
     "DJANGO_HSTS_INCLUDE_SUBDOMAINS": "1",
     "DJANGO_HSTS_PRELOAD": "1",
-    "R2_GATEWAY_URL": "https://canecorsoancestry-edge.aighewieghosa111.workers.dev",
-    "MEDIA_EDGE_BASE_URL": "https://canecorsoancestry-edge.aighewieghosa111.workers.dev",
+    "R2_GATEWAY_URL": "https://media.canecorsoancestry.com",
+    "MEDIA_EDGE_BASE_URL": "https://media.canecorsoancestry.com",
     "MEDIA_EDGE_URL_TTL": "300",
     "R2_GATEWAY_SIGNING_KEY": base64.b64encode(secret.encode()).decode(),
     "PAYSTACK_SECRET_KEY": os.environ.get("PAYSTACK_SECRET_KEY", ""),
@@ -482,7 +493,7 @@ fi
 # A local Django 200 is not proof that the public Worker can reach Oracle.
 # Fail the release if the user-facing route is not reachable or still serves
 # the previous commit. Public /healthz/ is uncached and discloses no secrets.
-readonly PUBLIC_EDGE="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+readonly PUBLIC_EDGE="$PUBLIC_SITE"
 public_ready=0
 for attempt in $(seq 1 20); do
   public_status="$(curl --connect-timeout 4 --max-time 12 -sS -o "$probe_output" -w '%{http_code}' "$PUBLIC_EDGE/healthz/" || true)"

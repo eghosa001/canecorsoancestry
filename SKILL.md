@@ -45,7 +45,7 @@ The current production stack is:
 
 **Northflank and Supabase are retired production services, not rollback targets.** Never deploy production Django there or write new data to the old Supabase database. Follow `ARCHITECTURE.md` and `infra/active-services.json` for the authoritative current service inventory. Preserve the Oracle live database; never restore over it or rerun one-time migrations without a verified recovery plan.
 
-No custom domain is currently configured. Do not add a custom domain or another hosting/database provider unless the owner explicitly requests it.
+The owner explicitly requested `canecorsoancestry.com` as the canonical public domain. Route its apex and www through the existing Cloudflare site Worker. Preserve the private Oracle and R2 backend architecture; do not introduce another provider.
 
 Keep all authenticated routes and database-backed public pages uncached at the Cloudflare site edge so approved changes appear on the next public GET. Cache only safe static assets.
 

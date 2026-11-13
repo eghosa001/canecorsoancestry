@@ -302,7 +302,7 @@ def home(request):
         }
         caches["public"].set("cca:home:public-stats:v4", public_stats, 300)
 
-    public_root = request.build_absolute_uri("/").rstrip("/")
+    public_root = settings.SITE_URL.rstrip("/")
     context = {
         **public_stats,
         "featured_dogs": featured_dogs,

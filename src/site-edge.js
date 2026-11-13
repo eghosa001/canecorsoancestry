@@ -21,6 +21,36 @@ const CSRF_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567
 const BOT_RE = /(bot|crawler|spider|slurp|bingpreview|facebookexternalhit|twitterbot|linkedinbot)/i;
 const PRIVATE_PREFIXES = ["/accounts/", "/member/", "/admin/", "/dashboard/", "/media/"];
 
+const OFFICIAL_DOMAIN = "canecorsoancestry.com";
+const LEGACY_SITE_HOST = "canecorsoancestry-site-edge.aighewieghosa111.workers.dev";
+
+// The public web property has one canonical hostname. Preserve old assets and
+// operational probes; redirect human pages and indexed URLs, never auth POSTs.
+function canonicalRedirect(request, env = {}) {
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  const url = new URL(request.url);
+  const isWww = url.hostname === "www." + OFFICIAL_DOMAIN;
+  const isLegacy = url.hostname === LEGACY_SITE_HOST
+    && env.DOMAIN_REDIRECTS_ENABLED === "1";
+  if (!isWww && !isLegacy) return null;
+  if (isLegacy && (
+    url.pathname.startsWith("/__edge/") ||
+    url.pathname === "/healthz/" ||
+    url.pathname.startsWith("/static/") ||
+    url.pathname.startsWith("/media/")
+  )) return null;
+  url.protocol = "https:";
+  url.hostname = OFFICIAL_DOMAIN;
+  url.port = "";
+  return new Response(null, {
+    status: 308,
+    headers: {
+      location: url.toString(),
+      "cache-control": "public, max-age=300",
+    },
+  });
+}
+
 function isLoginPath(pathname) {
   return pathname === "/accounts/login/";
 }
@@ -515,6 +545,8 @@ async function handleRequest(request, env, ctx) {
     });
   }
   const url = new URL(request.url);
+  const redirect = canonicalRedirect(request, env);
+  if (redirect) return redirect;
 
   if (url.pathname === "/__edge/health") {
     return Response.json(
@@ -608,7 +640,7 @@ async function handleRequest(request, env, ctx) {
   return loginRequest ? authWarmingPage(request) : warmingPage(request);
 }
 
-export { hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, shouldWaitForOrigin, edgeCacheVersion, cacheKey, originRequest, timedOriginGet, transportFetch, authWarmingPage };
+export { canonicalRedirect, hasPrivateCookie, isSearchTrackingUrl, isCacheablePublicPath, shouldWaitForOrigin, edgeCacheVersion, cacheKey, originRequest, timedOriginGet, transportFetch, authWarmingPage };
 
 export default {
   fetch(request, env, ctx) {

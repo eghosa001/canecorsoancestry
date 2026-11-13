@@ -6,8 +6,8 @@ The public Cloudflare Workers site edge routes exclusively to Django on Oracle t
 
 Source of truth: `infra/active-services.json` and `scripts/verify_active_services.py`.
 
-- Public site: `https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev`
-- R2 gateway: `https://canecorsoancestry-edge.aighewieghosa111.workers.dev`
+- Official public site (after DNS cutover): `https://canecorsoancestry.com`
+- Media gateway (after DNS cutover): `https://media.canecorsoancestry.com`
 - Oracle Django service: `cca-oracle-staging.service` (historical service name, **production origin**)
 - Oracle PostgreSQL service: `cca-pg-shadow.service` (historical service name, **production primary**)
 - Database: `cca_live`; mode `/etc/cca/oracle-db-mode = local`
