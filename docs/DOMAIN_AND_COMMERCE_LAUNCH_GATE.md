@@ -22,16 +22,33 @@ charge cards; those tests require real delivery and Paystack sandbox access.
 
 A missing commercial prerequisite is an explicit BLOCK, not a false PASS.
 
-## Validated future domain configuration (before DNS purchase)
+## Purchased production domain: canecorsoancestry.com (Spaceship)
 
-The Oracle staging script and CI smoke/data-health checks now support repository
-variable `CCA_CANONICAL_SITE_URL`. Until set, the current Workers preview remains
-the canonical public site. The new value must be exactly `https://<domain>`
-(without path or custom port). Oracle writes SITE_URL, allowed hosts and CSRF
-origins from the same validated value, always retaining the preview host for
-safe migration. Django robots.txt emits the configured canonical sitemap URL.
+The domain is purchased, but **registration does not prove working Cloudflare DNS**.
+The code now provisions the following Workers Custom Domains after this zone is
+active in the same Cloudflare account:
 
-**Do not set this variable before the new domain is purchased and Cloudflare
-Worker custom route, SSL, and origin DNS are deployed.** Once routed, configure
-Paystack callback, email SPF/DKIM/DMARC, Search Console and the apex/www redirect;
-then switch the variable and release. DNS registration is an owner action.
+- `canecorsoancestry.com` — canonical website via `wrangler.site.toml`.
+- `www.canecorsoancestry.com` — redirects 308 to the apex, preserving path/query.
+- `media.canecorsoancestry.com` — the existing private, HMAC-signed R2 gateway.
+
+Cloudflare must first show the zone as **Active**. At Spaceship set the exact
+two nameservers assigned **to this zone** by Cloudflare; do not guess or use
+the nameservers assigned to a different site. Cloudflare Workers Custom
+Domains create their proxied DNS records and TLS certificates on deployment.
+Remove any conflicting CNAME records for the same host first.
+
+**Required release order:** Active Cloudflare zone → deploy and verify site
+and media Custom Domains/TLS → verify real Django login, /healthz/,
+sitemap and media signatures on the new hostnames → release Oracle with
+SITE_URL, trusted hosts/CSRF and media gateway set to the purchased domain →
+confirm Paystack callback, account email URLs and Google Search Console →
+enable old workers.dev website host redirects and retain private operational
+health/asset routes. The production Oracle staging script fails closed if
+official site or media routes are not live. Do not remove the R2 worker,
+database or Oracle tunnel; these are essential services rather than old sites.
+
+Old public Workers website pages become 308 redirects after the site Worker
+deploys with DOMAIN_REDIRECTS_ENABLED=1. Previously issued signed image URLs
+are allowed to expire naturally through the legacy media Worker. Do not
+turn off its workers.dev route until no old signed image/backup clients need it.

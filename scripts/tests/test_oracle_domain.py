@@ -1,10 +1,10 @@
 """Focused guard against unsafe custom hostname cutovers."""
 from unittest import TestCase
-from scripts.oracle_runner.site_domain import canonical_site, host_settings, PREVIEW_SITE
+from scripts.oracle_runner.site_domain import canonical_site, host_settings, PREVIEW_SITE, OFFICIAL_SITE
 
 class DomainConfigTests(TestCase):
-    def test_default_keeps_existing_public_worker(self):
-        self.assertEqual(canonical_site(""), PREVIEW_SITE)
+    def test_default_is_owner_purchased_domain(self):
+        self.assertEqual(canonical_site(""), OFFICIAL_SITE)
 
     def test_custom_host_preserves_preview_for_safe_migration(self):
         root, allowed, origins = host_settings("https://Pedigree.Example/")
@@ -12,6 +12,8 @@ class DomainConfigTests(TestCase):
         self.assertIn("pedigree.example", allowed)
         self.assertIn("canecorsoancestry-site-edge.aighewieghosa111.workers.dev", allowed)
         self.assertIn("https://pedigree.example", origins)
+        self.assertIn("www.canecorsoancestry.com", allowed)
+        self.assertIn("https://www.canecorsoancestry.com", origins)
 
     def test_shell_stops_if_canonical_url_validation_fails(self):
         from pathlib import Path

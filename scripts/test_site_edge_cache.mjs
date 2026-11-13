@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 // It also gives us a safe no-behavior-change path to re-run edge cutover verification.
 import edge, {
   cacheKey,
+  canonicalRedirect,
   edgeCacheVersion,
   hasPrivateCookie,
   isCacheablePublicPath,
@@ -108,6 +109,22 @@ assert.equal(
   cacheKey(trackedRequest, { EDGE_CACHE_VERSION: "release-sha-123" }).url,
   "https://example.test/dogs/example-dog/?__cca_edge_v=release-sha-123",
 );
+
+const legacy = "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev";
+const canonical = "https://canecorsoancestry.com";
+const redirect = canonicalRedirect(
+  new Request(legacy + "/dogs/?q=Atlas"),
+  { DOMAIN_REDIRECTS_ENABLED: "1" },
+);
+assert.equal(redirect.status, 308);
+assert.equal(redirect.headers.get("location"), canonical + "/dogs/?q=Atlas");
+assert.equal(canonicalRedirect(new Request(legacy + "/healthz/"), { DOMAIN_REDIRECTS_ENABLED: "1" }), null);
+assert.equal(canonicalRedirect(new Request(legacy + "/__edge/health"), { DOMAIN_REDIRECTS_ENABLED: "1" }), null);
+assert.equal(canonicalRedirect(new Request(legacy + "/static/core/site.css"), { DOMAIN_REDIRECTS_ENABLED: "1" }), null);
+assert.equal(canonicalRedirect(new Request(legacy + "/accounts/login/"), { DOMAIN_REDIRECTS_ENABLED: "0" }), null);
+assert.equal(canonicalRedirect(new Request(canonical + "/"), { DOMAIN_REDIRECTS_ENABLED: "1" }), null);
+assert.equal(canonicalRedirect(new Request("https://www.canecorsoancestry.com/kennels/?q=K"), {}).headers.get("location"), canonical + "/kennels/?q=K");
+assert.equal(canonicalRedirect(new Request(legacy + "/accounts/login/", {method:"POST"}), { DOMAIN_REDIRECTS_ENABLED: "1" }), null);
 
 console.log("Approval-sensitive pages bypass all Cloudflare HTML caching; static assets remain cached.");
 

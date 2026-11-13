@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     env:
-      PUBLIC_SITE: ${{ vars.CCA_CANONICAL_SITE_URL || 'https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev' }}
+      PUBLIC_SITE: https://canecorsoancestry.com
     steps:
       - uses: actions/checkout@v4
         with:

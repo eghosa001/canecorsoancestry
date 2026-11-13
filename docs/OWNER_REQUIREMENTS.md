@@ -7,7 +7,7 @@ This file records the requirements that must survive future implementation and r
 - Public project name: **Cane Corso Ancestry**.
 - This is a **pedigree and ancestry website, not a dog registry**.
 - Python/Django is the preferred backend technology.
-- No custom domain has been purchased or configured; use the current Cloudflare `workers.dev` public endpoint unless the owner explicitly changes this.
+- The owner purchased `canecorsoancestry.com` from Spaceship and chose it as the single public website hostname. After DNS activation, `www` and legacy workers.dev web URLs redirect to the apex; keep the Cloudflare Workers, Oracle private origin and R2 media gateway operational.
 - The two supplied design mockups in `docs/design-reference/` are the owner-approved visual baseline and must remain in the repository.
 
 ## Client-approved typography scale (29 October 2026)

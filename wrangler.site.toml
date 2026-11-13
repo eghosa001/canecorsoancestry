@@ -2,7 +2,15 @@ name = "canecorsoancestry-site-edge"
 main = "src/site-edge.js"
 compatibility_date = "2026-10-01"
 compatibility_flags = ["global_fetch_strictly_public"]
-workers_dev = true
+workers_dev = true  # Keep legacy host available only for SEO redirects and health checks
+
+[[routes]]
+pattern = "canecorsoancestry.com"
+custom_domain = true
+
+[[routes]]
+pattern = "www.canecorsoancestry.com"
+custom_domain = true
 
 [observability]
 enabled = true
@@ -10,6 +18,7 @@ enabled = true
 [vars]
 ORIGIN_URL = "http://127.0.0.1:18080"
 ORIGIN_TRANSPORT = "private-vpc"
+DOMAIN_REDIRECTS_ENABLED = "1"
 
 
 [triggers]

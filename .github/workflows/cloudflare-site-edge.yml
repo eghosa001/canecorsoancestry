@@ -189,7 +189,7 @@ jobs:
       - name: Verify public workers.dev edge and fast warm-up response
         shell: bash
         run: |
-          base="https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+          base="https://canecorsoancestry.com"
           expected_site_marker="core/site.css"
           expected_premium_marker="core/premium-polish.css"
 
@@ -310,7 +310,7 @@ jobs:
           import urllib.parse
           import urllib.request
 
-          base = "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev"
+          base = "https://canecorsoancestry.com"
           males = [
               "0d1dcc5b-d146-48a9-a9fb-97e46692f358",
               "67fb5587-6abd-454e-8aaf-acd2dba66b66",

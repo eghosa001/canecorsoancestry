@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 from performance_math import nearest_rank_percentile
 
 
-BASE_URL = os.getenv("PRODUCTION_BASE_URL", "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev").rstrip("/")
+BASE_URL = os.getenv("PRODUCTION_BASE_URL", "https://canecorsoancestry.com").rstrip("/")
 OUT = Path(os.getenv("PRODUCTION_SMOKE_DIR", "artifacts/production-smoke"))
 OUT.mkdir(parents=True, exist_ok=True)
 
