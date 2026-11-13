@@ -25,18 +25,17 @@ A missing commercial prerequisite is an explicit BLOCK, not a false PASS.
 ## Purchased production domain: canecorsoancestry.com (Spaceship)
 
 The domain is purchased, but **registration does not prove working Cloudflare DNS**.
-The code now provisions the following Workers Custom Domains after this zone is
-active in the same Cloudflare account:
+The active zone uses the following routing:
 
 - `canecorsoancestry.com` — canonical website via `wrangler.site.toml`.
-- `www.canecorsoancestry.com` — redirects 308 to the apex, preserving path/query.
+- `www.canecorsoancestry.com` — **existing Cloudflare DNS-managed redirect** to the apex, preserving path/query; do not bind another Worker Custom Domain over that record.
 - `media.canecorsoancestry.com` — the existing private, HMAC-signed R2 gateway.
 
 Cloudflare must first show the zone as **Active**. At Spaceship set the exact
 two nameservers assigned **to this zone** by Cloudflare; do not guess or use
 the nameservers assigned to a different site. Cloudflare Workers Custom
 Domains create their proxied DNS records and TLS certificates on deployment.
-Remove any conflicting CNAME records for the same host first.
+Retain the working DNS-managed `www` redirect; do not delete its DNS records.
 
 **Required release order:** Active Cloudflare zone → deploy and verify site
 and media Custom Domains/TLS → verify real Django login, /healthz/,

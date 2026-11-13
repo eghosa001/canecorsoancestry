@@ -21,7 +21,7 @@ wrangler = tomllib.loads((ROOT / "wrangler.site.toml").read_text())
 vars_ = wrangler["vars"]
 assert wrangler["name"] == "canecorsoancestry-site-edge"
 assert registry["public_endpoint"] == "https://canecorsoancestry.com"
-assert {r["pattern"] for r in wrangler["routes"]} == {"canecorsoancestry.com", "www.canecorsoancestry.com"}
+assert {r["pattern"] for r in wrangler["routes"]} == {"canecorsoancestry.com"}
 assert all(r["custom_domain"] for r in wrangler["routes"])
 assert vars_["ORIGIN_URL"] == "http://127.0.0.1:18080"
 assert vars_["ORIGIN_TRANSPORT"] == "private-vpc"
