@@ -200,7 +200,7 @@ class PublicThemeRegressionTests(TestCase):
         self.assertIsNotNone(caches['public'].get("cca:home:public-stats:v4"))
 
     def test_home_caches_diverse_featured_dogs(self):
-        caches['public'].delete("cca:home:featured-dog-ids:v1")
+        caches['public'].delete("cca:home:featured-dog-ids:v2")
         kennel = Kennel.objects.create(name="Featured Kennel", slug="featured-kennel")
         first = Dog.objects.create(
             name="Featured First",
@@ -236,12 +236,12 @@ class PublicThemeRegressionTests(TestCase):
         self.assertIn(other.name, names)
         self.assertNotIn(second.name, names)
         self.assertEqual(
-            caches['public'].get("cca:home:featured-dog-ids:v1"),
+            caches['public'].get("cca:home:featured-dog-ids:v2"),
             [first.pk, other.pk],
         )
 
     def test_home_falls_back_when_one_kennel_dominates_fast_candidates(self):
-        caches['public'].delete("cca:home:featured-dog-ids:v1")
+        caches['public'].delete("cca:home:featured-dog-ids:v2")
         dominant = Kennel.objects.create(name="Dominant Kennel", slug="dominant-kennel")
         for index in range(96):
             dog = Dog.objects.create(
@@ -294,7 +294,10 @@ class PublicThemeRegressionTests(TestCase):
         self.assertContains(response, "Pedigree · Bloodline · Heritage")
         self.assertContains(response, "Discover the ancestry behind the breed.")
         self.assertContains(response, "evergreen-heritage.css?v=20261024-heritage-v1")
-        self.assertContains(response, '<button class="theme-toggle', count=3)
+        self.assertContains(response, 'data-theme="dark"')
+        self.assertContains(response, '<meta name="theme-color" content="#090a09">')
+        self.assertNotContains(response, 'data-theme-toggle')
+        self.assertNotContains(response, 'cca-theme')
         self.assertContains(response, "Countries")
         self.assertContains(response, "site.css?v=20261017-pairing-dashboard-v90")
         self.assertContains(response, "premium-polish.css?v=20261007-interaction-v50")
