@@ -1,14 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Member access · Cane Corso Ancestry{% endblock %}
+{% block title %}Sign in · Cane Corso Ancestry{% endblock %}
 {% block content %}
 <section class="auth-shell">
   <div class="auth-card">
-    <p class="eyebrow">Member access</p>
+    <p class="eyebrow">Account access</p>
     <h1>Sign in</h1>
+    <p class="muted">Members and authorised staff can sign in with their account email or username.</p>
     {% if form.errors %}<p class="form-error">The email or password was not accepted.</p>{% endif %}
     <form method="post">
       {% csrf_token %}
-      <label for="{{ form.username.id_for_label }}">Email</label>
+      <label for="{{ form.username.id_for_label }}">Email or username</label>
       {{ form.username }}
       <label for="{{ form.password.id_for_label }}">Password</label>
       {{ form.password }}
@@ -16,6 +17,7 @@
       <button class="btn btn-gold" type="submit">Sign in</button>
     </form>
     <p class="muted"><a class="text-link" href="{% url 'password_reset' %}">Forgot your password?</a>{% if account_email_enabled %} · <a class="text-link" href="{% url 'accounts:resend-verification' %}">Resend verification</a>{% endif %}</p>
+    <p class="muted">Super Admin? <a class="text-link" href="{% url 'admin:login' %}">Open administration sign-in</a>. Moderators should use the form above.</p>
     <p class="muted">New here? <a class="text-link" href="{% url 'accounts:signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create a member account</a>.</p>
   </div>
 </section>
