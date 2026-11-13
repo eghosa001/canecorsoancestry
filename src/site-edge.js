@@ -393,20 +393,20 @@ button{width:100%;margin-top:18px;border:0;border-radius:10px;background:var(--g
 <main>
 <div class="brand"><div class="mark" aria-hidden="true">C</div><strong>Cane Corso Ancestry</strong></div>
 <section class="card">
-<p class="eyebrow">Member access</p>
+<p class="eyebrow">Account access</p>
 <h1>Sign in</h1>
 <p class="sub">You can enter your details now. The secure Django service is starting in the background.</p>
 <form method="post" action="">
 <input type="hidden" name="csrfmiddlewaretoken" value="${token}">
 ${nextField}
-<label for="id_username">Email</label>
-<input id="id_username" name="username" type="email" autocomplete="email" autofocus required>
+<label for="id_username">Email or username</label>
+<input id="id_username" name="username" type="text" autocomplete="username" autocapitalize="none" autofocus required>
 <label for="id_password">Password</label>
 <input id="id_password" name="password" type="password" autocomplete="current-password" required>
 <button id="submit" type="submit">Sign in</button>
 </form>
 <div class="status" id="status" role="status" aria-live="polite"><span class="dot"></span><span>Preparing secure sign-in…</span></div>
-<p class="links"><a href="/member/signup/">Create a member account</a></p>
+<p class="links"><a href="/member/signup/">Create a member account</a> · <a href="/admin/login/">Super Admin sign-in</a></p>
 </section>
 </main>
 <script>
