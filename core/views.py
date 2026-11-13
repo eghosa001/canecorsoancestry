@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import logging
 import os
+import random
 import time
 import uuid
 from urllib.parse import urlparse
@@ -18,6 +19,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.urls import reverse
+from django.utils import timezone
 
 from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
 from registry.permissions import can_manage_verification, can_review_submissions, is_staff_identity
@@ -222,8 +224,8 @@ def robots_txt(request):
 
 
 def _load_featured_dogs():
-    """Return four popular imaged dogs without a whole-table window sort."""
-    cache_key = "cca:home:featured-dog-ids:v1"
+    """Rotate four genuine, public, imaged dogs without an expensive random SQL sort."""
+    cache_key = "cca:home:featured-dog-ids:v2"
     featured_ids = caches["public"].get(cache_key)
 
     def load(ids):
@@ -254,6 +256,9 @@ def _load_featured_dogs():
         .order_by("-search_count", "-updated_at", "name")
         .values_list("pk", "kennel_id")[:96]
     )
+    # Shuffle a bounded set in Python; never ORDER BY RANDOM() over the
+    # entire live pedigree table. A daily seed keeps cards stable for visitors.
+    random.Random(timezone.localdate().isoformat()).shuffle(candidate_rows)
     seen_groups = set()
     featured_ids = []
     for dog_id, kennel_id in candidate_rows:
