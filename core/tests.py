@@ -329,14 +329,14 @@ class FormControlContrastTests(TestCase):
 
 
 class OriginalDarkThemeReversionTests(TestCase):
-    def test_legacy_dark_assets_are_theme_scoped_and_current_light_remains(self):
+    def test_legacy_dark_assets_load_from_first_paint(self):
         page = self.client.get(reverse("home"))
         self.assertContains(page, "evergreen-heritage.css?v=20261024-heritage-v1")
         self.assertContains(page, "pre-figma-dark.css?v=20261024-original-dark-v1")
         self.assertContains(page, "data-legacy-dark-stylesheet", count=4)
-        self.assertContains(page, 'media="not all"', count=3)
+        self.assertContains(page, 'media="all"', count=3)
         self.assertContains(page, 'core/structured-pages.css')
-        self.assertContains(page, 'data-theme="light"')
+        self.assertContains(page, 'data-theme="dark"')
 
     def test_original_dark_colors_and_headings_are_explicit(self):
         css = Path(finders.find("core/pre-figma-dark.css")).read_text(encoding="utf-8")
