@@ -30,13 +30,11 @@ def run():
             page.on("pageerror", lambda e: errors.append(str(e)))
             go(page, "/")
             assert page.locator(".site-header").is_visible()
-            # Theme regression: Oct 17 original charcoal/gold on dark only.
-            # Existing Evergreen light mode remains visually unchanged.
-            theme_button = page.locator(".mobile-header-theme")
+            # Dark is the owner's only approved visitor theme. It must load
+            # before any interaction, including on iPhone Safari.
+            assert page.locator(".theme-toggle").count() == 0, "Obsolete theme switch is still visible"
             assert page.evaluate("""() => [...document.querySelectorAll('[data-legacy-dark-stylesheet]')]
-              .every(link => link.media === 'not all')"""), "Old CSS leaked into light mode"
-            theme_button.tap()
-            page.wait_for_load_state("networkidle")
+              .every(link => link.media === 'all')"""), "Dark CSS not active from first paint"
             dark = page.evaluate("""() => ({
               active: document.documentElement.dataset.theme,
               stylesEnabled: [...document.querySelectorAll('[data-legacy-dark-stylesheet]')]
@@ -61,27 +59,6 @@ def run():
                 f"Dark typeface mix differs from pre-Figma: {dark_fonts}"
             )
             assert "Georgia" in dark["font"], f"Original serif identity not restored: {dark}"
-            theme_button.tap()
-            light = page.evaluate("""() => ({
-              active: document.documentElement.dataset.theme,
-              stylesDisabled: [...document.querySelectorAll('[data-legacy-dark-stylesheet]')]
-                .every(link => link.media === 'not all'),
-              canvas: getComputedStyle(document.documentElement).getPropertyValue('--cca-canvas').trim(),
-            })""")
-            assert light["active"] == "light" and light["stylesDisabled"], f"Light mode was altered: {light}"
-            assert light["canvas"] == "#f2f1ea", f"Light theme colors changed: {light}"
-            light_fonts = page.evaluate("""() => ({
-              heading: getComputedStyle(document.querySelector('.hero h1')).fontFamily,
-              headingWeight: getComputedStyle(document.querySelector('.hero h1')).fontWeight,
-              body: getComputedStyle(document.body).fontFamily,
-              brand: getComputedStyle(document.querySelector('.brand')).fontFamily,
-            })""")
-            assert "Georgia" in light_fonts["heading"] and light_fonts["headingWeight"] == "600", (
-                f"Light homepage hero no longer uses its original Georgia weight: {light_fonts}"
-            )
-            assert "Georgia" in light_fonts["brand"] and "Inter" in light_fonts["body"], (
-                f"Light typeface mix differs from pre-Figma: {light_fonts}"
-            )
             featured_cards = page.locator(".featured-dog-grid .dog-card")
             assert featured_cards.count(), "Mobile fixture has no popular dog cards to inspect"
             featured_shape = page.evaluate("""() => {

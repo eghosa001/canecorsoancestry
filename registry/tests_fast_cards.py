@@ -129,7 +129,7 @@ class FastPublicDogCardTests(TestCase):
         DogRegistration.objects.create(
             dog=dog, authority=None, number="NOAUTH-771",
         )
-        caches["public"].delete("cca:home:featured-dog-ids:v1")
+        caches["public"].delete("cca:home:featured-dog-ids:v2")
         home = self.client.get("/")
         self.assertEqual(home.status_code, 200)
         self.assertContains(home, dog.name)

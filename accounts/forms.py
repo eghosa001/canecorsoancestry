@@ -261,17 +261,24 @@ class VerificationResendForm(forms.Form):
 
 
 class EmailAuthenticationForm(AuthenticationForm):
-    username = forms.EmailField(
-        label="Email",
-        widget=forms.EmailInput(attrs={"autocomplete": "email"}),
+    """Accept the dedicated account username or its email without changing roles."""
+
+    username = forms.CharField(
+        label="Email or username",
+        widget=forms.TextInput(attrs={"autocomplete": "username", "autocapitalize": "none"}),
     )
 
     def clean(self):
-        email = (self.cleaned_data.get("username") or "").strip().lower()
-        if email:
-            user = get_user_model().objects.filter(email__iexact=email).only("username").first()
-            if user:
-                self.cleaned_data["username"] = user.get_username()
+        login_value = (self.cleaned_data.get("username") or "").strip()
+        if "@" in login_value:
+            # Only resolve an unambiguous email. Never choose a different
+            # identity arbitrarily when legacy accounts share an address.
+            usernames = list(
+                get_user_model().objects.filter(email__iexact=login_value)
+                .values_list("username", flat=True)[:2]
+            )
+            if len(usernames) == 1:
+                self.cleaned_data["username"] = usernames[0]
         return super().clean()
 
 
