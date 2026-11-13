@@ -212,7 +212,7 @@ jobs:
           for attempt in $(seq 1 30); do
             page_status="$(curl --connect-timeout 4 --max-time 8 -sS -H 'Accept: text/html' -o /tmp/edge-page.html -w '%{http_code}' "$base/" || true)"
             if [ "$page_status" = "200" ] &&
-               grep -q 'data-ui-version="customer-v49"' /tmp/edge-page.html &&
+               grep -q 'data-ui-version="evergreen-heritage-v1"' /tmp/edge-page.html &&
                grep -q 'cane-corso-head-logo-right.webp' /tmp/edge-page.html &&
                grep -q '20261004-headlogo-v64' /tmp/edge-page.html &&
                grep -q "$expected_premium_marker" /tmp/edge-page.html &&
