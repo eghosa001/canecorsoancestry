@@ -6,6 +6,37 @@ from urllib.parse import urlparse
 
 
 class AccountRecoveryTests(TestCase):
+    def test_regular_sign_in_accepts_email_and_username(self):
+        user = get_user_model().objects.create_user(
+            username="signin-member", email="signin-member@example.test", password="Member-password-123",
+        )
+        for identity in ("signin-member@example.test", "signin-member"):
+            with self.subTest(identity=identity):
+                self.client.logout()
+                response = self.client.post(reverse("login"), {
+                    "username": identity, "password": "Member-password-123",
+                })
+                self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
+                self.assertEqual(str(self.client.session["_auth_user_id"]), str(user.pk))
+
+    def test_super_admin_can_sign_in_from_public_site_by_username(self):
+        owner = get_user_model().objects.create_superuser(
+            username="admin-without-email", email="", password="Admin-password-123",
+        )
+        response = self.client.post(reverse("login"), {
+            "username": "admin-without-email", "password": "Admin-password-123",
+        })
+        self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
+        self.assertEqual(str(self.client.session["_auth_user_id"]), str(owner.pk))
+        admin_response = self.client.get(reverse("admin:index"))
+        self.assertEqual(admin_response.status_code, 200)
+
+    def test_sign_in_explains_staff_and_super_admin_access(self):
+        response = self.client.get(reverse("login"))
+        self.assertContains(response, "Email or username")
+        self.assertContains(response, reverse("admin:login"))
+        self.assertContains(response, "Moderators should use the form above.")
+
     @override_settings(ACCOUNT_EMAIL_ENABLED=False)
     def test_login_keeps_password_recovery_discoverable_when_email_is_disabled(self):
         response = self.client.get(reverse("login"))
