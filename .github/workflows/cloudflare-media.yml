@@ -2,6 +2,7 @@ name: Cloudflare R2 media gateway
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, closed]
     paths:
       - "src/r2-media.js"
       - "wrangler.r2.toml"
@@ -25,6 +26,7 @@ concurrency:
 
 jobs:
   validate:
+    if: github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -40,7 +42,9 @@ jobs:
         run: npx --yes wrangler@4 deploy --dry-run --config wrangler.r2.toml
 
   deploy-r2:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name != 'pull_request' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main')
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -92,7 +96,7 @@ jobs:
       - name: Verify R2 media gateway
         shell: bash
         run: |
-          base="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
+          base="https://media.canecorsoancestry.com"
 
           for attempt in $(seq 1 12); do
             status="$(curl --connect-timeout 10 --max-time 20 -sS -o /tmp/r2-health.json -w '%{http_code}' "$base/healthz/" || true)"
@@ -118,7 +122,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
+          base="https://media.canecorsoancestry.com"
           empty_digest="$(printf '' | sha256sum | awk '{print $1}')"
           for key in "dogs/bellissimo/karma-custodi-nos.webp" "dogs/archive/111/111524.jpg" "dogs/archive/026/26098.jpg" "dogs/archive/014/14125.jpg"; do
             timestamp="$(date +%s)"
@@ -141,7 +145,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
+          base="https://media.canecorsoancestry.com"
           key="smoke/uploads/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.txt"
           body="cca-r2-write-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           digest="$(printf '%s' "$body" | sha256sum | awk '{print $1}')"
@@ -190,7 +194,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base="https://canecorsoancestry-edge.aighewieghosa111.workers.dev"
+          base="https://media.canecorsoancestry.com"
           key="smoke/uploads/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.jpg"
           python - <<'PY'
           import base64
