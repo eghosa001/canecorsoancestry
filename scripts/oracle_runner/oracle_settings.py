@@ -5,6 +5,10 @@ from django.core.exceptions import ImproperlyConfigured
 
 from config.settings.production import *  # noqa: F403,F401
 
+# Billing support contact approved for the public production site. Allow the
+# repository variable to override it; an unset/blank value uses this address.
+SUPPORT_EMAIL = os.getenv("CCA_SUPPORT_EMAIL", "").strip() or "canecorsoancestry@gmail.com"
+
 # Cloudflare Worker should never retain the root Django SECRET_KEY. This
 # credential is domain-separated by HMAC during deployment.
 ORIGIN_EDGE_SECRET = os.getenv("CCA_ORIGIN_EDGE_SECRET", "").strip()
