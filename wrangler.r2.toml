@@ -3,6 +3,10 @@ main = "src/r2-media.js"
 compatibility_date = "2026-10-01"
 workers_dev = true
 
+[[routes]]
+pattern = "media.canecorsoancestry.com"
+custom_domain = true
+
 [observability]
 enabled = true
 
