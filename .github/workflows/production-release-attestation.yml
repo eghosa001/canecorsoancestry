@@ -33,13 +33,17 @@ jobs:
           python-version: "3.13"
       - name: Validate release-attestation policy
         run: python -m unittest scripts.tests.test_live_release_attestation -v
-      - name: Compare Cloudflare Django health to latest main SHA
+      - name: Compare Cloudflare Django health to latest deployable Django SHA
         if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
-          expected_sha="$(git rev-parse HEAD)"
-          commit_epoch="$(git show -s --format=%ct HEAD)"
+          expected_sha="$(git log -1 --format=%H HEAD -- accounts config core pedigrees registry templates manage.py requirements.txt Dockerfile scripts/oracle_runner)"
+          if [[ ! "$expected_sha" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "::error::Could not identify the latest deployable Django source commit."
+            exit 1
+          fi
+          commit_epoch="$(git show -s --format=%ct "$expected_sha")"
           python scripts/verify_live_release.py \
             --expected-sha "$expected_sha" \
             --commit-epoch "$commit_epoch" \

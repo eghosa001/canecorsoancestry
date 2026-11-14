@@ -25,7 +25,7 @@ def classify_attestation(payload, expected_sha, *, commit_epoch, now_epoch=None,
         return "failure", "The live application is not verified against Oracle-local PostgreSQL."
     current = payload.get("release")
     if current == expected_sha:
-        return "success", "Live Oracle Django release matches current main."
+        return "success", "Live Oracle Django release matches the latest deployable Django source on main."
     now = time.time() if now_epoch is None else now_epoch
     age = max(0, now - commit_epoch)
     if age < grace_seconds:

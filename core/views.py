@@ -256,19 +256,15 @@ def _load_featured_dogs():
         .order_by("-search_count", "-updated_at", "name")
         .values_list("pk", "kennel_id")[:96]
     )
-    # Shuffle a bounded set in Python; never ORDER BY RANDOM() over the
-    # entire live pedigree table. A daily seed keeps cards stable for visitors.
-    random.Random(timezone.localdate().isoformat()).shuffle(candidate_rows)
-    seen_groups = set()
-    featured_ids = []
+    # Keep the highest-ranked dog within each kennel, then rotate kennel
+    # groups daily. Never ORDER BY RANDOM() over the entire live pedigree table.
+    best_by_group = {}
     for dog_id, kennel_id in candidate_rows:
         group_id = kennel_id or dog_id
-        if group_id in seen_groups:
-            continue
-        seen_groups.add(group_id)
-        featured_ids.append(dog_id)
-        if len(featured_ids) == 4:
-            break
+        best_by_group.setdefault(group_id, dog_id)
+    diverse_candidates = list(best_by_group.values())
+    random.Random(timezone.localdate().isoformat()).shuffle(diverse_candidates)
+    featured_ids = diverse_candidates[:4]
 
     if len(featured_ids) < 4 and len(candidate_rows) == 96:
         # The fast candidate set normally finds four kennel-diverse cards.

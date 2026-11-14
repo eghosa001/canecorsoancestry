@@ -49,8 +49,9 @@ CSP = "; ".join(
         "media-src 'self' https:",
         "font-src 'self' data:",
         "style-src 'self' 'unsafe-inline'",
-        "script-src 'self' 'unsafe-inline'",
-        "connect-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
+        "connect-src 'self' https://cloudflareinsights.com",
+
     ]
 )
 

@@ -116,16 +116,9 @@ def public_routes(page, label):
     response = visit(page, "/dogs/suggestions/?q=" + quote("Browser Audit Sire"))
     assert "Browser Audit Sire" in response.text(), "Published dog missing from autocomplete"
     visit(page, "/")
-    assert_original_readable_type(page, label + "-light")
-    if page.viewport_size["width"] <= 760:
-        page.locator(".mobile-nav > summary").click()
-        theme = page.locator(".mobile-nav-panel [data-theme-toggle]").first
-    else:
-        theme = page.locator("[data-theme-toggle]").first
-    before = page.locator("html").get_attribute("data-theme")
-    theme.click()
-    after = page.locator("html").get_attribute("data-theme")
-    assert before != after, f"Theme toggle inactive: {before} to {after}"
+    active_theme = page.locator("html").get_attribute("data-theme")
+    assert active_theme == "dark", f"Visitor theme must be dark from first render: {active_theme}"
+    assert page.locator("[data-theme-toggle]").count() == 0, "The owner-approved site has no theme switch"
     assert_original_readable_type(page, label + "-dark")
     page.screenshot(path=OUT / f"{label}-home.png", full_page=True)
 
