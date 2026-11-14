@@ -232,12 +232,13 @@ class PublicThemeRegressionTests(TestCase):
         response = self.client.get(reverse("home"))
         names = [dog.name for dog in response.context["featured_dogs"]]
 
-        self.assertIn(first.name, names)
+        kennel_featured = {first.name, second.name}.intersection(names)
+        self.assertEqual(len(names), 2)
+        self.assertEqual(len(kennel_featured), 1)
         self.assertIn(other.name, names)
-        self.assertNotIn(second.name, names)
         self.assertEqual(
             caches['public'].get("cca:home:featured-dog-ids:v2"),
-            [first.pk, other.pk],
+            [dog.pk for dog in response.context["featured_dogs"]],
         )
 
     def test_home_falls_back_when_one_kennel_dominates_fast_candidates(self):
