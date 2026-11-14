@@ -2,7 +2,7 @@ name: Production data health
 
 on:
   workflow_run:
-    workflows: ["Cloudflare site edge", "Oracle Django production release (CI-gated)"]
+    workflows: ["Cloudflare site edge", "Oracle Django production release (CI-gated)", "Full release audit"]
     types: [completed]
   workflow_dispatch:
   push:
@@ -43,7 +43,7 @@ jobs:
   audit:
     if: >-
       github.event_name != 'pull_request' &&
-      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+      (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'))
     runs-on: [self-hosted, linux, arm64, cca-oracle]
     timeout-minutes: 15
     env:
@@ -123,7 +123,7 @@ jobs:
       - name: Measure public pedigree, photograph and reviewed-evidence coverage
         # A workflow change can trigger before the new Django container is staged.
         # Run only once the updated Oracle release is available, or by manual/schedule.
-        if: github.event_name != 'push' && (github.event_name != 'workflow_run' || github.event.workflow_run.name == 'Oracle Django production release (CI-gated)')
+        if: github.event_name != 'push' && (github.event_name != 'workflow_run' || (github.event.workflow_run.name == 'Oracle Django production release (CI-gated)' || (github.event.workflow_run.name == 'Full release audit' && github.event.workflow_run.head_branch == 'main')))
         run: |
           # Read-only: report published aggregate counts, never dog identities.
           # Source attachment is not equivalent to independent verification.
