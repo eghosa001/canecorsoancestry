@@ -282,7 +282,7 @@ jobs:
           from urllib.request import Request, urlopen
 
           SITE = os.environ["PUBLIC_SITE"].rstrip("/")
-          EDGE_HOST = "canecorsoancestry-edge.aighewieghosa111.workers.dev"
+          EDGE_HOST = "media.canecorsoancestry.com"
           HEADERS = {"User-Agent": "Mozilla/5.0 CCA-Live-Image-Audit/1.0"}
 
           class Images(HTMLParser):
