@@ -83,6 +83,7 @@ const env = {
       return { httpEtag: '"stored"' };
     },
     async delete(askedKey) {
+      if (askedKey === key) return;  // Simulated source removal in the mock.
       assert.match(askedKey, /^cca-photo-renditions\/direct-v2\/[a-f0-9]{64}\/(thumb|card|portrait)\.webp$/);
       renditions.delete(askedKey);
     },
