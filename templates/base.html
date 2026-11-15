@@ -28,6 +28,13 @@
       image.setAttribute("data-media-fallback-used", "1");
       image.removeAttribute("srcset");
       image.removeAttribute("sizes");
+      // A <picture><source> overrides img.src on phones. Drop failed signed
+      // sources so a permission-checked original can actually render.
+      if (image.parentElement?.tagName === "PICTURE") {
+        image.parentElement.querySelectorAll("source").forEach(function (source) {
+          source.remove();
+        });
+      }
       image.src = fallback;
     }, true);
   </script>
