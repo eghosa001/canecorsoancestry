@@ -33,8 +33,21 @@ def probe(browser, url, name, mobile=False):
         reduced_motion="reduce",
     )
     page = context.new_page()
+    observed_images = []
+    def on_response(response):
+        if "/_thumb/" in response.url:
+            headers = response.headers
+            observed_images.append({
+                "variant": headers.get("x-cca-image-variant", ""),
+                "cache": headers.get("x-cca-image-cache", ""),
+                "type": headers.get("content-type", "").split(";", 1)[0],
+                "size": headers.get("content-length", "?"),
+                "status": response.status,
+            })
+    page.on("response", on_response)
     try:
         for pass_number in (1, 2):
+            observed_images.clear()
             page.goto(url, wait_until="domcontentloaded", timeout=45000)
             photo = page.locator("[data-dog-photo-main]").first
             photo.wait_for(state="attached", timeout=12000)
@@ -60,8 +73,16 @@ def probe(browser, url, name, mobile=False):
                     photoVariant: src.searchParams.get('variant') || 'source',
                     imageTransferMs: resource ? Math.round(resource.duration) : null,
                     naturalWidth: photo.naturalWidth,
+                    paintEntries: performance.getEntriesByType('paint').map(e =>
+                        [e.name, Math.round(e.startTime)]),
+
                 };
             }""")
+            fcp_ms = next((v for k, v in metrics["paintEntries"]
+                           if k == "first-contentful-paint"), 0)
+            selected = next((r for r in observed_images if
+                             r["variant"] == metrics["photoVariant"] or
+                             r["variant"] == "original-fallback"), {})
             print(
                 "PHOTO-PERF " + " ".join(
                     f"{key}={val}" for key, val in {
@@ -74,10 +95,18 @@ def probe(browser, url, name, mobile=False):
                         "image_after_dom_ms": max(
                             0, metrics["visibleMs"] - metrics["domMs"]
                         ),
+                        "first_contentful_paint_ms": fcp_ms,
+                        "image_after_first_paint_ms": max(
+                            0, metrics["visibleMs"] - fcp_ms
+                        ),
                         "image_request_ms": metrics["imageTransferMs"],
                         "image_host": metrics["imageHost"],
                         "variant": metrics["photoVariant"],
                         "decoded_width": metrics["naturalWidth"],
+                        "media_response_variant": selected.get("variant", "browser-cache"),
+                        "media_response_cache": selected.get("cache", "browser-cache"),
+                        "media_response_type": selected.get("type", "browser-cache"),
+                        "media_response_bytes": selected.get("size", "?"),
                     }.items()
                 ),
                 flush=True,
