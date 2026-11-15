@@ -13,7 +13,7 @@
     <section class="member-form-target" aria-label="Dog being managed">
       <div class="member-form-target-media">
         {% if current_photo_url %}
-          <img src="{{ current_photo_url }}" alt="{{ dog.name }}" loading="eager" decoding="async"{% if "canecorsopedigree.com" in current_photo_url %} referrerpolicy="no-referrer"{% endif %}>
+          <img src="{% if '/media/dogs/' in current_photo_url %}{{ current_photo_url }}?variant=card{% else %}{{ current_photo_url }}{% endif %}" data-media-fallback="{{ current_photo_url }}" alt="{{ dog.name }}" loading="eager" decoding="async"{% if "canecorsopedigree.com" in current_photo_url %} referrerpolicy="no-referrer"{% endif %}>
         {% else %}
           <div class="media-placeholder"><span>CCA</span><small>No approved photo yet</small></div>
         {% endif %}
@@ -43,7 +43,7 @@
       <button class="dog-photo-gallery-item photo-report-pick" type="button"
               data-select-report-image="{{ photo.pk }}" aria-pressed="false"
               aria-label="Select photo {{ forloop.counter }} of {{ dog.name }} for review">
-        <img src="{{ photo.image.url }}" alt="Photo {{ forloop.counter }} of {{ dog.name }}" loading="lazy" decoding="async">
+        <img src="{{ photo.image.url }}?variant=thumb" data-media-fallback="{{ photo.image.url }}" alt="Photo {{ forloop.counter }} of {{ dog.name }}" {% if forloop.counter <= 4 %}loading="eager"{% else %}loading="lazy"{% endif %} decoding="async">
         <span data-photo-report-label="{% if photo.is_primary %}Main photo{% else %}Photo {{ forloop.counter }}{% endif %}">{% if photo.is_primary %}Main photo{% else %}Photo {{ forloop.counter }}{% endif %} · Select for review</span>
       </button>
       {% endfor %}
