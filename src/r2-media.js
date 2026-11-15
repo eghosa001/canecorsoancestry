@@ -171,7 +171,10 @@ async function handleR2Gateway(request, env, url, ctx) {
 
   if (verification.method === "GET") {
     const object = await env.MEDIA_BUCKET.get(key);
-    if (!object) return new Response("Not found", { status: 404 });
+    if (!object) return new Response("Not found", {
+      status: 404,
+      headers: { "cache-control": "private, no-store" },
+    });
     return new Response(object.body, {
       status: 200,
       headers: r2Headers(object),
@@ -180,7 +183,10 @@ async function handleR2Gateway(request, env, url, ctx) {
 
   if (verification.method === "HEAD") {
     const object = await env.MEDIA_BUCKET.head(key);
-    if (!object) return new Response(null, { status: 404 });
+    if (!object) return new Response(null, {
+      status: 404,
+      headers: { "cache-control": "private, no-store" },
+    });
     return new Response(null, {
       status: 200,
       headers: r2Headers(object),
