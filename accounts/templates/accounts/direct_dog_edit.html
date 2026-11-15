@@ -24,7 +24,7 @@
   {% if can_publish_dog %}
   <section class="panel" id="dog-visibility-only" aria-labelledby="dog-visibility-only-heading">
     <h2 id="dog-visibility-only-heading">Publish or unpublish only</h2>
-    <p class="muted">Change this dog's visibility without resubmitting unrelated details. Changes take effect after a successful save.</p>
+    <p class="muted">All saved details and individual health-result settings remain unchanged. Change visibility without resubmitting the long editor. Changes take effect after a successful save.</p>
     {% if publication_blockers and not dog.is_public %}
     <div class="notice" role="alert">
       <strong>Publication currently blocked</strong>
