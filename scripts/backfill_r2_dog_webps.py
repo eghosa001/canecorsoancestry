@@ -7,6 +7,7 @@ The Cloudflare REST API token is used for listing object names only.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import base64
 import hashlib
 import hmac
@@ -190,7 +191,13 @@ def main():
     parser.add_argument("--limit", type=int, default=80)
     parser.add_argument("--max-scan", type=int, default=6000)
     parser.add_argument("--sample-only", action="store_true")
+    parser.add_argument("--shard-count", type=int, default=1)
+    parser.add_argument("--shard-index", type=int, default=0)
+    parser.add_argument("--workers", type=int, default=1)
     args = parser.parse_args()
+    if (args.shard_count < 1 or not 0 <= args.shard_index < args.shard_count
+            or args.workers < 1 or args.workers > 4 or args.limit < 1):
+        parser.error("Invalid shard/worker/limit argument")
     if not os.environ.get("DJANGO_SECRET_KEY"):
         raise RuntimeError("Secure R2 gateway signing key is missing")
 
@@ -205,8 +212,14 @@ def main():
     if args.sample_only:
         return
     try:
-        keys = list_source_keys(args.max_scan)
-        print(f"PHOTO_BACKFILL_LIST discovered={len(keys)}", flush=True)
+        all_keys = list_source_keys(args.max_scan)
+        keys = [
+            key for index, key in enumerate(all_keys)
+            if index % args.shard_count == args.shard_index and key != SAMPLE
+        ]
+        print(f"PHOTO_BACKFILL_LIST discovered={len(all_keys)} "
+              f"shard={args.shard_index}/{args.shard_count} selected={len(keys)}",
+              flush=True)
     except Exception as exc:
         print("PHOTO_BACKFILL_LIST unavailable; targeted sample was repaired "
               f"(reason={type(exc).__name__})", flush=True)
@@ -214,25 +227,47 @@ def main():
 
     stats = {"optimized": 0, "already_ready": 0, "failed": 0}
     total_written = 0
-    for key in keys:
-        if key == SAMPLE:
-            continue
-        if stats["optimized"] >= args.limit:
-            break
-        try:
-            status, _, size = optimize_one(key)
-            if status in stats:
-                stats[status] += 1
-            else:
-                stats["failed"] += 1
-            total_written += size
-        except Exception:
+
+    def count_outcome(status, size):
+        nonlocal total_written
+        if status in stats:
+            stats[status] += 1
+        else:
             stats["failed"] += 1
+        total_written += size
         total = sum(stats.values())
         if total and total % 25 == 0:
             print(f"PHOTO_BACKFILL_PROGRESS scanned={total} "
                   f"optimized={stats['optimized']} already={stats['already_ready']} "
                   f"failed={stats['failed']}", flush=True)
+
+    if args.workers == 1:
+        # Scheduled maintenance continues until it finds the requested count
+        # of missing images. Already-optimized entries do not waste its quota.
+        for key in keys:
+            if stats["optimized"] >= args.limit:
+                break
+            try:
+                status, _, size = optimize_one(key)
+                count_outcome(status, size)
+            except Exception:
+                count_outcome("failed", 0)
+    else:
+        # Cloud-hosted one-time bulk backfill: disjoint sharded source sets,
+        # bounded worker concurrency and a finite number of candidates.
+        # No original objects are overwritten or published.
+        with ThreadPoolExecutor(max_workers=args.workers) as pool:
+            work = {
+                pool.submit(optimize_one, key): key
+                for key in keys[:args.limit]
+            }
+            for future in as_completed(work):
+                try:
+                    status, _, size = future.result()
+                    count_outcome(status, size)
+                except Exception:
+                    count_outcome("failed", 0)
+
     print("PHOTO_BACKFILL_TOTAL "
           f"optimized={stats['optimized']} already={stats['already_ready']} "
           f"failed={stats['failed']} bytes_written={total_written}",
