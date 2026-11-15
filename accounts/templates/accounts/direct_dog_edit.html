@@ -24,7 +24,7 @@
   {% if can_publish_dog %}
   <section class="panel" id="dog-visibility-only" aria-labelledby="dog-visibility-only-heading">
     <h2 id="dog-visibility-only-heading">Publish or unpublish only</h2>
-    <p class="muted">Publish an incomplete record as it is. Missing photos, parent details, certificates or source documents will not prevent publication. Existing details and health results remain unchanged.</p>
+    <p class="muted">Publish an incomplete record as it is. Missing photos, parent details, certificates or source documents will not prevent publication. All saved details and individual health-result settings remain unchanged.</p>
     <form method="post" action="{% url 'accounts:dog-set-public-visibility' dog.pk %}" class="member-form">
       {% csrf_token %}
       <input type="hidden" name="version" value="{{ version }}">
