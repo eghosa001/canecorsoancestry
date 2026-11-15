@@ -9,7 +9,11 @@
   <link rel="stylesheet" href="{% static 'core/breed-dna.css' %}?v=20261101-orthopedic-screening-v6">
   {% if dog.display_images %}<meta property="og:image" content="{{ dog.display_images.0.image.url }}?v=20261002-2">{% elif dog.source_image_url %}<meta property="og:image" content="{{ dog.source_image_url }}">{% endif %}
   <script type="application/ld+json">{{ structured_data }}</script>
-  {% if dog.display_images %}<link rel="preload" as="image" href="{{ dog.display_images.0.image.url|dog_photo:'portrait' }}" imagesrcset="{{ dog.display_images.0.image.url|dog_photo:'card' }} 480w, {{ dog.display_images.0.image.url|dog_photo:'portrait' }} 960w" imagesizes="(max-width: 720px) 94vw, 650px">{% endif %}
+  {% if dog.display_images %}
+    {# The first visible phone photo is only 480px; the full-size portrait is reserved for desktop and deliberate enlargement. #}
+    <link rel="preload" as="image" media="(max-width: 760px)" href="{{ dog.display_images.0.image.url|dog_photo:'card' }}" fetchpriority="high">
+    <link rel="preload" as="image" media="(min-width: 761px)" href="{{ dog.display_images.0.image.url|dog_photo:'portrait' }}" fetchpriority="high">
+  {% endif %}
 {% endblock %}
 {% block content %}
 <section class="dog-profile page-shell">
@@ -27,14 +31,17 @@
            target="_blank" rel="noopener"
            aria-label="Enlarge photograph of {{ dog.name }}">
           {% if dog.display_images %}
-            <img class="dog-portrait-image" data-dog-photo-main
-                 data-media-fallback="{{ dog.display_images.0.image.url }}" src="{{ dog.display_images.0.image.url|dog_photo:'portrait' }}" srcset="{{ dog.display_images.0.image.url|dog_photo:'card' }} 480w, {{ dog.display_images.0.image.url|dog_photo:'portrait' }} 960w" sizes="(max-width: 720px) 94vw, 650px"
-                 alt="{{ dog.name }}{% if dog.display_images.0.public_caption %} — {{ dog.display_images.0.public_caption }}{% endif %}"
-                 loading="eager" fetchpriority="high" decoding="async">
+            <picture class="dog-portrait-responsive">
+              <source data-dog-hero-mobile-source media="(max-width: 760px)" srcset="{{ dog.display_images.0.image.url|dog_photo:'card' }}">
+              <img class="dog-portrait-image" data-dog-photo-main
+                   data-media-fallback="{{ dog.display_images.0.image.url }}" src="{{ dog.display_images.0.image.url|dog_photo:'portrait' }}"
+                   alt="{{ dog.name }}{% if dog.display_images.0.public_caption %} — {{ dog.display_images.0.public_caption }}{% endif %}"
+                   loading="eager" fetchpriority="high" decoding="sync">
+            </picture>
           {% else %}
             <img class="dog-portrait-image" data-dog-photo-main
                  src="{{ dog.source_image_url }}" alt="{{ dog.name }}"
-                 loading="eager" fetchpriority="high" decoding="async" referrerpolicy="no-referrer">
+                 loading="eager" fetchpriority="high" decoding="sync" referrerpolicy="no-referrer">
           {% endif %}
           <span class="dog-portrait-expand" aria-hidden="true">View larger ↗</span>
         </a>
