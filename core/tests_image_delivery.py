@@ -104,7 +104,7 @@ class DogPhotoDeliveryTests(TestCase):
         self.assertContains(response, 'media="(max-width: 760px)"')
         self.assertContains(response, 'media="(min-width: 761px)"')
         self.assertContains(response, 'data-dog-hero-mobile-source')
-        self.assertContains(response, 'srcset="/_thumb/dogs/photo-preview.jpg?variant=card')
+        self.assertContains(response, 'srcset="https://r2.example.workers.dev/_thumb/dogs/photo-preview.jpg?variant=card')
         self.assertContains(response, 'decoding="sync"')
         self.assertContains(response, 'class="dog-portrait-responsive"')
 
