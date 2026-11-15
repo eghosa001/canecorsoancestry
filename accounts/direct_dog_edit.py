@@ -56,49 +56,9 @@ def _is_staff_created_research_dog(dog):
     ).exists()
 
 
-def _has_staff_publication_source(dog):
-    """Only a saved documentary provenance record qualifies a staff archive dog."""
-    return DogSource.objects.filter(dog=dog).filter(
-        Q(source_url__gt="") | Q(document__gt="")
-    ).exists()
-
-
-def _staff_publication_basis(dog, attestation):
-    if not _is_staff_created_research_dog(dog):
-        return None
-    if attestation != "yes":
-        raise ValidationError(
-            "This staff-created record requires historical/research publication "
-            "attestation. Customer-owned listings must use paid member submissions."
-        )
-    if not _has_staff_publication_source(dog):
-        raise ValidationError(
-            "Add and save a documentary source URL or evidence file before "
-            "publishing this staff-created historical research record."
-        )
-    return "staff_historical_research"
-
-
-def _publication_preflight(dog):
-    """Show saved-record blockers before a moderator attempts to publish."""
-    needs_source = (
-        not dog.is_public
-        and _is_staff_created_research_dog(dog)
-        and not _has_staff_publication_source(dog)
-    )
-    blockers = []
-    if needs_source:
-        blockers.append(
-            "No saved documentary source. Add a source URL or evidence file "
-            "in Related information → Sources, save the record, then publish."
-        )
-    if not dog.is_public:
-        try:
-            dog.full_clean()
-        except ValidationError as exc:
-            blockers.extend(exc.messages)
-    return needs_source, blockers
-
+def _staff_publication_basis(dog):
+    """Mark an authorized direct staff publication without implying verification."""
+    return "staff_direct_publication" if _is_staff_created_research_dog(dog) else None
 
 def _candidate_change(field, value):
     if field in {"sire", "dam", "kennel", "litter"}:
@@ -665,12 +625,8 @@ def dog_set_public_visibility(request, pk):
     if action not in {"publish", "unpublish"}:
         messages.error(request, "Choose Publish or Unpublish.")
         return redirect("accounts:dog-direct-edit", pk=pk)
-    if request.POST.get("confirm_visibility") != "yes" or len(note) < 5:
-        messages.error(
-            request,
-            "Confirm the visibility change and provide a reason of at least 5 characters.",
-        )
-        return redirect("accounts:dog-direct-edit", pk=pk)
+    if not note:
+        note = "Published by authorized staff." if action == "publish" else "Unpublished by authorized staff."
 
     try:
         with transaction.atomic():
@@ -691,12 +647,12 @@ def dog_set_public_visibility(request, pk):
                 messages.info(request, "This publication decision is already in effect.")
                 return redirect("accounts:dog-direct-edit", pk=pk)
             publication_basis = (
-                _staff_publication_basis(dog, request.POST.get("historical_research_attestation"))
-                if make_public and not dog.is_public else None
+                _staff_publication_basis(dog) if make_public and not dog.is_public else None
             )
-            # No automatic 'verified' status is granted by publication.
-            # Respect ancestry cycle/identity validations before exposing facts.
-            dog.full_clean()
+            # Publication changes only visibility. Do not validate unchanged
+            # pedigree/evidence fields here: an incomplete or legacy record can
+            # be published as-is. Any actual edit still runs normal validation,
+            # and database integrity constraints remain enforced.
             before = _snapshot(dog)
             before["publication"] = {
                 "is_public": dog.is_public,
@@ -807,9 +763,8 @@ def dog_direct_edit(request, pk):
                     )
                     visibility_changed = make_public != locked.is_public
                     publication_basis = (
-                        _staff_publication_basis(
-                            locked, request.POST.get("historical_research_attestation")
-                        ) if visibility_changed and make_public else None
+                        _staff_publication_basis(locked)
+                        if visibility_changed and make_public else None
                     )
                     # An ordinary moderator must not combine publication with
                     # sensitive ancestry/evidence changes in one transaction.
@@ -949,7 +904,6 @@ def dog_direct_edit(request, pk):
                 return redirect("accounts:dog-direct-edit", pk=pk)
             except (IntegrityError, ValidationError) as exc:
                 form.add_error(None, str(exc))
-    publication_needs_source, publication_blockers = _publication_preflight(dog)
     revisions = list(_revision_events(dog)[:25])
     _review_states(revisions)
     return render(request, "accounts/direct_dog_edit.html", {
@@ -958,9 +912,6 @@ def dog_direct_edit(request, pk):
         "suggested_kennel": suggested_kennel,
         "can_add_dog": can_add_canonical_dog(request.user),
         "can_publish_dog": can_publish,
-        "staff_research_publication_required": _is_staff_created_research_dog(dog),
-        "publication_needs_source": publication_needs_source,
-        "publication_blockers": publication_blockers,
     })
 
 

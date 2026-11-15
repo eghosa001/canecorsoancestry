@@ -292,53 +292,57 @@ class OwnerFeedbackFixesTests(TestCase):
         self.dog.save(update_fields=["is_public"])
         url = reverse("accounts:dog-set-public-visibility", args=[self.dog.pk])
         version = self.dog.updated_at.isoformat()
-        valid = {
-            "action": "publish",
-            "confirm_visibility": "yes",
-            "reason": "Reviewed dog entry",
-            "version": version,
-        }
+        # Unassigned members still cannot change canonical public visibility.
         self.client.force_login(self.member)
-        self.assertEqual(self.client.post(url, valid).status_code, 403)
+        self.assertEqual(self.client.post(url, {
+            "action": "publish", "version": version,
+        }).status_code, 403)
         self.client.force_login(self.staff)
-        # Staff may publish, but the explicit endpoint still requires confirmation.
-        self.assertEqual(self.client.post(
-            url, {**valid, "confirm_visibility": ""}
-        ).status_code, 302)
+        # Moderators may publish an incomplete record without checkbox,
+        # documentary evidence, or a mandatory audit reason.
+        self.assertEqual(self.client.post(url, {
+            "action": "publish", "version": version,
+        }).status_code, 302)
         self.dog.refresh_from_db()
-        self.assertFalse(self.dog.is_public)
+        self.assertTrue(self.dog.is_public)
+        self.assertFalse(self.dog.visibility_locked_by_superadmin)
         self.assertContains(
             self.client.get(reverse("accounts:dog-direct-edit", args=[self.dog.pk])),
             'name="visibility_public"',
         )
+
         self.client.force_login(self.owner)
-        self.client.post(url, {**valid, "confirm_visibility": ""})
-        self.dog.refresh_from_db()
-        self.assertFalse(self.dog.is_public)
-        self.client.post(url, {**valid, "reason": "No"})
-        self.dog.refresh_from_db()
-        self.assertFalse(self.dog.is_public)
-        self.dog.bio = "Updated between review and publish"
-        self.dog.save(update_fields=["bio", "updated_at"])
-        self.client.post(url, valid)
-        self.dog.refresh_from_db()
-        self.assertFalse(self.dog.is_public)
-        self.assertEqual(ModerationAudit.objects.filter(
-            dog=self.dog, summary__publication_action="publish",
-        ).count(), 0)
-        self.client.post(url, {**valid, "version": self.dog.updated_at.isoformat()})
-        self.dog.refresh_from_db()
-        self.assertTrue(self.dog.is_public)
         self.client.post(url, {
-            "action": "unpublish", "reason": "Owner withdrew approval",
-            "confirm_visibility": "yes", "version": self.dog.updated_at.isoformat(),
+            "action": "unpublish", "version": self.dog.updated_at.isoformat(),
         })
         self.dog.refresh_from_db()
         self.assertFalse(self.dog.is_public)
+        self.assertTrue(self.dog.visibility_locked_by_superadmin)
         self.assertEqual(
             self.client.get(reverse("registry:dog-detail", args=[self.dog.slug])).status_code,
             404,
         )
+
+        # Old page versions remain blocked, so a concurrent edit is not lost.
+        stale_version = self.dog.updated_at.isoformat()
+        self.dog.bio = "Updated between review and publish"
+        self.dog.save(update_fields=["bio", "updated_at"])
+        before_count = ModerationAudit.objects.filter(
+            dog=self.dog, summary__publication_action="publish",
+        ).count()
+        self.client.post(url, {"action": "publish", "version": stale_version})
+        self.dog.refresh_from_db()
+        self.assertFalse(self.dog.is_public)
+        self.assertEqual(ModerationAudit.objects.filter(
+            dog=self.dog, summary__publication_action="publish",
+        ).count(), before_count)
+
+        self.client.post(url, {
+            "action": "publish", "version": self.dog.updated_at.isoformat(),
+        })
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+        self.assertTrue(self.dog.visibility_locked_by_superadmin)
         self.assertEqual(ModerationAudit.objects.filter(
             dog=self.dog, summary__publication_action="unpublish",
         ).count(), 1)

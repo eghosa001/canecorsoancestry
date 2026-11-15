@@ -101,38 +101,33 @@ class StaffDogCreationAndAccessTests(TestCase):
         self.assertEqual(event.actor, self.reviewer)
         self.assertFalse(event.summary["is_owner"])
 
-    def test_staff_created_research_record_requires_source_and_attestation_to_publish(self):
+    def test_staff_created_record_can_publish_without_source_or_attestation(self):
         self.client.force_login(self.reviewer)
         response = self.client.post(reverse("accounts:dog-direct-create"), {
-            "name": "Archive Source Gate", "sex": "male",
-            "reason": "Staff archive research record prepared for sourcing",
+            "name": "Unfinished Archive", "sex": "male",
+            "reason": "Staff canonical record prepared with details to follow",
         })
         self.assertEqual(response.status_code, 302)
-        dog = Dog.objects.get(name="Archive Source Gate")
+        dog = Dog.objects.get(name="Unfinished Archive")
+        self.assertFalse(dog.is_public)
         url = reverse("accounts:dog-set-public-visibility", args=[dog.pk])
-        payload = {
-            "action": "publish", "confirm_visibility": "yes",
-            "reason": "Historical archive identity reviewed",
-            "version": dog.updated_at.isoformat(),
-            "historical_research_attestation": "yes",
-        }
-        self.client.post(url, payload)
-        dog.refresh_from_db()
-        self.assertFalse(dog.is_public)
-        DogSource.objects.create(
-            dog=dog, source_type=DogSource.SourceType.PEDIGREE,
-            title="Historical archive", source_url="https://example.org/archive",
-        )
-        self.client.post(url, {**payload, "historical_research_attestation": ""})
-        dog.refresh_from_db()
-        self.assertFalse(dog.is_public)
-        self.client.post(url, payload)
+        result = self.client.post(url, {
+            "action": "publish", "version": dog.updated_at.isoformat(),
+        })
+        self.assertEqual(result.status_code, 302)
         dog.refresh_from_db()
         self.assertTrue(dog.is_public)
+        self.assertEqual(dog.verification_state, "community")
+        self.assertEqual(
+            self.client.get(reverse("registry:dog-detail", args=[dog.slug])).status_code,
+            200,
+        )
         audit = ModerationAudit.objects.filter(
             dog=dog, summary__publication_action="publish",
         ).latest("pk")
-        self.assertEqual(audit.summary["publication_basis"], "staff_historical_research")
+        self.assertEqual(audit.actor, self.reviewer)
+        self.assertEqual(audit.summary["publication_basis"], "staff_direct_publication")
+        self.assertEqual(audit.note, "Published by authorized staff.")
 
     def test_member_cannot_add_even_with_forged_post(self):
         url = reverse("accounts:dog-direct-create")
