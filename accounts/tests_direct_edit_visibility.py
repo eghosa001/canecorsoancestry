@@ -4,7 +4,8 @@ from django.core.cache import caches
 from django.test import TestCase
 from django.urls import reverse
 
-from registry.models import Dog, DogImage, ModerationAudit, ModerationRoleAssignment
+from registry.models import Dog, DogImage, DogSource, ModerationAudit, ModerationRoleAssignment
+from registry.services import record_audit
 from registry.public_freshness import FEATURED_DOG_IDS_CACHE_KEY
 
 
@@ -80,6 +81,78 @@ class StaffChangeVisibilityTests(TestCase):
         self.dog.refresh_from_db()
         self.assertTrue(self.dog.is_public)
         self.assertEqual(self.dog.name, "Before")
+
+    def test_staff_created_dog_needs_saved_source_and_attestation_then_publishes(self):
+        """Regression for a private dog created through staff tools."""
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        record_audit(
+            action=ModerationAudit.Action.RECORD_CHANGED,
+            actor=self.owner, dog=self.dog,
+            summary={"kind": "direct_dog_create", "is_owner": True},
+            note="Staff historical research entry",
+        )
+        self.client.force_login(self.owner)
+        page_url = reverse("accounts:dog-direct-edit", args=[self.dog.pk])
+        action = reverse("accounts:dog-set-public-visibility", args=[self.dog.pk])
+        page = self.client.get(page_url)
+        self.assertContains(page, "Publication currently blocked")
+        self.assertContains(page, "No saved documentary source")
+        self.assertContains(page, 'id="dog-source-records" open')
+        self.assertLess(
+            page.content.index(b'id="dog-visibility-only"'),
+            page.content.index(b'id="dog-identity"'),
+        )
+        payload = {
+            "version": page.context["version"],
+            "action": "publish",
+            "confirm_visibility": "yes",
+            "historical_research_attestation": "yes",
+            "reason": "Confirmed historical pedigree source",
+        }
+        self.assertRedirects(self.client.post(action, payload), page_url)
+        self.dog.refresh_from_db()
+        self.assertFalse(self.dog.is_public)
+        self.assertContains(
+            self.client.get(page_url), "No saved documentary source"
+        )
+
+        DogSource.objects.create(
+            dog=self.dog,
+            source_type=DogSource.SourceType.PEDIGREE,
+            title="Archival pedigree record",
+            source_url="https://example.org/cane-corso-pedigree",
+        )
+        ready = self.client.get(page_url)
+        self.assertNotContains(ready, "Publication currently blocked")
+        payload["version"] = ready.context["version"]
+        without_attestation = dict(payload)
+        without_attestation.pop("historical_research_attestation")
+        self.assertRedirects(self.client.post(action, without_attestation), page_url)
+        self.dog.refresh_from_db()
+        self.assertFalse(self.dog.is_public)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertRedirects(self.client.post(action, payload), page_url)
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+        self.assertContains(self.client.get(page_url), "Published")
+        self.assertEqual(
+            self.client.get(reverse("registry:dog-detail", args=[self.dog.slug])).status_code,
+            200,
+        )
+
+    def test_unpublished_regular_dog_uses_simple_publish_form_near_top(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("accounts:dog-direct-edit", args=[self.dog.pk]))
+        self.assertContains(page, "Publish or unpublish only")
+        self.assertNotContains(page, "Publication currently blocked")
+        self.assertLess(
+            page.content.index(b'id="dog-visibility-only"'),
+            page.content.index(b'id="dog-identity"'),
+        )
 
     def test_live_edit_clears_cached_public_metadata(self):
         url, data = self.payload(name="After")
