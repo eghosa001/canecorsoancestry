@@ -148,7 +148,7 @@ jobs:
           key="dogs/archive/111/111524.jpg"
           variant="thumb"
           expires="$(( ($(date +%s) + 359) / 60 * 60 ))"
-          signature="$(CCA_PHOTO_KEY="$key" CCA_PHOTO_VARIANT="$variant" CCA_PHOTO_EXPIRY="$expires" python -c 'import hashlib,hmac,os; m="\\n".join(("GET",os.environ["CCA_PHOTO_KEY"],os.environ["CCA_PHOTO_VARIANT"],os.environ["CCA_PHOTO_EXPIRY"])); print(hmac.new(os.environ["R2_GATEWAY_SIGNING_KEY"].encode(),m.encode(),hashlib.sha256).hexdigest())')"
+          signature="$(CCA_PHOTO_KEY="$key" CCA_PHOTO_VARIANT="$variant" CCA_PHOTO_EXPIRY="$expires" python -c 'import hashlib,hmac,os; m=chr(10).join(("GET",os.environ["CCA_PHOTO_KEY"],os.environ["CCA_PHOTO_VARIANT"],os.environ["CCA_PHOTO_EXPIRY"])); print(hmac.new(os.environ["R2_GATEWAY_SIGNING_KEY"].encode(),m.encode(),hashlib.sha256).hexdigest())')"
           url="https://media.canecorsoancestry.com/_thumb/$key?variant=$variant&expires=$expires&signature=$signature"
           status="$(curl --connect-timeout 8 --max-time 35 -sS -D /tmp/cca-photo-headers.txt -o /tmp/cca-photo-body.webp -w '%{http_code}' "$url")"
           test "$status" = 200 || { echo "::error::Signed photo HTTP $status"; exit 1; }
