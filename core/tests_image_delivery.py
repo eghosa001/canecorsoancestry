@@ -98,7 +98,15 @@ class DogPhotoDeliveryTests(TestCase):
         self.assertIn("/_thumb/dogs/photo-preview.jpg?variant=portrait", lightbox)
         self.assertNotIn('src="/media/dogs/photo-preview.jpg"', lightbox)
         self.assertIn('data-media-fallback="/media/dogs/photo-preview.jpg"', lightbox)
-        self.assertContains(response, "20261109-fast-gallery-v1")
+        self.assertContains(response, "20261115-mobile-picture-v2")
+        # A phone requests one 480px WebP, not the 960px desktop portrait.
+        # Each preload matches its actual responsive picture candidate.
+        self.assertContains(response, 'media="(max-width: 760px)"')
+        self.assertContains(response, 'media="(min-width: 761px)"')
+        self.assertContains(response, 'data-dog-hero-mobile-source')
+        self.assertContains(response, 'srcset="https://r2.example.workers.dev/_thumb/dogs/photo-preview.jpg?variant=card')
+        self.assertContains(response, 'decoding="sync"')
+        self.assertContains(response, 'class="dog-portrait-responsive"')
 
     def test_home_first_public_photo_is_priority_loaded_without_full_size_download(self):
         from django.core.cache import caches

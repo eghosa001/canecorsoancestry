@@ -10,6 +10,8 @@
   if (!gallery || !dialog) return;
   const openLink = gallery.querySelector("[data-dog-photo-open]");
   const hero = gallery.querySelector("[data-dog-photo-main]");
+  const heroMobileSource = gallery.querySelector("[data-dog-hero-mobile-source]");
+  const firstMobilePhoto = heroMobileSource?.getAttribute("srcset") || "";
   const caption = gallery.querySelector("[data-dog-photo-caption]");
   const counter = gallery.querySelector("[data-dog-photo-count]");
   const thumbs = [...gallery.querySelectorAll("[data-dog-photo-thumb]")];
@@ -239,6 +241,11 @@
     } else {
       hero.removeAttribute("srcset");
       hero.removeAttribute("sizes");
+    }
+    // A <picture> source wins over img.src on phones. Update it when the
+    // selected photograph changes, otherwise Safari keeps displaying photo 1.
+    if (heroMobileSource && heroMobileSource.isConnected) {
+      heroMobileSource.srcset = selected === 0 ? firstMobilePhoto : previewFor(item);
     }
     hero.setAttribute("data-media-fallback", item.src);
     hero.removeAttribute("data-media-fallback-used");

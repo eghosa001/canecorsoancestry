@@ -126,12 +126,12 @@
                 <a class="dashboard-dog-media" href="{% if dog.is_public %}{% url 'registry:dog-detail' dog.slug %}{% else %}{% url 'accounts:member-pedigree' dog.pk %}{% endif %}">
                   {% if dog.display_images %}
                     {% if dog.is_effectively_public %}
-                      <img data-media-fallback="{{ dog.display_images.0.image.url }}" src="{{ dog.display_images.0.image.url|dog_photo:'card' }}" alt="{{ dog.name }}" width="480" height="360" {% if forloop.counter <= 4 %}loading="eager"{% else %}loading="lazy"{% endif %} decoding="async">
+                      <img data-media-fallback="{{ dog.display_images.0.image.url }}" src="{{ dog.display_images.0.image.url|dog_photo:'card' }}" alt="{{ dog.name }}" width="480" height="360" {% if forloop.counter <= 4 %}loading="eager"{% else %}loading="lazy"{% endif %} {% if forloop.first %}decoding="sync"{% else %}decoding="async"{% endif %}>
                     {% else %}
-                      <img data-media-fallback="{{ dog.display_images.0.image.url }}" src="{{ dog.display_images.0.image.url }}?variant=card" alt="{{ dog.name }}" width="480" height="360" {% if forloop.counter <= 4 %}loading="eager"{% else %}loading="lazy"{% endif %} decoding="async">
+                      <img data-media-fallback="{{ dog.display_images.0.image.url }}" src="{{ dog.display_images.0.image.url }}?variant=card" alt="{{ dog.name }}" width="480" height="360" {% if forloop.counter <= 4 %}loading="eager"{% else %}loading="lazy"{% endif %} {% if forloop.first %}decoding="sync"{% else %}decoding="async"{% endif %}>
                     {% endif %}
                   {% elif dog.source_image_url %}
-                    <img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+                    <img src="{{ dog.source_image_url }}" alt="{{ dog.name }}" loading="lazy" {% if forloop.first %}decoding="sync"{% else %}decoding="async"{% endif %} referrerpolicy="no-referrer">
                   {% else %}
                     <div class="media-placeholder"><span>CCA</span><small>No photo yet</small></div>
                   {% endif %}

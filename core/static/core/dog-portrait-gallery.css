@@ -36,6 +36,14 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.dog-portrait-responsive {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
 .dog-portrait-open {
   position: relative;
   display: flex;
