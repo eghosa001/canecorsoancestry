@@ -57,7 +57,7 @@
                       data-photo-caption="{% if photo.public_caption %}{{ photo.public_caption }}{% else %}Photo {{ forloop.counter }}{% endif %}"
                       aria-label="Show photograph {{ forloop.counter }} of {{ dog.name }}"
                       aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">
-                <img data-media-fallback="{{ photo.image.url }}" src="{{ photo.image.url|dog_photo:'thumb' }}" alt="" loading="lazy" decoding="async">
+                <img data-media-fallback="{{ photo.image.url }}" src="{{ photo.image.url|dog_photo:'thumb' }}" alt="" {% if forloop.counter <= 3 %}loading="eager"{% else %}loading="lazy"{% endif %} decoding="async">
                 <span>{{ forloop.counter }}</span>
               </button>
             {% endfor %}

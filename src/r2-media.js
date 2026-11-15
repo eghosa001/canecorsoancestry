@@ -146,7 +146,7 @@ async function verifyGatewayRequest(request, env, key, body) {
   return { ok: false, reason: "signature", method: wireMethod };
 }
 
-async function handleR2Gateway(request, env, url) {
+async function handleR2Gateway(request, env, url, ctx) {
   const key = safeKey(url, "/_r2/");
   if (!key) return new Response("Invalid key", { status: 400 });
 
@@ -209,6 +209,16 @@ async function handleR2Gateway(request, env, url) {
       );
     }
 
+    // New dog photographs are rendered once in the background after their
+    // original R2 upload is verified. Visitors can then fetch small WebP
+    // previews immediately rather than waiting for a cold conversion.
+    if (isPhotoKey(key)) {
+      const warm = prewarmUploadedDogPhoto(
+        env, key, verified.httpEtag || stored.httpEtag, body,
+      );
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(warm);
+      else await warm;
+    }
     return Response.json(
       {
         status: "stored",
@@ -404,6 +414,76 @@ async function handleSignedMedia(request, env, url) {
 
 
 const PHOTO_WIDTHS = Object.freeze({ thumb: 176, card: 480, portrait: 960 });
+const PHOTO_RENDITION_VERSION = "v1";
+const PHOTO_EDGE_TTL = 60;
+const PHOTO_BROWSER_TTL = 45;
+
+// Persist each compressed rendition against the source R2 ETag. A replacement
+// under the same object key receives new variants instead of stale pixels.
+// These objects live in the private R2 bucket, never on a public URL.
+async function photoRenditionKey(key, etag, variant) {
+  if (!etag) return null;
+  const sourceId = await sha256Hex(encoder.encode(key));
+  const revision = String(etag).replace(/[^a-zA-Z0-9]/g, "").slice(0, 64);
+  if (!revision) return null;
+  return `cca-photo-renditions/${PHOTO_RENDITION_VERSION}/${sourceId}/${revision}/${variant}.webp`;
+}
+
+async function optimizedPhotoBytes(env, stream, variant) {
+  const rendition = (
+    await env.IMAGES.input(stream)
+      .transform({ width: PHOTO_WIDTHS[variant], fit: "scale-down" })
+      .output({ format: "image/webp", quality: 80, anim: true })
+  ).response();
+  const bytes = await rendition.arrayBuffer();
+  if (!bytes.byteLength) throw new Error("Empty WebP rendition");
+  return bytes;
+}
+
+async function storePhotoRendition(env, key, etag, variant, bytes) {
+  const renditionKey = await photoRenditionKey(key, etag, variant);
+  if (!renditionKey) return;
+  await env.MEDIA_BUCKET.put(renditionKey, bytes, {
+    httpMetadata: { contentType: "image/webp" },
+  });
+}
+
+async function prewarmUploadedDogPhoto(env, key, etag, originalBytes) {
+  // Uploads return promptly; transformations are performed with waitUntil.
+  // Skip documents, non-photos and unavailable Images bindings entirely.
+  if (!isPhotoKey(key) || !etag ||
+      !env.IMAGES || typeof env.IMAGES.input !== "function") return;
+  await Promise.allSettled(Object.keys(PHOTO_WIDTHS).map(async (variant) => {
+    const stream = new Response(originalBytes).body;
+    const bytes = await optimizedPhotoBytes(env, stream, variant);
+    await storePhotoRendition(env, key, etag, variant, bytes);
+  }));
+}
+
+function optimizedPhotoResponse(body, variant, cacheStatus) {
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "image/webp",
+      "cache-control": `private, max-age=${PHOTO_BROWSER_TTL}`,
+      "x-content-type-options": "nosniff",
+      "x-cca-image-variant": variant,
+      "x-cca-image-cache": cacheStatus,
+    },
+  });
+}
+
+function cacheOptimizedPhoto(cache, cacheKey, response, ctx) {
+  if (!cache) return;
+  const headers = new Headers(response.headers);
+  headers.set("cache-control", `public, max-age=${PHOTO_EDGE_TTL}`);
+  const put = cache.put(cacheKey, new Response(response.clone().body, {
+    status: 200, headers,
+  }));
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(put);
+  else return put;
+}
+
 
 function isPhotoKey(key) {
   return (
@@ -460,9 +540,9 @@ async function handleOptimizedDogPhoto(request, env, url, ctx) {
   }
 
   const cache = globalThis.caches?.default;
-  // Not a public route: only an internal cache key. Cache is checked only
-  // after validating the HMAC, and cached data expires quickly if moderation
-  // updates or replaces the public source photo.
+  // Signed authorisation is checked before either cache lookup. The edge
+  // cache is deliberately short; durable versioned R2 renditions survive
+  // edge eviction and are shared across Cloudflare locations.
   const cacheKey = new Request(
     url.origin + "/__photo_cache/" + variant + "/" + encodeURIComponent(key),
   );
@@ -470,54 +550,61 @@ async function handleOptimizedDogPhoto(request, env, url, ctx) {
     const stored = await cache.match(cacheKey);
     if (stored) {
       const headers = new Headers(stored.headers);
-      headers.set("cache-control", "private, max-age=45");
-      headers.set("x-cca-image-cache", "HIT");
+      headers.set("cache-control", `private, max-age=${PHOTO_BROWSER_TTL}`);
+      headers.set("x-cca-image-cache", "EDGE");
       return new Response(stored.body, { status: 200, headers });
     }
   }
 
-  const object = await env.MEDIA_BUCKET.get(key);
-  if (!object) return new Response("Not found", { status: 404 });
-
-  if (env.IMAGES && typeof env.IMAGES.input === "function") {
-    try {
-      // Width-only, scale-down: no cropping, no distortion, never upscale.
-      const rendition = (
-        await env.IMAGES.input(object.body)
-          .transform({ width: PHOTO_WIDTHS[variant], fit: "scale-down" })
-          .output({ format: "image/webp", quality: 84, anim: true })
-      ).response();
-      const cacheHeaders = new Headers(rendition.headers);
-      cacheHeaders.set("cache-control", "public, max-age=120");
-      cacheHeaders.set("x-content-type-options", "nosniff");
-      if (cache) {
-        const store = cache.put(
-          cacheKey,
-          new Response(rendition.clone().body, {
-            status: 200, headers: cacheHeaders,
-          }),
-        );
-        if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(store);
-        else await store;
-      }
-      cacheHeaders.set("cache-control", "private, max-age=45");
-      cacheHeaders.set("x-cca-image-cache", "MISS");
-      cacheHeaders.set("x-cca-image-variant", variant);
-      return new Response(rendition.body, { status: 200, headers: cacheHeaders });
-    } catch {
-      // Free transformation quota, unsupported photo or service outage must
-      // never break an image. Preserve the unchanged R2 original instead.
-      const original = await env.MEDIA_BUCKET.get(key);
-      if (!original) return new Response("Not found", { status: 404 });
-      const headers = r2Headers(original, "private, max-age=30");
-      headers.set("x-cca-image-variant", "original-fallback");
-      return new Response(original.body, { status: 200, headers });
+  // A HEAD is sufficient to determine source existence and revision. No
+  // original image bytes are transferred on a persistent rendition hit.
+  const source = await env.MEDIA_BUCKET.head(key);
+  if (!source) return new Response("Not found", { status: 404 });
+  const renditionKey = await photoRenditionKey(
+    key, source.httpEtag || source.etag, variant,
+  );
+  if (renditionKey) {
+    const ready = await env.MEDIA_BUCKET.get(renditionKey);
+    if (ready) {
+      const response = optimizedPhotoResponse(ready.body, variant, "R2");
+      const put = cacheOptimizedPhoto(cache, cacheKey, response, ctx);
+      if (put) await put;
+      return response;
     }
   }
 
-  const headers = r2Headers(object, "private, max-age=30");
+  const original = await env.MEDIA_BUCKET.get(key);
+  if (!original) return new Response("Not found", { status: 404 });
+  if (env.IMAGES && typeof env.IMAGES.input === "function") {
+    try {
+      const bytes = await optimizedPhotoBytes(env, original.body, variant);
+      const response = optimizedPhotoResponse(bytes, variant, "MISS");
+      // Persist a WebP for future cold visitors and after short edge-cache
+      // expiry. Persist failures must not delay or break this response.
+      if (renditionKey) {
+        const save = storePhotoRendition(
+          env, key, source.httpEtag || source.etag, variant, bytes,
+        ).catch(() => {});
+        if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(save);
+        else await save;
+      }
+      const put = cacheOptimizedPhoto(cache, cacheKey, response, ctx);
+      if (put) await put;
+      return response;
+    } catch {
+      // Never break a photo when the free quota or transform service is down.
+      // Retain the existing private signed original fallback.
+      const fallback = await env.MEDIA_BUCKET.get(key);
+      if (!fallback) return new Response("Not found", { status: 404 });
+      const headers = r2Headers(fallback, "private, max-age=30");
+      headers.set("x-cca-image-variant", "original-fallback");
+      return new Response(fallback.body, { status: 200, headers });
+    }
+  }
+
+  const headers = r2Headers(original, "private, max-age=30");
   headers.set("x-cca-image-variant", "original-fallback");
-  return new Response(object.body, { status: 200, headers });
+  return new Response(original.body, { status: 200, headers });
 }
 
 export { isAllowedSourceUrl, isPhotoKey, photoSignatureMessage };
@@ -531,7 +618,7 @@ export default {
     }
 
     if (url.pathname.startsWith("/_r2/")) {
-      return handleR2Gateway(request, env, url);
+      return handleR2Gateway(request, env, url, ctx);
     }
 
     if (url.pathname.startsWith("/_r2_ingest/")) {

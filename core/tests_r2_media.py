@@ -75,3 +75,42 @@ class R2MediaDeliveryTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn("/_media/", response["Location"])
         self.assertEqual(response["Cache-Control"], "private, no-store")
+
+    def test_signed_public_thumbnail_redirect_uses_optimized_variant(self):
+        response = self.client.get(f"/media/{self.path}?variant=card")
+        self.assertEqual(response.status_code, 302)
+        parsed = urlparse(response["Location"])
+        self.assertEqual(parsed.path, f"/_thumb/{self.path}")
+        self.assertEqual(parse_qs(parsed.query)["variant"], ["card"])
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+
+    def test_private_member_thumbnail_is_signed_only_after_access_check(self):
+        kennel = Kennel.objects.create(name="Private Image Kennel", slug="private-image")
+        self.dog.kennel = kennel
+        self.dog.is_public = False
+        self.dog.save(update_fields=["kennel", "is_public"])
+        # The same short-lived preview must not be obtainable anonymously.
+        self.assertEqual(
+            self.client.get(f"/media/{self.path}?variant=card").status_code,
+            404,
+        )
+        member = get_user_model().objects.create_user(username="photo-member")
+        KennelMembership.objects.create(
+            user=member, kennel=kennel, role=KennelMembership.Role.OWNER,
+        )
+        self.client.force_login(member)
+        response = self.client.get(f"/media/{self.path}?variant=card")
+        self.assertEqual(response.status_code, 302)
+        parsed = urlparse(response["Location"])
+        query = parse_qs(parsed.query)
+        self.assertEqual(parsed.path, f"/_thumb/{self.path}")
+        self.assertEqual(query["variant"], ["card"])
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        from core.templatetags.dog_images import dog_photo
+        self.assertEqual(
+            response["Location"],
+            dog_photo(f"/media/{self.path}", "card"),
+        )
+        # Full-resolution original continues through the legacy private route.
+        original = self.client.get(f"/media/{self.path}")
+        self.assertEqual(urlparse(original["Location"]).path, f"/_media/{self.path}")

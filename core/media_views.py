@@ -1,4 +1,5 @@
 import mimetypes
+from urllib.parse import quote
 
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -6,6 +7,7 @@ from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.db.models import Q
 
 from core.cloudflare_media import signed_media_url
+from core.templatetags.dog_images import PHOTO_PRESETS, dog_photo
 from registry.permissions import can_review_submissions
 from registry.models import DisputeCase, DogDocument, DogImage, DogSource, Submission, SubmissionEvidence, VerificationState
 
@@ -105,6 +107,22 @@ def media_file(request, path):
 
     media_base = getattr(settings, "MEDIA_EDGE_BASE_URL", "").strip()
     if media_base:
+        # Members' private dog thumbnails still enter via this permission-
+        # checked Django route. Only after access is authorized do we issue a
+        # short-lived HMAC for the compact CDN preview, avoiding multi-megabyte
+        # originals in account dashboards and photo correction forms.
+        variant = request.GET.get("variant")
+        if (
+            variant in PHOTO_PRESETS
+            and path.startswith("dogs/")
+            and DogImage.objects.filter(image=path).exists()
+        ):
+            source = "/media/" + quote(path, safe="/")
+            optimized = dog_photo(source, variant)
+            if optimized != source:
+                preview = HttpResponseRedirect(optimized)
+                preview["Cache-Control"] = "private, no-store"
+                return preview
         response = HttpResponseRedirect(
             signed_media_url(
                 media_base,
