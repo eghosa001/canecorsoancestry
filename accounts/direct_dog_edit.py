@@ -56,6 +56,13 @@ def _is_staff_created_research_dog(dog):
     ).exists()
 
 
+def _has_staff_publication_source(dog):
+    """Only a saved documentary provenance record qualifies a staff archive dog."""
+    return DogSource.objects.filter(dog=dog).filter(
+        Q(source_url__gt="") | Q(document__gt="")
+    ).exists()
+
+
 def _staff_publication_basis(dog, attestation):
     if not _is_staff_created_research_dog(dog):
         return None
@@ -64,15 +71,33 @@ def _staff_publication_basis(dog, attestation):
             "This staff-created record requires historical/research publication "
             "attestation. Customer-owned listings must use paid member submissions."
         )
-    has_source = DogSource.objects.filter(dog=dog).filter(
-        Q(source_url__gt="") | Q(document__gt="")
-    ).exists()
-    if not has_source:
+    if not _has_staff_publication_source(dog):
         raise ValidationError(
             "Add and save a documentary source URL or evidence file before "
             "publishing this staff-created historical research record."
         )
     return "staff_historical_research"
+
+
+def _publication_preflight(dog):
+    """Show saved-record blockers before a moderator attempts to publish."""
+    needs_source = (
+        not dog.is_public
+        and _is_staff_created_research_dog(dog)
+        and not _has_staff_publication_source(dog)
+    )
+    blockers = []
+    if needs_source:
+        blockers.append(
+            "No saved documentary source. Add a source URL or evidence file "
+            "in Related information → Sources, save the record, then publish."
+        )
+    if not dog.is_public:
+        try:
+            dog.full_clean()
+        except ValidationError as exc:
+            blockers.extend(exc.messages)
+    return needs_source, blockers
 
 
 def _candidate_change(field, value):
@@ -924,6 +949,7 @@ def dog_direct_edit(request, pk):
                 return redirect("accounts:dog-direct-edit", pk=pk)
             except (IntegrityError, ValidationError) as exc:
                 form.add_error(None, str(exc))
+    publication_needs_source, publication_blockers = _publication_preflight(dog)
     revisions = list(_revision_events(dog)[:25])
     _review_states(revisions)
     return render(request, "accounts/direct_dog_edit.html", {
@@ -933,6 +959,8 @@ def dog_direct_edit(request, pk):
         "can_add_dog": can_add_canonical_dog(request.user),
         "can_publish_dog": can_publish,
         "staff_research_publication_required": _is_staff_created_research_dog(dog),
+        "publication_needs_source": publication_needs_source,
+        "publication_blockers": publication_blockers,
     })
 
 
