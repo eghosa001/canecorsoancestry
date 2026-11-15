@@ -164,9 +164,23 @@ jobs:
         run: |
           set -euo pipefail
           base="https://media.canecorsoancestry.com"
-          key="smoke/uploads/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.txt"
+          key="smoke/uploads/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-missing-first.jpg"
           body="cca-r2-write-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           digest="$(printf '%s' "$body" | sha256sum | awk '{print $1}')"
+          # Mirror Django's storage probe: an unauthorised/non-existent photo
+          # is checked by signed HEAD BEFORE the object is created.
+          empty_digest="$(printf '' | sha256sum | awk '{print $1}')"
+          timestamp="$(date +%s)"
+          signature="$(R2_METHOD="HEAD" R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$empty_digest" python -c 'import hashlib,hmac,os; m=os.environ["R2_METHOD"]; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["R2_GATEWAY_SIGNING_KEY"].encode(), chr(10).join([m,k,t,d]).encode(), hashlib.sha256).hexdigest())')"
+          absent_status="$(curl --connect-timeout 8 --max-time 20 -sS -o /dev/null -w '%{http_code}' -I \
+            -H "x-r2-timestamp: $timestamp" \
+            -H "x-r2-content-sha256: $empty_digest" \
+            -H "x-r2-signature: $signature" \
+            "$base/_r2/$key" || true)"
+          if [ "$absent_status" != "404" ]; then
+            echo "::error::Missing object HEAD should be 404 before upload: HTTP $absent_status"
+            exit 1
+          fi
           timestamp="$(date +%s)"
           signature="$(R2_METHOD="PUT" R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$digest" python -c 'import hashlib,hmac,os; m=os.environ["R2_METHOD"]; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["R2_GATEWAY_SIGNING_KEY"].encode(), chr(10).join([m,k,t,d]).encode(), hashlib.sha256).hexdigest())')"
           put_status="$(curl --connect-timeout 8 --max-time 30 -sS -o /tmp/r2-put.json -w '%{http_code}' -X PUT \
@@ -192,6 +206,18 @@ jobs:
             "$base/_r2/$key" || true)"
           if [ "$head_status" != "200" ]; then
             echo "::error::Uploaded R2 object could not be read back; HTTP $head_status"
+            exit 1
+          fi
+
+          timestamp="$(date +%s)"
+          signature="$(R2_METHOD="GET" R2_KEY="$key" R2_TS="$timestamp" R2_DIGEST="$empty_digest" python -c 'import hashlib,hmac,os; m=os.environ["R2_METHOD"]; k=os.environ["R2_KEY"]; t=os.environ["R2_TS"]; d=os.environ["R2_DIGEST"]; print(hmac.new(os.environ["R2_GATEWAY_SIGNING_KEY"].encode(), chr(10).join([m,k,t,d]).encode(), hashlib.sha256).hexdigest())')"
+          get_status="$(curl --connect-timeout 8 --max-time 20 -sS -o /tmp/r2-after-miss-body.txt -w '%{http_code}' \
+            -H "x-r2-timestamp: $timestamp" \
+            -H "x-r2-content-sha256: $empty_digest" \
+            -H "x-r2-signature: $signature" \
+            "$base/_r2/$key" || true)"
+          if [ "$get_status" != "200" ] || [ "$(cat /tmp/r2-after-miss-body.txt)" != "$body" ]; then
+            echo "::error::Freshly uploaded R2 object cannot be read after prior 404 HEAD: HTTP $get_status"
             exit 1
           fi
 

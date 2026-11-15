@@ -20,8 +20,9 @@ bucket_name = "canecorsoancestry-media"
 [images]
 binding = "IMAGES"
 
-# Enable the Cache API for signed public photo renditions only. The worker
-# verifies each HMAC before cache lookup; private R2 gateway routes are never
-# cached. Versioned WebPs also persist in R2 after edge eviction.
+# Do not enable Worker-wide HTTP caching. Oracle uses authenticated HEAD
+# before PUT and GET for the SAME object key; negative lookups must never
+# survive a subsequent write. Private versioned WebP renditions remain durable
+# in R2, independently of Cloudflare's optional edge Cache API.
 [cache]
-enabled = true
+enabled = false
