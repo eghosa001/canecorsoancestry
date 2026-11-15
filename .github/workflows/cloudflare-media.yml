@@ -141,6 +141,24 @@ jobs:
             fi
           done
 
+      - name: Check live signed dog thumbnail format
+        shell: bash
+        run: |
+          set -euo pipefail
+          key="dogs/archive/111/111524.jpg"
+          variant="thumb"
+          expires="$(( ($(date +%s) + 359) / 60 * 60 ))"
+          signature="$(CCA_PHOTO_KEY="$key" CCA_PHOTO_VARIANT="$variant" CCA_PHOTO_EXPIRY="$expires" python -c 'import hashlib,hmac,os; m="\\n".join(("GET",os.environ["CCA_PHOTO_KEY"],os.environ["CCA_PHOTO_VARIANT"],os.environ["CCA_PHOTO_EXPIRY"])); print(hmac.new(os.environ["R2_GATEWAY_SIGNING_KEY"].encode(),m.encode(),hashlib.sha256).hexdigest())')"
+          url="https://media.canecorsoancestry.com/_thumb/$key?variant=$variant&expires=$expires&signature=$signature"
+          status="$(curl --connect-timeout 8 --max-time 35 -sS -D /tmp/cca-photo-headers.txt -o /tmp/cca-photo-body.webp -w '%{http_code}' "$url")"
+          test "$status" = 200 || { echo "::error::Signed photo HTTP $status"; exit 1; }
+          echo "Photo bytes: $(wc -c </tmp/cca-photo-body.webp)"
+          grep -iE '^(content-type|x-cca-image-cache|x-cca-image-variant):' /tmp/cca-photo-headers.txt || true
+          if ! grep -qi '^content-type: image/webp' /tmp/cca-photo-headers.txt; then
+            echo "::warning::Cloudflare image transform returned an original, not a WebP. Check Images quota/binding."
+          fi
+          # Never print signed URL or any secret.
+
       - name: Verify R2 upload round trip
         shell: bash
         run: |
