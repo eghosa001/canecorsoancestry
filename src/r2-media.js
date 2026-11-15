@@ -215,6 +215,9 @@ async function handleR2Gateway(request, env, url, ctx) {
       );
     }
 
+    // A replaced original must never leave the previously derived WebP
+    // visible at the stable private key. Delete before prewarming.
+    if (isPhotoKey(key)) await invalidateDirectPhotoRenditions(env, key);
     // New dog photographs are rendered once in the background after their
     // original R2 upload is verified. Visitors can then fetch small WebP
     // previews immediately rather than waiting for a cold conversion.
@@ -239,6 +242,7 @@ async function handleR2Gateway(request, env, url, ctx) {
 
   if (request.method === "DELETE") {
     await env.MEDIA_BUCKET.delete(key);
+    if (isPhotoKey(key)) await invalidateDirectPhotoRenditions(env, key);
     return new Response(null, { status: 204 });
   }
 
@@ -248,7 +252,7 @@ async function handleR2Gateway(request, env, url, ctx) {
   });
 }
 
-async function handleR2Ingest(request, env, url) {
+async function handleR2Ingest(request, env, url, ctx) {
   if (request.method !== "POST") {
     return new Response("Method not allowed", {
       status: 405,
@@ -360,6 +364,15 @@ async function handleR2Ingest(request, env, url) {
     );
   }
 
+  if (isPhotoKey(key)) {
+    await invalidateDirectPhotoRenditions(env, key);
+    const warm = prewarmUploadedDogPhoto(
+      env, key, verified.httpEtag || stored.httpEtag, data,
+    );
+    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(warm);
+    else await warm;
+  }
+
   return Response.json(
     {
       status: "stored",
@@ -421,6 +434,7 @@ async function handleSignedMedia(request, env, url) {
 
 const PHOTO_WIDTHS = Object.freeze({ thumb: 176, card: 480, portrait: 960 });
 const PHOTO_RENDITION_VERSION = "v1";
+const PHOTO_DIRECT_VERSION = "direct-v2";
 const PHOTO_EDGE_TTL = 60;
 const PHOTO_BROWSER_TTL = 45;
 
@@ -433,6 +447,27 @@ async function photoRenditionKey(key, etag, variant) {
   const revision = String(etag).replace(/[^a-zA-Z0-9]/g, "").slice(0, 64);
   if (!revision) return null;
   return `cca-photo-renditions/${PHOTO_RENDITION_VERSION}/${sourceId}/${revision}/${variant}.webp`;
+}
+
+// A stable private R2 key lets every subsequent profile/photo request obtain
+// the finished WebP with ONE get(), rather than HEAD(original) then GET(WebP).
+// It is never exposed directly: the HMAC-checked /_thumb/ route remains the
+// only public path. The key is invalidated when the original is replaced.
+async function photoDirectRenditionKey(key, variant) {
+  return `cca-photo-renditions/${PHOTO_DIRECT_VERSION}/${await sha256Hex(encoder.encode(key))}/${variant}.webp`;
+}
+
+async function invalidateDirectPhotoRenditions(env, key) {
+  if (!isPhotoKey(key)) return;
+  await Promise.all(Object.keys(PHOTO_WIDTHS).map(async (variant) => {
+    await env.MEDIA_BUCKET.delete(await photoDirectRenditionKey(key, variant));
+  }));
+}
+
+async function storeDirectPhotoRendition(env, key, variant, bytes) {
+  await env.MEDIA_BUCKET.put(await photoDirectRenditionKey(key, variant), bytes, {
+    httpMetadata: { contentType: "image/webp" },
+  });
 }
 
 async function optimizedPhotoBytes(env, stream, variant) {
@@ -462,7 +497,10 @@ async function prewarmUploadedDogPhoto(env, key, etag, originalBytes) {
   await Promise.allSettled(Object.keys(PHOTO_WIDTHS).map(async (variant) => {
     const stream = new Response(originalBytes).body;
     const bytes = await optimizedPhotoBytes(env, stream, variant);
-    await storePhotoRendition(env, key, etag, variant, bytes);
+    await Promise.all([
+      storeDirectPhotoRendition(env, key, variant, bytes),
+      storePhotoRendition(env, key, etag, variant, bytes),
+    ]);
   }));
 }
 
@@ -562,8 +600,21 @@ async function handleOptimizedDogPhoto(request, env, url, ctx) {
     }
   }
 
-  // A HEAD is sufficient to determine source existence and revision. No
-  // original image bytes are transferred on a persistent rendition hit.
+  // Fast path: one R2 GET for the finished private preview. Avoid any
+  // original-object HEAD, image transform, or sequential storage lookup.
+  // This is especially important on cold browser loads in remote regions.
+  const direct = await env.MEDIA_BUCKET.get(
+    await photoDirectRenditionKey(key, variant),
+  );
+  if (direct) {
+    const response = optimizedPhotoResponse(direct.body, variant, "R2-DIRECT");
+    const put = cacheOptimizedPhoto(cache, cacheKey, response, ctx);
+    if (put) await put;
+    return response;
+  }
+
+  // Legacy images still use the verified ETag path once. Promote its
+  // existing WebP to the stable private key without re-transforming it.
   const source = await env.MEDIA_BUCKET.head(key);
   if (!source) return new Response("Not found", { status: 404 });
   const renditionKey = await photoRenditionKey(
@@ -572,7 +623,11 @@ async function handleOptimizedDogPhoto(request, env, url, ctx) {
   if (renditionKey) {
     const ready = await env.MEDIA_BUCKET.get(renditionKey);
     if (ready) {
-      const response = optimizedPhotoResponse(ready.body, variant, "R2");
+      const bytes = await new Response(ready.body).arrayBuffer();
+      const response = optimizedPhotoResponse(bytes, variant, "R2");
+      const save = storeDirectPhotoRendition(env, key, variant, bytes).catch(() => {});
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(save);
+      else await save;
       const put = cacheOptimizedPhoto(cache, cacheKey, response, ctx);
       if (put) await put;
       return response;
@@ -587,13 +642,17 @@ async function handleOptimizedDogPhoto(request, env, url, ctx) {
       const response = optimizedPhotoResponse(bytes, variant, "MISS");
       // Persist a WebP for future cold visitors and after short edge-cache
       // expiry. Persist failures must not delay or break this response.
+      const saves = [
+        storeDirectPhotoRendition(env, key, variant, bytes),
+      ];
       if (renditionKey) {
-        const save = storePhotoRendition(
+        saves.push(storePhotoRendition(
           env, key, source.httpEtag || source.etag, variant, bytes,
-        ).catch(() => {});
-        if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(save);
-        else await save;
+        ));
       }
+      const save = Promise.allSettled(saves);
+      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(save);
+      else await save;
       const put = cacheOptimizedPhoto(cache, cacheKey, response, ctx);
       if (put) await put;
       return response;
@@ -628,7 +687,7 @@ export default {
     }
 
     if (url.pathname.startsWith("/_r2_ingest/")) {
-      return handleR2Ingest(request, env, url);
+      return handleR2Ingest(request, env, url, ctx);
     }
 
     if (url.pathname.startsWith("/_media/")) {
