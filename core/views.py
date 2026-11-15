@@ -23,6 +23,7 @@ from django.utils import timezone
 
 from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
 from registry.permissions import can_manage_verification, can_review_submissions, is_staff_identity
+from registry.public_freshness import FEATURED_DOG_IDS_CACHE_KEY
 from registry.querysets import one_dog_per_kennel, with_card_image, with_card_registration, with_stored_images, published_dogs
 
 from .seo import json_ld
@@ -225,7 +226,7 @@ def robots_txt(request):
 
 def _load_featured_dogs():
     """Rotate four genuine, public, imaged dogs without an expensive random SQL sort."""
-    cache_key = "cca:home:featured-dog-ids:v2"
+    cache_key = FEATURED_DOG_IDS_CACHE_KEY
     featured_ids = caches["public"].get(cache_key)
 
     def load(ids):
