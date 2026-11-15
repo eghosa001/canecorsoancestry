@@ -14,7 +14,7 @@ from django.core.cache.backends.filebased import FileBasedCache
 from django.test import RequestFactory
 
 from .admin import DogAdmin
-from .public_freshness import invalidate_public_content
+from .public_freshness import FEATURED_DOG_IDS_CACHE_KEY, invalidate_public_content
 
 from registry.models import Dog, Kennel, ModerationRoleAssignment, Submission
 from registry.services import approve_submission
@@ -37,6 +37,30 @@ class ApprovedChangesAppearImmediatelyTests(TestCase):
             is_public=True, kennel=self.kennel,
         )
 
+    def test_homepage_featured_cache_clears_on_super_admin_save(self):
+        # The homepage must populate exactly the key that staff edits invalidate.
+        from registry.models import DogImage
+
+        DogImage.objects.create(dog=self.dog, image="dogs/freshness-test.jpg")
+        response = self.client.get(reverse("home"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            caches["public"].get("cca:home:featured-dog-ids:v2"),
+            [self.dog.pk],
+        )
+        self.assertEqual(FEATURED_DOG_IDS_CACHE_KEY, "cca:home:featured-dog-ids:v2")
+
+        owner = get_user_model().objects.create_superuser(
+            username="featured-owner", email="featured-owner@example.test",
+            password="Private-test-password-123",
+        )
+        request = RequestFactory().post("/admin/registry/dog/")
+        request.user = owner
+        self.dog.country = "Ghana"
+        with self.captureOnCommitCallbacks(execute=True):
+            DogAdmin(Dog, admin.site).save_model(request, self.dog, None, True)
+        self.assertIsNone(caches["public"].get("cca:home:featured-dog-ids:v2"))
+
     @patch("registry.services.verify_submission", return_value=[])
     def test_approved_rename_updates_public_profile_and_all_caches(self, _verify):
         submission = Submission.objects.create(
@@ -45,7 +69,7 @@ class ApprovedChangesAppearImmediatelyTests(TestCase):
             payload={"name": "Updated Display Name", "country": "Italy"},
         )
         keys = (
-            "cca:home:featured-dog-ids:v1",
+            "cca:home:featured-dog-ids:v2",
             "cca:home:public-stats:v4",
             "cca:dog-search:default-count:v1",
             "cca:dog-search:countries:v3",
