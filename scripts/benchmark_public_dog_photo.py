@@ -43,6 +43,8 @@ def probe(browser, url, name, mobile=False):
                 "type": headers.get("content-type", "").split(";", 1)[0],
                 "size": headers.get("content-length", "?"),
                 "status": response.status,
+                "path": urlsplit(response.url).path,
+                "fallback_reason": headers.get("x-cca-image-fallback-reason", ""),
             })
     page.on("response", on_response)
     try:
@@ -106,6 +108,8 @@ def probe(browser, url, name, mobile=False):
                         "media_response_variant": selected.get("variant", "browser-cache"),
                         "media_response_cache": selected.get("cache", "browser-cache"),
                         "media_response_type": selected.get("type", "browser-cache"),
+                        "media_path": selected.get("path", ""),
+                        "media_fallback_reason": selected.get("fallback_reason", ""),
                         "media_response_bytes": selected.get("size", "?"),
                     }.items()
                 ),
