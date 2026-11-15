@@ -77,10 +77,15 @@ const env = {
         writeHttpMetadata(headers) { headers.set("content-type", "image/jpeg"); } };
     },
     async put(askedKey, bytes, opts) {
-      assert.match(askedKey, /^cca-photo-renditions\/v1\/[a-f0-9]{64}\/v[12]\/thumb\.webp$/);
+      assert.match(askedKey, /^cca-photo-renditions\/(?:v1\/[a-f0-9]{64}\/v[12]|direct-v2\/[a-f0-9]{64})\/thumb\.webp$/);
       assert.equal(opts.httpMetadata.contentType, "image/webp");
       renditions.set(askedKey, bytes);
       return { httpEtag: '"stored"' };
+    },
+    async delete(askedKey) {
+      if (askedKey === key) return;  // Simulated source removal in the mock.
+      assert.match(askedKey, /^cca-photo-renditions\/direct-v2\/[a-f0-9]{64}\/(thumb|card|portrait)\.webp$/);
+      renditions.delete(askedKey);
     },
   },
   IMAGES: {
@@ -119,15 +124,52 @@ assert.equal(ok.headers.get("x-cca-image-cache"), "MISS");
 assert.equal(await ok.text(), "webp-thumbnail");
 assert.equal(transforms, 1);
 await Promise.all(pending);
-assert.equal(renditions.size, 1, "First conversion must survive edge cache eviction");
+assert.equal(renditions.size, 2, "First conversion must persist both legacy and direct WebP keys");
 const coldReturn = await worker.fetch(new Request(imageURL), env, {});
-assert.equal(coldReturn.headers.get("x-cca-image-cache"), "R2");
+assert.equal(coldReturn.headers.get("x-cca-image-cache"), "R2-DIRECT");
 assert.equal(await coldReturn.text(), "webp-thumbnail");
-assert.equal(transforms, 1, "Second visitor must reuse R2 WebP without conversion");
+assert.equal(transforms, 1, "Second visitor must reuse direct WebP without conversion");
+
+// The fast path may not contact the original object at all. Catch a
+// regression where it silently reintroduces an extra R2 HEAD.
+let directReads = 0;
+const originalHead = env.MEDIA_BUCKET.head;
+env.MEDIA_BUCKET.head = async () => { throw new Error("Direct preview made an unnecessary original HEAD"); };
+const originalGet = env.MEDIA_BUCKET.get;
+env.MEDIA_BUCKET.get = async (askedKey) => {
+  if (askedKey === key) throw new Error("Direct preview downloaded the original");
+  directReads++;
+  return originalGet(askedKey);
+};
+const instant = await worker.fetch(new Request(imageURL), env, {});
+assert.equal(instant.headers.get("x-cca-image-cache"), "R2-DIRECT");
+assert.equal(directReads, 1, "Fast path should do a single private R2 GET");
+env.MEDIA_BUCKET.head = originalHead;
+env.MEDIA_BUCKET.get = originalGet;
+
+// A signed delete must remove every stable fast preview before a source key
+// may be reused; the legacy ETag versions remain private and unreachable.
+const emptyHex = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new Uint8Array()))]
+  .map(x => x.toString(16).padStart(2, "0")).join("");
+const deletedAt = String(Math.floor(Date.now() / 1000));
+const deleteMac = new Uint8Array(await crypto.subtle.sign(
+  "HMAC", importedKey,
+  encoder.encode(["DELETE", key, deletedAt, emptyHex].join("\n")),
+));
+const deleteSignature = [...deleteMac].map(x => x.toString(16).padStart(2, "0")).join("");
+const deleteResponse = await worker.fetch(new Request(
+  "https://media.example.workers.dev/_r2/" + key,
+  { method: "DELETE", headers: {
+    "x-r2-timestamp": deletedAt, "x-r2-content-sha256": emptyHex,
+    "x-r2-signature": deleteSignature,
+  } },
+), env, {});
+assert.equal(deleteResponse.status, 204);
+assert.equal([...renditions.keys()].filter(k => k.includes("/direct-v2/")).length, 0);
 sourceEtag = '"v2"';
 const replaced = await worker.fetch(new Request(imageURL), env, {});
 assert.equal(replaced.headers.get("x-cca-image-cache"), "MISS");
-assert.equal(transforms, 2, "Replaced source ETag must not reuse stale optimized pixels");
+assert.equal(transforms, 2, "Changed original must never reuse a deleted fast preview");
 const bad = await worker.fetch(new Request(imageURL.replace(signature, "bad")), env, {});
 assert.equal(bad.status, 403);
 assert.equal(transforms, 2, "Unsigned access must never reach image transforms");
@@ -164,13 +206,17 @@ const uploadedEnv = {
         storedSource = bytes;
         return { httpEtag: '"upload1"' };
       }
-      assert.match(name, /^cca-photo-renditions\/v1\/[a-f0-9]{64}\/upload1\/(thumb|card|portrait)\.webp$/);
+      assert.match(name, /^cca-photo-renditions\/(?:v1\/[a-f0-9]{64}\/upload1|direct-v2\/[a-f0-9]{64})\/(thumb|card|portrait)\.webp$/);
       prewarmed.set(name, bytes);
       return { httpEtag: '"preview"' };
     },
     async head(name) {
       assert.equal(name, uploadKey);
       return { size: storedSource.byteLength, httpEtag: '"upload1"' };
+    },
+    async delete(name) {
+      assert.match(name, /^cca-photo-renditions\/direct-v2\/[a-f0-9]{64}\/(thumb|card|portrait)\.webp$/);
+      prewarmed.delete(name);
     },
   },
   IMAGES: {
@@ -213,7 +259,8 @@ assert.equal(upload.status, 201);
 assert.equal((await upload.json()).r2_verified, true);
 await Promise.all(uploadTasks);
 assert.equal(uploadTransformCount, 3);
-assert.equal(prewarmed.size, 3, "New photos must have thumb, card and portrait ready");
+assert.equal(prewarmed.size, 6, "New photos must have both direct and versioned renditions ready");
+assert.equal([...prewarmed.keys()].filter(k => k.includes("direct-v2")).length, 3);
 console.log("New dog uploads prewarm three private versioned WebP variants");
 
 const emptyDigest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new Uint8Array()))]

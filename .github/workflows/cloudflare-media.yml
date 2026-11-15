@@ -154,6 +154,15 @@ jobs:
           test "$status" = 200 || { echo "::error::Signed photo HTTP $status"; exit 1; }
           echo "Photo bytes: $(wc -c </tmp/cca-photo-body.webp)"
           grep -iE '^(content-type|x-cca-image-cache|x-cca-image-variant):' /tmp/cca-photo-headers.txt || true
+          # Signed first/second-load timings from an actual public dog photo.
+          # Do not print tokens or infer results from a local fake R2 mock.
+          for pass in 1 2; do
+            curl --connect-timeout 8 --max-time 35 -sS \
+              -o /dev/null -D /tmp/cca-photo-timing-headers.txt \
+              -w "Photo CDN pass $pass: status=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s bytes=%{size_download}\\n" \
+              "$url"
+            grep -iE '^(x-cca-image-cache|x-cca-image-variant):' /tmp/cca-photo-timing-headers.txt || true
+          done
           if ! grep -qi '^content-type: image/webp' /tmp/cca-photo-headers.txt; then
             echo "::warning::Cloudflare image transform returned an original, not a WebP. Check Images quota/binding."
           fi
