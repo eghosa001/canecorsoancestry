@@ -7,8 +7,11 @@ after the database transaction commits (never before a rollback).
 from django.core.cache import caches
 from django.db import transaction
 
+# Keep the homepage reader and the post-commit invalidator on the same key.
+FEATURED_DOG_IDS_CACHE_KEY = "cca:home:featured-dog-ids:v2"
+
 _PUBLIC_KEYS = (
-    "cca:home:featured-dog-ids:v1",
+    FEATURED_DOG_IDS_CACHE_KEY,
     "cca:home:public-stats:v4",
     "cca:dog-search:default-count:v1",
     "cca:dog-search:countries:v3",

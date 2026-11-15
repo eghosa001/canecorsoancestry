@@ -208,9 +208,18 @@ jobs:
             exit 1
           fi
           echo "PASS: Audited commit matches current protected main: $selected"
-      - name: Require fresh offsite encrypted backup
+      - name: Ensure fresh encrypted offsite backup before deployment
         shell: bash
-        run: bash scripts/oracle_runner/check_offsite_backup_freshness.sh
+        run: |
+          set -euo pipefail
+          # GitHub scheduled workflows may be delayed or dropped. Back up the
+          # live Oracle primary if the last verified offsite snapshot is stale.
+          # If creation or verification fails, stop before touching Django.
+          if ! bash scripts/oracle_runner/check_offsite_backup_freshness.sh; then
+            echo "::warning::Offsite backup is not fresh; creating and verifying a new encrypted snapshot."
+            bash scripts/oracle_runner/backup_local_postgres.sh
+            bash scripts/oracle_runner/check_offsite_backup_freshness.sh
+          fi
       - name: Deploy to private Oracle Django service and verify live PDF routes
         shell: bash
         run: bash scripts/oracle_runner/stage_django.sh
