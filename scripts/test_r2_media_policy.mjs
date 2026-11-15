@@ -54,18 +54,33 @@ const signed = new Uint8Array(await crypto.subtle.sign(
 ));
 const signature = [...signed].map(byte => byte.toString(16).padStart(2, "0")).join("");
 let transforms = 0;
+const renditions = new Map();
+let sourceEtag = '"v1"';
+const photoSource = (keyName) => ({
+  body: new Response("original").body, size: 8, httpEtag: sourceEtag,
+  writeHttpMetadata(headers) { headers.set("content-type", "image/jpeg"); },
+});
 const env = {
   R2_GATEWAY_SIGNING_KEY: signingKey,
   MEDIA_BUCKET: {
     async get(askedKey) {
-      assert.equal(askedKey, key);
-      return { body: new Response("original").body, size: 8,
-        writeHttpMetadata(headers) { headers.set("content-type", "image/jpeg"); } };
+      if (askedKey === key) return photoSource(askedKey);
+      const stored = renditions.get(askedKey);
+      return stored ? {
+        body: new Response(stored).body, size: stored.byteLength,
+        writeHttpMetadata(h) { h.set("content-type", "image/webp"); },
+      } : null;
     },
     async head(askedKey) {
       assert.equal(askedKey, key);
-      return { size: 8,
+      return { size: 8, httpEtag: sourceEtag,
         writeHttpMetadata(headers) { headers.set("content-type", "image/jpeg"); } };
+    },
+    async put(askedKey, bytes, opts) {
+      assert.match(askedKey, /^cca-photo-renditions\/v1\/[a-f0-9]{64}\/v[12]\/thumb\.webp$/);
+      assert.equal(opts.httpMetadata.contentType, "image/webp");
+      renditions.set(askedKey, bytes);
+      return { httpEtag: '"stored"' };
     },
   },
   IMAGES: {
@@ -78,6 +93,7 @@ const env = {
           return {
             async output(opts) {
               assert.equal(opts.format, "image/webp");
+              assert.equal(opts.quality, 80);
               return { response() {
                 return new Response("webp-thumbnail", {
                   headers: { "content-type": "image/webp" },
@@ -92,23 +108,36 @@ const env = {
 };
 const imageURL = "https://media.example.workers.dev/_thumb/" + key +
   "?variant=thumb&expires=" + expires + "&signature=" + signature;
-const ok = await worker.fetch(new Request(imageURL), env, {});
+const pending = [];
+const ctx = { waitUntil(promise) { pending.push(promise); } };
+const ok = await worker.fetch(new Request(imageURL), env, ctx);
 assert.equal(ok.status, 200);
 assert.equal(ok.headers.get("content-type"), "image/webp");
 assert.equal(ok.headers.get("cache-control"), "private, max-age=45");
 assert.equal(ok.headers.get("x-cca-image-variant"), "thumb");
+assert.equal(ok.headers.get("x-cca-image-cache"), "MISS");
 assert.equal(await ok.text(), "webp-thumbnail");
 assert.equal(transforms, 1);
+await Promise.all(pending);
+assert.equal(renditions.size, 1, "First conversion must survive edge cache eviction");
+const coldReturn = await worker.fetch(new Request(imageURL), env, {});
+assert.equal(coldReturn.headers.get("x-cca-image-cache"), "R2");
+assert.equal(await coldReturn.text(), "webp-thumbnail");
+assert.equal(transforms, 1, "Second visitor must reuse R2 WebP without conversion");
+sourceEtag = '"v2"';
+const replaced = await worker.fetch(new Request(imageURL), env, {});
+assert.equal(replaced.headers.get("x-cca-image-cache"), "MISS");
+assert.equal(transforms, 2, "Replaced source ETag must not reuse stale optimized pixels");
 const bad = await worker.fetch(new Request(imageURL.replace(signature, "bad")), env, {});
 assert.equal(bad.status, 403);
-assert.equal(transforms, 1, "Unsigned access must never reach image transforms");
+assert.equal(transforms, 2, "Unsigned access must never reach image transforms");
 const wrongVariant = await worker.fetch(new Request(imageURL.replace("thumb", "unexpected")), env, {});
 assert.equal(wrongVariant.status, 404);
 const privatePdf = await worker.fetch(new Request(imageURL.replace(key, "documents/secret.pdf")), env, {});
 assert.equal(privatePdf.status, 404);
 const head = await worker.fetch(new Request(imageURL, { method: "HEAD" }), env, {});
 assert.equal(head.status, 200);
-assert.equal(transforms, 1, "HEAD never triggers transformation");
+assert.equal(transforms, 2, "HEAD never triggers transformation");
 
 const emptyDigest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new Uint8Array()))]
   .map(x => x.toString(16).padStart(2, "0")).join("");
