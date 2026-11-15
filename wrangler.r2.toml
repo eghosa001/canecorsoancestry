@@ -20,7 +20,8 @@ bucket_name = "canecorsoancestry-media"
 [images]
 binding = "IMAGES"
 
-# Explicit, post-HMAC thumbnail caching uses Cache API only.
-# Do not enable Worker-wide HTTP caching for the signed R2 gateway.
+# Enable the Cache API for signed public photo renditions only. The worker
+# verifies each HMAC before cache lookup; private R2 gateway routes are never
+# cached. Versioned WebPs also persist in R2 after edge eviction.
 [cache]
-enabled = false
+enabled = true
