@@ -1,0 +1,71 @@
+name: Repair and backfill private dog WebP previews
+
+on:
+  pull_request:
+    paths:
+      - "scripts/backfill_r2_dog_webps.py"
+      - "scripts/tests/test_photo_webp_backfill.py"
+      - ".github/workflows/backfill-dog-webps.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/backfill_r2_dog_webps.py"
+      - "scripts/tests/test_photo_webp_backfill.py"
+      - ".github/workflows/backfill-dog-webps.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "25 4 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cca-private-dog-webp-backfill
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Test safe CPU conversion with no credentials
+        run: |
+          python -m pip install 'Pillow>=13.0,<14'
+          python -m unittest scripts.tests.test_photo_webp_backfill -v
+          python -m compileall -q scripts/backfill_r2_dog_webps.py
+
+  optimize-remote-dog-photos:
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'eghosa001/canecorsoancestry'
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Convert private originals into durable WebPs without modifying originals
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install 'Pillow>=13.0,<14'
+          if [ -z "$DJANGO_SECRET_KEY" ]; then
+            echo "::error::Missing signing secret; refusing WebP backfill"
+            exit 1
+          fi
+          # Process a bounded batch; repeat runs skip already-complete copies.
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python scripts/backfill_r2_dog_webps.py --limit 45 --max-scan 6000
+          else
+            python scripts/backfill_r2_dog_webps.py --limit 120 --max-scan 6000
+          fi
