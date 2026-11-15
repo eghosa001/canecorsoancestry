@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from registry.models import Dog, DogImage, ModerationAudit, ModerationRoleAssignment
+from registry.public_freshness import FEATURED_DOG_IDS_CACHE_KEY
 
 
 class StaffChangeVisibilityTests(TestCase):
@@ -82,12 +83,12 @@ class StaffChangeVisibilityTests(TestCase):
 
     def test_live_edit_clears_cached_public_metadata(self):
         url, data = self.payload(name="After")
-        caches['public'].set("cca:home:featured-dog-ids:v1", [self.dog.pk], 300)
+        caches['public'].set(FEATURED_DOG_IDS_CACHE_KEY, [self.dog.pk], 300)
         caches['public'].set("cca:home:public-stats:v4", {"dog_count": 1}, 300)
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(url, data)
         self.assertEqual(response.status_code, 302)
-        self.assertIsNone(caches['public'].get("cca:home:featured-dog-ids:v1"))
+        self.assertIsNone(caches['public'].get(FEATURED_DOG_IDS_CACHE_KEY))
         self.assertIsNone(caches['public'].get("cca:home:public-stats:v4"))
         self.assertContains(
             self.client.get(reverse("registry:dog-detail", args=[self.dog.slug])),
