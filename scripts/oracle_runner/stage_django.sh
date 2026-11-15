@@ -486,6 +486,24 @@ payload = json.load(open(sys.argv[1], encoding="utf-8"))
 assert payload.get("status") == "ok" and payload.get("storage") == "r2"
 PY
 then
+  # The authenticated Django probe already returns sanitized failure fields.
+  # Print only stage/status/auth markers, never the signing fingerprint, URLs,
+  # raw gateway exception, request headers, or secret-bearing payloads.
+  python3 - "$probe_output" <<'PY' || true
+import json
+import sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as stream:
+        payload = json.load(stream)
+    if isinstance(payload, dict):
+        allowed = ("stage", "error_type", "http_status", "auth_reason", "auth_method")
+        summary = " ".join(f"{key}={str(payload.get(key, ''))[:80]}" for key in allowed)
+        print(f"Oracle R2 probe diagnostics: {summary}", flush=True)
+    else:
+        print("Oracle R2 probe diagnostics: unexpected response format", flush=True)
+except (OSError, ValueError, TypeError):
+    print("Oracle R2 probe diagnostics: non-JSON or unavailable response", flush=True)
+PY
   echo "::error::Oracle -> R2 storage probe failed (HTTP $code)." >&2
   exit 1
 fi
