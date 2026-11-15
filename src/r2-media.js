@@ -656,19 +656,33 @@ async function handleOptimizedDogPhoto(request, env, url, ctx) {
       const put = cacheOptimizedPhoto(cache, cacheKey, response, ctx);
       if (put) await put;
       return response;
-    } catch {
-      // Never break a photo when the free quota or transform service is down.
-      // Retain the existing private signed original fallback.
+    } catch (error) {
+      // Make fallback observable without returning raw exception details,
+      // storage paths or credentials in the public response.
+      const message = String(error?.message || error || "").toLowerCase();
+      const reason = /quota|limit|subscription|billing|payment|credits/.test(message)
+        ? "quota"
+        : /unsupported|format|decode|invalid image|corrupt/.test(message)
+          ? "unsupported-image"
+          : /timeout|timed out/.test(message)
+            ? "timeout"
+            : "transform-error";
+      console.warn("CCA photo conversion fallback", {
+        error_name: String(error?.name || "Error").slice(0, 50),
+        reason,
+      });
       const fallback = await env.MEDIA_BUCKET.get(key);
       if (!fallback) return new Response("Not found", { status: 404 });
       const headers = r2Headers(fallback, "private, max-age=30");
       headers.set("x-cca-image-variant", "original-fallback");
+      headers.set("x-cca-image-fallback-reason", reason);
       return new Response(fallback.body, { status: 200, headers });
     }
   }
 
   const headers = r2Headers(original, "private, max-age=30");
   headers.set("x-cca-image-variant", "original-fallback");
+  headers.set("x-cca-image-fallback-reason", "images-binding-unavailable");
   return new Response(original.body, { status: 200, headers });
 }
 
