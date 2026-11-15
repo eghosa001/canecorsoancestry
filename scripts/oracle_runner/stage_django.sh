@@ -507,6 +507,7 @@ PY
   echo "::error::Oracle -> R2 storage probe failed (HTTP $code)." >&2
   exit 1
 fi
+echo "PASS: Oracle-to-R2 authenticated missing-check, upload, read-back and cleanup succeeded."
 
 # A local Django 200 is not proof that the public Worker can reach Oracle.
 # Fail the release if the user-facing route is not reachable or still serves
