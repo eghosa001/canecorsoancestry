@@ -114,7 +114,7 @@ class StaffChangeVisibilityTests(TestCase):
         self.dog.refresh_from_db()
         self.assertFalse(self.dog.is_public)
         self.assertContains(
-            self.client.get(page_url), "Add and save a documentary source URL"
+            self.client.get(page_url), "No saved documentary source"
         )
 
         DogSource.objects.create(
