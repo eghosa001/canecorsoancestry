@@ -2,6 +2,7 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import caches
 from django.test import TestCase
+from django.core.exceptions import ValidationError
 from django.urls import reverse
 
 from registry.models import Dog, DogImage, DogSource, ModerationAudit, ModerationRoleAssignment
@@ -82,65 +83,88 @@ class StaffChangeVisibilityTests(TestCase):
         self.assertTrue(self.dog.is_public)
         self.assertEqual(self.dog.name, "Before")
 
-    def test_staff_created_dog_needs_saved_source_and_attestation_then_publishes(self):
-        """Regression for a private dog created through staff tools."""
+    def test_staff_created_dog_publishes_without_evidence_attestation_or_reason(self):
+        """Staff publication is allowed even with no photo, source or pedigree details."""
         self.dog.is_public = False
         self.dog.save(update_fields=["is_public"])
         record_audit(
             action=ModerationAudit.Action.RECORD_CHANGED,
             actor=self.owner, dog=self.dog,
             summary={"kind": "direct_dog_create", "is_owner": True},
-            note="Staff historical research entry",
+            note="Staff-created canonical dog",
         )
         self.client.force_login(self.owner)
         page_url = reverse("accounts:dog-direct-edit", args=[self.dog.pk])
         action = reverse("accounts:dog-set-public-visibility", args=[self.dog.pk])
         page = self.client.get(page_url)
-        self.assertContains(page, "Publication currently blocked")
-        self.assertContains(page, "No saved documentary source")
-        self.assertContains(page, 'id="dog-source-records" open')
+        self.assertNotContains(page, "Publication currently blocked")
+        self.assertNotContains(page, "historical_research_attestation")
+        self.assertNotContains(page, "confirm_visibility")
+        self.assertContains(page, "Publish an incomplete record as it is")
         self.assertLess(
             page.content.index(b'id="dog-visibility-only"'),
             page.content.index(b'id="dog-identity"'),
         )
-        payload = {
-            "version": page.context["version"],
-            "action": "publish",
-            "confirm_visibility": "yes",
-            "historical_research_attestation": "yes",
-            "reason": "Confirmed historical pedigree source",
-        }
-        self.assertRedirects(self.client.post(action, payload), page_url)
-        self.dog.refresh_from_db()
-        self.assertFalse(self.dog.is_public)
-        self.assertContains(
-            self.client.get(page_url), "No saved documentary source"
-        )
-
-        DogSource.objects.create(
-            dog=self.dog,
-            source_type=DogSource.SourceType.PEDIGREE,
-            title="Archival pedigree record",
-            source_url="https://example.org/cane-corso-pedigree",
-        )
-        ready = self.client.get(page_url)
-        self.assertNotContains(ready, "Publication currently blocked")
-        payload["version"] = ready.context["version"]
-        without_attestation = dict(payload)
-        without_attestation.pop("historical_research_attestation")
-        self.assertRedirects(self.client.post(action, without_attestation), page_url)
-        self.dog.refresh_from_db()
-        self.assertFalse(self.dog.is_public)
-
         with self.captureOnCommitCallbacks(execute=True):
-            self.assertRedirects(self.client.post(action, payload), page_url)
+            self.assertRedirects(self.client.post(action, {
+                "version": page.context["version"],
+                "action": "publish",
+            }), page_url)
         self.dog.refresh_from_db()
         self.assertTrue(self.dog.is_public)
+        self.assertEqual(self.dog.verification_state, "community")
         self.assertContains(self.client.get(page_url), "Published")
         self.assertEqual(
             self.client.get(reverse("registry:dog-detail", args=[self.dog.slug])).status_code,
             200,
         )
+        audit = ModerationAudit.objects.get(
+            dog=self.dog, summary__publication_action="publish",
+        )
+        self.assertEqual(audit.summary["publication_basis"], "staff_direct_publication")
+        self.assertEqual(audit.note, "Published by authorized staff.")
+
+    def test_moderator_can_publish_incomplete_staff_record_without_source(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        record_audit(
+            action=ModerationAudit.Action.RECORD_CHANGED,
+            actor=self.staff, dog=self.dog,
+            summary={"kind": "direct_dog_create", "is_owner": False},
+            note="Staff-created canonical dog",
+        )
+        page_url = reverse("accounts:dog-direct-edit", args=[self.dog.pk])
+        page = self.client.get(page_url)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertRedirects(self.client.post(
+                reverse("accounts:dog-set-public-visibility", args=[self.dog.pk]),
+                {"version": page.context["version"], "action": "publish"},
+            ), page_url)
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+        self.assertFalse(self.dog.visibility_locked_by_superadmin)
+
+    def test_visibility_only_does_not_revalidate_unchanged_incomplete_pedigree(self):
+        self.dog.is_public = False
+        self.dog.save(update_fields=["is_public"])
+        other = Dog.objects.create(
+            name="Unverified sire", slug="unverified-sire", sex=Dog.Sex.FEMALE,
+        )
+        self.dog.sire = other
+        self.dog.save(update_fields=["sire", "updated_at"])
+        with self.assertRaises(ValidationError):
+            self.dog.full_clean()
+        self.client.force_login(self.owner)
+        url = reverse("accounts:dog-direct-edit", args=[self.dog.pk])
+        page = self.client.get(url)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertRedirects(self.client.post(
+                reverse("accounts:dog-set-public-visibility", args=[self.dog.pk]),
+                {"version": page.context["version"], "action": "publish"},
+            ), url)
+        self.dog.refresh_from_db()
+        self.assertTrue(self.dog.is_public)
+        self.assertEqual(self.dog.sire_id, other.pk)
 
     def test_unpublished_regular_dog_uses_simple_publish_form_near_top(self):
         self.dog.is_public = False
