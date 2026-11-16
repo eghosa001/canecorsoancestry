@@ -128,7 +128,8 @@ def get_traffic(days=7):
         "requests": sum(row["requests"] for row in rows),
         "unique_today": rows[-1]["uniques"],
         "average_daily_uniques": round(sum(row["uniques"] for row in rows) / days, 1),
-        "paths": paths, "countries": countries, "refreshed": now,
+        "paths": paths, "countries": countries,
+        "refreshed": now.strftime("%d %b %Y %H:%M UTC"),
     }
     cache.set(key, report, timeout=300)
     return report
