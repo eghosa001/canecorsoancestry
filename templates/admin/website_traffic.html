@@ -1,0 +1,84 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> &rsaquo; Website traffic</div>{% endblock %}
+{% block extrastyle %}{{ block.super }}
+<style>
+.traffic-shell{max-width:1100px}.traffic-shell .muted{color:var(--body-quiet-color)}
+.traffic-tabs{display:flex;gap:.6rem;flex-wrap:wrap;margin:1.3rem 0}
+.traffic-tabs a{padding:.6rem 1rem;border:1px solid var(--border-color);border-radius:8px;text-decoration:none}
+.traffic-tabs a.active{background:var(--selected-bg);font-weight:700}
+.traffic-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:1.3rem}
+.traffic-card,.traffic-panel{border:1px solid var(--border-color);border-radius:10px;background:var(--body-bg);padding:1.1rem}
+.traffic-card strong{display:block;font-size:clamp(1.6rem,3vw,2.2rem);font-variant-numeric:tabular-nums}
+.traffic-card span{display:block;color:var(--body-quiet-color)}
+.traffic-panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,350px),1fr));gap:14px}
+.traffic-panel{min-width:0;margin-bottom:1rem}.traffic-panel h2{margin:0 0 1rem;font-size:1.15rem}
+.traffic-panel table{width:100%;border-collapse:collapse}
+.traffic-panel th,.traffic-panel td{padding:.6rem .3rem;text-align:left;vertical-align:middle;border-bottom:1px solid var(--border-color)}
+.traffic-panel th:last-child,.traffic-panel td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.traffic-path{overflow-wrap:anywhere}
+.traffic-bar{height:7px;background:var(--darkened-bg);border-radius:10px;margin-top:5px}
+.traffic-bar span{display:block;height:100%;background:var(--link-fg);border-radius:10px}
+@media(max-width:600px){.traffic-card,.traffic-panel{padding:.85rem}.traffic-panel td,.traffic-panel th{font-size:.87rem}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="traffic-shell">
+  <h1>Website traffic</h1>
+  <p class="muted">Cloudflare analytics for canecorsoancestry.com. Read-only, refreshed every five minutes. All dates use UTC.</p>
+  <nav class="traffic-tabs" aria-label="Traffic period">
+    <a href="{% url 'admin-traffic' %}?days=1" {% if traffic.days == 1 %}class="active" aria-current="page"{% endif %}>Today</a>
+    <a href="{% url 'admin-traffic' %}?days=7" {% if traffic.days == 7 %}class="active" aria-current="page"{% endif %}>7 days</a>
+    <a href="{% url 'admin-traffic' %}?days=30" {% if traffic.days == 30 %}class="active" aria-current="page"{% endif %}>30 days</a>
+  </nav>
+  {% if traffic.status == "unconfigured" %}
+    <section class="traffic-panel">
+      <h2>Connect Cloudflare analytics</h2>
+      <p>The admin report is installed, but the production server needs the Cloudflare zone ID and a read-only Analytics API token to retrieve real figures.</p>
+      <p>Configure <code>CCA_TRAFFIC_ZONE_ID</code> and <code>CCA_TRAFFIC_API_TOKEN</code> in the server environment and restart Django. Do not add the token to source code.</p>
+      <p class="muted">No extra tracking JavaScript or database migration is required. Existing Cloudflare HTTP traffic history can be queried within your plan's retention limits.</p>
+    </section>
+  {% elif traffic.status == "error" %}
+    <section class="traffic-panel">
+      <h2>Analytics temporarily unavailable</h2>
+      <p>Cloudflare did not return valid analytics. Check the read-only token, zone permissions, or API status, then try again.</p>
+    </section>
+  {% else %}
+    <div class="traffic-cards" aria-label="Traffic summary">
+      <div class="traffic-card"><strong>{{ traffic.page_views }}</strong><span>Page views</span></div>
+      <div class="traffic-card"><strong>{{ traffic.requests }}</strong><span>HTTP requests</span></div>
+      {% if traffic.days == 1 %}
+        <div class="traffic-card"><strong>{{ traffic.unique_today }}</strong><span>Estimated unique visitors today</span></div>
+      {% else %}
+        <div class="traffic-card"><strong>{{ traffic.average_daily_uniques }}</strong><span>Average daily unique visitors</span></div>
+      {% endif %}
+    </div>
+    <div class="traffic-panels">
+      <section class="traffic-panel">
+        <h2>Daily page views</h2>
+        <table><thead><tr><th>Date (UTC)</th><th>Page views</th></tr></thead>
+          <tbody>{% for day in traffic.daily %}
+            <tr><td>{{ day.date }}<div class="traffic-bar"><span style="width:{{ day.width }}%"></span></div></td><td>{{ day.views }}</td></tr>
+          {% endfor %}</tbody>
+        </table>
+      </section>
+      <section class="traffic-panel">
+        <h2>Popular public URLs</h2>
+        <table><thead><tr><th>Page path</th><th>Requests</th></tr></thead>
+          <tbody>{% for page in traffic.paths %}
+            <tr><td class="traffic-path">{{ page.path }}</td><td>{{ page.requests }}</td></tr>
+          {% empty %}<tr><td colspan="2">No public-page requests in this period.</td></tr>{% endfor %}</tbody>
+        </table>
+      </section>
+      <section class="traffic-panel">
+        <h2>Requests by country</h2>
+        <table><thead><tr><th>Country</th><th>Requests</th></tr></thead>
+          <tbody>{% for country in traffic.countries %}
+            <tr><td>{{ country.name }}</td><td>{{ country.requests }}</td></tr>
+          {% empty %}<tr><td colspan="2">No country data in this period.</td></tr>{% endfor %}</tbody>
+        </table>
+      </section>
+    </div>
+    <p class="muted">Cloudflare counts network traffic, including some automated requests. The page-view figure is Cloudflare's HTML page estimate. Popular URLs and country figures are requests, not individual people. Daily unique estimates are averaged rather than summed to avoid counting returning visitors repeatedly. Retrieved {{ traffic.refreshed }}.</p>
+  {% endif %}
+</div>
+{% endblock %}

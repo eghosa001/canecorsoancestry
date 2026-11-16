@@ -1,5 +1,12 @@
 {% extends "admin/index.html" %}
 {% block content %}
+{% if request.user.is_superuser %}
+<section style="background:var(--body-bg);border:1px solid var(--hairline-color);padding:1.25rem;margin:0 0 1.5rem;border-radius:8px">
+  <h2 style="margin-top:0">Website traffic</h2>
+  <p>See recent visitors, page views, trends, popular dog profiles and traffic by country.</p>
+  <p><a class="button" href="{% url 'admin-traffic' %}">Open traffic dashboard</a></p>
+</section>
+{% endif %}
 <section style="background:var(--body-bg);border:1px solid var(--hairline-color);padding:1.25rem;margin:0 0 1.5rem;border-radius:8px">
   <h2 style="margin-top:0">Administration and editing</h2>
   <p>Open the role-aware directory of all supported changes, including moderator role changes, permissions, deactivation, removal, dog health entries, kennels, litters and verification controls.</p>
