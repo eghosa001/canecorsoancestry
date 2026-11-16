@@ -9,8 +9,11 @@ from accounts.forms import EmailAuthenticationForm
 from accounts.views import merge_dogs_view, merge_dog_suggestions
 from accounts.views import AccountPasswordResetView
 from core.media_views import media_file
+from core.traffic_admin import website_traffic_admin
 from core.sitemaps import SITEMAPS
 from core.views import dashboard, healthz, home, robots_txt, storage_probe, privacy_notice, terms_notice, billing_notice
+
+admin.site.index_template = "admin/cca_index.html"
 
 handler404 = "core.views.branded_not_found"
 handler500 = "core.views.branded_server_error"
@@ -56,6 +59,7 @@ urlpatterns = [
     path("accounts/reset/<uidb64>/<token>/", PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
     path("accounts/reset/done/", PasswordResetCompleteView.as_view(), name="password_reset_complete"),
     path("member/", include("accounts.urls")),
+    path("admin/traffic/", admin.site.admin_view(website_traffic_admin), name="admin-traffic"),
     path("admin/merge-dogs/search/", admin.site.admin_view(merge_dog_suggestions), name="admin-merge-dogs-search"),
     path("admin/merge-dogs/", admin.site.admin_view(merge_dogs_view), name="admin-merge-dogs"),
     path("admin/", admin.site.urls),
