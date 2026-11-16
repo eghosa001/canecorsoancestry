@@ -413,42 +413,17 @@ def main():
             if label == "home":
                 if page.locator(".dog-card .verification-pill").count():
                     raise AssertionError("Homepage still shows dog verification badges")
-                # Evergreen Heritage loads in light mode unless the visitor has
-                # explicitly saved dark mode. Verify both actual theme palettes.
-                if page.locator("html").get_attribute("data-theme") != "light":
-                    raise AssertionError("Public homepage did not default to light mode")
-                gold = page.evaluate(
-                    "() => getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()"
-                )
-                if gold.lower() != "#244f42":
-                    raise AssertionError(f"Unexpected light-theme accent: {gold}")
-                if page.locator("[data-theme-toggle]").count() != 3:
-                    raise AssertionError("Production does not expose desktop, header-mobile, and menu-mobile theme controls")
+                # The current public template deliberately uses the original dark
+                # palette. The previous test still expected the retired light-first
+                # design and removed theme toggle controls, reporting false outages.
+                if page.locator("html").get_attribute("data-theme") != "dark":
+                    raise AssertionError("Public homepage did not default to dark mode")
+                if page.locator("[data-theme-toggle]").count():
+                    raise AssertionError("Retired theme toggle unexpectedly reappeared")
                 if page.locator(".hero-mark").count():
                     raise AssertionError("Obsolete decorative hero plaque is still rendered")
-                assert_visual_contrast(
-                    page,
-                    ".hero-search input",
-                    ".hero-search input",
-                    "Light-theme hero search",
-                )
-                assert_visual_contrast(
-                    page,
-                    ".action-card",
-                    ".action-card strong",
-                    "Light-theme home action card",
-                )
                 if page.locator(".hero-stats article").count() != 4:
                     raise AssertionError("Homepage should expose exactly four compact public metrics")
-                bg = page.evaluate(
-                    "() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()"
-                )
-                if bg.lower() != "#f2f1ea":
-                    raise AssertionError(f"Unexpected light-theme background: {bg}")
-
-                page.locator("[data-theme-toggle]").first.click()
-                if page.locator("html").get_attribute("data-theme") != "dark":
-                    raise AssertionError("Production theme toggle did not switch to dark mode")
                 dark_bg = page.evaluate(
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()"
                 )
@@ -456,7 +431,7 @@ def main():
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()"
                 )
                 if dark_bg.lower() != "#101110" or dark_accent.lower() != "#c7a25d":
-                    raise AssertionError(f"Unexpected dark-theme tokens: {dark_bg}, {dark_accent}")
+                    raise AssertionError(f"Unexpected live dark-theme tokens: {dark_bg}, {dark_accent}")
                 assert_visual_contrast(
                     page,
                     ".hero-search input",
@@ -469,9 +444,6 @@ def main():
                     ".action-card strong",
                     "Dark-theme home action card",
                 )
-                page.locator("[data-theme-toggle]").first.click()
-                if page.locator("html").get_attribute("data-theme") != "light":
-                    raise AssertionError("Production theme toggle did not restore light mode")
                 brand = page.locator(".brand-mark")
                 brand_src = brand.get_attribute("src") or ""
                 if "cane-corso-head-logo-right" not in brand_src or brand_src.startswith("data:"):
@@ -674,15 +646,12 @@ def main():
                       const header = document.querySelector(".site-header").getBoundingClientRect();
                       const title = document.querySelector(".hero h1").getBoundingClientRect();
                       const stats = [...document.querySelectorAll(".hero-stats article")].map((el) => el.getBoundingClientRect());
-                      const theme = document.querySelector(".mobile-header-theme");
                       return {
                         heroOffset: title.top - header.bottom,
                         firstY: stats[0]?.top,
                         secondY: stats[1]?.top,
                         thirdY: stats[2]?.top,
                         fourthY: stats[3]?.top,
-                        themeVisible: theme ? getComputedStyle(theme).display !== "none" : false,
-                        themeTop: theme ? theme.getBoundingClientRect().top : -1,
                         menuTop: document.querySelector(".mobile-nav").getBoundingClientRect().top,
                         logoWidth: document.querySelector(".brand-mark").getBoundingClientRect().width,
                       };
@@ -698,12 +667,8 @@ def main():
                     or restored_mobile["thirdY"] <= restored_mobile["firstY"]
                 ):
                     raise AssertionError(f"Mobile homepage statistics are not a balanced 2x2 grid: {restored_mobile}")
-                if not restored_mobile["themeVisible"]:
-                    raise AssertionError("Mobile light/dark control is not directly visible in the header")
                 if restored_mobile["logoWidth"] < 40:
                     raise AssertionError(f"Mobile logo is undersized: {restored_mobile}")
-                if abs(restored_mobile["themeTop"] - restored_mobile["menuTop"]) > 8:
-                    raise AssertionError(f"Mobile theme and menu controls are not on the same row: {restored_mobile}")
                 skip_link = page.locator(".skip-link")
                 page.evaluate("window.scrollTo(0, 0)")
                 page.keyboard.press("Tab")
@@ -715,25 +680,13 @@ def main():
                 page.locator(".mobile-nav > summary").click()
                 if not page.locator(".mobile-nav-panel").is_visible():
                     raise AssertionError("Production mobile menu did not open")
-                mobile_theme = page.locator(".mobile-nav-panel [data-theme-toggle]")
-                mobile_theme.click()
                 if page.locator("html").get_attribute("data-theme") != "dark":
-                    raise AssertionError("Production mobile theme toggle did not switch to dark mode")
+                    raise AssertionError("Mobile navigation unexpectedly changed the dark theme")
                 assert_visual_contrast(
                     page,
                     ".action-card",
                     ".action-card strong",
                     "Mobile dark-theme action card with menu open",
-                )
-                page.screenshot(path=OUT / "home-mobile-dark-menu.png", full_page=True)
-                mobile_theme.click()
-                if page.locator("html").get_attribute("data-theme") != "light":
-                    raise AssertionError("Production mobile theme toggle did not restore light mode")
-                assert_visual_contrast(
-                    page,
-                    ".action-card",
-                    ".action-card strong",
-                    "Mobile light-theme action card with menu open",
                 )
                 page.screenshot(path=OUT / "home-mobile-menu.png", full_page=True)
                 page.evaluate("window.scrollTo(0, 320)")
