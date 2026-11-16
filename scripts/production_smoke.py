@@ -413,42 +413,17 @@ def main():
             if label == "home":
                 if page.locator(".dog-card .verification-pill").count():
                     raise AssertionError("Homepage still shows dog verification badges")
-                # Evergreen Heritage loads in light mode unless the visitor has
-                # explicitly saved dark mode. Verify both actual theme palettes.
-                if page.locator("html").get_attribute("data-theme") != "light":
-                    raise AssertionError("Public homepage did not default to light mode")
-                gold = page.evaluate(
-                    "() => getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()"
-                )
-                if gold.lower() != "#244f42":
-                    raise AssertionError(f"Unexpected light-theme accent: {gold}")
-                if page.locator("[data-theme-toggle]").count() != 3:
-                    raise AssertionError("Production does not expose desktop, header-mobile, and menu-mobile theme controls")
+                # The current public template deliberately uses the original dark
+                # palette. The previous test still expected the retired light-first
+                # design and removed theme toggle controls, reporting false outages.
+                if page.locator("html").get_attribute("data-theme") != "dark":
+                    raise AssertionError("Public homepage did not default to dark mode")
+                if page.locator("[data-theme-toggle]").count():
+                    raise AssertionError("Retired theme toggle unexpectedly reappeared")
                 if page.locator(".hero-mark").count():
                     raise AssertionError("Obsolete decorative hero plaque is still rendered")
-                assert_visual_contrast(
-                    page,
-                    ".hero-search input",
-                    ".hero-search input",
-                    "Light-theme hero search",
-                )
-                assert_visual_contrast(
-                    page,
-                    ".action-card",
-                    ".action-card strong",
-                    "Light-theme home action card",
-                )
                 if page.locator(".hero-stats article").count() != 4:
                     raise AssertionError("Homepage should expose exactly four compact public metrics")
-                bg = page.evaluate(
-                    "() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()"
-                )
-                if bg.lower() != "#f2f1ea":
-                    raise AssertionError(f"Unexpected light-theme background: {bg}")
-
-                page.locator("[data-theme-toggle]").first.click()
-                if page.locator("html").get_attribute("data-theme") != "dark":
-                    raise AssertionError("Production theme toggle did not switch to dark mode")
                 dark_bg = page.evaluate(
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()"
                 )
@@ -456,7 +431,7 @@ def main():
                     "() => getComputedStyle(document.documentElement).getPropertyValue('--gold').trim()"
                 )
                 if dark_bg.lower() != "#101110" or dark_accent.lower() != "#c7a25d":
-                    raise AssertionError(f"Unexpected dark-theme tokens: {dark_bg}, {dark_accent}")
+                    raise AssertionError(f"Unexpected live dark-theme tokens: {dark_bg}, {dark_accent}")
                 assert_visual_contrast(
                     page,
                     ".hero-search input",
@@ -469,9 +444,6 @@ def main():
                     ".action-card strong",
                     "Dark-theme home action card",
                 )
-                page.locator("[data-theme-toggle]").first.click()
-                if page.locator("html").get_attribute("data-theme") != "light":
-                    raise AssertionError("Production theme toggle did not restore light mode")
                 brand = page.locator(".brand-mark")
                 brand_src = brand.get_attribute("src") or ""
                 if "cane-corso-head-logo-right" not in brand_src or brand_src.startswith("data:"):
