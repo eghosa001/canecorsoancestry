@@ -248,8 +248,9 @@ def browser_contract(browser_type, name, axe_source, mobile_options):
         branded_404 = (
             desktop.locator(".site-header").count()
             and desktop.locator(".auth-card").count()
-            and "That page is not in the ancestry database." in body_text
+            and "Page not found." in body_text
             and "Search dogs" in body_text
+            and "Go home" in body_text
         )
         if not branded_404:
             snippet = " ".join(body_text.split())[:500]
