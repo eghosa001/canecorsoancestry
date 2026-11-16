@@ -1,0 +1,82 @@
+name: Daily isolated member and moderator journey
+
+# Real public traffic, Oracle data, payment keys and owner accounts are never used.
+# The browser runs against an ephemeral Django database and file-backed inbox.
+on:
+  schedule:
+    - cron: "27 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/member-journey-daily.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cca-sandbox-member-journey-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  member-to-moderator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.qa_browser
+      CCA_QA_ISOLATED: "1"
+      PYTHONPATH: "."
+      PYTHONUNBUFFERED: "1"
+      BROWSER: chromium
+      CCA_QA_REPORT_ROOT: artifacts/member-journey
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Isolate all test data, email, images and files
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DATABASE_URL=sqlite:///$RUNNER_TEMP/cca-sandbox-member-journey.sqlite3" >> "$GITHUB_ENV"
+          echo "CCA_QA_MAIL_ROOT=$RUNNER_TEMP/cca-member-mail" >> "$GITHUB_ENV"
+          echo "CCA_QA_MEDIA_ROOT=$RUNNER_TEMP/cca-member-media" >> "$GITHUB_ENV"
+          echo "CCA_QA_FIXTURE_ROOT=$RUNNER_TEMP/cca-member-fixtures" >> "$GITHUB_ENV"
+          mkdir -p artifacts/member-journey
+      - name: Install test dependencies and Chromium
+        run: |
+          python -m pip install -r requirements.txt 'playwright==1.64.1'
+          python -m playwright install --with-deps chromium
+      - name: Validate isolated database and create temporary test identities
+        run: |
+          python -m py_compile scripts/qa_extended_seed.py scripts/qa_comprehensive_browser.py
+          python manage.py check
+          python manage.py migrate --noinput
+          python -m scripts.seed_browser_audit
+          python -m scripts.qa_extended_seed
+      - name: Verify moderator approval, publication and access security
+        run: python manage.py test accounts.tests_moderator_fast_review accounts.tests_moderator_final_publication --verbosity 1
+      - name: Start isolated test website
+        shell: bash
+        run: |
+          set -euo pipefail
+          python manage.py runserver --noreload 127.0.0.1:8000 > artifacts/member-journey/django.log 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -n 100 artifacts/member-journey/django.log
+          exit 1
+      - name: Browser test signup, email verification, draft, roles and research
+        run: python -m scripts.qa_comprehensive_browser --browser chromium
+      - name: Store diagnostic report only when the journey fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: member-journey-diagnostics
+          path: |
+            artifacts/member-journey/
+          retention-days: 7
+          if-no-files-found: warn
