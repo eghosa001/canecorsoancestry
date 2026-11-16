@@ -142,6 +142,8 @@ values = {
     "MEDIA_EDGE_URL_TTL": "300",
     "R2_GATEWAY_SIGNING_KEY": base64.b64encode(secret.encode()).decode(),
     "PAYSTACK_SECRET_KEY": os.environ.get("PAYSTACK_SECRET_KEY", ""),
+    "CCA_TRAFFIC_ZONE_ID": os.environ.get("CCA_TRAFFIC_ZONE_ID", ""),
+    "CCA_TRAFFIC_API_TOKEN": os.environ.get("CCA_TRAFFIC_API_TOKEN", ""),
     "CCA_SUPPORT_EMAIL": os.environ.get("CCA_SUPPORT_EMAIL", ""),
     "EMAIL_HOST": os.environ.get("EMAIL_HOST", ""),
     "EMAIL_HOST_USER": os.environ.get("EMAIL_HOST_USER", ""),
