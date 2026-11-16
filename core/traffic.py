@@ -10,6 +10,30 @@ from django.core.cache import cache
 
 log = logging.getLogger(__name__)
 API = "https://api.cloudflare.com/client/v4/graphql"
+# Public Web Analytics identifiers, not API credentials. This site already
+# collects browser beacons; do not install a second tracker.
+WEB_ACCOUNT = "19a03bec57c0277e01e1e70e241576af"
+WEB_SITE = "68b036386f3841018058c0128192ef26"
+WEB_DASHBOARD = (
+    f"https://dash.cloudflare.com/{WEB_ACCOUNT}/web-analytics/overview/visits"
+    f"?siteTag~in={WEB_SITE}&excludeBots=Yes"
+)
+BROWSER_QUERY = """
+query BrowserTraffic($account: string,
+  $audienceFilter: AccountRumPageloadEventsAdaptiveGroupsFilter_InputObject,
+  $automatedFilter: AccountRumPageloadEventsAdaptiveGroupsFilter_InputObject) {
+ viewer {
+  accounts(filter: {accountTag: $account}) {
+   audience: rumPageloadEventsAdaptiveGroups(limit: 1, filter: $audienceFilter) {
+    count sum {visits}
+   }
+   automated: rumPageloadEventsAdaptiveGroups(limit: 1, filter: $automatedFilter) {
+    count sum {visits}
+   }
+  }
+ }
+}
+"""
 QUERY = """
 query Traffic($zone: string, $since: Date, $until: Date,
               $start: Time, $end: Time, $host: string) {
@@ -50,6 +74,50 @@ def _public_path(path):
     ))
 
 
+def get_browser_traffic(token, days, now):
+    """Browser observations with known bots excluded; never claim exact humans.
+
+    Raw HTTP counts cannot be subtracted from beacon page loads to calculate
+    crawlers. They measure different populations and have different coverage.
+    """
+    host = urlparse(settings.SITE_URL).hostname or "canecorsoancestry.com"
+    first = now.date() - timedelta(days=days - 1)
+    filters = {
+        "siteTag": WEB_SITE,
+        "requestHost": host,
+        "requestPath_notlike": "/admin/%",
+        "datetime_geq": first.isoformat() + "T00:00:00Z",
+        "datetime_lt": now.isoformat(timespec="seconds").replace("+00:00", "Z"),
+    }
+    unavailable = {"status": "unavailable", "dashboard_url": WEB_DASHBOARD}
+    try:
+        response = requests.post(
+            API, json={"query": BROWSER_QUERY, "variables": {
+                "account": WEB_ACCOUNT,
+                "audienceFilter": {**filters, "bot": 0},
+                "automatedFilter": {**filters, "bot": 1},
+            }}, headers={"Authorization": f"Bearer {token}"}, timeout=(3, 7),
+        )
+        response.raise_for_status()
+        result = response.json()
+        if result.get("errors"):
+            raise ValueError("Browser analytics unavailable")
+        account = result["data"]["viewer"]["accounts"][0]
+        audience = account["audience"]
+        automated = account["automated"]
+        if not isinstance(audience, list) or not isinstance(automated, list):
+            raise ValueError("Missing browser analytics")
+        return {
+            "status": "ready", "dashboard_url": WEB_DASHBOARD,
+            "page_views": sum(_count(row.get("count")) for row in audience),
+            "visits": sum(_count((row.get("sum") or {}).get("visits")) for row in audience),
+            "automated_page_views": sum(_count(row.get("count")) for row in automated),
+        }
+    except (requests.RequestException, ValueError, TypeError, KeyError, IndexError) as exc:
+        log.warning("Browser analytics request unavailable (%s)", type(exc).__name__)
+        return unavailable
+
+
 def get_traffic(days=7):
     if days not in (1, 7, 30):
         days = 7
@@ -60,7 +128,7 @@ def get_traffic(days=7):
     now = datetime.now(timezone.utc)
     first = now.date() - timedelta(days=days - 1)
     host = urlparse(settings.SITE_URL).hostname or "canecorsoancestry.com"
-    key = f"cca:traffic:v1:{zone}:{host}:{days}:{now.date()}"
+    key = f"cca:traffic:v2:{zone}:{host}:{days}:{now.date()}"
     stored = cache.get(key)
     if stored is not None:
         return stored
@@ -129,7 +197,9 @@ def get_traffic(days=7):
         "unique_today": rows[-1]["uniques"],
         "average_daily_uniques": round(sum(row["uniques"] for row in rows) / days, 1),
         "paths": paths, "countries": countries,
+        "browser": get_browser_traffic(token, days, now),
         "refreshed": now.strftime("%d %b %Y %H:%M UTC"),
     }
     cache.set(key, report, timeout=300)
     return report
+

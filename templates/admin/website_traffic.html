@@ -43,18 +43,37 @@
       <p>Cloudflare did not return valid analytics. Check the read-only token, zone permissions, or API status, then try again.</p>
     </section>
   {% else %}
-    <div class="traffic-cards" aria-label="Traffic summary">
-      <div class="traffic-card"><strong>{{ traffic.page_views }}</strong><span>Page views</span></div>
-      <div class="traffic-card"><strong>{{ traffic.requests }}</strong><span>HTTP requests</span></div>
-      {% if traffic.days == 1 %}
-        <div class="traffic-card"><strong>{{ traffic.unique_today }}</strong><span>Estimated unique visitors today</span></div>
+    <section class="traffic-panel" aria-label="Browser audience">
+      <h2>Browser audience — known bots excluded</h2>
+      {% if traffic.browser.status == "ready" %}
+        <div class="traffic-cards">
+          <div class="traffic-card"><strong>{{ traffic.browser.visits }}</strong><span>Bot-filtered browser visits</span></div>
+          <div class="traffic-card"><strong>{{ traffic.browser.page_views }}</strong><span>Bot-filtered browser page views</span></div>
+          <div class="traffic-card"><strong>{{ traffic.browser.automated_page_views }}</strong><span>Detected bot browser page views</span></div>
+        </div>
+        <p>Use bot-filtered browser visits to assess your audience. Visits are not unique people; returning visitors can start more than one visit. Admin pages are excluded.</p>
+        <p class="muted">These are estimates from the existing Cloudflare browser beacon. Known bots are excluded, but undetected automation and browser-based tests may remain. Ad blockers and disabled JavaScript can hide genuine visits. Data starts when Web Analytics was enabled; earlier history cannot be reconstructed.</p>
       {% else %}
-        <div class="traffic-card"><strong>{{ traffic.average_daily_uniques }}</strong><span>Average daily unique visitors</span></div>
+        <p>Bot-filtered browser figures are unavailable. Raw network totals below are not a substitute for human visits.</p>
+        <p class="muted">The analytics token needs Account Analytics Read access to the existing Web Analytics site.</p>
+      {% endif %}
+      <p><a href="{{ traffic.browser.dashboard_url }}" target="_blank" rel="noopener noreferrer">Open Cloudflare browser report with bots excluded</a></p>
+    </section>
+    <details class="traffic-panel">
+      <summary>Raw network traffic — includes crawlers, scanners and automated tests</summary>
+      <p>These totals are not human audience counts. Do not subtract browser page views from network totals to calculate bot traffic: the sources measure different activity.</p>
+    <div class="traffic-cards" aria-label="Traffic summary">
+      <div class="traffic-card"><strong>{{ traffic.page_views }}</strong><span>Unfiltered network HTML page views</span></div>
+      <div class="traffic-card"><strong>{{ traffic.requests }}</strong><span>All HTTP requests</span></div>
+      {% if traffic.days == 1 %}
+        <div class="traffic-card"><strong>{{ traffic.unique_today }}</strong><span>Unfiltered unique clients today</span></div>
+      {% else %}
+        <div class="traffic-card"><strong>{{ traffic.average_daily_uniques }}</strong><span>Average daily unfiltered unique clients</span></div>
       {% endif %}
     </div>
     <div class="traffic-panels">
       <section class="traffic-panel">
-        <h2>Daily page views</h2>
+        <h2>Daily unfiltered network page views</h2>
         <table><thead><tr><th>Date (UTC)</th><th>Page views</th></tr></thead>
           <tbody>{% for day in traffic.daily %}
             <tr><td>{{ day.date }}<div class="traffic-bar"><span style="width:{{ day.width }}%"></span></div></td><td>{{ day.views }}</td></tr>
@@ -62,7 +81,7 @@
         </table>
       </section>
       <section class="traffic-panel">
-        <h2>Popular public URLs</h2>
+        <h2>Popular URLs — all network traffic</h2>
         <table><thead><tr><th>Page path</th><th>Requests</th></tr></thead>
           <tbody>{% for page in traffic.paths %}
             <tr><td class="traffic-path">{{ page.path }}</td><td>{{ page.requests }}</td></tr>
@@ -70,7 +89,7 @@
         </table>
       </section>
       <section class="traffic-panel">
-        <h2>Requests by country</h2>
+        <h2>Requests by country — all network traffic</h2>
         <table><thead><tr><th>Country</th><th>Requests</th></tr></thead>
           <tbody>{% for country in traffic.countries %}
             <tr><td>{{ country.name }}</td><td>{{ country.requests }}</td></tr>
@@ -79,6 +98,8 @@
       </section>
     </div>
     <p class="muted">Cloudflare counts network traffic, including some automated requests. The page-view figure is Cloudflare's HTML page estimate. Popular URLs and country figures are requests, not individual people. Daily unique estimates are averaged rather than summed to avoid counting returning visitors repeatedly. Retrieved {{ traffic.refreshed }}.</p>
+    </details>
   {% endif %}
 </div>
 {% endblock %}
+

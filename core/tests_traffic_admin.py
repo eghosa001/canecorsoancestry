@@ -77,7 +77,7 @@ class WebsiteTrafficTests(TestCase):
         env = {"CCA_TRAFFIC_ZONE_ID": "a" * 32, "CCA_TRAFFIC_API_TOKEN": "test-token"}
         with patch.dict(os.environ, env), patch(
             "core.traffic.requests.post", return_value=response
-        ) as post:
+        ) as post, patch("core.traffic.get_browser_traffic", return_value={"status": "unavailable"}):
             report = get_traffic(7)
             self.assertEqual(report["status"], "ready")
             self.assertEqual(report["page_views"], 14)
@@ -104,3 +104,4 @@ class WebsiteTrafficTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Analytics temporarily unavailable")
         self.assertEqual(response.context["traffic"]["days"], 7)
+
