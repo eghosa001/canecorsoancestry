@@ -28,9 +28,22 @@ jobs:
   verify:
     if: github.event_name != 'pull_request' && github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux, arm64, cca-oracle]
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: bash scripts/oracle_runner/check_offsite_backup_freshness.sh
+      - name: Verify offsite backup and recover an overdue snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          if bash scripts/oracle_runner/check_offsite_backup_freshness.sh; then
+            exit 0
+          fi
+          # GitHub may delay/drop an hourly schedule. Never hide a stale backup:
+          # produce a genuine encrypted, uploaded and verified snapshot instead.
+          echo "::warning::Offsite backup freshness failed; attempting a fresh encrypted Oracle backup."
+          bash scripts/oracle_runner/backup_local_postgres.sh
+          # If recovery is unsuccessful or the new R2 pointer remains stale,
+          # the monitor must still fail and alert the owner.
+          bash scripts/oracle_runner/check_offsite_backup_freshness.sh
