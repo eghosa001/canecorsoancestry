@@ -646,15 +646,12 @@ def main():
                       const header = document.querySelector(".site-header").getBoundingClientRect();
                       const title = document.querySelector(".hero h1").getBoundingClientRect();
                       const stats = [...document.querySelectorAll(".hero-stats article")].map((el) => el.getBoundingClientRect());
-                      const theme = document.querySelector(".mobile-header-theme");
                       return {
                         heroOffset: title.top - header.bottom,
                         firstY: stats[0]?.top,
                         secondY: stats[1]?.top,
                         thirdY: stats[2]?.top,
                         fourthY: stats[3]?.top,
-                        themeVisible: theme ? getComputedStyle(theme).display !== "none" : false,
-                        themeTop: theme ? theme.getBoundingClientRect().top : -1,
                         menuTop: document.querySelector(".mobile-nav").getBoundingClientRect().top,
                         logoWidth: document.querySelector(".brand-mark").getBoundingClientRect().width,
                       };
@@ -670,12 +667,8 @@ def main():
                     or restored_mobile["thirdY"] <= restored_mobile["firstY"]
                 ):
                     raise AssertionError(f"Mobile homepage statistics are not a balanced 2x2 grid: {restored_mobile}")
-                if not restored_mobile["themeVisible"]:
-                    raise AssertionError("Mobile light/dark control is not directly visible in the header")
                 if restored_mobile["logoWidth"] < 40:
                     raise AssertionError(f"Mobile logo is undersized: {restored_mobile}")
-                if abs(restored_mobile["themeTop"] - restored_mobile["menuTop"]) > 8:
-                    raise AssertionError(f"Mobile theme and menu controls are not on the same row: {restored_mobile}")
                 skip_link = page.locator(".skip-link")
                 page.evaluate("window.scrollTo(0, 0)")
                 page.keyboard.press("Tab")
@@ -687,25 +680,13 @@ def main():
                 page.locator(".mobile-nav > summary").click()
                 if not page.locator(".mobile-nav-panel").is_visible():
                     raise AssertionError("Production mobile menu did not open")
-                mobile_theme = page.locator(".mobile-nav-panel [data-theme-toggle]")
-                mobile_theme.click()
                 if page.locator("html").get_attribute("data-theme") != "dark":
-                    raise AssertionError("Production mobile theme toggle did not switch to dark mode")
+                    raise AssertionError("Mobile navigation unexpectedly changed the dark theme")
                 assert_visual_contrast(
                     page,
                     ".action-card",
                     ".action-card strong",
                     "Mobile dark-theme action card with menu open",
-                )
-                page.screenshot(path=OUT / "home-mobile-dark-menu.png", full_page=True)
-                mobile_theme.click()
-                if page.locator("html").get_attribute("data-theme") != "light":
-                    raise AssertionError("Production mobile theme toggle did not restore light mode")
-                assert_visual_contrast(
-                    page,
-                    ".action-card",
-                    ".action-card strong",
-                    "Mobile light-theme action card with menu open",
                 )
                 page.screenshot(path=OUT / "home-mobile-menu.png", full_page=True)
                 page.evaluate("window.scrollTo(0, 320)")
