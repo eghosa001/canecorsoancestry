@@ -39,3 +39,34 @@ All periods use UTC and report current-day data where available. Automated
 traffic can be represented in these Cloudflare estimates, and Cloudflare
 data availability depends on plan and historical retention. Google Search
 Console clicks are not visitor counts.
+
+
+## Browser audience and automated traffic
+
+The primary audience cards use the existing Cloudflare Web Analytics site
+`68b036386f3841018058c0128192ef26` in account
+`19a03bec57c0277e01e1e70e241576af`. These are public identifiers, not secrets.
+No additional beacon or tracking script is installed by the admin report.
+
+The same analytics API token also needs **Account > Account Analytics > Read**
+for this account. Keep its existing read-only Zone Analytics permission. If
+account access is missing, the audience section shows unavailable; it never
+relabels raw totals as humans or substitutes zero for an API failure.
+
+The browser query filters the site tag, exact site hostname and selected UTC
+period, excludes /admin/ paths, and uses bot=0 for the audience estimate.
+Detected bot browser page loads use bot=1 and remain separate. Visits are
+not unique people. Unidentified automation and browser tests can remain;
+ad blockers and disabled JavaScript can hide real visits.
+
+The original edge totals are retained under a collapsed **Raw network traffic**
+section. They include crawlers, scanners, tests, static requests and other
+traffic and are not human counts. Edge totals minus beacon totals are never
+reported as a bot count: they measure different populations. Raw network
+country and popular-path tables remain explicitly unfiltered.
+
+Historical browser data is limited to when Web Analytics was enabled and
+Cloudflare retention. It cannot reconstruct human traffic before collection.
+
+Official definitions: https://developers.cloudflare.com/web-analytics/data-metrics/dimensions/
+
