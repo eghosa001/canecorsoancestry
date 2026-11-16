@@ -28,6 +28,9 @@ jobs:
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || 'main' }}
           persist-credentials: false
+          # The last Django-path commit can predate HEAD; a shallow checkout makes
+          # Git treat HEAD as the root and creates false stale-release alerts.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
