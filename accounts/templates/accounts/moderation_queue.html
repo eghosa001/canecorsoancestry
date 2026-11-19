@@ -196,7 +196,7 @@
     <div class="panel-heading"><h2>Open dispute cases</h2><span>Cases flag contested facts but never alter canonical pedigree data automatically.</span></div>
     <div class="dispute-list">
       {% for dispute in disputes %}
-        <article class="dispute-card">
+        <article class="dispute-card" id="dispute-{{ dispute.pk }}">
           <div class="dispute-card-main">
             <span class="eyebrow">{% if dispute.is_photo_report %}Wrong dog photograph{% else %}{{ dispute.get_reason_display }}{% endif %}</span>
             <h3>{{ dispute.dog.name }}</h3>
