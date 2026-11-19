@@ -1,7 +1,11 @@
 """Release attestation must not mistake HTTP 200 or old deployments for readiness."""
+from types import SimpleNamespace
 from unittest import TestCase
+from unittest.mock import patch
 
-from scripts.verify_live_release import classify_attestation, fetch_health
+from scripts.verify_live_release import (
+    classify_attestation, deployed_release_covers_expected, fetch_health,
+)
 
 
 class ReleaseAttestationTests(TestCase):
@@ -19,6 +23,50 @@ class ReleaseAttestationTests(TestCase):
             commit_epoch=self.NOW - 9000, now_epoch=self.NOW,
         )
         self.assertEqual(status, "success")
+
+    def test_deployed_newer_main_merge_including_django_change_is_healthy(self):
+        with patch(
+            "scripts.verify_live_release.subprocess.run",
+            side_effect=[SimpleNamespace(returncode=0), SimpleNamespace(returncode=0)],
+        ) as git_check:
+            self.assertTrue(deployed_release_covers_expected(self.SHA, self.OLD))
+        self.assertEqual(
+            [call.args[0][-2:] for call in git_check.call_args_list],
+            [[self.SHA, self.OLD], [self.OLD, "HEAD"]],
+        )
+        status, message = classify_attestation(
+            {**self.HEALTH, "release": self.OLD},
+            self.SHA, commit_epoch=self.NOW - 9000, now_epoch=self.NOW,
+            verified_newer_release=True,
+        )
+        self.assertEqual(status, "success")
+        self.assertIn("includes", message)
+
+    def test_release_outside_main_or_missing_django_change_still_fails(self):
+        for return_codes in ([1], [0, 1]):
+            with self.subTest(return_codes=return_codes), patch(
+                "scripts.verify_live_release.subprocess.run",
+                side_effect=[
+                    SimpleNamespace(returncode=code) for code in return_codes
+                ],
+            ):
+                self.assertFalse(deployed_release_covers_expected(self.SHA, self.OLD))
+        with patch("scripts.verify_live_release.subprocess.run") as git_check:
+            self.assertFalse(deployed_release_covers_expected(self.SHA, "not-a-sha"))
+            git_check.assert_not_called()
+        status, _ = classify_attestation(
+            {**self.HEALTH, "release": self.OLD},
+            self.SHA, commit_epoch=self.NOW - 9000, now_epoch=self.NOW,
+        )
+        self.assertEqual(status, "failure")
+
+    def test_newer_main_release_cannot_override_unhealthy_origin(self):
+        status, _ = classify_attestation(
+            {**self.HEALTH, "status": "unhealthy", "release": self.OLD},
+            self.SHA, commit_epoch=self.NOW - 9000, now_epoch=self.NOW,
+            verified_newer_release=True,
+        )
+        self.assertEqual(status, "failure")
 
     def test_stale_release_warns_only_during_short_deploy_grace(self):
         payload = {**self.HEALTH, "release": self.OLD}

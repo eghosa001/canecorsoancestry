@@ -6,6 +6,7 @@ mismatch is reported as a warning; after grace it is a failing gate.
 import argparse
 import json
 import re
+import subprocess
 import time
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -14,7 +15,36 @@ HEX_SHA = re.compile(r"^[0-9a-f]{40}$")
 DEFAULT_GRACE_SECONDS = 90 * 60
 
 
-def classify_attestation(payload, expected_sha, *, commit_epoch, now_epoch=None, grace_seconds=DEFAULT_GRACE_SECONDS):
+def deployed_release_covers_expected(expected_sha, deployed_sha):
+    """Accept a deployed main commit containing the newest Django source.
+
+    Main merges may produce a newer release SHA than the most recent commit
+    touching Django paths. Require expected -> deployed -> main HEAD ancestry.
+    """
+    if (
+        not isinstance(expected_sha, str)
+        or not HEX_SHA.fullmatch(expected_sha)
+        or not isinstance(deployed_sha, str)
+        or not HEX_SHA.fullmatch(deployed_sha)
+    ):
+        return False
+    for older, newer in ((expected_sha, deployed_sha), (deployed_sha, "HEAD")):
+        try:
+            result = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", older, newer],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        if result.returncode != 0:
+            return False
+    return True
+
+
+def classify_attestation(payload, expected_sha, *, commit_epoch, now_epoch=None, grace_seconds=DEFAULT_GRACE_SECONDS, verified_newer_release=False):
     if not HEX_SHA.fullmatch(expected_sha):
         raise ValueError("Expected release SHA must be a 40-character lowercase Git SHA.")
     if not isinstance(payload, dict):
@@ -26,6 +56,11 @@ def classify_attestation(payload, expected_sha, *, commit_epoch, now_epoch=None,
     current = payload.get("release")
     if current == expected_sha:
         return "success", "Live Oracle Django release matches the latest deployable Django source on main."
+    if verified_newer_release and isinstance(current, str) and HEX_SHA.fullmatch(current):
+        return "success", (
+            f"Live Oracle Django release {current} is on main and includes "
+            f"the latest deployable Django source commit {expected_sha}."
+        )
     now = time.time() if now_epoch is None else now_epoch
     age = max(0, now - commit_epoch)
     if age < grace_seconds:
@@ -68,8 +103,14 @@ def main():
     args = parser.parse_args()
     try:
         payload = fetch_health(args.base_url)
+        deployed_sha = payload.get("release") if isinstance(payload, dict) else None
+        verified_newer_release = (
+            deployed_sha != args.expected_sha
+            and deployed_release_covers_expected(args.expected_sha, deployed_sha)
+        )
         status, message = classify_attestation(
-            payload, args.expected_sha, commit_epoch=args.commit_epoch
+            payload, args.expected_sha, commit_epoch=args.commit_epoch,
+            verified_newer_release=verified_newer_release,
         )
     except (ValueError, OSError, json.JSONDecodeError) as exc:
         print(f"::error::Release attestation unavailable: {exc}")
