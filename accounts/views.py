@@ -1603,13 +1603,23 @@ def moderation_queue(request):
         duplicate_candidates() if duplicate_scan_loaded else []
     )
 
-    disputes = list(
-        DisputeCase.objects.filter(
-            status__in=[DisputeCase.Status.OPEN, DisputeCase.Status.REVIEWING]
+    dispute_queryset = DisputeCase.objects.filter(
+        status__in=[DisputeCase.Status.OPEN, DisputeCase.Status.REVIEWING]
+    ).select_related("dog", "opened_by", "assigned_to")
+    # A direct alert must still open its exact dispute even when an older
+    # backlog has filled the normal 50-case queue preview.
+    try:
+        focus_dispute_id = uuid.UUID(request.GET.get("focus_dispute", ""))
+    except (ValueError, AttributeError, TypeError):
+        focus_dispute_id = None
+    if focus_dispute_id:
+        focused_disputes = list(dispute_queryset.filter(pk=focus_dispute_id))
+        disputes = focused_disputes + list(
+            dispute_queryset.exclude(pk=focus_dispute_id)
+            .order_by("status", "created_at")[:50 - len(focused_disputes)]
         )
-        .select_related("dog", "opened_by", "assigned_to")
-        .order_by("status", "created_at")[:50]
-    )
+    else:
+        disputes = list(dispute_queryset.order_by("status", "created_at")[:50])
     photo_dispute_ids = [row.pk for row in disputes]
     opened_photo_ids = {}
     if photo_dispute_ids:

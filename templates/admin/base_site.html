@@ -2,5 +2,5 @@
 {% load static %}
 {% block title %}{{ title }} | Cane Corso Ancestry administration{% endblock %}
 {% block branding %}<div id="site-name"><a href="{% url 'admin:index' %}">Cane Corso Ancestry · Administration</a></div>{% endblock %}
-{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'core/heritage-admin.css' %}?v=20261024-heritage-v1">{% endblock %}
-{% block nav-global %}{% endblock %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'core/heritage-admin.css' %}?v=20261024-heritage-v1"><link rel="stylesheet" href="{% static 'core/staff-review-alerts.css' %}?v=20261119-staff-review-v1">{% endblock %}
+{% block nav-global %}{% if staff_review_alerts %}<a class="cca-admin-review-link" href="{% url 'accounts:moderation' %}#pending-review" aria-label="{{ staff_review_alerts.aria_label }}">🔔 {{ staff_review_alerts.display_count }} pending reviews</a>{% endif %}{% endblock %}
