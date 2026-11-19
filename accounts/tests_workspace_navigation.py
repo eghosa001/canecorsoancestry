@@ -301,6 +301,24 @@ class StaffReviewAlertTests(TestCase):
         self.assertFalse(alerts["has_pending"])
         self.assertNotContains(response, "#dispute-" + str(self.dispute.pk))
 
+    def test_deep_link_keeps_a_new_dispute_visible_when_queue_is_full(self):
+        for index in range(51):
+            DisputeCase.objects.create(
+                dog=self.dog, opened_by=self.member,
+                reason=DisputeCase.Reason.OTHER,
+                details=f"Older review case {index}",
+            )
+        self.client.force_login(self.moderator)
+        home = self.client.get(reverse("home"))
+        link = next(
+            item["url"] for item in home.context["staff_review_alerts"]["items"]
+            if item["detail"].startswith("Dispute")
+        )
+        self.assertIn("focus_dispute=", link)
+        focused_id = link.split("focus_dispute=", 1)[1].split("#", 1)[0]
+        queue = self.client.get(reverse("accounts:moderation"), {"focus_dispute": focused_id})
+        self.assertContains(queue, 'id="dispute-' + focused_id + '"')
+
     def test_protected_proposal_is_signalled_only_to_owner(self):
         event = ModerationAudit.objects.create(
             action=ModerationAudit.Action.RECORD_CHANGED,
