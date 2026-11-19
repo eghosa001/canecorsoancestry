@@ -97,6 +97,12 @@ def site_metadata(request):
         }
         workspace_section = member_sections.get(view_name, "overview")
 
+    staff_review_alerts_data = None
+    if staff_role:
+        from accounts.staff_review_alerts import staff_review_alerts
+
+        staff_review_alerts_data = staff_review_alerts(request.user)
+
     # A canonical URL must not depend on a visitor's Host header or the
     # temporary workers.dev hostname once SITE_URL moves to a custom domain.
     public_root = settings.SITE_URL
@@ -112,6 +118,7 @@ def site_metadata(request):
         "workspace_nav": workspace_nav,
         "workspace_section": workspace_section,
         "staff_role": staff_role,
+        "staff_review_alerts": staff_review_alerts_data,
         "staff_role_label": {
             "owner": "Super Admin",
             "senior": "Senior Moderator",
