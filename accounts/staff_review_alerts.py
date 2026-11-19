@@ -42,7 +42,8 @@ def staff_review_alerts(user):
         items.append({
             "title": case.dog.name,
             "detail": "Dispute · " + case.get_reason_display(),
-            "url": reverse("accounts:moderation") + "#dispute-" + str(case.pk),
+            "url": (reverse("accounts:moderation") + "?focus_dispute=" + str(case.pk)
+                    + "#dispute-" + str(case.pk)),
         })
 
     # Only the Super Admin can decide protected pedigree proposals. Their
