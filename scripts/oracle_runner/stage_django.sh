@@ -377,6 +377,13 @@ sudo -n install -d -m 700 /etc/cca
 sudo -n install -d -m 755 /var/lib/cca/control
 # Persist uploaded media outside the read-only container across releases.
 sudo -n install -d -o 65532 -g 65532 -m 750 /var/lib/cca/media
+# Never switch production to an empty/incomplete VM media directory.
+# A human operator must mark photo/document recovery verified before cutover.
+if [[ "$MEDIA_BACKEND" == oracle-local ]] &&
+   ! sudo -n test -s /var/lib/cca/media/.cca-media-cutover-approved; then
+  echo "::error::Oracle media recovery has not been verified; refusing cutover." >&2
+  exit 1
+fi
 sudo -n install -o root -g root -m 600 "$temporary_env" "$APP_ENV"
 
 # Bind only on host loopback; Oracle ingress and Cloudflare routing remain
