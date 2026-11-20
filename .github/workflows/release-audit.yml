@@ -218,7 +218,11 @@ jobs:
           # GitHub scheduled workflows may be delayed or dropped. Back up the
           # live Oracle primary if the last verified offsite snapshot is stale.
           # If creation or verification fails, stop before touching Django.
-          if ! bash scripts/oracle_runner/check_offsite_backup_freshness.sh; then
+          if [[ "$CCA_MEDIA_BACKEND" == "oracle-local" ]]; then
+            # Emergency same-VM encrypted snapshot; independently verify and
+            # migrate to offsite backups when an unpaid R2 bucket is unavailable.
+            bash scripts/oracle_runner/backup_local_postgres_no_r2.sh
+          elif ! bash scripts/oracle_runner/check_offsite_backup_freshness.sh; then
             echo "::warning::Offsite backup is not fresh; creating and verifying a new encrypted snapshot."
             bash scripts/oracle_runner/backup_local_postgres.sh
             bash scripts/oracle_runner/check_offsite_backup_freshness.sh
