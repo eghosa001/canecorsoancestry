@@ -26,3 +26,30 @@ jobs:
             size="$(wc -c </tmp/cca-probe-body 2>/dev/null || echo 0)"
             echo "$kind HTTP=$code $mime bytes=$size"
           done
+
+      - name: Diagnose first real public dog photo without revealing signed URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --connect-timeout 8 --max-time 30 -sS \
+            https://canecorsoancestry.com/ -o /tmp/cca-home.html
+          python3 - <<'PY'
+          import re,html,urllib.request,urllib.error
+          source=open("/tmp/cca-home.html",encoding="utf-8").read()
+          matches=list(dict.fromkeys(html.unescape(x) for x in re.findall(
+            r'https://media\.canecorsoancestry\.com/_thumb/[^"<> ]+',source
+          )))
+          print("Found signed gallery images:",len(matches))
+          for link in matches[:3]:
+              try:
+                  req=urllib.request.Request(link,headers={"User-Agent":"Mozilla/5.0"})
+                  with urllib.request.urlopen(req,timeout=20) as r:
+                      print("real-photo HTTP",r.status,"content-type",r.headers.get("content-type"),
+                            "x-fallback",r.headers.get("x-cca-image-fallback-reason",""),
+                            "content-bytes",len(r.read(200000)))
+              except urllib.error.HTTPError as e:
+                  print("real-photo HTTP",e.code,"x-fallback",
+                        e.headers.get("x-cca-image-fallback-reason",""))
+              except Exception as e:
+                  print("real-photo failure",type(e).__name__)
+          PY
