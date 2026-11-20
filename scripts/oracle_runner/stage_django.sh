@@ -15,6 +15,10 @@ readonly PUBLIC_SITE
 export CCA_CANONICAL_SITE_URL="$PUBLIC_SITE"
 readonly MEDIA_EDGE="https://media.canecorsoancestry.com"
 MEDIA_BACKEND="${CCA_MEDIA_BACKEND:-r2}"
+# Recovery workflow writes this only after image and backup verification.
+if sudo -n test -s /var/lib/cca/media/.cca-media-cutover-approved; then
+  MEDIA_BACKEND=oracle-local
+fi
 [[ "$MEDIA_BACKEND" == r2 || "$MEDIA_BACKEND" == oracle-local ]] || {
   echo "::error::Unknown CCA_MEDIA_BACKEND" >&2; exit 2;
 }
