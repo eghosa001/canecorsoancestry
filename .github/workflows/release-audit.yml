@@ -194,6 +194,7 @@ jobs:
       EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
       DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
       CCA_SUPPORT_EMAIL: ${{ vars.CCA_SUPPORT_EMAIL }}
+      CCA_MEDIA_BACKEND: ${{ vars.CCA_MEDIA_BACKEND || 'r2' }}
       CCA_CANONICAL_SITE_URL: https://canecorsoancestry.com
     steps:
       - uses: actions/checkout@v4
