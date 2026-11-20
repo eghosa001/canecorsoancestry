@@ -14,9 +14,20 @@ PY
 readonly PUBLIC_SITE
 export CCA_CANONICAL_SITE_URL="$PUBLIC_SITE"
 readonly MEDIA_EDGE="https://media.canecorsoancestry.com"
+MEDIA_BACKEND="${CCA_MEDIA_BACKEND:-r2}"
+# Recovery workflow writes this only after image and backup verification.
+if sudo -n test -s /var/lib/cca/media/.cca-media-cutover-approved; then
+  MEDIA_BACKEND=oracle-local
+fi
+[[ "$MEDIA_BACKEND" == r2 || "$MEDIA_BACKEND" == oracle-local ]] || {
+  echo "::error::Unknown CCA_MEDIA_BACKEND" >&2; exit 2;
+}
+export CCA_MEDIA_BACKEND="$MEDIA_BACKEND"
 # Do not switch the live Django canonical host or media gateway to an
 # unreachable DNS zone. Fail before touching Oracle services or its database.
-for route in "$PUBLIC_SITE/__edge/health" "$MEDIA_EDGE/healthz/"; do
+health_routes=("$PUBLIC_SITE/__edge/health")
+if [[ "$MEDIA_BACKEND" == r2 ]]; then health_routes+=("$MEDIA_EDGE/healthz/"); fi
+for route in "${health_routes[@]}"; do
   status="$(curl --silent --show-error --connect-timeout 5 --max-time 12 \
     -o /dev/null -w '%{http_code}' "$route" || true)"
   if [[ "$status" != 200 ]]; then
@@ -137,6 +148,7 @@ values = {
     "DJANGO_HSTS_SECONDS": "31536000",
     "DJANGO_HSTS_INCLUDE_SUBDOMAINS": "1",
     "DJANGO_HSTS_PRELOAD": "1",
+    "CCA_MEDIA_BACKEND": os.environ["CCA_MEDIA_BACKEND"],
     "R2_GATEWAY_URL": "https://media.canecorsoancestry.com",
     "MEDIA_EDGE_BASE_URL": "https://media.canecorsoancestry.com",
     "MEDIA_EDGE_URL_TTL": "300",
@@ -367,6 +379,15 @@ fi
 
 sudo -n install -d -m 700 /etc/cca
 sudo -n install -d -m 755 /var/lib/cca/control
+# Persist uploaded media outside the read-only container across releases.
+sudo -n install -d -o 65532 -g 65532 -m 750 /var/lib/cca/media
+# Never switch production to an empty/incomplete VM media directory.
+# A human operator must mark photo/document recovery verified before cutover.
+if [[ "$MEDIA_BACKEND" == oracle-local ]] &&
+   ! sudo -n test -s /var/lib/cca/media/.cca-media-cutover-approved; then
+  echo "::error::Oracle media recovery has not been verified; refusing cutover." >&2
+  exit 1
+fi
 sudo -n install -o root -g root -m 600 "$temporary_env" "$APP_ENV"
 
 # Bind only on host loopback; Oracle ingress and Cloudflare routing remain
@@ -381,6 +402,7 @@ sudo -n "$PODMAN_BIN" create \
   --publish 127.0.0.1:18080:8080 \
   --env-file "$APP_ENV" \
   --volume /var/lib/cca/control:/run/cca:ro,Z \
+  --volume /var/lib/cca/media:/app/media:rw,Z \
   --read-only \
   --tmpfs /tmp:rw,nosuid,nodev,size=128m,mode=1777 \
   --user 65532:65532 \
@@ -481,11 +503,11 @@ code="$(curl --connect-timeout 2 --max-time 40 -sS -o "$probe_output" -w '%{http
   -H "X-CCA-Maintenance-Probe: $DJANGO_SECRET_KEY" \
   -H 'X-Forwarded-Proto: https' \
   "$URL/__internal/storage-probe/")"
-if [[ "$code" != 200 ]] || ! python3 - "$probe_output" <<'PY'
+if [[ "$code" != 200 ]] || ! python3 - "$probe_output" "$MEDIA_BACKEND" <<'PY'
 import json
 import sys
 payload = json.load(open(sys.argv[1], encoding="utf-8"))
-assert payload.get("status") == "ok" and payload.get("storage") == "r2"
+assert payload.get("status") == "ok" and payload.get("storage") == sys.argv[2]
 PY
 then
   # The authenticated Django probe already returns sanitized failure fields.
@@ -509,7 +531,7 @@ PY
   echo "::error::Oracle -> R2 storage probe failed (HTTP $code)." >&2
   exit 1
 fi
-echo "PASS: Oracle-to-R2 authenticated missing-check, upload, read-back and cleanup succeeded."
+echo "PASS: Oracle media ($MEDIA_BACKEND) upload, read-back and cleanup succeeded."
 
 # A local Django 200 is not proof that the public Worker can reach Oracle.
 # Fail the release if the user-facing route is not reachable or still serves
@@ -556,7 +578,7 @@ fi
 echo "PASS: Both public and member pedigree PDF routes are live and require login."
 echo "PASS: Cloudflare public homepage HTTP 200 and exact Django release SHA verified."
 
-echo "PASS: Oracle CCA stage is healthy at 127.0.0.1:18080; DB and R2 work."
+echo "PASS: Oracle CCA stage is healthy at 127.0.0.1:18080; DB and $MEDIA_BACKEND media work."
 echo "Oracle container updated; Cloudflare routing was not modified. If Oracle is serving production, this was a live Django restart."
 {
   echo "## Oracle Django container update completed (Cloudflare routing unchanged)"
@@ -565,7 +587,7 @@ echo "Oracle container updated; Cloudflare routing was not modified. If Oracle i
   echo "- Service: $APP_SERVICE (enabled)"
   echo "- Local origin: http://127.0.0.1:18080 (loopback only)"
   echo "- Database backend: $DB_MODE; schema migrations current"
-  echo "- Cloudflare R2: authenticated upload/read/delete probe passed"
+  echo "- Media: $MEDIA_BACKEND upload/read/delete probe passed"
   echo "- Edge authentication: direct access denied; trusted login succeeded"
   echo "- Cloudflare private VPC tunnel: active and enabled after app restart"
   echo "- Cloudflare public homepage: HTTP 200; exact Django SHA verified"

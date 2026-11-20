@@ -105,11 +105,12 @@ def healthz(request):
 @csrf_exempt
 @require_POST
 def storage_probe(request):
-    """Private deploy-time check of the exact Django -> R2 media path."""
+    """Private deploy-time round-trip check for the configured media backend."""
     supplied = request.headers.get("X-CCA-Storage-Probe", "")
     if not supplied or not hmac.compare_digest(supplied, settings.SECRET_KEY):
         raise Http404
 
+    storage_kind = getattr(settings, "CCA_MEDIA_BACKEND", "r2")
     key = f"smoke/runtime/{uuid.uuid4().hex}.jpg"
     payload = b"\xff\xd8\xff\xe0cca-runtime-r2-probe\xff\xd9"
     saved_name = ""
@@ -143,13 +144,13 @@ def storage_probe(request):
         with default_storage.open(saved_name, "rb") as handle:
             restored = handle.read()
         if restored != payload:
-            raise OSError("R2 read-back did not match the uploaded bytes.")
+            raise OSError("Media read-back did not match the uploaded bytes.")
     except Exception as exc:
         logger.exception("Live storage probe failed at stage=%s", stage)
         response = JsonResponse(
             {
                 "status": "unhealthy",
-                "storage": "r2",
+                "storage": storage_kind,
                 "stage": stage,
                 "error_type": type(exc).__name__,
                 "http_status": getattr(exc, "code", None),
@@ -172,7 +173,7 @@ def storage_probe(request):
         response = JsonResponse(
             {
                 "status": "ok",
-                "storage": "r2",
+                "storage": storage_kind,
                 "stage": "complete",
                 **diagnostics,
             }
