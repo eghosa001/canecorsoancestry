@@ -49,7 +49,7 @@ jobs:
       - name: Mark fully verified recovery and dispatch CI-gated Oracle release
         shell: bash
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           sudo -n sh -c 'printf "Drive-backed archive restoration passed; backup verified.\n" > /var/lib/cca/media/.cca-media-cutover-approved'
