@@ -142,6 +142,57 @@ def recover(key, record):
     return "failed"
 
 
+def recover_bellissimo(known):
+    """Recover separately imported Bellissimo dog images from source git blobs."""
+    import hashlib
+    from urllib.parse import quote
+    seed = json.loads((REPO_ROOT / "data/seeds/bellissimo-media.json").read_text())
+    base = "https://raw.githubusercontent.com/" + seed["source_repository"] + "/" + seed["source_commit"] + "/"
+    counts = {"restored": 0, "existing": 0, "skipped": 0, "failed": 0}
+    for item in seed["items"]:
+        key = item["r2_key"]
+        if key not in known:
+            counts["skipped"] += 1
+            continue
+        destination = (ROOT / key).resolve()
+        if not destination.is_relative_to(ROOT.resolve()):
+            counts["failed"] += 1
+            continue
+        if destination.is_file() and destination.stat().st_size > 0:
+            counts["existing"] += 1
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        blob_url = base + quote(item["source_path"], safe="/")
+        tmp = None
+        try:
+            req = Request(blob_url, headers={"User-Agent": "CaneCorsoAncestry-Recovery/1.0"})
+            with urlopen(req, timeout=35) as response:
+                payload = response.read(MAX_IMAGE_BYTES + 1)
+            expected_sha = item["source_blob_sha"]
+            git_data = b"blob " + str(len(payload)).encode() + b"\0" + payload
+            actual_sha = hashlib.sha1(git_data).hexdigest()
+            if (len(payload) != item["size"] or len(payload) > MAX_IMAGE_BYTES
+                    or not valid_image(payload[:16]) or actual_sha != expected_sha):
+                raise ValueError("source image mismatch")
+            fd, tmp = tempfile.mkstemp(prefix=".bellissimo-recover-", dir=destination.parent)
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.chmod(tmp, 0o640)
+            try:
+                os.link(tmp, destination)
+                counts["restored"] += 1
+            except FileExistsError:
+                counts["existing"] += 1
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+            counts["failed"] += 1
+        finally:
+            if tmp:
+                Path(tmp).unlink(missing_ok=True)
+    print(f"Bellissimo recovery: {counts}", flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--workers", type=int, default=6)
@@ -196,6 +247,7 @@ def main():
         return
     if coverage < 0.95:
         raise SystemExit("Below 95% archive photo coverage; do NOT enable Oracle local media")
+    recover_bellissimo(keys)
     print("Archive recovery passed; run independent private document checks before cutover")
 
 
