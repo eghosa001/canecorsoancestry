@@ -544,6 +544,12 @@ function cacheOptimizedPhoto(cache, cacheKey, response, ctx) {
 // owner's verified Google Drive archive. It never handles private documents,
 // medical evidence, new uploads, or user-created photographs. HMAC validation
 // happens BEFORE calling this function.
+// Verified same-dog historical photo used only while a newly uploaded
+// replacement is inaccessible in disabled R2. Canonical ID 88648 is Tabasco.
+const VERIFIED_SAME_DOG_PHOTO = Object.freeze({
+  "dogs/2026/10/IMG_1946.jpg": "dogs/archive/088/88648.jpg",
+});
+
 function driveArchiveIdForKey(key) {
   if (typeof key !== "string" ||
       !new RegExp("^dogs/archive/[0-9]{3}/[0-9]+[.](?:jpe?g|png|webp|avif)$").test(key)) {
@@ -553,7 +559,9 @@ function driveArchiveIdForKey(key) {
 }
 
 async function originalDriveArchivePhoto(key, method = "GET") {
-  const id = driveArchiveIdForKey(key);
+  const archiveKey = Object.hasOwn(VERIFIED_SAME_DOG_PHOTO, key)
+    ? VERIFIED_SAME_DOG_PHOTO[key] : key;
+  const id = driveArchiveIdForKey(archiveKey);
   const source = Object.hasOwn(bellissimoSources, key) ? bellissimoSources[key] : null;
   if (!id && !source) return null;
   if (method === "HEAD") {
