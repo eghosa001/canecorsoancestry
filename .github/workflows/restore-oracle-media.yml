@@ -1,0 +1,69 @@
+name: Restore actual dog photos to Oracle without R2
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/oracle_runner/restore_drive_media.py"
+      - ".github/workflows/restore-oracle-media.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: cca-oracle-photo-recovery
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    if: github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Ensure recovery targets the current protected main
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          current="$(git ls-remote https://github.com/eghosa001/canecorsoancestry.git refs/heads/main | cut -f1)"
+          test -n "$current" && test "$actual" = "$current"
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = "local"
+          sudo -n podman exec cca-pg-shadow pg_isready -h 127.0.0.1 -U cca_shadow_admin -d cca_live
+          sudo -n podman container exists cca-oracle-staging
+          sudo -n install -d -o 65532 -g 65532 -m 750 /var/lib/cca/media
+          test "$(df -Pk /var/lib/cca/media | awk 'END {print $4}')" -gt 4194304
+      - name: Copy only matching original Drive photographs to persistent Oracle disk
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n python3 scripts/oracle_runner/restore_drive_media.py --write --workers 6
+      - name: Verify encrypted database backup before changing media settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/oracle_runner/backup_local_postgres_no_r2.sh
+      - name: Mark fully verified recovery and dispatch CI-gated Oracle release
+        shell: bash
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          set -euo pipefail
+          sudo -n sh -c 'printf "Drive-backed archive restoration passed; backup verified.\n" > /var/lib/cca/media/.cca-media-cutover-approved'
+          sudo -n chmod 600 /var/lib/cca/media/.cca-media-cutover-approved
+          code="$(curl --silent --show-error --connect-timeout 10 --max-time 25 \
+            -o /tmp/cca-media-release-dispatch -w '%{http_code}' \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/eghosa001/canecorsoancestry/actions/workflows/release-audit.yml/dispatches \
+            -d '{"ref":"main"}')"
+          test "$code" = "204" || {
+            echo "::error::Photos restored but release dispatch returned HTTP $code"
+            exit 1
+          }
+          echo "PASS: restored images verified, protected main release audit dispatched."
