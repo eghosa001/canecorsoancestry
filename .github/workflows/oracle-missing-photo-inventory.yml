@@ -1,0 +1,63 @@
+name: Locate missing dog photo originals and same-dog backups
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/oracle-missing-photo-inventory.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enumerate exact missing public dog photos and proven same-dog alternatives
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n podman exec -i cca-oracle-staging python manage.py shell -c '
+          import json
+          from pathlib import Path
+          from django.core.files.storage import default_storage
+          from registry.models import DogImage
+          from registry.querysets import published_dogs
+          from django.db.models import Q
+          qs=DogImage.objects.filter(dog__in=published_dogs()).select_related("dog").order_by("dog__name","created_at")
+          by_dog={}
+          rows=list(qs)
+          for x in rows:
+              by_dog.setdefault(str(x.dog_id),[]).append(x)
+          missing=[]
+          for x in rows:
+              if not x.image.name or x.image.name.startswith("dogs/archive/"):
+                  continue
+              if default_storage.exists(x.image.name):
+                  continue
+              alternatives=[{"key":y.image.name,"is_primary":y.is_primary} for y in by_dog[str(x.dog_id)] if y.pk != x.pk and y.image.name and default_storage.exists(y.image.name)]
+              missing.append({"key":x.image.name,"dog":x.dog.name,"slug":x.dog.slug,"photo_id":x.pk,"photo_date":str(x.created_at.date()),"sha256":x.content_sha256 or "", "is_primary":x.is_primary,"same_dog_existing":alternatives})
+          seen=set()
+          unique=[]
+          for row in missing:
+              if row["key"] not in seen:
+                  unique.append(row);seen.add(row["key"])
+          print("EXACT_PUBLIC_MISSING_START")
+          for row in unique:
+              print(json.dumps(row,ensure_ascii=True,sort_keys=True))
+          print("EXACT_PUBLIC_MISSING_END")
+          print("TOTAL_MISSING_PUBLIC_UNIQUE",len(unique))
+          print("SAME_DOG_ALTERNATIVES",sum(bool(x["same_dog_existing"]) for x in unique))
+          '
+      - name: Search existing Oracle local media, backups and original upload names (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RECOVERY_MEDIA_MOUNTS:"
+          sudo -n findmnt -T /var/lib/cca/media -o SOURCE,TARGET,FSTYPE -n
+          echo "POTENTIAL_MEDIA_FOLDERS:"
+          sudo -n find /var/lib/cca /opt /srv /home/opc /var/backups -maxdepth 5 -type d \( -iname "*media*" -o -iname "*upload*" -o -iname "*backup*" \) -print 2>/dev/null | head -90 || true
+          echo "LOCAL_UPLOADS_COUNT:"
+          sudo -n find /var/lib/cca/media/dogs/2026 -type f 2>/dev/null | wc -l
+          echo "OTHER_MEDIA_GLOBS:"
+          sudo -n find /var/lib/cca /opt /srv /home/opc /var/backups -type f \( -iname 'IMG_1946*' -o -iname 'IMG_0347*' -o -iname '*WhatsApp_Image_2026-10-15_at_8.08.53_PM*' -o -iname 'IMG_5235*' \) -print 2>/dev/null | head -60 || true
