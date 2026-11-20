@@ -217,8 +217,8 @@ jobs:
           location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}' /tmp/media-first.headers)"
           echo "Public media entry -> HTTP $first_status"
           echo "Redirect target host: $(printf '%s' "$location" | sed -E 's#https?://([^/]+).*#\\1#')"
-          test "$first_status" = "302"
-          test -n "$location"
+          [[ "$first_status" == "200" || "$first_status" == "302" ]]
+          if [[ "$first_status" == "302" ]]; then test -n "$location"; fi
           final_status="$(curl -L --connect-timeout 10 --max-time 30 -sS -D /tmp/media-final.headers -o /tmp/media-probe.bin -w '%{http_code}' "$PUBLIC_SITE$media_path" || true)"
           echo "Public media final -> HTTP $final_status"
           test "$final_status" = "200"
@@ -277,6 +277,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Oracle local media does not generate R2 CDN signatures. The prior
+          # public photo step has already verified HTTP 200 + actual image bytes.
+          if sudo -n test -s /var/lib/cca/media/.cca-media-cutover-approved; then
+            echo "PASS: Oracle-local images validated; R2 signed CDN is disabled."
+            exit 0
+          fi
           python - <<'PY'
           import os
           from html.parser import HTMLParser
