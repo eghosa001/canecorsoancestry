@@ -88,7 +88,11 @@ jobs:
           set -euo pipefail
           # If a scheduled GitHub backup was missed, create and verify one now.
           # Never replace the running Django container unless verification passes.
-          if ! bash scripts/oracle_runner/check_offsite_backup_freshness.sh; then
+          if [[ "$CCA_MEDIA_BACKEND" == "oracle-local" ]]; then
+            # Emergency same-VM encrypted snapshot; independently verify and
+            # migrate to offsite backups when an unpaid R2 bucket is unavailable.
+            bash scripts/oracle_runner/backup_local_postgres_no_r2.sh
+          elif ! bash scripts/oracle_runner/check_offsite_backup_freshness.sh; then
             echo "::warning::Offsite backup is not fresh; creating and verifying a new encrypted snapshot."
             bash scripts/oracle_runner/backup_local_postgres.sh
             bash scripts/oracle_runner/check_offsite_backup_freshness.sh
