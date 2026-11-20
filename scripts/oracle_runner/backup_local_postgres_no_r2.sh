@@ -14,9 +14,13 @@ sudo -n podman exec cca-pg-shadow pg_isready -h 127.0.0.1 \
   -U cca_shadow_admin -d cca_live >/dev/null
 readonly ROOT=/var/lib/cca/pgshadow/backup/oracle-local
 sudo -n install -d -o root -g root -m 0700 "$ROOT"
-[[ "$(df -Pk "$ROOT" | awk 'END {print $4}')" -gt 4194304 ]] || {
-  echo "::error::Less than 4 GiB free for safe database backup"; exit 1;
+# ROOT is root-only (0700): df without sudo fails with permission denied
+# and previously made the disk check falsely report zero free space.
+available_kib="$(sudo -n df -Pk "$ROOT" | awk 'END {print $4}')"
+[[ "$available_kib" =~ ^[0-9]+$ && "$available_kib" -gt 4194304 ]] || {
+  echo "::error::Insufficient verified free space for encrypted database backup"; exit 1;
 }
+echo "Oracle encrypted-backup preflight: free_KiB=$available_kib"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 run_id="${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
 dump="$(mktemp "${RUNNER_TEMP:-/tmp}/cca-local-db-XXXXXXXX")"
