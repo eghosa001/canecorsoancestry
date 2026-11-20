@@ -127,6 +127,7 @@ def recover(key, record):
                     os.fsync(output.fileno())
             if received != expected or not valid_image(first):
                 raise ValueError("image size/type mismatch")
+            os.chown(temp, 65532, 65532)
             os.chmod(temp, 0o640)
             try:
                 os.link(temp, dest)
@@ -179,6 +180,7 @@ def recover_bellissimo(known):
                 stream.write(payload)
                 stream.flush()
                 os.fsync(stream.fileno())
+            os.chown(tmp, 65532, 65532)
             os.chmod(tmp, 0o640)
             try:
                 os.link(tmp, destination)
