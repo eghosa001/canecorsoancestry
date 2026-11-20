@@ -1,0 +1,38 @@
+name: Oracle photo-recovery disk preflight (read only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/oracle-photo-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect actual storage for safe cutover
+        run: |
+          set -euo pipefail
+          echo "FREE ROOT KiB: $(df -Pk / | awk 'END {print $4}')"
+          echo "FREE MEDIA KiB: $(df -Pk /var/lib/cca/media | awk 'END {print $4}')"
+          echo "FREE BACKUP KiB: $(df -Pk /var/lib/cca/pgshadow/backup | awk 'END {print $4}')"
+          echo "DISK:"
+          df -h / /var/lib/cca/media /var/lib/cca/pgshadow/backup
+          echo "MEDIA SIZE:"
+          sudo -n du -sh /var/lib/cca/media
+          echo "BACKUP SIZE:"
+          sudo -n du -sh /var/lib/cca/pgshadow/backup
+          echo "APP VOLUME MOUNT:"
+          sudo -n podman inspect cca-oracle-staging --format '{{json .Mounts}}' | python3 -c 'import sys,json; m=json.load(sys.stdin);print([{"destination":x.get("Destination"),"source":x.get("Source")} for x in m])'
+          echo "POSTGRES DATABASE SIZE:"
+          sudo -n podman exec cca-pg-shadow psql -U cca_shadow_admin -d cca_live -Atc "SELECT pg_size_pretty(pg_database_size('cca_live'))"
+          echo "PHOTO FILES ON DISK:"
+          sudo -n find /var/lib/cca/media/dogs/archive -type f | wc -l
+          echo "CUTOVER APPROVAL STATUS:"
+          if sudo -n test -s /var/lib/cca/media/.cca-media-cutover-approved; then echo approved; else echo pending; fi
