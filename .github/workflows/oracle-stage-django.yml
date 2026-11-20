@@ -88,7 +88,7 @@ jobs:
           set -euo pipefail
           # If a scheduled GitHub backup was missed, create and verify one now.
           # Never replace the running Django container unless verification passes.
-          if [[ "$CCA_MEDIA_BACKEND" == "oracle-local" ]]; then
+          if [[ "$CCA_MEDIA_BACKEND" == "oracle-local" ]] || sudo -n test -s /var/lib/cca/media/.cca-media-cutover-approved; then
             # Emergency same-VM encrypted snapshot; independently verify and
             # migrate to offsite backups when an unpaid R2 bucket is unavailable.
             bash scripts/oracle_runner/backup_local_postgres_no_r2.sh
