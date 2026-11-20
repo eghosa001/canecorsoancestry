@@ -15,16 +15,31 @@ ORIGIN_EDGE_SECRET = os.getenv("CCA_ORIGIN_EDGE_SECRET", "").strip()
 if not ORIGIN_EDGE_SECRET or ORIGIN_EDGE_SECRET == SECRET_KEY:  # noqa: F405
     raise ImproperlyConfigured("Oracle production requires a distinct Cloudflare origin credential.")
 
-# Oracle uses R2 object storage directly through its authenticated Cloudflare
-# gateway. Production storage must not import retired provider settings.
+# Oracle-local media is an opt-in no-subscription alternative. All private
+# media still passes through Django's per-file authorization at /media/.
+# Mount /var/lib/cca/media into /app/media before enabling this backend.
+CCA_MEDIA_BACKEND = os.getenv("CCA_MEDIA_BACKEND", "r2").strip().lower()
+if CCA_MEDIA_BACKEND not in {"r2", "oracle-local"}:
+    raise ImproperlyConfigured("CCA_MEDIA_BACKEND must be r2 or oracle-local.")
+
 R2_GATEWAY_URL = os.getenv("R2_GATEWAY_URL", "https://media.canecorsoancestry.com").rstrip("/")
-MEDIA_EDGE_BASE_URL = os.getenv("MEDIA_EDGE_BASE_URL", R2_GATEWAY_URL).rstrip("/")
 MEDIA_EDGE_URL_TTL = int(os.getenv("MEDIA_EDGE_URL_TTL", "300"))
 R2_GATEWAY_SIGNING_KEY = os.getenv("R2_GATEWAY_SIGNING_KEY", "").strip()
-if not R2_GATEWAY_URL or not R2_GATEWAY_SIGNING_KEY:
-    raise ImproperlyConfigured("Oracle production requires the authenticated R2 media gateway.")
+
+if CCA_MEDIA_BACKEND == "r2":
+    MEDIA_EDGE_BASE_URL = os.getenv("MEDIA_EDGE_BASE_URL", R2_GATEWAY_URL).rstrip("/")
+    if not R2_GATEWAY_URL or not R2_GATEWAY_SIGNING_KEY:
+        raise ImproperlyConfigured("Oracle production requires the authenticated R2 media gateway.")
+    media_storage = "core.r2_gateway_storage.CloudflareR2GatewayStorage"
+else:
+    # Stop generating signed R2 URLs. Existing templates fall back to the
+    # permission-checked /media/ route, and files stay on the persistent VM disk.
+    MEDIA_EDGE_BASE_URL = ""
+    MEDIA_ROOT = BASE_DIR / "media"  # noqa: F405
+    media_storage = "django.core.files.storage.FileSystemStorage"
+
 STORAGES = {
-    "default": {"BACKEND": "core.r2_gateway_storage.CloudflareR2GatewayStorage"},
+    "default": {"BACKEND": media_storage},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
 }
 
