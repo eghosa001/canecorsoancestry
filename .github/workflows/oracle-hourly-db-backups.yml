@@ -51,7 +51,7 @@ jobs:
       - name: Verify encrypted Oracle PostgreSQL backup
         shell: bash
         run: |
-          if [[ "$CCA_MEDIA_BACKEND" == "oracle-local" ]]; then
+          if [[ "$CCA_MEDIA_BACKEND" == "oracle-local" ]] || sudo -n test -s /var/lib/cca/media/.cca-media-cutover-approved; then
             bash scripts/oracle_runner/backup_local_postgres_no_r2.sh
           else
             bash scripts/oracle_runner/backup_local_postgres.sh
