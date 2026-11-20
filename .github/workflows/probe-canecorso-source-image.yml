@@ -81,3 +81,39 @@ jobs:
           if any(not x[3] for x in results):
               raise SystemExit("Some public dog photographs are still not accessible")
           PY
+
+      - name: Check missing-upload dog cards for alternate photo of the same dog
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import html
+          import re
+          from urllib.request import urlopen, Request
+          from urllib.parse import urlsplit
+          failed=[
+              "WhatsApp_Image_2026-10-15_at_8.08.53_PM.jpg",
+              "IMG_1946.jpg",
+              "IMG_0347.jpeg",
+              "IMG_5093.jpg",
+              "IMG_1956.jpg",
+              "IMG_5235.jpg",
+          ]
+          url="https://canecorsoancestry.com/dogs/"
+          with urlopen(Request(url,headers={"User-Agent":"Mozilla/5.0"}),timeout=25) as r:
+              content=html.unescape(r.read().decode())
+          for name in failed:
+              at=content.find(name)
+              if at<0:
+                  print(f"{name}: not on directory page",flush=True)
+                  continue
+              beg=max(content.rfind("<article",0,at),content.rfind("<li ",0,at),at-700)
+              end=min(len(content),at+1300)
+              excerpt=content[beg:end]
+              images=re.findall(r'/_thumb/(dogs/[^?"<> ]+)',excerpt)
+              links=re.findall(r'href="(/dogs/[^"#? ]+)',excerpt)
+              alt=re.findall(r'alt="([^"]+)"',excerpt)
+              print(f"{name}: public_page_links={list(dict.fromkeys(links))[:4]} "
+                    f"image_keys={list(dict.fromkeys(images))[:5]} "
+                    f"alt={alt[:3]}",flush=True)
+          PY
