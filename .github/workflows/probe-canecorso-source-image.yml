@@ -83,6 +83,7 @@ jobs:
           PY
 
       - name: Check missing-upload dog cards for alternate photo of the same dog
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
