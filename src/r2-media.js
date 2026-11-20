@@ -545,7 +545,7 @@ function cacheOptimizedPhoto(cache, cacheKey, response, ctx) {
 // happens BEFORE calling this function.
 function driveArchiveIdForKey(key) {
   if (typeof key !== "string" ||
-      !/^dogs\\/archive\\/\\d{3}\\/\\d+\\.(?:jpe?g|png|webp|avif)$/.test(key)) {
+      !new RegExp("^dogs/archive/[0-9]{3}/[0-9]+[.](?:jpe?g|png|webp|avif)$").test(key)) {
     return null;
   }
   return Object.hasOwn(driveArchiveIds, key) ? driveArchiveIds[key] : null;
