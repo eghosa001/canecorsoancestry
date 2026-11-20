@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/probe-canecorso-source-image.yml"
+      - "src/r2-media.js"
+      - "src/bellissimo-source-map.js"
 
 permissions:
   contents: read
