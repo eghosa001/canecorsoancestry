@@ -1,0 +1,69 @@
+name: Search exact-photo SHA256 copies on Oracle
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/oracle-missing-photo-hash-search.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  search:
+    if: github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Match SHA256 fingerprints of missing public photos against every restored Oracle photo
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          target="$(mktemp /tmp/cca-public-missing-XXXXXX.json)"
+          trap 'rm -f "$target"' EXIT
+          sudo -n podman exec cca-oracle-staging python -c '
+          import json, django
+          django.setup()
+          from registry.models import DogImage
+          from registry.querysets import published_dogs
+          from django.core.files.storage import default_storage
+          records=[]
+          for x in DogImage.objects.filter(dog__in=published_dogs()):
+              key=x.image.name
+              if not key or key.startswith("dogs/archive/") or key.startswith("dogs/bellissimo/") or default_storage.exists(key):
+                  continue
+              records.append({"key":key,"sha256":x.content_sha256,"dog":x.dog_id.hex})
+          print(json.dumps(records))
+          ' > "$target"
+          sudo -n python3 - "$target" <<'PY'
+          import sys, json, hashlib
+          from pathlib import Path
+          records = json.loads(Path(sys.argv[1]).read_text())
+          wanted = {str(x["sha256"]).lower(): [] for x in records if len(str(x["sha256"]))==64}
+          indexed=0
+          match={}
+          for p in Path("/var/lib/cca/media").rglob("*"):
+              if not p.is_file() or p.stat().st_size < 100:
+                  continue
+              indexed+=1
+              h=hashlib.sha256()
+              with p.open("rb") as f:
+                  for chunk in iter(lambda: f.read(1024*1024),b""):
+                      h.update(chunk)
+              digest=h.hexdigest()
+              if digest in wanted:
+                  match.setdefault(digest, []).append(str(p.relative_to("/var/lib/cca/media")))
+          for record in records:
+              sources=match.get(record["sha256"],[])
+              if sources:
+                  print("EXACT_MATCH",json.dumps({"missing_key":record["key"],"existing_keys":sources},sort_keys=True))
+          print("TOTAL_MISSING_NON_BELLISSIMO",len(records))
+          print("EXACT_SHA256_MATCHES",sum(bool(match.get(x["sha256"])) for x in records))
+          print("EXISTING_MEDIA_FILES_CHECKED",indexed)
+          PY
+      - name: Check for other retained media directories without changing files
+        shell: bash
+        run: |
+          echo "ORACLE UPLOAD ROOT COUNT"
+          sudo -n find /var/lib/cca/media/dogs/2026 -type f 2>/dev/null | wc -l || true
+          echo "KNOWN ORIGINAL BASENAME SEARCH"
+          sudo -n find /var/lib/cca /opt /srv /home/opc /var/backups -type f \( -iname 'IMG_1946*' -o -iname 'IMG_0347*' -o -iname '*WhatsApp_Image_2026-10-15_at_8.08.53_PM*' -o -iname 'IMG_5235*' \) -print 2>/dev/null | head -45 || true
