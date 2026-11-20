@@ -1,4 +1,5 @@
 import { driveArchiveIds } from "./drive-archive-map.js";
+import { bellissimoSources } from "./bellissimo-source-map.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -553,19 +554,20 @@ function driveArchiveIdForKey(key) {
 
 async function originalDriveArchivePhoto(key, method = "GET") {
   const id = driveArchiveIdForKey(key);
-  if (!id) return null;
+  const source = Object.hasOwn(bellissimoSources, key) ? bellissimoSources[key] : null;
+  if (!id && !source) return null;
   if (method === "HEAD") {
     return new Response(null, {
       status: 200,
       headers: {
-        "content-type": "image/jpeg",
+        "content-type": key.endsWith(".webp") ? "image/webp" : "image/jpeg",
         "cache-control": "private, max-age=30",
         "x-cca-image-source": "owner-drive-archive",
       },
     });
   }
-  const url = "https://drive.google.com/uc?export=download&id=" +
-    encodeURIComponent(id);
+  const url = source || ("https://drive.google.com/uc?export=download&id=" +
+    encodeURIComponent(id));
   // The owner's already-shared archive is the source of record during R2
   // downtime. The redirect does not require paid R2 or image transformations.
   return new Response(null, {
