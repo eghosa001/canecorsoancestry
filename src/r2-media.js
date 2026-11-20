@@ -1,3 +1,5 @@
+import { driveArchiveIds } from "./drive-archive-map.js";
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -170,6 +172,8 @@ async function handleR2Gateway(request, env, url, ctx) {
   }
 
   if (verification.method === "GET") {
+    const archived = await originalDriveArchivePhoto(key, "GET");
+    if (archived) return archived;
     const object = await env.MEDIA_BUCKET.get(key);
     if (!object) return new Response("Not found", {
       status: 404,
@@ -182,6 +186,8 @@ async function handleR2Gateway(request, env, url, ctx) {
   }
 
   if (verification.method === "HEAD") {
+    const archived = await originalDriveArchivePhoto(key, "HEAD");
+    if (archived) return archived;
     const object = await env.MEDIA_BUCKET.head(key);
     if (!object) return new Response(null, {
       status: 404,
@@ -420,6 +426,10 @@ async function handleSignedMedia(request, env, url) {
     return new Response("Forbidden", { status: 403 });
   }
 
+  // Restrict Drive fallback to previously-public, signed archive originals.
+  const archived = await originalDriveArchivePhoto(key, request.method);
+  if (archived) return archived;
+
   const object = request.method === "HEAD"
     ? await env.MEDIA_BUCKET.head(key)
     : await env.MEDIA_BUCKET.get(key);
@@ -529,6 +539,45 @@ function cacheOptimizedPhoto(cache, cacheKey, response, ctx) {
 }
 
 
+// Emergency read-only fallback: only original public archive keys from the
+// owner's verified Google Drive archive. It never handles private documents,
+// medical evidence, new uploads, or user-created photographs. HMAC validation
+// happens BEFORE calling this function.
+function driveArchiveIdForKey(key) {
+  if (typeof key !== "string" ||
+      !/^dogs\\/archive\\/\\d{3}\\/\\d+\\.(?:jpe?g|png|webp|avif)$/.test(key)) {
+    return null;
+  }
+  return Object.hasOwn(driveArchiveIds, key) ? driveArchiveIds[key] : null;
+}
+
+async function originalDriveArchivePhoto(key, method = "GET") {
+  const id = driveArchiveIdForKey(key);
+  if (!id) return null;
+  if (method === "HEAD") {
+    return new Response(null, {
+      status: 200,
+      headers: {
+        "content-type": "image/jpeg",
+        "cache-control": "private, max-age=30",
+        "x-cca-image-source": "owner-drive-archive",
+      },
+    });
+  }
+  const url = "https://drive.google.com/uc?export=download&id=" +
+    encodeURIComponent(id);
+  // The owner's already-shared archive is the source of record during R2
+  // downtime. The redirect does not require paid R2 or image transformations.
+  return new Response(null, {
+    status: 302,
+    headers: {
+      location: url,
+      "cache-control": "private, max-age=30",
+      "x-cca-image-source": "owner-drive-archive",
+    },
+  });
+}
+
 function isPhotoKey(key) {
   return (
     typeof key === "string" &&
@@ -573,6 +622,11 @@ async function handleOptimizedDogPhoto(request, env, url, ctx) {
   if (!constantTimeEqual(expected, signature)) {
     return new Response("Forbidden", { status: 403 });
   }
+
+  // Serve the existing public archive directly while R2 is unavailable.
+  // Every request above has already passed the signed URL validation.
+  const archived = await originalDriveArchivePhoto(key, request.method);
+  if (archived) return archived;
 
   // A HEAD request must never run an image transformation.
   if (request.method === "HEAD") {
@@ -686,7 +740,7 @@ async function handleOptimizedDogPhoto(request, env, url, ctx) {
   return new Response(original.body, { status: 200, headers });
 }
 
-export { isAllowedSourceUrl, isPhotoKey, photoSignatureMessage };
+export { isAllowedSourceUrl, isPhotoKey, photoSignatureMessage, driveArchiveIdForKey };
 
 export default {
   async fetch(request, env, ctx) {
