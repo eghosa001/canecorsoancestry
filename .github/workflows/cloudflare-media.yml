@@ -6,6 +6,7 @@ on:
     paths:
       - "src/r2-media.js"
       - "src/drive-archive-map.js"
+      - "src/bellissimo-source-map.js"
       - "scripts/build_drive_archive_map.py"
       - "data/canecorso_drive_manifest_v1/**"
       - "wrangler.r2.toml"
@@ -16,6 +17,7 @@ on:
     paths:
       - "src/r2-media.js"
       - "src/drive-archive-map.js"
+      - "src/bellissimo-source-map.js"
       - "scripts/build_drive_archive_map.py"
       - "data/canecorso_drive_manifest_v1/**"
       - "wrangler.r2.toml"
@@ -333,6 +335,27 @@ jobs:
           bad="https://media.canecorsoancestry.com/_thumb/$key?variant=$variant&expires=$expires&signature=00000000"
           code="$(curl --connect-timeout 8 --max-time 25 -sS -o /dev/null -w '%{http_code}' "$bad")"
           test "$code" = "403" || { echo "::error::Unsigned photo access not blocked ($code)"; exit 1; }
+
+      - name: Verify live signed Bellissimo fallback and original WebP bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          key="dogs/bellissimo/karma-custodi-nos.webp"
+          variant="card"
+          expires="$(( $(date +%s) + 300 ))"
+          signature="$(CCA_PHOTO_KEY="$key" CCA_PHOTO_VARIANT="$variant" CCA_PHOTO_EXPIRY="$expires" python3 -c 'import hashlib,hmac,os; m=chr(10).join(("GET",os.environ["CCA_PHOTO_KEY"],os.environ["CCA_PHOTO_VARIANT"],os.environ["CCA_PHOTO_EXPIRY"])); print(hmac.new(os.environ["R2_GATEWAY_SIGNING_KEY"].encode(),m.encode(),hashlib.sha256).hexdigest())')"
+          url="https://media.canecorsoancestry.com/_thumb/$key?variant=$variant&expires=$expires&signature=$signature"
+          first="$(curl --connect-timeout 8 --max-time 25 -sS -D /tmp/cca-bellissimo-headers -o /dev/null -w '%{http_code}' "$url")"
+          test "$first" = "302"
+          grep -qi '^location: https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/' /tmp/cca-bellissimo-headers
+          code="$(curl -L --connect-timeout 8 --max-time 35 -sS -o /tmp/cca-bellissimo-photo -w '%{http_code}' "$url")"
+          test "$code" = "200"
+          python3 - <<'PY'
+          from pathlib import Path
+          b=Path("/tmp/cca-bellissimo-photo").read_bytes()
+          assert b[:4] == b"RIFF" and b[8:12] == b"WEBP" and len(b) > 1000
+          print(f"PASS: live Bellissimo photo HTTP 200, original WebP ({len(b)} bytes)")
+          PY
 
       - name: Clean temporary files
         if: always()

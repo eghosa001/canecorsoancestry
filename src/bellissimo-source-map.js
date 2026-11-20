@@ -1,0 +1,25 @@
+// Strict allowlist of public, commit-pinned dog photos from the owner's source repository.
+export const bellissimoSources = Object.freeze({
+ "dogs/bellissimo/branco-02.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/branco-02.webp",
+ "dogs/bellissimo/karma-custodi-nos.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/karma-custodi-nos.webp",
+ "dogs/bellissimo/karma-custodi-nos-02.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/karma-custodi-nos-02.webp",
+ "dogs/bellissimo/anthie-custodi-nos-main.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/anthie-custodi-nos-main.webp",
+ "dogs/bellissimo/anthie-custodi-nos-02.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/anthie-custodi-nos-02.webp",
+ "dogs/bellissimo/anthie-custodi-nos-03.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/anthie-custodi-nos-03.webp",
+ "dogs/bellissimo/tessa-sangue-magnifica.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/tessa-sangue-magnifica.webp",
+ "dogs/bellissimo/daisy-bellissimo-geni.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/daisy-bellissimo-geni.webp",
+ "dogs/bellissimo/eden-01.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/eden-01.webp",
+ "dogs/bellissimo/gyda-01.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/gyda-01.webp",
+ "dogs/bellissimo/yasmin-bellissimo-geni.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/puppies/yasmin-bellissimo-geni.webp",
+ "dogs/bellissimo/dragoslav-custodi-nos.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/dragoslav-custodi-nos.webp",
+ "dogs/bellissimo/himera-custodi-nos-main.avif": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/himera-custodi-nos-main.avif",
+ "dogs/bellissimo/himera-custodi-nos-02.avif": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/himera-custodi-nos-02.avif",
+ "dogs/bellissimo/roman-custodi-nos.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/roman-custodi-nos.webp",
+ "dogs/bellissimo/roman-custodi-nos-02.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/roman-custodi-nos-02.webp",
+ "dogs/bellissimo/limoncello-sangue-magnifica-custodi-nos.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/limoncello-sangue-magnifica-custodi-nos.webp",
+ "dogs/bellissimo/zz-top-sangue-magnifica.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/zz-top-sangue-magnifica.webp",
+ "dogs/bellissimo/zz-top-sangue-magnifica-02.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/zz-top-sangue-magnifica-02.webp",
+ "dogs/bellissimo/birba-sangue-magnifica.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/birba-sangue-magnifica.webp",
+ "dogs/bellissimo/birba-sangue-magnifica-02.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/birba-sangue-magnifica-02.webp",
+ "dogs/bellissimo/birba-sangue-magnifica-03.webp": "https://raw.githubusercontent.com/eghosa001/bellissimo-geni-cane-corso/3addd1b186a62bf2040c02980ab0eaa0aad801a7/assets/dogs/birba-sangue-magnifica-03.webp"
+});
