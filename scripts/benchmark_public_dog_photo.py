@@ -16,7 +16,7 @@ def sample_profile(browser):
     context = browser.new_context(viewport={"width": 1280, "height": 800})
     page = context.new_page()
     page.goto(ROOT, wait_until="domcontentloaded", timeout=45000)
-    card = page.locator("a.dog-card").first
+    card = page.locator('a.dog-card[href*="ccp-111524-garko-del-dyrium"]').first
     card.wait_for(state="attached", timeout=20000)
     url = urljoin(ROOT, card.get_attribute("href"))
     context.close()
@@ -119,10 +119,54 @@ def probe(browser, url, name, mobile=False):
         context.close()
 
 
+def verify_homepage_decoded_images(browser):
+    for label, mobile in (("desktop", False), ("mobile", True)):
+        context = browser.new_context(
+            viewport={"width": 390 if mobile else 1280, "height": 844 if mobile else 800},
+            is_mobile=mobile, has_touch=mobile,
+        )
+        page = context.new_page()
+        errors = []
+        page.on("requestfailed", lambda req: errors.append(req.url.split("?", 1)[0]))
+        page.goto(ROOT, wait_until="domcontentloaded", timeout=45000)
+        photos = page.locator("img[data-media-fallback]")
+        count = photos.count()
+        print(f"RECOVERY-BROWSER mode={label} managed_images={count}", flush=True)
+        if count == 0:
+            context.close()
+            raise RuntimeError("No managed images appeared in homepage HTML")
+        checked = min(8, count)
+        visible = 0
+        for idx in range(checked):
+            node = photos.nth(idx)
+            node.scroll_into_view_if_needed(timeout=10000)
+            try:
+                node.evaluate("(i) => i.decode()", timeout=14000)
+            except Exception as exc:
+                print(f"RECOVERY-BROWSER mode={label} index={idx} decode_error={type(exc).__name__}", flush=True)
+            state = node.evaluate("""i => ({
+              naturalWidth: i.naturalWidth,
+              complete: i.complete,
+              path: new URL(i.currentSrc || i.src).pathname,
+              contentSrc: i.currentSrc || i.src
+            })""")
+            valid = state["naturalWidth"] > 0
+            print(f"RECOVERY-BROWSER mode={label} index={idx} "
+                  f"pixels={state['naturalWidth']} complete={state['complete']} "
+                  f"path={state['path']} valid={valid}", flush=True)
+            visible += valid
+        print(f"RECOVERY-BROWSER mode={label} decoded={visible}/{checked} "
+              f"requests_failed={len(errors)}", flush=True)
+        context.close()
+        if visible != checked:
+            raise RuntimeError(f"{label} browser still cannot decode {checked-visible} homepage dog photos")
+
+
 def main():
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
+            verify_homepage_decoded_images(browser)
             url = sample_profile(browser)
             print("PHOTO-PERF note=GitHub-runner-network-not-Nigeria", flush=True)
             probe(browser, url, "desktop")
