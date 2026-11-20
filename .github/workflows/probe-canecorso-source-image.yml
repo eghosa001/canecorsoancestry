@@ -27,29 +27,57 @@ jobs:
             echo "$kind HTTP=$code $mime bytes=$size"
           done
 
-      - name: Diagnose first real public dog photo without revealing signed URL
+      - name: Verify actual homepage and dog-directory photos after emergency repair
         shell: bash
         run: |
           set -euo pipefail
-          curl -L --connect-timeout 8 --max-time 30 -sS \
-            https://canecorsoancestry.com/ -o /tmp/cca-home.html
           python3 - <<'PY'
-          import re,html,urllib.request,urllib.error
-          source=open("/tmp/cca-home.html",encoding="utf-8").read()
-          matches=list(dict.fromkeys(html.unescape(x) for x in re.findall(
-            r'https://media\.canecorsoancestry\.com/_thumb/[^"<> ]+',source
-          )))
-          print("Found signed gallery images:",len(matches))
-          for link in matches[:3]:
+          import concurrent.futures
+          import html
+          import re
+          from urllib.parse import urlsplit
+          from urllib.request import Request, urlopen
+          from urllib.error import HTTPError
+
+          HEADERS = {"User-Agent": "Mozilla/5.0 (CCA-Real-Photo-Smoke/1.0)"}
+          urls = {}
+          for page in ("/", "/dogs/"):
+              request=Request("https://canecorsoancestry.com" + page, headers=HEADERS)
+              with urlopen(request, timeout=25) as response:
+                  if response.status != 200:
+                      raise SystemExit(f"Page {page} HTTP {response.status}")
+                  source = response.read().decode("utf-8")
+              links = list(dict.fromkeys(html.unescape(x) for x in re.findall(
+                  r'https://media\.canecorsoancestry\.com/_thumb/[^"<> ]+', source
+              )))
+              print(f"Signed public dog images on {page}: {len(links)}", flush=True)
+              for link in links[:16]:
+                  urls[link] = urlsplit(link).path
+
+          if not urls:
+              raise SystemExit("No dog-photo links found in public rendered HTML")
+
+          def check(item):
+              link, path = item
               try:
-                  req=urllib.request.Request(link,headers={"User-Agent":"Mozilla/5.0"})
-                  with urllib.request.urlopen(req,timeout=20) as r:
-                      print("real-photo HTTP",r.status,"content-type",r.headers.get("content-type"),
-                            "x-fallback",r.headers.get("x-cca-image-fallback-reason",""),
-                            "content-bytes",len(r.read(200000)))
-              except urllib.error.HTTPError as e:
-                  print("real-photo HTTP",e.code,"x-fallback",
-                        e.headers.get("x-cca-image-fallback-reason",""))
+                  with urlopen(Request(link, headers=HEADERS), timeout=25) as response:
+                      content_type = response.headers.get("content-type", "").split(";", 1)[0]
+                      payload = response.read(512)
+                      good = (response.status == 200 and content_type.startswith("image/") and
+                              (payload.startswith(b"\xff\xd8\xff") or
+                               payload.startswith(b"\x89PNG\r\n\x1a\n") or
+                               payload[:4] == b"RIFF"))
+                      return (path, response.status, content_type, good)
+              except HTTPError as e:
+                  return (path, e.code, "", False)
               except Exception as e:
-                  print("real-photo failure",type(e).__name__)
+                  return (path, type(e).__name__, "", False)
+
+          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+              results=list(pool.map(check, urls.items()))
+          for path, status, ct, good in results:
+              print(f"{'PASS' if good else 'FAIL'} {path} HTTP={status} {ct}", flush=True)
+          print(f"VERIFIED {sum(x[3] for x in results)}/{len(results)} real public images", flush=True)
+          if any(not x[3] for x in results):
+              raise SystemExit("Some public dog photographs are still not accessible")
           PY
