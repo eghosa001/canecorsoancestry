@@ -2,20 +2,27 @@ name: Probe CaneCorso source image
 
 on:
   push:
+    branches: [main]
     paths:
       - ".github/workflows/probe-canecorso-source-image.yml"
+
+permissions:
+  contents: read
 
 jobs:
   probe:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Probe source image
+      - name: Probe public source and owner Drive archive
+        shell: bash
         run: |
-          set -euo pipefail
-          url='https://www.canecorsopedigree.com/static/images/animal/thumbnails/img4ba604e9286da.jpg_400.jpeg'
-          status="$(curl -L --connect-timeout 10 --max-time 30 -A 'CaneCorsoResearchArchiver/1.0' -H 'Referer: https://www.canecorsopedigree.com/' -sS -D /tmp/h -o /tmp/img -w '%{http_code}' "$url" || true)"
-          echo "status=$status"
-          echo "bytes=$(wc -c < /tmp/img 2>/dev/null || echo 0)"
-          grep -i '^content-type:' /tmp/h || true
-          test "$status" = "200"
-          test -s /tmp/img
+          set -u
+          for item in             "source|https://www.canecorsopedigree.com/static/images/animal/thumbnails/img4ba604e9286da.jpg_400.jpeg"             "drive|https://drive.google.com/uc?export=download&id=1Fx8EfP_JQj6SBAKMLnzK47IDp7daX6ci"             "r2health|https://media.canecorsoancestry.com/healthz/"             "site|https://canecorsoancestry.com/healthz/"; do
+            kind="${item%%|*}"
+            url="${item#*|}"
+            code="$(curl -L -sS --connect-timeout 5 --max-time 20               -A 'Mozilla/5.0 CaneCorsoAncestry-Recovery/1.0'               -H 'Referer: https://www.canecorsopedigree.com/'               -o /tmp/cca-probe-body -D /tmp/cca-probe-headers               -w '%{http_code}' "$url" || true)"
+            mime="$(grep -i '^content-type:' /tmp/cca-probe-headers 2>/dev/null | tail -1 | tr -d '\r' | cut -c 1-100)"
+            size="$(wc -c </tmp/cca-probe-body 2>/dev/null || echo 0)"
+            echo "$kind HTTP=$code $mime bytes=$size"
+          done
