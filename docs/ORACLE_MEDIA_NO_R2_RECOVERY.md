@@ -49,10 +49,16 @@ exact key to avoid assigning an image to the wrong dog.
 5. Check representative public and private dog photos and original
    verification documents. Validate the recovered-file coverage against
    the database before any cutover. Keep R2 originals untouched.
-6. After recovery checks and off-VM backup arrangements, set the GitHub
-   Actions repository variable `CCA_MEDIA_BACKEND` to `oracle-local`.
-   The normal CI-gated release and storage round-trip probe must pass.
-   If its backup or media checks fail, leave the existing deployment intact.
+6. After recovery checks and off-VM backup arrangements, write a
+   root-owned, nonempty `/var/lib/cca/media/.cca-media-cutover-approved`
+   marker documenting the approval. The release script refuses local-media
+   deployment without this marker. Do not create it merely because an
+   archive directory exists; check the actual mapped photo files and
+   protected documents first.
+7. Set the GitHub Actions repository variable `CCA_MEDIA_BACKEND` to
+   `oracle-local`. The CI-gated release and storage round-trip probe must
+   pass. If its backup or media checks fail, leave the existing deployment
+   intact.
 
 ## Important operational limits
 
