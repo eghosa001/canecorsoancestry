@@ -13,15 +13,20 @@ ROOT = "https://canecorsoancestry.com/"
 
 
 def sample_profile(browser):
-    context = browser.new_context(viewport={"width": 1280, "height": 800})
-    page = context.new_page()
-    page.goto(ROOT, wait_until="domcontentloaded", timeout=45000)
-    card = page.locator('a.dog-card[href*="ccp-111524-garko-del-dyrium"]').first
-    card.wait_for(state="attached", timeout=20000)
-    url = urljoin(ROOT, card.get_attribute("href"))
-    context.close()
+    # Stable published archive dog whose original JPEG is present on Oracle.
+    # Choosing the first homepage card is unreliable when editorial order changes.
+    url = urljoin(ROOT, "/dogs/ccp-111524-garko-del-dyrium/")
     if urlsplit(url).hostname != "canecorsoancestry.com":
-        raise RuntimeError("Sample link escaped the official production domain")
+        raise RuntimeError("Sample link escaped official production domain")
+    context = browser.new_context(viewport={"width": 1280, "height": 800})
+    try:
+        response = context.new_page().goto(
+            url, wait_until="domcontentloaded", timeout=45000
+        )
+        if response is None or response.status != 200:
+            raise RuntimeError("Known archived dog profile did not load")
+    finally:
+        context.close()
     return url
 
 
