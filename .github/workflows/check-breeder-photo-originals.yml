@@ -1,0 +1,32 @@
+name: Check independent breeder image galleries for missing originals
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/recovery/compare_public_breeder_galleries.py"
+      - ".github/workflows/check-breeder-photo-originals.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    if: github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check only 11 dog-owner or breeder pages and verify candidate SHA256
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/recovery/compare_public_breeder_galleries.py
+          python3 scripts/recovery/compare_public_breeder_galleries.py
+      - name: Save exact-match originals and candidate metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cca-breeder-photo-candidates-hash-checked
+          path: artifacts/cca-external-breeder-photo-check/
+          retention-days: 14
+          if-no-files-found: warn
