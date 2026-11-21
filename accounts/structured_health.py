@@ -278,18 +278,48 @@ def save_structured_health(request, pk):
 
         pct = data.get("cane_corso_percentage")
         if pct is not None:
-            # Publication permission is NEVER inferred from staff review. If
-            # there is an owner-consented report for this source, editing its
-            # values retains its existing consent; a new source is private.
-            if document is None or (
-                document.document_type != DogDocument.DocumentType.DNA
-                and not data.get("dna_evidence_confirmed")
-            ):
-                form.add_error(
-                    "source_document",
-                    "Use an accepted DNA report or confirm the actual breed-composition "
-                    "findings in the accepted legacy Health/DNA certificate.",
-                )
+            if not data.get("breed_report_verified") or document is None:
+                # No accepted DNA certificate supports this estimate. Publish
+                # available information as a separate *unverified* record,
+                # never as a BreedDNAReport or DNA-tested finding.
+                label = "Cane Corso percentage (reported)"
+                value = percentage_text(pct) + "% Cane Corso"
+                previous = HealthRecord.objects.select_for_update().filter(
+                    dog=dog, test_type=label,
+                ).order_by("-created_at", "-pk").first()
+                if (
+                    previous and previous.result == value
+                    and (not when or previous.tested_on == when)
+                ):
+                    if publish_selected and not previous.is_public:
+                        previous.is_public = True
+                        previous.save(update_fields=["is_public"])
+                        updates += 1
+                else:
+                    new_visibility = publish_selected or (previous.is_public if previous else False)
+                    if previous and previous.is_public:
+                        previous.is_public = False
+                        previous.save(update_fields=["is_public"])
+                    record = HealthRecord.objects.create(
+                        dog=dog, test_type=label, result=value,
+                        tested_on=when, verification_state=VerificationState.COMMUNITY,
+                        is_public=new_visibility,
+                        notes="Staff-reported breed estimate; no accepted laboratory breed-composition evidence",
+                    )
+                    record_audit(
+                        action=ModerationAudit.Action.VERIFICATION,
+                        actor=request.user, dog=dog,
+                        summary={
+                            "kind": "reported_breed_estimate",
+                            "health_record_id": record.pk,
+                            "percentage": percentage_text(pct),
+                            "source": source_key,
+                            "evidence_verified": False,
+                            "public": new_visibility,
+                        },
+                        note="Staff published a clearly unverified reported breed estimate; no DNA report was certified.",
+                    )
+                    updates += 1
             else:
                 prior = BreedDNAReport.objects.select_for_update().filter(
                     health_record__dog=dog, evidence_document=document,
@@ -325,6 +355,11 @@ def save_structured_health(request, pk):
                         consent_public_summary=False, consent_full_report=False,
                     )
                 if publish_selected:
+                    # A verified DNA report replaces an earlier unverified
+                    # breed estimate on the public page, without deleting it.
+                    HealthRecord.objects.filter(
+                        dog=dog, test_type="Cane Corso percentage (reported)", is_public=True,
+                    ).update(is_public=False)
                     # Public text summary only. Store a separate audited staff
                     # authorization; never set owner consent or expose the PDF.
                     record_audit(
@@ -354,19 +389,15 @@ def save_structured_health(request, pk):
                 )
                 updates += 1
 
-        if form.errors:
-            messages.error(request, "The DNA source is not an approved stored breed report.")
-            transaction.set_rollback(True)
-            return redirect("accounts:reviewed-dog-health", pk=pk)
-        if updates:
+         if updates:
             invalidate_public_content()
     if not updates:
-        messages.info(request, "No values changed. The previously verified results were retained.")
+        messages.info(request, "No values changed. Existing health information was retained.")
     else:
         messages.success(
-            request, f"Saved {updates} reviewed result{'s' if updates != 1 else ''}."
+            request, f"Saved {updates} health result{'s' if updates != 1 else ''}."
             + (
-                " Selected results were published; all other health information was retained."
+                " Selected results were published with their evidence status; all other health information was retained."
                 if publish_selected else
                 " New results are private; previously public corrections remain public. Other results were retained."
             )
