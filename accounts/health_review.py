@@ -229,10 +229,12 @@ def reviewed_dog_health(request, pk):
             allowed = StructuredHealthForm(dog=dog).fields["source_document"].queryset
             if allowed.filter(pk=candidate.pk).exists():
                 selected_source_document = candidate
-    structured_form = StructuredHealthForm(
-        dog=dog,
-        initial={"source_document": selected_source_document.pk} if selected_source_document else {},
-    )
+    structured_form = getattr(request, "_structured_health_form_override", None)
+    if structured_form is None:
+        structured_form = StructuredHealthForm(
+            dog=dog,
+            initial={"source_document": selected_source_document.pk} if selected_source_document else {},
+        )
     # Imported all-in-one "purity / health" prose was historically rendered
     # as separate marker names on the public profile. Staff must be able to
     # recognize those older values without mistaking them for independently
