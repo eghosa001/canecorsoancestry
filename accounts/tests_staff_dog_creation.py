@@ -95,7 +95,7 @@ class StaffDogCreationAndAccessTests(TestCase):
             dog = Dog.objects.get(name="Owner Dog With Photo")
             image = DogImage.objects.get(dog=dog)
             saved = Path(image.image.path).read_bytes()
-            self.assertEqual(saved[:3], b"\\xff\\xd8\\xff")
+            self.assertEqual(saved[:3], bytes.fromhex("ffd8ff"))
             self.assertEqual(image.content_sha256, hashlib.sha256(saved).hexdigest())
             self.assertTrue(image.is_primary)
             self.assertFalse(dog.is_public)
