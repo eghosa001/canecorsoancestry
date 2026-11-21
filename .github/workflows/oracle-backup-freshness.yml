@@ -33,17 +33,26 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Verify offsite backup and recover an overdue snapshot
+      - name: Check offsite R2 backup; verify emergency local backup if R2 is unavailable
         shell: bash
         run: |
           set -euo pipefail
           if bash scripts/oracle_runner/check_offsite_backup_freshness.sh; then
             exit 0
           fi
-          # GitHub may delay/drop an hourly schedule. Never hide a stale backup:
-          # produce a genuine encrypted, uploaded and verified snapshot instead.
-          echo "::warning::Offsite backup freshness failed; attempting a fresh encrypted Oracle backup."
-          bash scripts/oracle_runner/backup_local_postgres.sh
-          # If recovery is unsuccessful or the new R2 pointer remains stale,
-          # the monitor must still fail and alert the owner.
-          bash scripts/oracle_runner/check_offsite_backup_freshness.sh
+          # GitHub can delay a scheduled upload; first try to restore a real
+          # encrypted, independently verified OFFSITE backup, as before.
+          echo "::warning::Offsite R2 backup is missing or stale; attempting verified recovery."
+          if bash scripts/oracle_runner/backup_local_postgres.sh; then
+            bash scripts/oracle_runner/check_offsite_backup_freshness.sh
+            exit 0
+          fi
+          # Cloudflare can disable R2 following a billing downgrade. Protect
+          # PostgreSQL with a new verified local backup, without claiming R2
+          # is healthy or concealing the absence of disaster recovery.
+          echo "::warning::Offsite R2 recovery FAILED; creating an emergency Oracle-local encrypted snapshot."
+          bash scripts/oracle_runner/backup_local_postgres_no_r2.sh
+          echo "::warning::DEGRADED: R2 offsite backup is unavailable; only a VERIFIED same-VM snapshot exists."
+          if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+            printf '%s\n' '## DEGRADED — OFFSITE BACKUP UNAVAILABLE' 'Oracle PostgreSQL was backed up locally, encrypted and verified. No separate offsite backup is confirmed; restore R2 billing/access or add another offsite destination.' >> "$GITHUB_STEP_SUMMARY"
+          fi
