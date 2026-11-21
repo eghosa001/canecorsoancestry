@@ -540,6 +540,57 @@ class ModeratorLabResultTests(TestCase):
         self.assertEqual(result.verification_state, VerificationState.COMMUNITY)
         self.assertContains(self.client.get(self.public_url), "Not DNA-verified")
 
+    def test_unverified_additional_condition_posts_without_certificate(self):
+        self.client.force_login(self.moderator)
+        url = reverse("accounts:add-reviewed-health-condition", args=[self.dog.pk])
+        self.assertRedirects(self.client.post(url, {
+            "test_type": "Cardiac examination", "result": "Normal",
+            "reviewed": "on", "intent": "publish",
+        }), self.health_url)
+        record = HealthRecord.objects.get(dog=self.dog, test_type="Cardiac examination")
+        self.assertTrue(record.is_public)
+        self.assertEqual(record.verification_state, VerificationState.COMMUNITY)
+        public = self.client.get(self.public_url)
+        self.assertContains(public, "Cardiac examination")
+        self.assertContains(public, "Not independently verified")
+
+    def test_staff_can_upgrade_unverified_marker_with_actual_certificate(self):
+        self.client.force_login(self.moderator)
+        url = reverse("accounts:save-structured-health", args=[self.dog.pk])
+        self.assertRedirects(self.client.post(url, {
+            "cmr1": "Clear", "reviewed": "on", "intent": "publish",
+        }), self.health_url)
+        old = HealthRecord.objects.get(dog=self.dog, test_type="CMR1")
+        accepted = Submission.objects.create(
+            kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
+            dog=self.dog, submitted_by=self.owner,
+        )
+        evidence = DogDocument.objects.create(
+            dog=self.dog, title="Accepted genetic report",
+            document_type=DogDocument.DocumentType.HEALTH,
+            file="private/accepted-cmr1.pdf", source_submission=accepted,
+        )
+        self.assertRedirects(self.client.post(url, {
+            "source_document": evidence.pk, "cmr1": "Clear",
+            "reviewed": "on", "intent": "publish",
+        }), self.health_url)
+        old.refresh_from_db()
+        verified = HealthRecord.objects.get(dog=self.dog, test_type="CMR1", is_public=True)
+        self.assertFalse(old.is_public)
+        self.assertEqual(verified.verification_state, VerificationState.HEALTH_VERIFIED)
+
+    def test_failed_available_result_preserves_entered_values(self):
+        self.client.force_login(self.moderator)
+        url = reverse("accounts:save-structured-health", args=[self.dog.pk])
+        response = self.client.post(url, {
+            "cmr1": "Carrier", "tested_on": "2999-01-01",
+            "reviewed": "on", "intent": "publish",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The report date cannot be in the future.")
+        self.assertEqual(response.context["structured_form"]["cmr1"].value(), "Carrier")
+        self.assertFalse(HealthRecord.objects.filter(dog=self.dog).exists())
+
     def test_staff_can_hide_and_restore_only_reviewed_summary(self):
         submission = self.upload()
         self.client.force_login(self.moderator)
