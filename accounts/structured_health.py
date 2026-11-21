@@ -75,11 +75,11 @@ class StructuredHealthForm(forms.Form):
         help_text="One breed and its percentage per line; all breeds must total 100%.",
     )
     tested_on = forms.DateField(
-        required=False, label="Date shown on certificate",
+        required=False, label="Date recorded (optional)",
         widget=forms.DateInput(attrs={"type": "date"}),
     )
     reviewed = forms.BooleanField(
-        label="I checked every changed value against this dog's accepted original laboratory evidence.",
+        label="I confirm these are the available recorded values for this dog. Without approved laboratory evidence, the public profile will label them Not independently verified.",
     )
 
     def __init__(self, *args, dog, **kwargs):
@@ -89,30 +89,27 @@ class StructuredHealthForm(forms.Form):
 
     def clean(self):
         data = super().clean()
-        if bool(data.get("source_submission")) == bool(data.get("source_document")):
-            self.add_error(None, "Choose exactly one approved laboratory report.")
+        if data.get("source_submission") and data.get("source_document"):
+            self.add_error(None, "Choose only one approved laboratory report, or leave both blank for unverified information.")
+        data["has_approved_evidence"] = bool(data.get("source_submission") or data.get("source_document"))
         changed = any(data.get(name) for name in ("cmr1", "dsra", "ncl1", "hip", "elbow"))
         pct = data.get("cane_corso_percentage")
         if pct is not None:
             changed = True
-            if not (data.get("laboratory") or "").strip():
-                self.add_error("laboratory", "Enter the laboratory printed on the breed-composition report.")
             source = data.get("source_document")
             submission = data.get("source_submission")
-            # A clinical health certificate must never become a breed-DNA proof.
-            if (
-                source is not None
-                and source.document_type != DogDocument.DocumentType.DNA
-                and not data.get("dna_evidence_confirmed")
-            ):
-                self.add_error(
-                    "dna_evidence_confirmed",
-                    "This accepted document is classified as Health. Confirm that "
-                    "its actual laboratory certificate contains the reported "
-                    "breed-composition percentage before recording it privately.",
+            # An unsupported breed percentage is still publishable as
+            # explicitly unverified owner/staff-reported information. Never
+            # manufacture a BreedDNAReport or claim DNA-tested without proof.
+            data["breed_report_verified"] = bool(
+                (data.get("laboratory") or "").strip() and (
+                    (source and (
+                        source.document_type == DogDocument.DocumentType.DNA
+                        or data.get("dna_evidence_confirmed")
+                    ))
+                    or (submission and (submission.payload or {}).get("evidence_type") == "breed")
                 )
-            if submission is not None and (submission.payload or {}).get("evidence_type") != "breed":
-                self.add_error("source_submission", "Choose an approved breed-composition submission.")
+            )
             try:
                 data["composition"] = parse_breed_composition(
                     pct, data.get("other_breeds") or "",
@@ -133,8 +130,6 @@ def structured_rows(records):
     """Prepare compact read-only current values without trusting mixed legacy prose."""
     latest = {}
     for record in records:
-        if record.verification_state != VerificationState.HEALTH_VERIFIED:
-            continue
         code = record.test_type.strip().upper()
         if code not in {"CMR1", "DSRA", "NCL1", "HD", "ED"}:
             continue
@@ -184,14 +179,21 @@ def save_structured_health(request, pk):
             document = DogDocument.objects.filter(
                 dog=dog, source_submission=submission,
             ).first()
-        else:
+        elif document:
             document = get_object_or_404(
                 DogDocument.objects.select_for_update(), pk=document.pk, dog=dog,
             )
         if document and document.is_public:
             document.is_public = False
             document.save(update_fields=["is_public"])
-        source_key = f"submission:{submission.pk}" if submission else f"document:{document.pk}"
+        source_key = (
+            f"submission:{submission.pk}" if submission else
+            f"document:{document.pk}" if document else "staff-reported:unverified"
+        )
+        evidence_verified = bool(data["has_approved_evidence"])
+        verification_state = (
+            VerificationState.HEALTH_VERIFIED if evidence_verified else VerificationState.COMMUNITY
+        )
         when = data.get("tested_on")
         existing = structured_rows(
             list(HealthRecord.objects.select_for_update().filter(dog=dog).order_by("-created_at"))
@@ -205,6 +207,8 @@ def save_structured_health(request, pk):
             if (
                 previous and previous.result.strip().lower() == result.lower()
                 and (not when or previous.tested_on == when)
+                and (previous.verification_state == VerificationState.HEALTH_VERIFIED
+                     or previous.verification_state == verification_state)
             ):
                 # Publishing a previously saved private result does not require
                 # re-entering, duplicating or altering any other test.
@@ -219,7 +223,7 @@ def save_structured_health(request, pk):
                             "health_record_id": previous.pk, "public": True,
                             "source": source_key,
                         },
-                        note="Staff independently published an evidence-reviewed result.",
+                        note="Staff published an existing result; evidence status is unchanged.",
                     )
                     updates += 1
                 continue
@@ -237,16 +241,21 @@ def save_structured_health(request, pk):
             )
             record = HealthRecord.objects.create(
                 dog=dog, test_type=code, result=result, tested_on=when,
-                verification_state=VerificationState.HEALTH_VERIFIED,
+                verification_state=verification_state,
                 is_public=new_visibility,
                 evidence_document=direct_document,
-                notes=f"Structured staff health transcription from accepted {source_key}",
+                notes=(
+                    f"Structured staff health transcription from accepted {source_key}"
+                    if evidence_verified else
+                    "Staff-published available health information; laboratory evidence not verified"
+                ),
             )
-            VerificationEvent.objects.create(
-                dog=dog, health_record=record, state=VerificationState.HEALTH_VERIFIED,
-                reviewer=request.user,
-                note=f"Reviewer independently checked structured {code} result against {source_key}.",
-            )
+            if evidence_verified:
+                VerificationEvent.objects.create(
+                    dog=dog, health_record=record, state=VerificationState.HEALTH_VERIFIED,
+                    reviewer=request.user,
+                    note=f"Reviewer independently checked structured {code} result against {source_key}.",
+                )
             record_audit(
                 action=ModerationAudit.Action.VERIFICATION,
                 actor=request.user, dog=dog,
@@ -254,10 +263,15 @@ def save_structured_health(request, pk):
                     "kind": "structured_health_result", "health_record_id": record.pk,
                     "test_type": code, "result": result,
                     "public": new_visibility,
+                    "evidence_verified": evidence_verified,
                     "superseded_health_record_id": previous.pk if previous else None,
                     "source": source_key,
                 },
-                note="Staff saved evidence-backed individual test result; original document stays private.",
+                note=(
+                    "Staff saved evidence-backed individual test result; original document stays private."
+                    if evidence_verified else
+                    "Staff recorded available health information without laboratory verification."
+                ),
             )
             existing[code] = record
             updates += 1
