@@ -1,9 +1,17 @@
 """Short, change-scoped checks for private dog creation and staff access governance."""
-from django.contrib.auth import get_user_model
-from django.test import TestCase
-from django.urls import reverse
+import hashlib
+from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
-from registry.models import Dog, DogSource, ModerationAudit, ModerationRoleAssignment
+from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from PIL import Image
+
+from registry.models import Dog, DogImage, DogSource, ModerationAudit, ModerationRoleAssignment
 from registry.permissions import can_add_canonical_dog
 
 
@@ -67,6 +75,50 @@ class StaffDogCreationAndAccessTests(TestCase):
         editor = self.client.get(reverse("accounts:dog-direct-edit", args=[dog.pk]))
         self.assertEqual(editor.status_code, 200)
         self.assertContains(editor, "Visibility")
+
+    @staticmethod
+    def _test_photo():
+        stream = BytesIO()
+        Image.new("RGB", (48, 48), (65, 32, 18)).save(stream, format="PNG")
+        return SimpleUploadedFile("owner-dog.png", stream.getvalue(), content_type="image/png")
+
+    def test_owner_can_add_dog_with_real_photo_on_local_storage(self):
+        self.client.force_login(self.owner)
+        with TemporaryDirectory() as root, override_settings(MEDIA_ROOT=root):
+            response = self.client.post(reverse("accounts:dog-direct-create"), {
+                "name": "Owner Dog With Photo",
+                "sex": "male",
+                "reason": "Verified kennel information reviewed before creation",
+                "primary_photo": self._test_photo(),
+            })
+            self.assertEqual(response.status_code, 302)
+            dog = Dog.objects.get(name="Owner Dog With Photo")
+            image = DogImage.objects.get(dog=dog)
+            saved = Path(image.image.path).read_bytes()
+            self.assertEqual(saved[:3], b"\\xff\\xd8\\xff")
+            self.assertEqual(image.content_sha256, hashlib.sha256(saved).hexdigest())
+            self.assertTrue(image.is_primary)
+            self.assertFalse(dog.is_public)
+            self.assertEqual(
+                ModerationAudit.objects.filter(dog=dog, summary__kind="direct_dog_create").count(), 1,
+            )
+
+    def test_failed_photo_write_shows_error_and_rolls_back_entire_dog(self):
+        self.client.force_login(self.owner)
+        with patch("django.core.files.storage.FileSystemStorage._save",
+                   side_effect=OSError("simulated storage failure")):
+            with self.assertLogs("accounts.direct_dog_edit", level="ERROR"):
+                response = self.client.post(reverse("accounts:dog-direct-create"), {
+                    "name": "Unsaved Owner Photo",
+                    "sex": "female",
+                    "reason": "Verified kennel information reviewed before creation",
+                    "primary_photo": self._test_photo(),
+                })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The photograph could not be saved")
+        self.assertIn("primary_photo", response.context["form"].errors)
+        self.assertFalse(Dog.objects.filter(name="Unsaved Owner Photo").exists())
+        self.assertFalse(ModerationAudit.objects.filter(summary__kind="direct_dog_create").exists())
 
     def test_normal_moderator_can_add_private_dog_with_audit_and_navigation(self):
         self.client.force_login(self.reviewer)
