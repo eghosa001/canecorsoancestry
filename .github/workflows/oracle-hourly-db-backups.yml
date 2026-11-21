@@ -51,8 +51,19 @@ jobs:
       - name: Verify encrypted Oracle PostgreSQL backup
         shell: bash
         run: |
+          set -euo pipefail
           if [[ "$CCA_MEDIA_BACKEND" == "oracle-local" ]] || sudo -n test -s /var/lib/cca/media/.cca-media-cutover-approved; then
             bash scripts/oracle_runner/backup_local_postgres_no_r2.sh
+          elif bash scripts/oracle_runner/backup_local_postgres.sh; then
+            echo "PASS: encrypted offsite R2 database backup verified."
           else
-            bash scripts/oracle_runner/backup_local_postgres.sh
+            # Cloudflare billing suspension makes the existing R2 gateway fail.
+            # Never leave the production PostgreSQL database without a *new*
+            # independently verified emergency snapshot just because R2 is down.
+            echo "::warning::R2 offsite backup FAILED. Attempting emergency encrypted Oracle-local backup."
+            bash scripts/oracle_runner/backup_local_postgres_no_r2.sh
+            echo "::warning::DEGRADED BACKUP PROTECTION: verified LOCAL snapshot only; no offsite recovery copy."
+            if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+              printf '%s\n' '## DEGRADED — OFFSITE BACKUP UNAVAILABLE' 'A fresh encrypted local PostgreSQL snapshot was verified on Oracle. This is NOT an offsite backup. Restore R2 billing/access or arrange independent offsite backup storage.' >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
