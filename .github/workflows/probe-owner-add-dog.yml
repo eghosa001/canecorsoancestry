@@ -1,0 +1,71 @@
+name: Owner Add Dog production runtime probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/probe-owner-add-dog.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 6
+    steps:
+      - name: Verify the production Super Admin Add Dog page and photo form without saving data
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sudo -n cat /etc/cca/oracle-db-mode)" = local
+          sudo -n systemctl is-active --quiet cca-oracle-staging.service
+          sudo -n podman exec cca-oracle-staging python manage.py shell -c '
+          from io import BytesIO
+          from django.contrib.auth import get_user_model
+          from django.contrib.messages.middleware import MessageMiddleware
+          from django.contrib.sessions.middleware import SessionMiddleware
+          from django.core.files.uploadedfile import SimpleUploadedFile
+          from django.test import RequestFactory
+          from django.urls import reverse
+          from PIL import Image
+          from accounts.direct_dog_edit import DirectDogCreateForm, dog_direct_create
+          from registry.permissions import can_add_canonical_dog
+          from registry.models import ModerationRoleAssignment
+
+          owner = get_user_model().objects.filter(
+              is_active=True,
+              is_superuser=True,
+              ancestry_moderation_role__role=ModerationRoleAssignment.Role.OWNER,
+              ancestry_moderation_role__is_deregistered=False,
+          ).order_by("pk").first()
+          assert owner is not None, "No active Super Admin moderation identity found"
+          assert can_add_canonical_dog(owner), "Super Admin access check failed"
+          path = reverse("accounts:dog-direct-create")
+          assert path == "/member/moderation/dogs/add/", path
+          request = RequestFactory().get(path, HTTP_HOST="canecorsoancestry.com")
+          request.user = owner
+          SessionMiddleware(lambda req: None).process_request(request)
+          MessageMiddleware(lambda req: None).process_request(request)
+          response = dog_direct_create(request)
+          assert response.status_code == 200, "Owner GET did not return HTTP 200"
+          assert b"Add private dog" in response.content
+          assert b"multipart/form-data" in response.content
+          print("PASS: live owner Add Dog GET rendered with the photo input.")
+
+          blob = BytesIO()
+          Image.new("RGB", (48, 48), (32, 60, 84)).save(blob, format="PNG")
+          form = DirectDogCreateForm(
+              data={"name":"Read-only upload validation", "sex":"male",
+                    "reason":"Test image validation without creating a dog"},
+              files={"primary_photo": SimpleUploadedFile(
+                  "probe.png", blob.getvalue(), content_type="image/png")},
+              allow_publication=False,
+          )
+          assert form.is_valid(), "Valid photo did not pass Add Dog form validation"
+          photo = form.cleaned_data["primary_photo"]
+          assert photo.read(3) == bytes.fromhex("ffd8ff")
+          print("PASS: live owner photo validation normalized a PNG to JPEG without saving it.")
+          '
