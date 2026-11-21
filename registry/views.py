@@ -563,6 +563,7 @@ def dog_detail(request, slug):
             "code": label, "name": "Additional laboratory screening",
             "status": classified[0] if classified else (status or "Result unclear"),
             "tone": classified[1] if classified else "other",
+            "verified": True,
         })
     # Older data may have a single free-text health row combining an alleged
     # breed percentage with words such as "DSRA CLEAR". Never treat that prose
