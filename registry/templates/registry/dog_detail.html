@@ -296,6 +296,7 @@
                 <div class="genetic-screening-row">
                   <div class="genetic-screening-identity">
                     <strong title="{{ marker.name }}">{{ marker.code }}</strong>
+                    {% if not marker.verified %}<small>Not independently verified</small>{% endif %}
                   </div>
                   <span class="genetic-screening-status genetic-screening-status--{{ marker.tone }}">
                     {% if marker.tone == 'clear' %}<span aria-hidden="true">✓</span>{% elif marker.tone == 'untested' %}<span aria-hidden="true">—</span>{% elif marker.tone == 'carrier' %}<span aria-hidden="true">◐</span>{% else %}<span aria-hidden="true">!</span>{% endif %}
@@ -306,6 +307,14 @@
             </div>
           </div>
         {% endif %}
+      </section>
+    {% endif %}
+    {% if reported_breed %}
+      <section class="other-health" aria-label="Reported breed information">
+        <h3>Reported breed information</h3>
+        <div class="health-compact-list">
+          <div class="health-compact-row"><strong>{{ reported_breed.result }}</strong><span>Not DNA-verified · Entered from available records</span></div>
+        </div>
       </section>
     {% endif %}
     {% if orthopaedic_screenings %}
@@ -322,6 +331,7 @@
             <div class="orthopaedic-compact-identity">
               <strong>{{ assessment.short_label }}</strong>
               <small class="orthopaedic-compact-result">{{ assessment.headline }}</small>
+              {% if assessment.tone == "unverified" %}<small>Not independently verified</small>{% endif %}
             </div>
             <strong class="orthopaedic-compact-grade orthopaedic-compact-grade--{{ assessment.tone }}" aria-label="{{ assessment.grade }}: {{ assessment.headline }}">{{ assessment.grade }}</strong>
           </div>
@@ -336,8 +346,7 @@
           {% for result in other_health_rows %}
             <div class="health-compact-row">
               <strong>{{ result.test }}</strong>
-              <span>{{ result.result }}</span>
-
+              <span>{{ result.result }}{% if not result.verified %} · Not independently verified{% endif %}</span>
             </div>
           {% endfor %}
         </div>
