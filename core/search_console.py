@@ -3,6 +3,8 @@
 The credential belongs to a service account granted Search Console access.
 Never put it in the repository or return API details to the admin browser.
 """
+import base64
+import binascii
 import json
 import logging
 import os
@@ -57,6 +59,14 @@ def get_search_console_report(days=28):
     if days not in ALLOWED_DAYS:
         days = 28
     raw = os.getenv("CCA_GSC_SERVICE_ACCOUNT_JSON", "").strip()
+    if not raw:
+        encoded = os.getenv("CCA_GSC_SERVICE_ACCOUNT_B64", "").strip()
+        if encoded:
+            try:
+                raw = base64.b64decode(encoded, validate=True).decode("utf-8")
+            except (binascii.Error, UnicodeDecodeError):
+                logger.warning("Search Console credential encoding is invalid")
+                return {"status": "error", "days": days}
     site_url = os.getenv("CCA_GSC_SITE_URL", DEFAULT_PROPERTY).strip() or DEFAULT_PROPERTY
     if not raw:
         return {"status": "unconfigured", "days": days}
