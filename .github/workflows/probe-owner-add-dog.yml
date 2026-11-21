@@ -68,4 +68,30 @@ jobs:
           photo = form.cleaned_data["primary_photo"]
           assert photo.read(3) == bytes.fromhex("ffd8ff")
           print("PASS: live owner photo validation normalized a PNG to JPEG without saving it.")
+
+          # Signed-cookie test sessions never create django_session rows.
+          # Exercise the entire real middleware chain without a login POST
+          # or any database changes, including the Cloudflare origin guard.
+          from django.conf import settings
+          from django.test import Client, override_settings
+          pages = (
+              ("accounts:verification-dashboard", "Super Admin dashboard"),
+              ("accounts:moderation", "review queue"),
+              ("accounts:dog-edit-list", "Manage Dogs"),
+              ("accounts:dog-direct-create", "Add Dog"),
+          )
+          with override_settings(SESSION_ENGINE="django.contrib.sessions.backends.signed_cookies"):
+              client = Client(
+                  raise_request_exception=False,
+                  SERVER_NAME="canecorsoancestry.com",
+                  HTTP_X_CCA_EDGE="1",
+                  HTTP_X_CCA_ORIGIN_SECRET=settings.ORIGIN_EDGE_SECRET,
+              )
+              client.force_login(owner)
+              for route, label in pages:
+                  response = client.get(reverse(route), secure=True)
+                  assert response.status_code == 200, (
+                      f"{label}: HTTP {response.status_code} through real Django middleware"
+                  )
+                  print(f"PASS: live owner {label} HTTP 200 through full middleware.")
           '
