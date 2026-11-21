@@ -492,17 +492,34 @@ class ModeratorLabResultTests(TestCase):
         self.assertNotContains(public, "100% Cane Corso")
         self.assertNotContains(public, "private/legacy/embark-evidence.pdf")
 
-    def test_structured_editor_rejects_missing_evidence_and_non_dna_purity(self):
+    def test_staff_can_publish_available_results_without_approved_evidence(self):
         self.client.force_login(self.moderator)
         url = reverse("accounts:save-structured-health", args=[self.dog.pk])
-        failed = self.client.post(url, {
-            "cmr1": "Clear", "reviewed": "on", "intent": "publish",
+        result = self.client.post(url, {
+            "cmr1": "Clear", "hip": "HD-A", "cane_corso_percentage": "100",
+            "reviewed": "on", "intent": "publish",
         })
-        self.assertEqual(failed.status_code, 200)
-        self.assertContains(failed, "No approved laboratory report is available for this dog.")
-        self.assertContains(failed, "Choose exactly one approved laboratory report.")
-        self.assertEqual(failed.context["structured_form"]["cmr1"].value(), "Clear")
-        self.assertFalse(HealthRecord.objects.filter(dog=self.dog).exists())
+        self.assertRedirects(result, self.health_url)
+        records = list(HealthRecord.objects.filter(dog=self.dog))
+        self.assertEqual(len(records), 3)
+        self.assertTrue(all(r.is_public for r in records))
+        self.assertTrue(all(r.verification_state == VerificationState.COMMUNITY for r in records))
+        self.assertFalse(BreedDNAReport.objects.exists())
+        public = self.client.get(self.public_url)
+        self.assertContains(public, "100% Cane Corso")
+        self.assertContains(public, "HD-A")
+        self.assertContains(public, "CMR1")
+        self.assertContains(public, "Not independently verified")
+        self.assertNotContains(public, "DNA-tested")
+        record = next(r for r in records if r.test_type == "CMR1")
+        toggle = reverse("accounts:toggle-health-result", args=[self.dog.pk, record.pk])
+        self.assertRedirects(self.client.post(toggle, {"visibility": "hide"}), self.health_url)
+        record.refresh_from_db()
+        self.assertFalse(record.is_public)
+        self.client.force_login(self.unauthorized)
+        self.assertEqual(self.client.post(url, {"cmr1": "Affected", "reviewed": "on"}).status_code, 403)
+
+    def test_non_dna_document_does_not_verify_breed_percentage(self):
         accepted = Submission.objects.create(
             kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
             dog=self.dog, submitted_by=self.owner,
@@ -510,15 +527,18 @@ class ModeratorLabResultTests(TestCase):
         doc = DogDocument.objects.create(
             dog=self.dog, title="Clinical certificate",
             document_type=DogDocument.DocumentType.HEALTH,
-            file="documents/accepted-clinical.pdf",
-            source_submission=accepted,
+            file="documents/accepted-clinical.pdf", source_submission=accepted,
         )
-        self.client.post(url, {
+        self.client.force_login(self.moderator)
+        url = reverse("accounts:save-structured-health", args=[self.dog.pk])
+        self.assertRedirects(self.client.post(url, {
             "source_document": doc.pk, "cane_corso_percentage": "100",
-            "laboratory": "Embark", "reviewed": "on",
-        })
+            "laboratory": "Embark", "reviewed": "on", "intent": "publish",
+        }), self.health_url)
         self.assertFalse(BreedDNAReport.objects.exists())
-        self.assertFalse(HealthRecord.objects.filter(dog=self.dog).exists())
+        result = HealthRecord.objects.get(dog=self.dog)
+        self.assertEqual(result.verification_state, VerificationState.COMMUNITY)
+        self.assertContains(self.client.get(self.public_url), "Not DNA-verified")
 
     def test_staff_can_hide_and_restore_only_reviewed_summary(self):
         submission = self.upload()
