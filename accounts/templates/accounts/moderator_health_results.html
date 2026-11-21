@@ -7,7 +7,7 @@
   <header class="page-heading">
     <p class="eyebrow">Moderator · Private health workspace</p>
     <h1>{{ dog.name }}</h1>
-    <p>Update verified results one test at a time in the structured editor below. A result is public when it is evidence-reviewed, approved for public display and its dog's profile is visible. Any authorized Moderator, Senior Moderator or Super Admin can switch verified breed-DNA summaries between Public and Private.</p>
+    <p>Publish the health and breed information currently available for this dog. An accepted laboratory report is optional for recording information, but results without one are clearly marked Not independently verified. Verified DNA testing is shown only when its supporting report has been reviewed. Select only the fields you want to change; existing values remain in place.</p>
     <p class="muted">Exact dog record: {{ dog.pk }} · {{ dog.slug }}</p>
     <div class="button-row">
       <a class="btn btn-outline" href="{% url 'accounts:moderation' %}?kind=health">← Health review queue</a>
@@ -17,15 +17,15 @@
   <section class="panel structured-health-panel" id="structured-health-editor">
     <div class="health-section-heading">
       <div>
-        <p class="health-review-overline">Staff editor · evidence-backed</p>
+        <p class="health-review-overline">Staff editor · publish available information</p>
         <h2>Edit Health &amp; DNA</h2>
       </div>
     </div>
-    <p class="health-review-help">Select only the findings shown on the approved report. Leave every other test blank: existing public and private values will remain unchanged. Save privately, or publish only the selected findings.</p>
+    <p class="health-review-help">Choose any known results for this dog and leave unavailable values blank. Without an approved laboratory source, entered findings can still be published but will be labelled Not independently verified.</p>
     {% if not evidence_entries %}
       <div class="structured-evidence" role="alert">
         <strong>No approved laboratory report is available for this dog.</strong>
-        <p>Health and DNA findings cannot be verified or published until a genuine report for this exact dog is approved. Review any pending laboratory upload in the <a href="{% url 'accounts:moderation' %}?kind=health">health review queue</a>, or obtain the original report first. Existing records are unchanged.</p>
+        <p>You can still publish the results available to you, clearly marked Not independently verified. These values will not be described as DNA-tested or laboratory-verified. To upgrade their status, select an approved certificate later from the <a href="{% url 'accounts:moderation' %}?kind=health">health review queue</a>.</p>
       </div>
     {% endif %}
     {% if structured_form.errors %}
@@ -41,23 +41,23 @@
     {% if selected_legacy_record %}
       <div class="structured-evidence" role="status" id="legacy-source-help">
         <strong>Converting an older combined record</strong>
-        <p>The original “{{ selected_legacy_record.test_type }}” entry is preserved as historical evidence. Use the separate CMR1, DSRA and other fields below to transcribe only values actually shown on the accepted report. Breed-composition percentages require a verified, structured DNA report and a separate publication decision.</p>
+        <p>The original “{{ selected_legacy_record.test_type }}” entry is preserved. Record only the details available from it. Without a reviewed certificate, new entries will remain marked Not independently verified; a reported breed percentage is not DNA-tested.</p>
         {% if selected_source_document %}
           <p><strong>Evidence selected:</strong> {{ selected_source_document.title }}</p>
         {% else %}
-          <p>Select the correct accepted certificate under <strong>1. Select the approved evidence</strong> to save any changes.</p>
+          <p>Select an accepted certificate if you have one, or leave the evidence selectors blank for a clearly labelled unverified result.</p>
         {% endif %}
       </div>
     {% endif %}
     <form action="{% url 'accounts:save-structured-health' dog.pk %}" method="post" class="structured-health-form">
       {% csrf_token %}
       <div class="structured-evidence">
-        <strong>1. Select the approved evidence</strong>
+        <strong>1. Approved evidence (optional)</strong>
         <div class="structured-health-source-fields">
           <div><label for="{{ structured_form.source_submission.id_for_label }}">Approved member health report</label>{{ structured_form.source_submission }}</div>
           <div><label for="{{ structured_form.source_document.id_for_label }}">Or an accepted health/DNA certificate</label>{{ structured_form.source_document }}</div>
         </div>
-        <small>Choose one source. Original reports remain private and every corrected value is audited.</small>
+        <small>Choose at most one source. Leave both blank to publish reported information without a certificate. Original reports remain private; every edit is audited.</small>
         <div class="health-selected-evidence" aria-live="polite">
           <strong data-evidence-selected-label>Select a report to inspect its actual laboratory name.</strong>
           <a class="btn btn-outline" data-evidence-selected-link href="#" target="_blank" rel="noopener noreferrer" hidden>Open selected original PDF / image ↗</a>
@@ -99,7 +99,7 @@
       </div>
       <div class="structured-health-group structured-breed-panel">
         <h3>4. Breed DNA composition</h3>
-        <p class="muted">Enter the percentage <strong>reported by the DNA laboratory</strong>, for example 100 for a reported 100% Cane Corso result. This is a laboratory estimate, not a pedigree purity guarantee.</p>
+        <p class="muted">Enter a Cane Corso percentage only if one is recorded. Without an accepted breed-composition certificate and named laboratory, it will be shown as a reported, unverified estimate — not DNA-tested or guaranteed purity.</p>
         <div class="structured-breed-value">
           <div class="structured-health-identity"><strong>Cane Corso</strong><small>Current recorded estimate: {% if latest_breed %}{{ latest_breed.cane_corso_percentage }}%{% else %}Not recorded{% endif %}</small></div>
           <div class="structured-health-control"><label for="{{ structured_form.cane_corso_percentage.id_for_label }}">Reported percentage (%)</label>{{ structured_form.cane_corso_percentage }}</div>
@@ -109,7 +109,7 @@
           <div><label for="{{ structured_form.other_breeds.id_for_label }}">Other breed percentages (if any)</label>{{ structured_form.other_breeds }}</div>
         </div>
         <label class="structured-health-attest">{{ structured_form.dna_evidence_confirmed }} <span>{{ structured_form.dna_evidence_confirmed.label }} Use this for an older accepted report categorized as Health that includes real DNA breed-composition findings; do not infer purity from a generic health result.</span></label>
-        <p class="structured-privacy-note">Staff may record a reviewed breed-DNA percentage, but a <strong>new report stays private until an authorized moderator publishes it or owner consent is already recorded</strong>. No private PDF or image will be published.</p>
+        <p class="structured-privacy-note">Verified DNA summaries and unverified breed estimates are separate. Missing certificates never block unrelated health results. Original PDFs and images remain private.</p>
       </div>
       <div class="structured-health-footer">
         <div><label for="{{ structured_form.tested_on.id_for_label }}">Date of report (optional)</label>{{ structured_form.tested_on }}</div>
