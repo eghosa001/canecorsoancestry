@@ -52,3 +52,27 @@ class KennelSEOTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Featured kennel")
         self.assertNotContains(response, "Site-owner selection")
+
+    def test_official_website_button_on_bellissimo_profile(self):
+        response = self.client.get(
+            reverse("registry:kennel-detail", args=[self.bellissimo.slug])
+        )
+        self.assertContains(response, 'href="https://bellissimogeni.com/"')
+        self.assertContains(response, "Visit Bellissimo Geni website")
+        self.assertContains(response, 'rel="noopener noreferrer"')
+
+    def test_other_kennels_do_not_inherit_bellissimo_link(self):
+        response = self.client.get(
+            reverse("registry:kennel-detail", args=[self.ordinary.slug])
+        )
+        self.assertNotContains(response, "https://bellissimogeni.com/")
+        self.assertNotContains(response, "Visit Bellissimo Geni website")
+
+    def test_kennel_explicit_website_takes_precedence(self):
+        self.bellissimo.website = "https://example.org/kennel"
+        self.bellissimo.save(update_fields=["website"])
+        response = self.client.get(
+            reverse("registry:kennel-detail", args=[self.bellissimo.slug])
+        )
+        self.assertContains(response, 'href="https://example.org/kennel"')
+        self.assertNotContains(response, 'href="https://bellissimogeni.com/"')
