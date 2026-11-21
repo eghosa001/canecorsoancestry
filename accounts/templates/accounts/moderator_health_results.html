@@ -22,6 +22,22 @@
       </div>
     </div>
     <p class="health-review-help">Select only the findings shown on the approved report. Leave every other test blank: existing public and private values will remain unchanged. Save privately, or publish only the selected findings.</p>
+    {% if not evidence_entries %}
+      <div class="structured-evidence" role="alert">
+        <strong>No approved laboratory report is available for this dog.</strong>
+        <p>Health and DNA findings cannot be verified or published until a genuine report for this exact dog is approved. Review any pending laboratory upload in the <a href="{% url 'accounts:moderation' %}?kind=health">health review queue</a>, or obtain the original report first. Existing records are unchanged.</p>
+      </div>
+    {% endif %}
+    {% if structured_form.errors %}
+      <div class="structured-evidence" role="alert" data-health-form-errors>
+        <strong>Nothing was saved or published. Correct these fields:</strong>
+        {{ structured_form.non_field_errors }}
+        {% for field in structured_form %}
+          {% if field.errors %}<p><strong>{{ field.label }}:</strong> {{ field.errors }}</p>{% endif %}
+        {% endfor %}
+        <p>Your entered values are retained below.</p>
+      </div>
+    {% endif %}
     {% if selected_legacy_record %}
       <div class="structured-evidence" role="status" id="legacy-source-help">
         <strong>Converting an older combined record</strong>
