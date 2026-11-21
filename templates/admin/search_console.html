@@ -34,8 +34,8 @@
   </nav>
   {% if gsc.status == "unconfigured" %}
     <section class="gsc-panel"><h2>Connect Search Console securely</h2>
-      <p>Install a dedicated Google service account with read-only Search Console access to <strong>canecorsoancestry.com</strong>. Set <code>CCA_GSC_SERVICE_ACCOUNT_JSON</code> in the Oracle Django environment to its complete JSON credential and grant its service-account email access to the Search Console domain property. Restart Django.</p>
-      <p>Optionally set <code>CCA_GSC_SITE_URL</code> (default: <code>sc-domain:canecorsoancestry.com</code>). Never put the private key in GitHub or expose it in the browser. GSC Wizard's personal connection does not automatically authorize the production Django server.</p>
+      <p>Grant a dedicated Google service account read-only Search Console access to the <strong>sc-domain:canecorsoancestry.com</strong> property, then save its full JSON credential in the GitHub Actions repository secret <code>CCA_GSC_SERVICE_ACCOUNT_JSON</code>. The next successful audited Oracle deployment securely supplies this credential to the Django dashboard.</p>
+      <p>Never commit the private key in a repository file or send it through a chat; use the encrypted GitHub Actions Secrets interface. The default property is <code>sc-domain:canecorsoancestry.com</code>. Your GSC Wizard login does not automatically authorize the Django server.</p>
     </section>
   {% elif gsc.status == "error" %}
     <section class="gsc-panel"><h2>Search Console temporarily unavailable</h2><p>Check service-account permission, credentials, Google API access and the server connection. No private error information is shown here.</p></section>
