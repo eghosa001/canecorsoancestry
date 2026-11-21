@@ -389,7 +389,7 @@ def save_structured_health(request, pk):
                 )
                 updates += 1
 
-         if updates:
+        if updates:
             invalidate_public_content()
     if not updates:
         messages.info(request, "No values changed. Existing health information was retained.")
