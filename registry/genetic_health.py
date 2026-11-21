@@ -26,11 +26,11 @@ RESULT_CHOICES = (
 
 
 def marker_status_rows(records):
-    """Show only markers supported by actual published, evidence-reviewed results."""
+    """Show recorded markers while distinguishing reviewed from reported values."""
     latest = {}
     for record in records:
         code = (record.test_type or "").strip().upper()
-        if code not in MARKER_CODES or record.verification_state != "health":
+        if code not in MARKER_CODES:
             continue
         rank = (record.tested_on or date.min, record.created_at, record.pk or 0)
         if code not in latest or rank > latest[code][0]:
@@ -42,10 +42,12 @@ def marker_status_rows(records):
             continue  # Missing evidence is not an observed negative or an explicit Not tested result.
         original = (record.result or "").strip()
         classified = SCREENING_RESULTS.get(original.lower())
+        verified = record.verification_state == "health"
         rows.append({
             "code": code, "name": name,
             "status": classified[0] if classified else (original or "Result unclear"),
-            "tone": classified[1] if classified else "other",
+            "tone": (classified[1] if classified else "other") if verified else "unverified",
+            "verified": verified,
         })
     return rows
 
