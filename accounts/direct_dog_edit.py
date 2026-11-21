@@ -5,6 +5,7 @@ before/after audit. The super admin can accept or reverse a moderator change.
 """
 import hashlib
 import json
+import logging
 import uuid
 
 from django import forms
@@ -32,6 +33,9 @@ from registry.public_freshness import invalidate_public_content
 from registry.permissions import can_add_canonical_dog, can_manage_verification, can_publish_canonical_dog, can_review_submissions
 from registry.services import record_audit, moderation_dog_ids
 from .forms import validate_document_upload, validate_image_upload, normalize_image_upload
+
+
+logger = logging.getLogger(__name__)
 
 
 DOG_FIELDS = (
@@ -491,6 +495,16 @@ def dog_direct_create(request):
                     },
                     note=form.cleaned_data["reason"],
                 )
+        except OSError:
+            # FileField writes the photo through the active media backend.
+            # A failed R2/Oracle write must not become an unexplained 500 or
+            # leave the dog created without the owner's chosen photograph.
+            logger.exception("staff_dog_photo_upload_failed")
+            form.add_error(
+                "primary_photo",
+                "The photograph could not be saved. The dog was not added. "
+                "Please try again, or add the dog without a photo and upload it later.",
+            )
         except (IntegrityError, ValidationError) as exc:
             form.add_error(None, f"Dog was not added: {exc}")
         else:
