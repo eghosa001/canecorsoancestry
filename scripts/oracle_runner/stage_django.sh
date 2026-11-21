@@ -121,6 +121,7 @@ python3 - "$temporary_env" <<'PY'
 import base64
 import hashlib
 import hmac
+import json
 import os
 import sys
 from pathlib import Path
@@ -177,6 +178,24 @@ values = {
     "GUNICORN_TIMEOUT": "60",
     "GIT_COMMIT_SHA": os.environ["CCA_RELEASE_SHA"],
 }
+# Encode the optional Google Search Console key for Podman's one-line env file.
+# It remains in the root-owned environment, not the application image or logs.
+gsc_secret = os.environ.get("CCA_GSC_SERVICE_ACCOUNT_JSON", "").strip()
+if gsc_secret:
+    try:
+        gsc_document = json.loads(gsc_secret)
+    except (TypeError, ValueError):
+        raise SystemExit("Invalid Google Search Console credential JSON")
+    if (
+        not isinstance(gsc_document, dict)
+        or gsc_document.get("type") != "service_account"
+        or not gsc_document.get("client_email")
+        or not gsc_document.get("private_key")
+    ):
+        raise SystemExit("Invalid Google Search Console service account fields")
+    values["CCA_GSC_SERVICE_ACCOUNT_B64"] = base64.b64encode(
+        json.dumps(gsc_document, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii")
 for key, value in values.items():
     if any(char in str(value) for char in ("\r", "\n", "\0")):
         raise SystemExit(f"Unsafe newline or NUL in {key}")
