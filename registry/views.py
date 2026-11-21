@@ -785,7 +785,24 @@ def kennel_list(request):
             | Q(city__icontains=query)
             | Q(country__icontains=query)
         )
-    kennels = kennels.order_by("name")
+    featured_name = getattr(settings, "CCA_FEATURED_KENNEL_NAME", "").strip()
+    # A site-owner feature is not an impartial ranking. Never feature unverified
+    # or provisional historical names as confirmed kennels.
+    if not query and featured_name:
+        kennels = kennels.annotate(
+            is_featured=Case(
+                When(
+                    name__iexact=featured_name,
+                    verified_at__isnull=False,
+                    is_archive_hypothesis=False,
+                    then=Value(1),
+                ),
+                default=Value(0),
+                output_field=IntegerField(),
+            )
+        ).order_by("-is_featured", "name")
+    else:
+        kennels = kennels.order_by("name")
 
     paginator = Paginator(kennels, 18)
     page_obj = paginator.get_page(request.GET.get("page"))
@@ -867,6 +884,27 @@ def kennel_detail(request, slug):
         "registry/kennel_detail.html",
         {
             "kennel": kennel,
+            "is_featured_kennel": (
+                bool(kennel.verified_at)
+                and not kennel.is_archive_hypothesis
+                and bool(getattr(settings, "CCA_FEATURED_KENNEL_NAME", ""))
+                and kennel.name.casefold() == settings.CCA_FEATURED_KENNEL_NAME.casefold()
+            ),
+            "structured_data": json_ld({
+                "@context": "https://schema.org",
+                "@type": "ProfilePage",
+                "name": f"{kennel.name} Cane Corso kennel profile",
+                "url": f"{settings.SITE_URL}{reverse('registry:kennel-detail', args=[kennel.slug])}",
+                "description": (
+                    kennel.description[:300]
+                    if kennel.description
+                    else f"Public Cane Corso dog, pedigree and litter records associated with {kennel.name}."
+                ),
+                "mainEntity": {
+                    "@type": "Organization" if kennel.verified_at and not kennel.is_archive_hypothesis else "Thing",
+                    "name": kennel.name,
+                },
+            }),
             "dogs": dog_page.object_list,
             "litters": litter_page.object_list,
             "dog_page": dog_page,

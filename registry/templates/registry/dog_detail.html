@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static dog_images %}
-{% block title %}{{ dog.name }} · Cane Corso Ancestry{% endblock %}
-{% block meta_description %}Pedigree, ancestry, offspring, siblings and health information for Cane Corso {{ dog.name }}.{% endblock %}
+{% block title %}{{ dog.name }} · Cane Corso Pedigree & Ancestry{% endblock %}
+{% block meta_description %}Explore the Cane Corso pedigree of {{ dog.name }}{% if dog.bloodline %}, {{ dog.bloodline }} bloodline{% endif %}. Trace parents, ancestors and offspring, with documented health and kennel details when available.{% endblock %}
 {% block og_title %}{{ dog.name }} · Cane Corso Pedigree{% endblock %}
 {% block og_description %}Explore {{ dog.name }}'s Cane Corso pedigree, ancestry, offspring, siblings and health information.{% endblock %}
 {% block extra_head %}
