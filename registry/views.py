@@ -785,6 +785,7 @@ def kennel_list(request):
             | Q(city__icontains=query)
             | Q(country__icontains=query)
         )
+    # Neutral, predictable directory order: no paid or owner-specific ranking.
     kennels = kennels.order_by("name")
 
     paginator = Paginator(kennels, 18)
@@ -867,6 +868,21 @@ def kennel_detail(request, slug):
         "registry/kennel_detail.html",
         {
             "kennel": kennel,
+            "structured_data": json_ld({
+                "@context": "https://schema.org",
+                "@type": "ProfilePage",
+                "name": f"{kennel.name} Cane Corso kennel profile",
+                "url": f"{settings.SITE_URL}{reverse('registry:kennel-detail', args=[kennel.slug])}",
+                "description": (
+                    kennel.description[:300]
+                    if kennel.description
+                    else f"Public Cane Corso dog, pedigree and litter records associated with {kennel.name}."
+                ),
+                "mainEntity": {
+                    "@type": "Organization" if kennel.verified_at and not kennel.is_archive_hypothesis else "Thing",
+                    "name": kennel.name,
+                },
+            }),
             "dogs": dog_page.object_list,
             "litters": litter_page.object_list,
             "dog_page": dog_page,

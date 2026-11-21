@@ -1,5 +1,9 @@
 {% extends "base.html" %}
-{% block title %}{{ kennel.name }} · Cane Corso Ancestry{% endblock %}
+{% block title %}{{ kennel.name }} · Cane Corso Kennel & Pedigrees | Cane Corso Ancestry{% endblock %}
+{% block meta_description %}Explore {{ kennel.name }} Cane Corso kennel{% if kennel.city %} in {{ kennel.city }}{% endif %}{% if kennel.country %}, {{ kennel.country }}{% endif %}: documented dog pedigrees, bloodlines and public litters.{% endblock %}
+{% block og_title %}{{ kennel.name }} · Cane Corso Kennel Profile{% endblock %}
+{% block og_description %}Browse documented Cane Corso dogs, pedigrees and public litters associated with {{ kennel.name }}.{% endblock %}
+{% block extra_head %}<script type="application/ld+json">{{ structured_data }}</script>{% endblock %}
 {% load dog_images %}
 {% block content %}
 <section class="page-shell">
@@ -16,6 +20,13 @@
       {% if claim_pending %}<span class="submission-state pending">Your ownership claim is pending</span>{% elif claim_in_review %}<span class="submission-state pending">Ownership review in progress</span>{% endif %}
     </div>
   </header>
+
+  {% if kennel.description %}
+  <section class="kennel-about" aria-labelledby="kennel-about-title">
+    <h2 id="kennel-about-title">About {{ kennel.name }}</h2>
+    {{ kennel.description|linebreaks }}
+  </section>
+  {% endif %}
 
   <div class="section-heading"><h2>Dogs bred by this kennel</h2><span>{{ public_dog_total }} recorded dog{{ public_dog_total|pluralize }}{% if dog_total %} · {{ dog_total }} with photos{% endif %}</span></div>
   <div class="dog-card-grid">
