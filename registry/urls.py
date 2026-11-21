@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from .kennel_guides import nigeria_kennel_guide
 
 app_name = "registry"
 
@@ -10,6 +11,7 @@ urlpatterns = [
     path("dogs/<slug:slug>/", views.dog_detail, name="dog-detail"),
     path("statistics/", views.pedigree_statistics, name="statistics"),
     path("kennels/", views.kennel_list, name="kennel-list"),
+    path("kennels/nigeria/", nigeria_kennel_guide, name="kennel-nigeria-guide"),
     path("kennels/<slug:slug>/", views.kennel_detail, name="kennel-detail"),
     path("litters/<uuid:pk>/", views.litter_detail, name="litter-detail"),
 ]
