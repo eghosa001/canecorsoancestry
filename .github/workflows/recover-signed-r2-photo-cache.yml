@@ -1,0 +1,34 @@
+name: Recover missing dog photos from signed Cloudflare image cache
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/recovery/probe_signed_photo_cache.py"
+      - ".github/workflows/recover-signed-r2-photo-cache.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    if: github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read-only signed retrieval of missing originals and thumbnails
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/recovery/probe_signed_photo_cache.py
+          python3 scripts/recovery/probe_signed_photo_cache.py
+      - name: Keep any exact original and separately labeled candidates
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cca-signed-media-48-cache-evidence
+          path: artifacts/cca-signed-photo-cache-recovery/
+          if-no-files-found: warn
+          retention-days: 14
