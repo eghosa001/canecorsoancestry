@@ -381,6 +381,19 @@ sudo -n install -d -m 700 /etc/cca
 sudo -n install -d -m 755 /var/lib/cca/control
 # Persist uploaded media outside the read-only container across releases.
 sudo -n install -d -o 65532 -g 65532 -m 750 /var/lib/cca/media
+# Drive archive recovery ran with sudo and created dogs/archive as root.
+# The generic smoke/runtime probe succeeded but could not detect that Django
+# (uid 65532) cannot create a new dogs/YYYY/MM photo in a root-owned parent.
+# Repair only the upload path and current date directories, never recursively
+# chown archived breeder photographs or private medical documents.
+if [[ "$MEDIA_BACKEND" == oracle-local ]]; then
+  dog_year="$(TZ=Africa/Lagos date +%Y)"
+  dog_month="$(TZ=Africa/Lagos date +%m)"
+  sudo -n install -d -o 65532 -g 65532 -m 750 \
+    /var/lib/cca/media/dogs \
+    "/var/lib/cca/media/dogs/$dog_year" \
+    "/var/lib/cca/media/dogs/$dog_year/$dog_month"
+fi
 # Never switch production to an empty/incomplete VM media directory.
 # A human operator must mark photo/document recovery verified before cutover.
 if [[ "$MEDIA_BACKEND" == oracle-local ]] &&
@@ -532,6 +545,32 @@ PY
   exit 1
 fi
 echo "PASS: Oracle media ($MEDIA_BACKEND) upload, read-back and cleanup succeeded."
+
+# Independently prove the exact path used by DogImage(upload_to="dogs/%Y/%m/")
+# is writable by the running, unprivileged Django user. A generic media probe
+# under smoke/runtime cannot discover root-owned archive parent directories.
+# This probe creates no Dog record and removes its random temporary file.
+if [[ "$MEDIA_BACKEND" == oracle-local ]]; then
+  sudo -n "$PODMAN_BIN" exec "$APP_CONTAINER" python manage.py shell -c '
+from datetime import datetime
+from uuid import uuid4
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+
+payload = bytes.fromhex("ffd8ff") + b"cca-dog-upload-permissions-check"
+key = f"dogs/{datetime.now():%Y/%m}/.cca-write-check-{uuid4().hex}.jpg"
+saved = None
+try:
+    saved = default_storage.save(key, ContentFile(payload))
+    with default_storage.open(saved, "rb") as handle:
+        if handle.read() != payload:
+            raise OSError("Dog-photo upload readback mismatch")
+finally:
+    if saved:
+        default_storage.delete(saved)
+'
+  echo "PASS: actual dogs/YYYY/MM uploads are writable and readable by Django."
+fi
 
 # A local Django 200 is not proof that the public Worker can reach Oracle.
 # Fail the release if the user-facing route is not reachable or still serves
