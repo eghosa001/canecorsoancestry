@@ -495,7 +495,13 @@ class ModeratorLabResultTests(TestCase):
     def test_structured_editor_rejects_missing_evidence_and_non_dna_purity(self):
         self.client.force_login(self.moderator)
         url = reverse("accounts:save-structured-health", args=[self.dog.pk])
-        self.client.post(url, {"cmr1": "Clear", "reviewed": "on"})
+        failed = self.client.post(url, {
+            "cmr1": "Clear", "reviewed": "on", "intent": "publish",
+        })
+        self.assertEqual(failed.status_code, 200)
+        self.assertContains(failed, "No approved laboratory report is available for this dog.")
+        self.assertContains(failed, "Choose exactly one approved laboratory report.")
+        self.assertEqual(failed.context["structured_form"]["cmr1"].value(), "Clear")
         self.assertFalse(HealthRecord.objects.filter(dog=self.dog).exists())
         accepted = Submission.objects.create(
             kind=Submission.Kind.DOCUMENT, status=Submission.Status.APPROVED,
