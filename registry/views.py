@@ -524,6 +524,11 @@ def dog_detail(request, slug):
     # Build only intentionally published health cards; private review evidence
     # and unpublished status stay in the staff workspace.
     genetic_screenings = marker_status_rows(dog.display_health_records)
+    reported_breed = max(
+        (record for record in dog.display_health_records
+         if record.test_type == "Cane Corso percentage (reported)"),
+        key=lambda record: (record.created_at, record.pk), default=None,
+    )
     # Only actual recorded marker statuses are displayed; never invent missing results.
     # Additional conditions are sourced from a moderator-reviewed approval event,
     # not an untrusted string in the member's original notes.
@@ -558,6 +563,7 @@ def dog_detail(request, slug):
             "code": label, "name": "Additional laboratory screening",
             "status": classified[0] if classified else (status or "Result unclear"),
             "tone": classified[1] if classified else "other",
+            "verified": True,
         })
     # Older data may have a single free-text health row combining an alleged
     # breed percentage with words such as "DSRA CLEAR". Never treat that prose
@@ -568,9 +574,9 @@ def dog_detail(request, slug):
     orthopaedic_screenings = []
     for record in dog.display_health_records:
         label = (record.test_type or "").strip().lower()
-        if (label.upper() in MARKER_CODES and record.verification_state == VerificationState.HEALTH_VERIFIED) or (
+        if label.upper() in MARKER_CODES or (
             record.pk in confirmed_extra_ids and record.pk not in verified_clinical_extras
-        ):
+        ) or record.test_type == "Cane Corso percentage (reported)":
             continue  # Reviewed genetic markers are already displayed in the DNA card.
         legacy_rows = legacy_mixed_health_rows(
             record.test_type, record.result,
@@ -657,13 +663,14 @@ def dog_detail(request, slug):
             "mates_truncated": mates_truncated,
             "relative_health": relative_health,
             "breed_dna": breed_dna,
+            "reported_breed": reported_breed if not breed_dna else None,
             "breed_dna_percentage": percentage_text(breed_dna.cane_corso_percentage) if breed_dna else "",
             "genetic_screenings": genetic_screenings,
             "other_health_records": other_health_records,
             "other_health_rows": other_health_rows,
             "orthopaedic_screenings": orthopaedic_screenings,
             "show_dna_card": bool(breed_dna or genetic_screenings),
-            "has_public_health_records": bool(other_health_records or orthopaedic_screenings or breed_dna or genetic_screenings),
+            "has_public_health_records": bool(other_health_records or orthopaedic_screenings or breed_dna or genetic_screenings or reported_breed),
             "can_submit_breed_dna": can_submit_breed_dna,
             "coi_percent": coi_percent,
             "can_select_coi": can_select_coi,
