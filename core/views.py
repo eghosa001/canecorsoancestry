@@ -286,16 +286,6 @@ def _load_featured_dogs():
 
 def home(request):
     featured_dogs = _load_featured_dogs()
-    featured_name = getattr(settings, "CCA_FEATURED_KENNEL_NAME", "").strip()
-    featured_kennel = (
-        Kennel.objects.filter(
-            name__iexact=featured_name,
-            is_public=True,
-            is_archive_hypothesis=False,
-            verified_at__isnull=False,
-        ).only("name", "slug", "city", "country", "description").first()
-        if featured_name else None
-    )
     public_stats = caches["public"].get("cca:home:public-stats:v4")
     if public_stats is None:
         public_stats = {
@@ -314,7 +304,6 @@ def home(request):
     context = {
         **public_stats,
         "featured_dogs": featured_dogs,
-        "featured_kennel": featured_kennel,
         "structured_data": json_ld({
             "@context": "https://schema.org",
             "@type": "WebSite",

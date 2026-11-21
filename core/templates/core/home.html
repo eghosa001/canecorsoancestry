@@ -51,23 +51,6 @@
   </div>
 </section>
 
-{% if featured_kennel %}
-<section class="page-shell" aria-labelledby="featured-kennel-heading">
-  <div class="section-heading">
-    <div><p class="eyebrow">Featured kennel · Site-owner selection</p><h2 id="featured-kennel-heading">{{ featured_kennel.name }}</h2></div>
-    <a class="text-link" href="{% url 'registry:kennel-list' %}">Browse all kennels →</a>
-  </div>
-  <div class="kennel-grid">
-    <a class="kennel-card" href="{% url 'registry:kennel-detail' featured_kennel.slug %}">
-      <div class="kennel-card-top"><span class="verification-pill">Verified kennel</span></div>
-      <h3>{{ featured_kennel.name }}</h3>
-      <p>{% if featured_kennel.city %}{{ featured_kennel.city }}{% if featured_kennel.country %}, {% endif %}{% endif %}{{ featured_kennel.country }}</p>
-      <p>Explore public dog profiles, documented pedigrees and linked litters.</p>
-    </a>
-  </div>
-</section>
-{% endif %}
-
 {% if featured_dogs %}
 <section class="page-shell">
   <div class="section-heading">

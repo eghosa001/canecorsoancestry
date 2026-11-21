@@ -12,7 +12,6 @@
       <p class="eyebrow">Kennel profile</p>
       <h1>{{ kennel.name }}</h1>
       <p>{{ kennel.city }}{% if kennel.city and kennel.country %}, {% endif %}{{ kennel.country }}</p>
-      {% if is_featured_kennel %}<span class="verification-pill">Featured kennel</span>{% endif %}
       {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% elif kennel.is_archive_hypothesis %}<p class="muted"><strong>Historical name · unverified.</strong> Name matches alone do not establish breeding origin or ownership.</p>{% endif %}
     </div>
     <div class="button-row">
@@ -28,7 +27,6 @@
     {{ kennel.description|linebreaks }}
   </section>
   {% endif %}
-  {% if is_featured_kennel %}<p class="muted">Featured by Cane Corso Ancestry. This placement is a site-owner selection, not an independent quality ranking.</p>{% endif %}
 
   <div class="section-heading"><h2>Dogs bred by this kennel</h2><span>{{ public_dog_total }} recorded dog{{ public_dog_total|pluralize }}{% if dog_total %} · {{ dog_total }} with photos{% endif %}</span></div>
   <div class="dog-card-grid">

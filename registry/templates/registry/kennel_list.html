@@ -41,7 +41,6 @@
           {% if kennel.city or kennel.country %}
           <span class="eyebrow">{% if kennel.city %}{{ kennel.city }}{% endif %}{% if kennel.city and kennel.country %}, {% endif %}{% if kennel.country %}{{ kennel.country }}{% endif %}</span>
           {% endif %}
-          {% if kennel.is_featured %}<span class="verification-pill">Featured kennel</span>{% endif %}
           {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% elif kennel.is_archive_hypothesis %}<span class="muted">Historical name · unverified</span>{% endif %}
         </div>
         <h2>{{ kennel.name }}</h2>
