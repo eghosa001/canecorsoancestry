@@ -1,0 +1,31 @@
+name: Recover 48 missing dog photographs from public web archives
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/recovery/probe_48_photo_archives.py"
+      - ".github/workflows/restore-public-dog-photo-cache.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    if: github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read-only independent web archive recovery
+        run: |
+          python3 -m py_compile scripts/recovery/probe_48_photo_archives.py
+          python3 scripts/recovery/probe_48_photo_archives.py
+      - name: Preserve exact-hash evidence and candidate image bytes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cca-missing-48-photo-cache-evidence
+          path: artifacts/cca-photo-cache-recovery/
+          if-no-files-found: warn
+          retention-days: 14
