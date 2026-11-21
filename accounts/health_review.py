@@ -173,6 +173,11 @@ def reviewed_dog_health(request, pk):
     staff_breed_ids = staff_authorized_breed_record_ids(dog)
     for record in records:
         record.staff_breed_authorized = record.pk in staff_breed_ids
+        record.is_staff_reported = any((record.notes or "").startswith(prefix) for prefix in (
+            "Staff-published available health information;",
+            "Staff-reported breed estimate;",
+            "Staff-reported additional health information",
+        ))
         record.is_legacy_mixed = legacy_mixed_health_rows(
             record.test_type, record.result,
             record_verified=record.verification_state == VerificationState.HEALTH_VERIFIED,
@@ -503,9 +508,10 @@ def add_reviewed_health_condition(request, pk):
         ).exists():
             messages.error(request, "This condition and date have already been transcribed from that document.")
             return redirect("accounts:reviewed-dog-health", pk=pk)
-        supporting_document = document or DogDocument.objects.filter(
-            dog=dog, source_submission=source,
-        ).first()
+        supporting_document = document or (
+            DogDocument.objects.filter(dog=dog, source_submission=source).first()
+            if source is not None else None
+        )
         # A document used as laboratory evidence is confidential even if it
         # was initially uploaded as a general document with public visibility.
         if supporting_document and supporting_document.is_public:
