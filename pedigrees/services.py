@@ -519,12 +519,23 @@ def direct_relative_health(
     if include_subject_records:
         ids.add(dog.pk)
     subject_records = []
-    # Unpublished or not-yet-verified health records never enter visitor or
-    # member profile data. DNA composition has its own publication-authorized
-    # public card and must not leak through direct relatives' raw-text rows.
+    # Relatives' raw health table stays evidence-reviewed only. The dog's
+    # own profile may also display explicitly staff-published reported records,
+    # labelled unverified in its health cards. Never expose arbitrary imported
+    # community claims or unapproved DNA documents by broadening this filter.
+    visible = Q(verification_state=VerificationState.HEALTH_VERIFIED)
+    if include_subject_records:
+        staff_reported = (
+            Q(notes__startswith="Staff-published available health information;")
+            | Q(notes__startswith="Staff-reported breed estimate;")
+            | Q(notes__startswith="Staff-reported additional health information")
+        )
+        visible |= (
+            Q(dog_id=dog.pk, verification_state=VerificationState.COMMUNITY)
+            & staff_reported
+        )
     records = HealthRecord.objects.filter(
-        dog_id__in=ids, is_public=True,
-        verification_state=VerificationState.HEALTH_VERIFIED,
+        visible, dog_id__in=ids, is_public=True,
         breed_dna_report__isnull=True,
     ).select_related("dog").order_by("dog__name", "test_type", "-tested_on")
     for record in records:
