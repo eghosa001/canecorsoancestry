@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Best Cane Corso Kennels in Nigeria & Africa? How to Choose{% endblock %}
+{% block meta_description %}Looking for the best Cane Corso kennel in Nigeria or Africa? Learn how to compare breeders by documented pedigrees, health testing and welfare, then browse Nigerian kennels.{% endblock %}
+{% block og_title %}Choosing Cane Corso Kennels in Nigeria and Africa{% endblock %}
+{% block og_description %}A practical guide to checking Cane Corso breeders and examining public dog and pedigree records in Nigeria.{% endblock %}
+{% block extra_head %}<script type="application/ld+json">{{ structured_data }}</script>{% endblock %}
+{% block content %}
+<article class="page-shell">
+  <header class="page-heading">
+    <p class="eyebrow">Cane Corso breeding · Nigeria and Africa</p>
+    <h1>How to find a good Cane Corso kennel in Nigeria</h1>
+    <p>Searching for the best Cane Corso kennel in Nigeria or elsewhere in Africa? There is no single reliable ranking that answers the question for every buyer. The useful approach is to compare documented dogs, breeding practices, health evidence and the breeder's willingness to answer questions.</p>
+  </header>
+
+  <section aria-labelledby="quality">
+    <h2 id="quality">What makes a Cane Corso kennel worth considering?</h2>
+    <p>Begin with the dog's identity and pedigree. Ask to see the sire and dam, follow the recorded generations and check whether registration numbers identify the issuing organisation. A long pedigree can help with ancestry research, but the number of generations shown is not proof of quality, health or responsible breeding.</p>
+    <p>Look for the actual results of health screening rather than a general claim that the dogs are healthy. Hip and elbow evaluations, appropriate genetic tests and relevant veterinary records are useful evidence. A missing result means it is not documented here; it should never be presented as a clear result. Discuss the findings and the breed's health risks with a qualified veterinarian.</p>
+    <p>Temperament, living conditions and puppy care matter too. Ask how the dogs are socialised, how they are housed, which vaccinations or parasite treatments are recorded and what happens if a new owner needs support. Where possible, arrange a visit or an appropriate live viewing before making a commitment.</p>
+  </section>
+
+  <section aria-labelledby="nigeria-guide">
+    <h2 id="nigeria-guide">Choosing a Cane Corso breeder in Nigeria</h2>
+    <p>For Nigerian kennels, confirm the operating location, whether the dogs and litters are genuinely associated with that breeder and whether the kennel can provide records for the particular dog being discussed. Check claims of membership, titles or registration with the organisation that issued them. Cane Corso Ancestry is an ancestry research platform, not a dog registration authority.</p>
+    <p>A kennel marked verified on this website has passed the platform's evidence-review process for its identity. This does not mean an external kennel club has certified its breeding programme or that its dogs have passed every health test.</p>
+    <p>For the recognised breed description, consult the <a class="text-link" href="https://www.fci.be/en/nomenclature/ITALIAN-CANE-CORSO-343.html" target="_blank" rel="noopener noreferrer">FCI Cane Corso Italiano standard (No. 343)</a>. For questions about health-screening evidence, the <a class="text-link" href="https://ofa.org/prospective-owners/" target="_blank" rel="noopener noreferrer">Orthopedic Foundation for Animals' prospective-owner guidance</a> is a useful reference.</p>
+  </section>
+
+  <section aria-labelledby="africa-guide">
+    <h2 id="africa-guide">Comparing Cane Corso kennels across Africa</h2>
+    <p>Apply the same checks wherever the breeder is based. Cross-border purchases may require additional consideration of veterinary documentation, transport conditions, animal welfare and the requirements of the destination country. Availability and export eligibility should be confirmed with the actual breeder and relevant authorities, not inferred from a directory profile.</p>
+    <p>Be cautious of any listing that relies only on photographs, vague champion claims or pressure to pay immediately. Independent documentation and transparent communication are more useful than an unsupported “number one kennel” label.</p>
+  </section>
+
+  <section aria-labelledby="nigeria-kennels">
+    <div class="section-heading">
+      <div><p class="eyebrow">Explore documented profiles</p><h2 id="nigeria-kennels">Cane Corso kennels listed in Nigeria</h2></div>
+      <a class="text-link" href="{% url 'registry:kennel-list' %}">Browse all kennels →</a>
+    </div>
+    <p>These are public profiles with Nigeria recorded as their country. They are listed alphabetically, not ranked by breeding quality. Public information can be incomplete; check each profile and supporting evidence before making a decision.</p>
+    <div class="kennel-grid">
+      {% for kennel in kennels %}
+      <a class="kennel-card" href="{% url 'registry:kennel-detail' kennel.slug %}">
+        <div class="kennel-card-top">
+          <span class="eyebrow">{% if kennel.city %}{{ kennel.city }}, {% endif %}Nigeria</span>
+          {% if kennel.verified_at %}<span class="verification-pill">Verified kennel</span>{% endif %}
+        </div>
+        <h3>{{ kennel.name }}</h3>
+        {% if kennel.description %}<p>{{ kennel.description|truncatewords:24 }}</p>{% else %}<p>View its public kennel profile, dogs and available pedigree records.</p>{% endif %}
+      </a>
+      {% empty %}
+      <div class="empty-state">
+        <strong>No Nigerian kennel profiles are currently available.</strong>
+        <p><a class="text-link" href="{% url 'registry:kennel-list' %}">Explore the full kennel directory</a> or check back after new records have been reviewed.</p>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+</article>
+{% endblock %}

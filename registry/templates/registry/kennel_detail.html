@@ -21,6 +21,10 @@
     </div>
   </header>
 
+  {% if kennel.country|lower == "nigeria" or kennel.country|lower == "ng" %}
+  <p class="muted">Looking for Cane Corso kennels in Nigeria? <a class="text-link" href="{% url 'registry:kennel-nigeria-guide' %}">Read the breeder-selection guide</a> to compare pedigree records, health screening and responsible breeding practices.</p>
+  {% endif %}
+
   {% if kennel.description %}
   <section class="kennel-about" aria-labelledby="kennel-about-title">
     <h2 id="kennel-about-title">About {{ kennel.name }}</h2>

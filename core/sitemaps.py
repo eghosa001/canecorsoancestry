@@ -14,6 +14,7 @@ class StaticViewSitemap(Sitemap):
             "home",
             "registry:dog-search",
             "registry:kennel-list",
+            "registry:kennel-nigeria-guide",
             "registry:statistics",
             "pedigrees:index",
             "pedigrees:virtual-mating",
