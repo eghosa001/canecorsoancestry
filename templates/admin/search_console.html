@@ -1,0 +1,76 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Home</a> &rsaquo; Google Search Console</div>{% endblock %}
+{% block extrastyle %}{{ block.super }}
+<style>
+.gsc-shell{max-width:1150px}.gsc-shell .muted{color:var(--body-quiet-color)}
+.gsc-periods{display:flex;flex-wrap:wrap;gap:.6rem;margin:1.2rem 0}
+.gsc-periods a{border:1px solid var(--border-color);padding:.55rem .95rem;border-radius:8px;text-decoration:none}
+.gsc-periods a.active{background:var(--selected-bg);font-weight:700}
+.gsc-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:1rem 0}
+.gsc-card,.gsc-panel{background:var(--body-bg);border:1px solid var(--border-color);border-radius:10px;padding:1rem}
+.gsc-card strong{font-size:clamp(1.5rem,3vw,2rem);display:block;font-variant-numeric:tabular-nums}
+.gsc-card span{color:var(--body-quiet-color)}
+.gsc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,450px),1fr));gap:12px}
+.gsc-panel{min-width:0;overflow-x:auto;margin-bottom:1rem}
+.gsc-panel h2{font-size:1.14rem;margin:0 0 1rem}
+.gsc-panel table{width:100%;border-collapse:collapse}
+.gsc-panel th,.gsc-panel td{text-align:left;padding:.55rem .4rem;border-bottom:1px solid var(--border-color)}
+.gsc-panel th:not(:first-child),.gsc-panel td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+.gsc-url{max-width:380px;overflow-wrap:anywhere}
+.gsc-bar{height:6px;background:var(--darkened-bg);margin-top:5px;border-radius:5px}
+.gsc-bar span{display:block;height:100%;background:var(--link-fg);border-radius:5px}
+@media(max-width:650px){.gsc-card,.gsc-panel{padding:.7rem}.gsc-panel td,.gsc-panel th{font-size:.82rem}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="gsc-shell">
+  <h1>Google Search Console</h1>
+  <p class="muted">Organic Google Web Search only. This is search visibility, not browser visits. Dates use UTC and exclude the most recent three days while data settles.</p>
+  <nav class="gsc-periods" aria-label="Search reporting period">
+    <a href="?days=1" {% if gsc.days == 1 %}class="active" aria-current="page"{% endif %}>Latest day</a>
+    <a href="?days=7" {% if gsc.days == 7 %}class="active" aria-current="page"{% endif %}>7 days</a>
+    <a href="?days=28" {% if gsc.days == 28 %}class="active" aria-current="page"{% endif %}>28 days</a>
+    <a href="?days=90" {% if gsc.days == 90 %}class="active" aria-current="page"{% endif %}>90 days</a>
+  </nav>
+  {% if gsc.status == "unconfigured" %}
+    <section class="gsc-panel"><h2>Connect Search Console securely</h2>
+      <p>Install a dedicated Google service account with read-only Search Console access to <strong>canecorsoancestry.com</strong>. Set <code>CCA_GSC_SERVICE_ACCOUNT_JSON</code> in the Oracle Django environment to its complete JSON credential and grant its service-account email access to the Search Console domain property. Restart Django.</p>
+      <p>Optionally set <code>CCA_GSC_SITE_URL</code> (default: <code>sc-domain:canecorsoancestry.com</code>). Never put the private key in GitHub or expose it in the browser. GSC Wizard's personal connection does not automatically authorize the production Django server.</p>
+    </section>
+  {% elif gsc.status == "error" %}
+    <section class="gsc-panel"><h2>Search Console temporarily unavailable</h2><p>Check service-account permission, credentials, Google API access and the server connection. No private error information is shown here.</p></section>
+  {% else %}
+    <p class="muted">Reporting period: {{ gsc.start_date }} to {{ gsc.end_date }} · cached for up to 10 minutes</p>
+    <div class="gsc-cards">
+      <div class="gsc-card"><strong>{{ gsc.impressions }}</strong><span>Search impressions</span></div>
+      <div class="gsc-card"><strong>{{ gsc.clicks }}</strong><span>Google clicks</span></div>
+      <div class="gsc-card"><strong>{{ gsc.ctr|floatformat:2 }}%</strong><span>Click-through rate</span></div>
+      <div class="gsc-card"><strong>{{ gsc.position|floatformat:2 }}</strong><span>Average position{% if gsc.impressions == 0 %} (no data){% endif %}</span></div>
+    </div>
+    <section class="gsc-panel"><h2>Daily organic search visibility</h2>
+      <table><thead><tr><th>Date</th><th>Impressions</th><th>Clicks</th></tr></thead><tbody>
+        {% for row in gsc.daily %}
+          <tr><td>{{ row.date }}<div class="gsc-bar"><span style="width:{{ row.width }}%"></span></div></td><td>{{ row.impressions }}</td><td>{{ row.clicks }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+    </section>
+    <div class="gsc-grid">
+      <section class="gsc-panel"><h2>Search landing pages</h2>
+        <table><thead><tr><th>Page</th><th>Impressions</th><th>Clicks</th></tr></thead><tbody>
+        {% for row in gsc.pages %}
+          <tr><td class="gsc-url">{{ row.key }}</td><td>{{ row.impressions }}</td><td>{{ row.clicks }}</td></tr>
+        {% empty %}<tr><td colspan="3">No page rows yet.</td></tr>{% endfor %}
+        </tbody></table>
+      </section>
+      <section class="gsc-panel"><h2>Top search queries</h2>
+        <table><thead><tr><th>Query</th><th>Impressions</th><th>Clicks</th></tr></thead><tbody>
+        {% for row in gsc.queries %}
+          <tr><td class="gsc-url">{{ row.key }}</td><td>{{ row.impressions }}</td><td>{{ row.clicks }}</td></tr>
+        {% empty %}<tr><td colspan="3">No query rows yet. Google hides some low-volume queries.</td></tr>{% endfor %}
+        </tbody></table>
+      </section>
+    </div>
+    <p class="muted">Google may omit anonymised queries from query tables. Use the summary totals for overall performance. Search Console indexing counts remain in the official indexing report.</p>
+  {% endif %}
+</div>
+{% endblock %}

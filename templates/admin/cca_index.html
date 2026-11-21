@@ -1,6 +1,23 @@
 {% extends "admin/index.html" %}
+{% load gsc_admin %}
 {% block content %}
 {% if request.user.is_superuser %}
+{% gsc_admin_summary as seo %}
+<section style="background:var(--body-bg);border:1px solid var(--hairline-color);padding:1.25rem;margin:0 0 1.5rem;border-radius:8px">
+  <h2 style="margin-top:0">Google Search Console · 28 days</h2>
+  {% if seo.status == "ready" %}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:1rem">
+      <div><strong style="font-size:1.5rem">{{ seo.impressions }}</strong><div>Impressions</div></div>
+      <div><strong style="font-size:1.5rem">{{ seo.clicks }}</strong><div>Clicks</div></div>
+      <div><strong style="font-size:1.5rem">{{ seo.ctr|floatformat:2 }}%</strong><div>CTR</div></div>
+      <div><strong style="font-size:1.5rem">{{ seo.position|floatformat:2 }}</strong><div>Avg. position</div></div>
+    </div>
+    <p>Data through {{ seo.end_date }} (UTC). Google Search data is delayed.</p>
+  {% else %}
+    <p>Search Console report {% if seo.status == "unconfigured" %}needs a read-only Google service account on the server{% else %}is temporarily unavailable{% endif %}.</p>
+  {% endif %}
+  <p><a class="button" href="{% url 'admin-search-console' %}">Open Search Console dashboard</a></p>
+</section>
 <section style="background:var(--body-bg);border:1px solid var(--hairline-color);padding:1.25rem;margin:0 0 1.5rem;border-radius:8px">
   <h2 style="margin-top:0">Website traffic</h2>
   <p>See recent visitors, page views, trends, popular dog profiles and traffic by country.</p>

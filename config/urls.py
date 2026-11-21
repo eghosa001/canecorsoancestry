@@ -10,6 +10,7 @@ from accounts.views import merge_dogs_view, merge_dog_suggestions
 from accounts.views import AccountPasswordResetView
 from core.media_views import media_file
 from core.traffic_admin import website_traffic_admin
+from core.search_console_admin import search_console_admin
 from core.sitemaps import SITEMAPS
 from core.views import dashboard, healthz, home, robots_txt, storage_probe, privacy_notice, terms_notice, billing_notice
 
@@ -60,6 +61,7 @@ urlpatterns = [
     path("accounts/reset/done/", PasswordResetCompleteView.as_view(), name="password_reset_complete"),
     path("member/", include("accounts.urls")),
     path("admin/traffic/", admin.site.admin_view(website_traffic_admin), name="admin-traffic"),
+    path("admin/search-console/", admin.site.admin_view(search_console_admin), name="admin-search-console"),
     path("admin/merge-dogs/search/", admin.site.admin_view(merge_dog_suggestions), name="admin-merge-dogs-search"),
     path("admin/merge-dogs/", admin.site.admin_view(merge_dogs_view), name="admin-merge-dogs"),
     path("admin/", admin.site.urls),
