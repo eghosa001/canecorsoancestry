@@ -160,11 +160,13 @@ def save_structured_health(request, pk):
     publish_selected = intent == "publish"
     form = StructuredHealthForm(request.POST, dog=dog)
     if not form.is_valid():
-        messages.error(
-            request,
-            "Nothing was saved. Check the evidence and the highlighted fields: " + form.errors.as_text(),
-        )
-        return redirect("accounts:reviewed-dog-health", pk=pk)
+        # Render the same staff workspace with the bound form. Redirecting
+        # here discarded every value the reviewer had just entered on mobile.
+        from .health_review import reviewed_dog_health
+
+        request._structured_health_form_override = form
+        messages.error(request, "Nothing was saved or published. Review the errors in the health editor.")
+        return reviewed_dog_health(request, pk)
     data = form.cleaned_data
     fields = (
         ("CMR1", "cmr1"), ("DSRA", "dsra"), ("NCL1", "ncl1"),
