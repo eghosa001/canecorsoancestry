@@ -196,6 +196,10 @@ def reviewed_dog_health(request, pk):
          hasattr(row, "breed_dna_report") and row.breed_dna_report is not None),
         None,
     )
+    latest_reported_breed = next(
+        (row for row in records if row.test_type == "Cane Corso percentage (reported)"),
+        None,
+    )
     # A link from a historical mixed record may preselect that very same
     # accepted source. Never choose evidence from another dog or auto-fill
     # unverified disease scores/percentages.
@@ -278,6 +282,7 @@ def reviewed_dog_health(request, pk):
         "quick_results": quick_results,
         "orthopedic_results": orthopedic_results,
         "latest_breed": latest_breed,
+        "latest_reported_breed": latest_reported_breed,
         "selected_legacy_record": selected_legacy_record,
         "selected_source_document": selected_source_document,
         "evidence_entries": evidence_entries,
@@ -396,7 +401,7 @@ class ReviewedHealthResultForm(forms.Form):
 
 
 class AdditionalHealthConditionForm(forms.Form):
-    """Transcribe a condition missed by the initial extraction from an approved report."""
+    """Record an additional health condition, with verified or reported provenance."""
     source_submission = forms.ModelChoiceField(
         queryset=Submission.objects.none(), required=False,
         label="Approved member report", empty_label="Choose approved report…",
@@ -419,7 +424,7 @@ class AdditionalHealthConditionForm(forms.Form):
         required=False, widget=forms.DateInput(attrs={"type": "date"}), label="Test date",
     )
     reviewed = forms.BooleanField(
-        label="I have checked this additional condition and its result in the approved report.",
+        label="I confirm this is the available result for this dog. Without approved evidence it will be labelled Not independently verified.",
     )
 
     def __init__(self, *args, dog, **kwargs):
@@ -432,8 +437,8 @@ class AdditionalHealthConditionForm(forms.Form):
         test_type = (data.get("test_type") or "").strip()
         result = _manual_health_result(self, data)
         data["resolved_result"] = result
-        if bool(data.get("source_submission")) == bool(data.get("source_document")):
-            self.add_error(None, "Choose exactly one approved source report.")
+        if data.get("source_submission") and data.get("source_document"):
+            self.add_error(None, "Choose only one approved source report, or leave both blank for unverified information.")
         if unstructured_breed_claim(test_type):
             self.add_error("test_type", "Breed percentages require a separately verified, owner-consented DNA record.")
         if test_type.upper() in MARKER_CODES and result.lower() not in SCREENING_RESULTS:
@@ -455,7 +460,7 @@ def add_reviewed_health_condition(request, pk):
     publish_selected = intent == "publish"
     form = AdditionalHealthConditionForm(request.POST, dog=dog)
     if not form.is_valid():
-        messages.error(request, "Check the additional condition and select its approved source document: " + form.errors.as_text())
+        messages.error(request, "Check the additional condition fields: " + form.errors.as_text())
         return redirect("accounts:reviewed-dog-health", pk=pk)
     data = form.cleaned_data
     with transaction.atomic():
@@ -471,7 +476,7 @@ def add_reviewed_health_condition(request, pk):
             source_marker = "Moderator condition transcribed from approved submission " + str(source.pk)
             source_category = str((source.payload or {}).get("evidence_type") or "health")
             source_id = str(source.pk)
-        else:
+        elif data.get("source_document"):
             # An approved Health/DNA document or Super Admin archival laboratory report.
             document = get_object_or_404(
                 DogDocument.objects.select_for_update(of=("self",)).filter(
@@ -486,6 +491,11 @@ def add_reviewed_health_condition(request, pk):
             source_marker = "Moderator condition transcribed from approved document " + str(document.pk)
             source_category = document.document_type
             source_id = str(document.pk)
+        else:
+            source_marker = "Staff-reported additional health information without approved laboratory evidence"
+            source_category = "unverified"
+            source_id = ""
+        evidence_verified = bool(source or document)
         source_note = source_marker + "; evidence_category=" + source_category
         if HealthRecord.objects.filter(
             dog=dog, test_type__iexact=data["test_type"].strip(),
@@ -510,14 +520,18 @@ def add_reviewed_health_condition(request, pk):
         record = HealthRecord.objects.create(
             dog=dog, test_type=data["test_type"].strip(),
             result=readable_health_result(data["resolved_result"]),
-            tested_on=data.get("tested_on"), verification_state=VerificationState.HEALTH_VERIFIED,
+            tested_on=data.get("tested_on"),
+            verification_state=(
+                VerificationState.HEALTH_VERIFIED if evidence_verified else VerificationState.COMMUNITY
+            ),
             is_public=publish_selected, notes=source_note, evidence_document=direct_evidence,
         )
-        VerificationEvent.objects.create(
-            dog=dog, health_record=record, state=VerificationState.HEALTH_VERIFIED,
-            reviewer=request.user,
-            note="Additional condition manually checked against approved private laboratory report " + source_id,
-        )
+        if evidence_verified:
+            VerificationEvent.objects.create(
+                dog=dog, health_record=record, state=VerificationState.HEALTH_VERIFIED,
+                reviewer=request.user,
+                note="Additional condition manually checked against approved private laboratory report " + source_id,
+            )
         record_audit(
             action=ModerationAudit.Action.VERIFICATION, actor=request.user,
             dog=dog, submission=source,
@@ -527,17 +541,21 @@ def add_reviewed_health_condition(request, pk):
                 "source_submission_id": str(source.pk) if source else None,
                 "source_document_id": document.pk if document else None,
                 "test_type": record.test_type, "result": record.result,
+                "evidence_verified": evidence_verified,
                 "public": publish_selected,
             },
-            note="Staff reviewer saved one evidence-reviewed condition; original evidence remains private.",
+            note=(
+                "Staff reviewer saved one evidence-reviewed condition; original evidence remains private."
+                if evidence_verified else "Staff published a clearly unverified reported health condition."
+            ),
         )
     invalidate_public_content()
     messages.success(request, (
-        "Additional reviewed condition published; other health values were retained."
+        "Additional condition published with its evidence status; other results were retained."
         if publish_selected else
-        "Additional reviewed condition saved privately; other health values were retained."
+        "Additional condition saved privately; other results were retained."
     ))
-    if publish_selected:
+    if publish_selected or not evidence_verified:
         return redirect("accounts:reviewed-dog-health", pk=pk)
     return redirect("accounts:edit-reviewed-health-result", pk=pk, record_id=record.pk)
 
@@ -706,8 +724,13 @@ def toggle_health_result(request, pk, record_id):
         record = get_object_or_404(
             HealthRecord.objects.select_for_update(of=("self",)).select_related("breed_dna_report"), pk=record_id, dog_id=pk
         )
-        if show and record.verification_state != "health":
-            messages.error(request, "Only approved, evidence-reviewed results may be public.")
+        staff_reported = any((record.notes or "").startswith(prefix) for prefix in (
+            "Staff-published available health information;",
+            "Staff-reported breed estimate;",
+            "Staff-reported additional health information",
+        ))
+        if show and record.verification_state != VerificationState.HEALTH_VERIFIED and not staff_reported:
+            messages.error(request, "Only reviewed or explicitly staff-reported results may be public.")
             return redirect("accounts:reviewed-dog-health", pk=pk)
         report = getattr(record, "breed_dna_report", None)
         has_authority = breed_publication_allowed(report) if report else False
