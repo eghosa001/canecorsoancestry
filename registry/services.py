@@ -1,6 +1,7 @@
 from collections import defaultdict
 from datetime import date
 from difflib import SequenceMatcher
+import logging
 import re
 
 from django.conf import settings
@@ -47,6 +48,8 @@ from .models import (
 from .public_freshness import invalidate_public_content
 from .permissions import can_review_flagged_submissions, can_review_submissions, can_second_approve
 from .verification import verification_snapshot, verify_submission
+
+logger = logging.getLogger(__name__)
 
 
 def unique_dog_slug(name):
@@ -146,28 +149,68 @@ def record_audit(
 
 
 def _notify_submission(submission):
-    title = f"Submission {submission.get_status_display().lower()}"
-    message = (
-        f"Your {submission.get_kind_display().lower()} submission "
-        f"has been {submission.get_status_display().lower()}."
-    )
+    """Notify the submitting member; never email an uncommitted decision."""
+    decision = submission.get_status_display().lower()
+    kind = submission.get_kind_display().lower()
+    title = f"Submission {decision}"
+    message = f"Your {kind} submission has been {decision}."
     Notification.objects.create(
         user=submission.submitted_by,
         title=title,
         message=message,
         link="/member/submissions/",
     )
-    if (
-        getattr(settings, "ANCESTRY_EMAIL_NOTIFICATIONS", False)
-        and submission.submitted_by.email
-    ):
-        send_mail(
-            subject=f"Cane Corso Ancestry · {title}",
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[submission.submitted_by.email],
-            fail_silently=True,
-        )
+
+    # Approval confirmations are transactional account messages. Reuse the
+    # existing, configured SMTP transport even when optional general email
+    # notifications are disabled. Never send through an unconfigured backend.
+    email_enabled = (
+        (submission.status == Submission.Status.APPROVED
+         and getattr(settings, "ACCOUNT_EMAIL_ENABLED", False))
+        or getattr(settings, "ANCESTRY_EMAIL_NOTIFICATIONS", False)
+    )
+    recipient = (submission.submitted_by.email or "").strip()
+    if not email_enabled or not recipient:
+        return
+
+    record = (
+        (submission.dog.name if submission.dog_id else "")
+        or (submission.litter.code if submission.litter_id else "")
+        or (submission.kennel.name if submission.kennel_id else "")
+        or (submission.document.title if submission.document_id else "")
+    )
+    detail = f"Record: {record}\n" if record else ""
+    subject = f"Cane Corso Ancestry - {submission.get_kind_display()} {decision}"
+    body = (
+        f"{message}\n\n{detail}"
+        f"View your submission: {settings.SITE_URL}/member/submissions/\n\n"
+        "Cane Corso Ancestry"
+    )
+    submission_id = str(submission.pk)
+
+    def send_after_commit():
+        try:
+            sent = send_mail(
+                subject=subject,
+                message=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[recipient],
+                fail_silently=False,
+            )
+            if sent != 1:
+                logger.error(
+                    "submission_decision_email_unsent submission_id=%s",
+                    submission_id,
+                )
+        except Exception:
+            # The recorded moderation decision and in-app notice must survive
+            # SMTP downtime; log failure for operational follow-up.
+            logger.exception(
+                "submission_decision_email_failed submission_id=%s",
+                submission_id,
+            )
+
+    transaction.on_commit(send_after_commit)
 
 
 def _require_paid_submission(submission):
