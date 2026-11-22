@@ -157,6 +157,11 @@ jobs:
               scoped_accounts=true
             fi
 
+            if grep -q '^accounts/tests_member_phase[.]py$' <<<"$changed"; then
+              targets+=("accounts.tests_member_phase.OptionalEmailNotificationTests")
+              scoped_accounts=true
+            fi
+
             if grep -q '^accounts/tests_template_regressions[.]py$' <<<"$changed"; then
               targets+=("accounts.tests_template_regressions")
               scoped_accounts=true
