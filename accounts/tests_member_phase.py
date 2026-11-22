@@ -386,7 +386,10 @@ class OptionalEmailNotificationTests(TestCase):
             payload={"name": "Mail Dog", "sex": Dog.Sex.UNKNOWN},
         )
 
-        approve_submission(submission, reviewer)
+        # Transactional messages must only leave after the approval commits.
+        with self.captureOnCommitCallbacks(execute=True):
+            approve_submission(submission, reviewer)
+            self.assertEqual(len(mail.outbox), 0)
 
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("approved", mail.outbox[0].subject.lower())
