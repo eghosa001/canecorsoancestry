@@ -123,6 +123,7 @@ class MemberApprovalEmailTests(TestCase):
         submission = self.submission()
         with self.captureOnCommitCallbacks(execute=True):
             approve_submission(submission, self.reviewer)
+        submission.refresh_from_db()
         get_user_model().objects.filter(pk=self.member.pk).update(
             email="corrected-member@example.com",
         )
@@ -150,6 +151,7 @@ class MemberApprovalEmailTests(TestCase):
         submission = self.submission()
         with self.captureOnCommitCallbacks(execute=True):
             approve_submission(submission, self.reviewer)
+        submission.refresh_from_db()
         get_user_model().objects.filter(pk=self.member.pk).update(email="invalid")
         self.assertFalse(resend_approved_submission_email(submission))
         self.assertEqual(len(mail.outbox), 1)
