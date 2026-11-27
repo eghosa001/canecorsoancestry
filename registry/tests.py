@@ -16,6 +16,26 @@ from .views import _public_profile_dog
 
 class DogModelTests(TestCase):
 
+    def test_unverified_kennel_uses_webpage_not_invalid_profile_schema(self):
+        import json
+        kennel = Kennel.objects.create(name="Archive Kennel", slug="archive-kennel", is_public=True)
+        response = self.client.get(reverse("registry:kennel-detail", args=[kennel.slug]))
+        self.assertEqual(response.status_code, 200)
+        schema = json.loads(response.context["structured_data"])
+        self.assertEqual(schema["@type"], "WebPage")
+        self.assertEqual(schema["mainEntity"]["@type"], "Thing")
+
+    def test_verified_kennel_uses_valid_organization_profile_schema(self):
+        import json
+        from django.utils import timezone
+        kennel = Kennel.objects.create(name="Verified Kennel", slug="verified-kennel", is_public=True, verified_at=timezone.now())
+        response = self.client.get(reverse("registry:kennel-detail", args=[kennel.slug]))
+        self.assertEqual(response.status_code, 200)
+        schema = json.loads(response.context["structured_data"])
+        self.assertEqual(schema["@type"], "ProfilePage")
+        self.assertEqual(schema["mainEntity"]["@type"], "Organization")
+
+
     def test_owner_authorized_normalized_dna_renders_big_percentage(self):
         from decimal import Decimal
         from .models import BreedDNAReport
