@@ -47,6 +47,7 @@ from .orthopaedic_health import describe_orthopaedic_result
 from .legacy_health import legacy_mixed_health_rows
 from .dna import percentage_text
 from .health_publication import staff_authorized_breed_record_ids
+from .photo_availability import attach_card_images, image_available, local_media_mode
 from .querysets import one_dog_per_kennel, public_dog_match_filter, with_card_image, with_card_registration, with_displayable_images, with_stored_images, published_dogs
 
 
@@ -261,9 +262,13 @@ def dog_search(request):
     page_obj.object_list = [
         cards_by_id[dog_id] for dog_id in page_ids if dog_id in cards_by_id
     ]
-    for dog in page_obj.object_list:
-        dog.card_image_url = default_storage.url(dog.card_image_name) if dog.card_image_name else ""
+    attach_card_images(page_obj.object_list)
     _attach_source_images_for_missing(page_obj.object_list)
+    if not query and local_media_mode():
+        # Preserve explicit name searches even when the photograph was lost.
+        # Browse pages must not render unavailable photographs or pretend that
+        # a missing original has been restored.
+        page_obj.object_list = [dog for dog in page_obj.object_list if dog.card_image_url or dog.source_image_url]
     query_params = request.GET.copy()
     query_params.pop("page", None)
 
@@ -385,6 +390,8 @@ def _public_profile_dog(slug):
             "-is_primary", "sort_order", "created_at"
         )) if dog._has_profile_images else []
     )
+    if local_media_mode():
+        dog.display_images = [image for image in dog.display_images if image_available(image.image.name)]
     dog.display_registrations = (
         list(DogRegistration.objects.filter(dog=dog).select_related("authority"))
         if dog._has_profile_registrations else []
