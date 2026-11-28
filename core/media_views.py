@@ -136,6 +136,24 @@ def media_file(request, path):
         )
         return response
 
+    # Authorization above also protects local derivatives. Fall back to the
+    # original if no matching preview exists, including after replacement.
+    local_variant = request.GET.get("variant")
+    if (getattr(settings, "CCA_MEDIA_BACKEND", "") == "oracle-local"
+            and local_variant in PHOTO_PRESETS
+            and DogImage.objects.filter(image=path).exists()):
+        from core.local_photo_renditions import existing_preview
+        derivative = existing_preview(path, local_variant)
+        if derivative:
+            try:
+                response = FileResponse(derivative.open("rb"), content_type="image/webp")
+            except FileNotFoundError:
+                pass
+            else:
+                response["X-Content-Type-Options"] = "nosniff"
+                response["Cache-Control"] = "public, max-age=300" if public else "private, no-store"
+                return response
+
     try:
         handle = default_storage.open(path, "rb")
     except FileNotFoundError as exc:
@@ -149,6 +167,7 @@ def media_file(request, path):
     )
     response["X-Content-Type-Options"] = "nosniff"
     response["Cache-Control"] = (
-        "public, max-age=86400" if public else "private, no-store"
+        ("public, max-age=60" if local_variant in PHOTO_PRESETS else "public, max-age=86400")
+        if public else "private, no-store"
     )
     return response
