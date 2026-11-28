@@ -877,7 +877,7 @@ def kennel_detail(request, slug):
             "kennel": kennel,
             "structured_data": json_ld({
                 "@context": "https://schema.org",
-                "@type": "ProfilePage",
+                "@type": "ProfilePage" if kennel.verified_at and not kennel.is_archive_hypothesis else "WebPage",
                 "name": f"{kennel.name} Cane Corso kennel profile",
                 "url": f"{settings.SITE_URL}{reverse('registry:kennel-detail', args=[kennel.slug])}",
                 "description": (
