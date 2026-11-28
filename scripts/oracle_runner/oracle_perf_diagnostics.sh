@@ -33,7 +33,7 @@ for path in "/" "/accounts/login/" "/pedigrees/virtual-mating/" "/dogs/?q=" "/do
   for n in 1 2; do
     headers_file="$(mktemp)"
     timing="$(curl -sS --connect-timeout 3 --max-time 20 -o /dev/null -D "$headers_file" -w 'http=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}' \
-      "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev$path" || true)"
+      "https://canecorsoancestry.com$path" || true)"
     app="$(tr -d '\r' < "$headers_file" | grep -i '^server-timing:' | head -1 | sed -E 's/^server-timing:[[:space:]]*//' || true)"
     rm -f "$headers_file"
     printf 'path=%s sample=%d %s app=%s\n' "$path" "$n" "$timing" "$app"
@@ -72,7 +72,7 @@ PY
 echo "=== Public routes and database post-cutover smoke ==="
 for path in "/" "/accounts/login/" "/pedigrees/virtual-mating/" "/dogs/?q=" "/dogs/?q=Branco"; do
   code="$(curl -sS --connect-timeout 5 --max-time 20 -o /dev/null -w '%{http_code}' \
-    "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev$path" || true)"
+    "https://canecorsoancestry.com$path" || true)"
   echo "public_smoke=$path http=$code"
   [[ "$code" == 200 ]] || { echo "::error::Public route $path failed after database cutover"; exit 1; }
 done
@@ -80,5 +80,5 @@ echo "=== External Cloudflare live-edge request timings from Oracle host ==="
 for path in "/" "/accounts/login/" "/pedigrees/virtual-mating/"; do
   curl --connect-timeout 5 --max-time 20 -sS -o /dev/null -w \
     "edge_path=$path http=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
-    "https://canecorsoancestry-site-edge.aighewieghosa111.workers.dev$path" || true
+    "https://canecorsoancestry.com$path" || true
 done
