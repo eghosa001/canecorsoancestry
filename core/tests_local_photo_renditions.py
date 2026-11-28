@@ -12,7 +12,8 @@ class LocalPhotoRenditionTests(TestCase):
     def test_derivatives_preserve_original_and_access_control(self):
         with TemporaryDirectory() as root, override_settings(
             MEDIA_ROOT=root, MEDIA_EDGE_BASE_URL="", CCA_MEDIA_BACKEND="oracle-local",
-            STORAGES={"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"}},
+            STORAGES={"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+                      "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}},
         ):
             key = "dogs/local-test.jpg"
             path = Path(root, key)
