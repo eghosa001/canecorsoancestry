@@ -43,6 +43,8 @@ def dog_photo(url, variant="card"):
         getattr(settings, "R2_GATEWAY_SIGNING_KEY", "")
         or getattr(settings, "SECRET_KEY", "")
     )
+    if not base and getattr(settings, "CCA_MEDIA_BACKEND", "") == "oracle-local":
+        return source + ("&" if parsed.query else "?") + "variant=" + variant
     if not base or not signing_key:
         return source
 
