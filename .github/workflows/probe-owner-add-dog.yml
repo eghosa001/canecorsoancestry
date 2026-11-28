@@ -73,6 +73,7 @@ jobs:
           # Exercise the entire real middleware chain without a login POST
           # or any database changes, including the Cloudflare origin guard.
           from django.conf import settings
+          from django.contrib.auth import SESSION_KEY, BACKEND_SESSION_KEY, HASH_SESSION_KEY, load_backend
           from django.test import Client, override_settings
           pages = (
               ("accounts:verification-dashboard", "Super Admin dashboard"),
@@ -87,7 +88,18 @@ jobs:
                   HTTP_X_CCA_EDGE="1",
                   HTTP_X_CCA_ORIGIN_SECRET=settings.ORIGIN_EDGE_SECRET,
               )
-              client.force_login(owner)
+              # Build the signed session directly, without login signals or
+              # modification of the real owner account last_login field.
+              backend = next(
+                  path for path in settings.AUTHENTICATION_BACKENDS
+                  if hasattr(load_backend(path), "get_user")
+              )
+              session = client.session
+              session[SESSION_KEY] = owner._meta.pk.value_to_string(owner)
+              session[BACKEND_SESSION_KEY] = backend
+              session[HASH_SESSION_KEY] = owner.get_session_auth_hash()
+              session.save()
+              client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key
               for route, label in pages:
                   response = client.get(reverse(route), secure=True)
                   assert response.status_code == 200, (
