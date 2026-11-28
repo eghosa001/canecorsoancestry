@@ -24,6 +24,7 @@ from django.utils import timezone
 from registry.models import Dog, DogImage, DogRegistration, DogSource, HealthRecord, Kennel, Litter, Submission
 from registry.permissions import can_manage_verification, can_review_submissions, is_staff_identity
 from registry.public_freshness import FEATURED_DOG_IDS_CACHE_KEY
+from registry.photo_availability import attach_card_images, local_media_mode
 from registry.querysets import one_dog_per_kennel, with_card_image, with_card_registration, with_stored_images, published_dogs
 
 from .seo import json_ld
@@ -243,9 +244,8 @@ def _load_featured_dogs():
                 )
             ))
         )
-        for dog in rows:
-            dog.card_image_url = default_storage.url(dog.card_image_name) if dog.card_image_name else ""
-        by_id = {dog.pk: dog for dog in rows}
+        attach_card_images(rows)
+        by_id = {dog.pk: dog for dog in rows if dog.card_image_url or not local_media_mode()}
         return [by_id[dog_id] for dog_id in ids if dog_id in by_id]
 
     if featured_ids:
@@ -280,8 +280,13 @@ def _load_featured_dogs():
             .values_list("pk", flat=True)[:4]
         )
 
-    caches["public"].set(cache_key, featured_ids, 300)
-    return load(featured_ids)
+    featured = load(featured_ids)
+    if local_media_mode() and len(featured) < 4:
+        # Refill from the bounded kennel-diverse pool, never invent an image.
+        remaining = [dog_id for dog_id in diverse_candidates if dog_id not in featured_ids]
+        featured.extend(load(remaining)[:4 - len(featured)])
+    caches["public"].set(cache_key, [dog.pk for dog in featured], 300)
+    return featured
 
 
 def home(request):
