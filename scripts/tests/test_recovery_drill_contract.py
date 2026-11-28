@@ -55,3 +55,11 @@ class RecoveryDrillContractTests(TestCase):
         self.assertIn('"production_primary_modified": False', SCRIPT.read_text())
         self.assertIn('"run_id": sys.argv[4]', SCRIPT.read_text())
         self.assertIn('"$restored_migrations" "$GITHUB_RUN_ID"', SCRIPT.read_text())
+
+    def test_local_drill_is_not_reported_as_offsite(self):
+        script = SCRIPT.read_text()
+        self.assertIn('backup_source=encrypted-same-vm-oracle', script)
+        self.assertIn('backup_source=encrypted-offsite-r2', script)
+        self.assertIn('"backup_source": sys.argv[5]', script)
+        self.assertIn('Local snapshot older than four hours', script)
+        self.assertIn('podman run -d --name "$RESTORE_CONTAINER" --network none', script)
