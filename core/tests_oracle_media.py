@@ -64,3 +64,25 @@ class OracleMediaDeliveryTests(TestCase):
             dog_photo("/media/dogs/public.jpg", "card"),
             "/media/dogs/public.jpg",
         )
+
+    def test_missing_local_primary_uses_only_same_dog_existing_photo(self):
+        from registry.photo_availability import attach_card_images
+        with TemporaryDirectory() as root, override_settings(
+            MEDIA_ROOT=root, CCA_MEDIA_BACKEND="oracle-local",
+            STORAGES={"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"}},
+        ):
+            dog = Dog.objects.create(name="Missing primary", slug="missing-primary", is_public=True)
+            other = Dog.objects.create(name="Other dog", slug="other-photo", is_public=True)
+            DogImage.objects.create(dog=dog, image="dogs/missing.jpg", is_primary=True)
+            DogImage.objects.create(dog=other, image="dogs/other.jpg", is_primary=True)
+            for filename in ("other.jpg", "same.jpg"):
+                file = Path(root, "dogs", filename)
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_bytes(b"photo")
+            dog.card_image_name = "dogs/missing.jpg"
+            attach_card_images([dog])
+            self.assertEqual(dog.card_image_url, "")
+            DogImage.objects.create(dog=dog, image="dogs/same.jpg")
+            attach_card_images([dog])
+            self.assertTrue(dog.card_image_url.endswith("/dogs/same.jpg"))
+            self.assertEqual(DogImage.objects.filter(dog=dog).count(), 2)
