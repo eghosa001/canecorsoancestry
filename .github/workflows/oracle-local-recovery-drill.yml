@@ -1,0 +1,51 @@
+name: Oracle local encrypted PostgreSQL restore drill
+on:
+  schedule:
+    - cron: '17 4 * * 6'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/oracle_runner/verify_offsite_recovery.sh'
+      - '.github/workflows/oracle-local-recovery-drill.yml'
+  pull_request:
+    paths:
+      - 'scripts/oracle_runner/verify_offsite_recovery.sh'
+      - 'scripts/tests/test_recovery_drill_contract.py'
+      - '.github/workflows/oracle-local-recovery-drill.yml'
+permissions:
+  contents: read
+concurrency:
+  group: cca-oracle-local-recovery
+  cancel-in-progress: false
+jobs:
+  contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          bash -n scripts/oracle_runner/verify_offsite_recovery.sh
+          python3 -m unittest scripts.tests.test_recovery_drill_contract -v
+          python3 scripts/fast_path_guard.py
+  local-restore:
+    if: github.event_name != 'pull_request' && github.repository == 'eghosa001/canecorsoancestry' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, arm64, cca-oracle]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify isolated restore from encrypted same-VM snapshot
+        run: |
+          set -euo pipefail
+          bash scripts/oracle_runner/verify_offsite_recovery.sh --local
+      - name: Retain minimal local restore receipt (NOT offsite)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oracle-local-recovery-proof
+          path: ${{ runner.temp }}/cca-recovery-proof.json
+          if-no-files-found: error
+          retention-days: 30

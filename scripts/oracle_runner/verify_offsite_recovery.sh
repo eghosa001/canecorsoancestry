@@ -36,6 +36,32 @@ storage() {
     -v "$PWD/scripts/oracle_runner:/scripts:ro,Z" \
     "$image" python /scripts/r2_postgres_backup.py "$@"
 }
+backup_source=encrypted-offsite-r2
+if [[ "${1:-}" == --local ]]; then
+  # Independent database instance, but same-VM source: never call this offsite.
+  backup_source=encrypted-same-vm-oracle
+  source_archive="$(sudo -n python3 - <<'PY'
+from datetime import datetime, timezone
+from pathlib import Path
+import re
+root=Path("/var/lib/cca/pgshadow/backup/oracle-local")
+files=[p for p in root.glob("cca-local-*.sealed")
+       if re.fullmatch(r"cca-local-[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9-]+[.]sealed", p.name)
+       and p.is_file() and not p.is_symlink() and p.stat().st_size > 0]
+assert files, "No encrypted local snapshot"
+p=max(files, key=lambda item: item.stat().st_mtime)
+age=datetime.now(timezone.utc).timestamp()-p.stat().st_mtime
+assert -300 < age < 4*3600, "Local snapshot older than four hours"
+print(p)
+PY
+)"
+  [[ -n "$source_archive" ]] || exit 1
+  expected_sha="$(sudo -n sha256sum "$source_archive" | cut -d' ' -f1)"
+  sudo -n cp -- "$source_archive" "$SEALED"
+  actual_sha="$(sudo -n sha256sum "$SEALED" | cut -d' ' -f1)"
+  [[ "$actual_sha" == "$expected_sha" ]] || exit 1
+  echo "Verified encrypted LOCAL snapshot copy; not offsite protection."
+elif [[ $# == 0 ]]; then
 storage download --key private-cca-postgres-backups/v1/latest.json --file /backups/latest.json
 
 # Parse and validate the pointer before requesting the archive from R2.
@@ -63,6 +89,9 @@ actual_sha="$(sudo -n sha256sum "$SEALED" | cut -d' ' -f1)"
 test "$actual_sha" = "$expected_sha" || {
   echo "::error::Offsite PostgreSQL archive checksum mismatch"; exit 1;
 }
+else
+  echo "::error::Unrecognized recovery mode"; exit 2
+fi
 sudo -n python3 scripts/oracle_runner/seal_postgres_backup.py open "$SEALED" "$DUMP" \
   --secret-env /etc/cca/oracle-stage.env
 sudo -n podman run --rm --network host \
@@ -159,11 +188,11 @@ if [[ "$integrity_check" != PASS ]]; then
   exit 1
 fi
 echo "PASS: Restored pedigree parent references, application indexes and foreign keys are structurally valid."
-echo "PASS: Encrypted R2 archive restored to independent PostgreSQL 17; $restored_dogs dogs, $restored_sources source records and $restored_migrations migrations."
+echo "PASS: $backup_source archive restored to independent PostgreSQL 17; $restored_dogs dogs, $restored_sources source records and $restored_migrations migrations."
 echo "Production database was not accessed for restore or modified."
 # Publish a minimal, auditable receipt. Never include archive object keys,
 # credentials, dog identities, row contents or decrypted backup bytes.
-sudo -n python3 - "$RUNNER_TEMP/cca-recovery-proof.json" "$restored_dogs" "$restored_migrations" "$GITHUB_RUN_ID" <<'PY'
+sudo -n python3 - "$RUNNER_TEMP/cca-recovery-proof.json" "$restored_dogs" "$restored_migrations" "$GITHUB_RUN_ID" "$backup_source" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -174,7 +203,7 @@ receipt = {
     "run_id": sys.argv[4],
     "checked_at_utc": datetime.now(timezone.utc).isoformat(),
     "database": "isolated-postgresql-17",
-    "backup_source": "encrypted-offsite-r2",
+    "backup_source": sys.argv[5],
     "restored_dog_count": int(sys.argv[2]),
     "restored_migrations_count": int(sys.argv[3]),
     "checks": {
@@ -190,5 +219,5 @@ receipt = {
 Path(sys.argv[1]).write_text(json.dumps(receipt, indent=2) + "\\n", encoding="utf-8")
 PY
 sudo -n chmod 0644 "$RUNNER_TEMP/cca-recovery-proof.json"
-echo "## Oracle offsite recovery verification" >> "$GITHUB_STEP_SUMMARY"
-echo "Restored **$restored_dogs** canonical dog records and **$restored_migrations** migrations in an isolated PostgreSQL 17 container. Source: encrypted offsite R2 snapshot; checksum, parent references, indexes and foreign keys passed. Live primary unchanged." >> "$GITHUB_STEP_SUMMARY"
+echo "## Oracle recovery verification ($backup_source)" >> "$GITHUB_STEP_SUMMARY"
+echo "Restored **$restored_dogs** canonical dog records and **$restored_migrations** migrations in an isolated PostgreSQL 17 container. Source: $backup_source snapshot; checksum, parent references, indexes and foreign keys passed. Live primary unchanged." >> "$GITHUB_STEP_SUMMARY"
