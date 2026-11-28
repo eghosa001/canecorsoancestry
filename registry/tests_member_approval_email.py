@@ -9,7 +9,7 @@ from django.test import TestCase, override_settings
 from registry.models import (
     Kennel, ModerationRoleAssignment, Notification, Submission,
 )
-from registry.services import approve_submission
+from registry.services import approve_submission, resend_approved_submission_email
 
 
 @override_settings(
@@ -118,3 +118,40 @@ class MemberApprovalEmailTests(TestCase):
             approve_submission(submission, self.reviewer)
         self.assertEqual(len(mail.outbox), 0)
         self.assertTrue(Notification.objects.filter(user=self.member).exists())
+
+    def test_retry_uses_corrected_account_email_without_reapproving(self, _verify):
+        submission = self.submission()
+        with self.captureOnCommitCallbacks(execute=True):
+            approve_submission(submission, self.reviewer)
+        submission.refresh_from_db()
+        get_user_model().objects.filter(pk=self.member.pk).update(
+            email="corrected-member@example.com",
+        )
+        self.assertTrue(resend_approved_submission_email(submission))
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(mail.outbox[-1].to, ["corrected-member@example.com"])
+        self.assertEqual(Notification.objects.filter(user=self.member).count(), 1)
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, Submission.Status.APPROVED)
+
+    def test_retry_refuses_pending_submission(self, _verify):
+        self.assertFalse(resend_approved_submission_email(self.submission()))
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_inactive_account_does_not_receive_decision_email(self, _verify):
+        self.member.is_active = False
+        self.member.save(update_fields=["is_active"])
+        submission = self.submission()
+        with self.captureOnCommitCallbacks(execute=True):
+            approve_submission(submission, self.reviewer)
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertTrue(Notification.objects.filter(user=self.member).exists())
+
+    def test_retry_rejects_malformed_address(self, _verify):
+        submission = self.submission()
+        with self.captureOnCommitCallbacks(execute=True):
+            approve_submission(submission, self.reviewer)
+        submission.refresh_from_db()
+        get_user_model().objects.filter(pk=self.member.pk).update(email="invalid")
+        self.assertFalse(resend_approved_submission_email(submission))
+        self.assertEqual(len(mail.outbox), 1)

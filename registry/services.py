@@ -9,6 +9,7 @@ from django.contrib.postgres.search import TrigramSimilarity
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
+from django.core.validators import validate_email
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -152,27 +153,45 @@ def _notify_submission(submission):
     """Notify the submitting member; never email an uncommitted decision."""
     decision = submission.get_status_display().lower()
     kind = submission.get_kind_display().lower()
-    title = f"Submission {decision}"
-    message = f"Your {kind} submission has been {decision}."
     Notification.objects.create(
         user=submission.submitted_by,
-        title=title,
-        message=message,
+        title=f"Submission {decision}",
+        message=f"Your {kind} submission has been {decision}.",
         link="/member/submissions/",
     )
+    transaction.on_commit(lambda: _send_submission_decision_email(submission))
 
-    # Approval confirmations are transactional account messages. Reuse the
-    # existing, configured SMTP transport even when optional general email
-    # notifications are disabled. Never send through an unconfigured backend.
+
+def _send_submission_decision_email(submission):
+    """Return whether the configured mail backend accepted the message.
+
+    Acceptance is not proof of delivery: a destination can bounce later.
+    """
     email_enabled = (
         (submission.status == Submission.Status.APPROVED
          and getattr(settings, "ACCOUNT_EMAIL_ENABLED", False))
         or getattr(settings, "ANCESTRY_EMAIL_NOTIFICATIONS", False)
     )
-    recipient = (submission.submitted_by.email or "").strip()
-    if not email_enabled or not recipient:
-        return
+    if not email_enabled:
+        return False
 
+    # Re-read the account so a corrected address is used, not a cached user.
+    member = submission.submitted_by.__class__.objects.filter(
+        pk=submission.submitted_by_id,
+    ).first()
+    if not member or not member.is_active:
+        logger.warning("submission_decision_email_inactive submission_id=%s", submission.pk)
+        return False
+    recipient = (member.email or "").strip()
+    try:
+        validate_email(recipient)
+    except ValidationError:
+        logger.warning("submission_decision_email_invalid_address submission_id=%s", submission.pk)
+        return False
+
+    decision = submission.get_status_display().lower()
+    kind = submission.get_kind_display().lower()
+    message = f"Your {kind} submission has been {decision}."
     record = (
         (submission.dog.name if submission.dog_id else "")
         or (submission.litter.code if submission.litter_id else "")
@@ -186,31 +205,28 @@ def _notify_submission(submission):
         f"View your submission: {settings.SITE_URL}/member/submissions/\n\n"
         "Cane Corso Ancestry"
     )
-    submission_id = str(submission.pk)
+    try:
+        sent = send_mail(
+            subject=subject,
+            message=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient],
+            fail_silently=False,
+        )
+        if sent != 1:
+            logger.error("submission_decision_email_unsent submission_id=%s", submission.pk)
+            return False
+        return True
+    except Exception:
+        logger.exception("submission_decision_email_failed submission_id=%s", submission.pk)
+        return False
 
-    def send_after_commit():
-        try:
-            sent = send_mail(
-                subject=subject,
-                message=body,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[recipient],
-                fail_silently=False,
-            )
-            if sent != 1:
-                logger.error(
-                    "submission_decision_email_unsent submission_id=%s",
-                    submission_id,
-                )
-        except Exception:
-            # The recorded moderation decision and in-app notice must survive
-            # SMTP downtime; log failure for operational follow-up.
-            logger.exception(
-                "submission_decision_email_failed submission_id=%s",
-                submission_id,
-            )
 
-    transaction.on_commit(send_after_commit)
+def resend_approved_submission_email(submission):
+    """Explicit administrator retry; never repeat the moderation decision."""
+    if submission.status != Submission.Status.APPROVED:
+        return False
+    return _send_submission_decision_email(submission)
 
 
 def _require_paid_submission(submission):

@@ -254,9 +254,37 @@ class LitterAdmin(PublicMetadataFreshnessAdmin):
 
 @admin.register(Submission)
 class SubmissionAdmin(admin.ModelAdmin):
+    actions = ("resend_approval_email",)
+
+    @admin.action(permissions=["view"], description="Resend approval email to current account address")
+    def resend_approval_email(self, request, queryset):
+        from .services import resend_approved_submission_email
+
+        if not _super_admin_has_permission(request):
+            self.message_user(request, "Only Super Admin may resend approval emails.", messages.ERROR)
+            return
+        selected = list(queryset.select_related("submitted_by")[:2])
+        if len(selected) != 1:
+            self.message_user(request, "Select exactly one approved submission.", messages.ERROR)
+            return
+        submission = selected[0]
+        if submission.status != Submission.Status.APPROVED:
+            self.message_user(request, "Only approved submissions can be resent.", messages.ERROR)
+            return
+        if resend_approved_submission_email(submission):
+            self.log_change(request, submission, "Retried approval email to current member account address.")
+            self.message_user(request, "Approval email accepted by mail server. Final delivery is not confirmed.", messages.SUCCESS)
+        else:
+            self.message_user(request, "Email was not sent. Check the member account address, active status and mail configuration.", messages.ERROR)
+
+    @admin.display(description="Member email")
+    def member_email(self, obj):
+        return obj.submitted_by.email or "No email"
+
     list_display = (
         "kind",
         "submitted_by",
+        "member_email",
         "dog",
         "litter",
         "document",
@@ -277,9 +305,11 @@ class SubmissionAdmin(admin.ModelAdmin):
         "document__title",
         "kennel__name",
         "submitted_by__username",
+        "submitted_by__email",
     )
     exclude = ("reviewed_by", "assigned_to")
     readonly_fields = (
+        "member_email",
         "status",
         "reviewed_by_admin",
         "assigned_admin",
