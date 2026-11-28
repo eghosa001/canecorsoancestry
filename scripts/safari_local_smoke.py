@@ -429,7 +429,7 @@ def run():
             assert pdf_response.headers.get("content-type", "").startswith("application/pdf")
             assert pdf_response.body().startswith(b"%PDF-"), "Download is not a real PDF"
             assert "6g.pdf" in pdf_response.headers.get("content-disposition", "")
-            assert page.get_by_role("button", name="Print pedigree", exact=True).is_visible()
+            assert page.locator(".cca-pedigree-download").get_by_role("button", name="Print pedigree", exact=True).is_visible()
             assert page.get_by_role("link", name="Download pedigree data (CSV)").count() == 0
 
             page.locator("#coi-generations").select_option("2")
